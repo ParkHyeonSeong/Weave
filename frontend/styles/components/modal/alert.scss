@@ -1,0 +1,81 @@
+@use '../../variables' as *;
+
+.Alert__Backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.Alert {
+  background: $color-bg;
+  border-radius: $radius-xl;
+  box-shadow: $shadow-lg;
+  width: 100%;
+  max-width: 400px;
+  overflow: hidden;
+
+  &__Header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: $space-4 $space-5;
+    border-bottom: 1px solid $color-border;
+  }
+
+  &__Title {
+    font-size: $font-size-md;
+    font-weight: $font-weight-semibold;
+    color: $color-text;
+  }
+
+  &__CloseBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: $radius-md;
+    color: $color-text-secondary;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+      color: $color-text;
+    }
+  }
+
+  &__Body {
+    padding: $space-5;
+  }
+
+  &__Contents {
+    font-size: $font-size-base;
+    color: $color-text-secondary;
+    line-height: 1.6;
+  }
+
+  &__Footer {
+    display: flex;
+    justify-content: flex-end;
+    padding: $space-3 $space-5;
+    border-top: 1px solid $color-border;
+  }
+
+  &__ConfirmBtn {
+    padding: $space-2 $space-4;
+    background: $color-primary;
+    color: $color-text-inverse;
+    border-radius: $radius-md;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    transition: background $transition-fast;
+
+    &:hover {
+      background: $color-primary-hover;
+    }
+  }
+}

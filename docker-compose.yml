@@ -1,0 +1,77 @@
+services:
+  # -- Backend (FastAPI) ---------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: weave-backend
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - ./backend:/app
+      - backend-venv:/app/.venv
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://weave:weave@db:5432/weave
+      - FRONTEND_PORT=${FRONTEND_PORT:-3000}
+      - LOG_LEVEL=DEBUG
+      - DEBUG=true
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - weave-network
+
+  # -- Frontend (Next.js) --------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: weave-frontend
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:${BACKEND_PORT:-8000}
+      - WATCHPACK_POLLING=true
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - weave-network
+
+  # -- Database (PostgreSQL) -----------------------------------------------
+  db:
+    image: postgres:17-alpine
+    container_name: weave-db
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    environment:
+      - POSTGRES_USER=weave
+      - POSTGRES_PASSWORD=weave
+      - POSTGRES_DB=weave
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U weave -d weave"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - weave-network
+
+volumes:
+  postgres-data:
+  backend-venv:
+
+networks:
+  weave-network:
+    driver: bridge

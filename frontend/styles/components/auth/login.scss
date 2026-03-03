@@ -1,0 +1,160 @@
+@use '../../variables' as *;
+
+.Login {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: $color-surface;
+  padding: $space-4;
+
+  &__Card {
+    width: 100%;
+    max-width: 400px;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-2xl;
+    padding: $space-10 $space-8;
+    box-shadow: $shadow-sm;
+  }
+
+  &__Header {
+    text-align: center;
+    margin-bottom: $space-8;
+  }
+
+  &__Logo {
+    font-size: $font-size-2xl;
+    font-weight: $font-weight-bold;
+    color: $color-text;
+    letter-spacing: -0.5px;
+  }
+
+  &__Subtitle {
+    margin-top: $space-2;
+    font-size: $font-size-base;
+    color: $color-text-secondary;
+  }
+
+  &__Form {
+    display: flex;
+    flex-direction: column;
+    gap: $space-4;
+  }
+
+  &__Field {
+    display: flex;
+    flex-direction: column;
+    gap: $space-1;
+  }
+
+  &__Label {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-text;
+  }
+
+  &__InputWrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  &__InputIcon {
+    position: absolute;
+    left: $space-3;
+    color: $color-text-tertiary;
+    pointer-events: none;
+  }
+
+  &__Input {
+    width: 100%;
+    padding: 10px $space-3 10px 36px;
+    background: $color-input-bg;
+    border: 1px solid $color-input-border;
+    border-radius: $radius-lg;
+    font-size: $font-size-base;
+    color: $color-text;
+    transition: all $transition-fast;
+    outline: none;
+
+    &::placeholder {
+      color: $color-text-tertiary;
+    }
+
+    &:focus {
+      border-color: $color-border-focus;
+      box-shadow: $shadow-focus;
+    }
+  }
+
+  &__TogglePassword {
+    position: absolute;
+    right: $space-3;
+    display: flex;
+    align-items: center;
+    color: $color-text-tertiary;
+    transition: color $transition-fast;
+
+    &:hover {
+      color: $color-text-secondary;
+    }
+  }
+
+  &__SubmitBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 10px;
+    margin-top: $space-2;
+    background: $color-primary;
+    color: $color-text-inverse;
+    border-radius: $radius-lg;
+    font-size: $font-size-base;
+    font-weight: $font-weight-medium;
+    transition: all $transition-fast;
+
+    &:hover:not(:disabled) {
+      background: $color-primary-hover;
+    }
+
+    &:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+  }
+
+  &__Spinner {
+    animation: spin 1s linear infinite;
+  }
+
+  &__Footer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: $space-1;
+    margin-top: $space-6;
+  }
+
+  &__FooterText {
+    font-size: $font-size-sm;
+    color: $color-text-secondary;
+  }
+
+  &__FooterLink {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-primary;
+    transition: color $transition-fast;
+
+    &:hover {
+      color: $color-primary-hover;
+    }
+  }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

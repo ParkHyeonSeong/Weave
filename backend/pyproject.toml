@@ -1,0 +1,24 @@
+[project]
+name = "weave-backend"
+version = "0.1.0"
+description = "Weave - In-house project management platform API"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.135.1",
+    "uvicorn[standard]>=0.41.0",
+    "pydantic>=2.12.5",
+    "python-dotenv>=1.1.0",
+    "sqlalchemy>=2.0.40",
+    "asyncpg>=0.30.0",
+    "alembic>=1.15.2",
+    "bcrypt>=4.0.0",
+    "PyJWT>=2.10.0",
+    "python-multipart>=0.0.20",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "httpx>=0.28.0",
+    "ruff>=0.11.0",
+]
