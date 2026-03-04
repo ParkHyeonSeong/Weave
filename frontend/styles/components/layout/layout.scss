@@ -1,0 +1,20 @@
+@use '../../variables' as *;
+
+.Layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: $color-surface;
+
+  &__Body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  &__Content {
+    flex: 1;
+    overflow-y: auto;
+    padding: $space-6;
+  }
+}

@@ -1,0 +1,145 @@
+@use '../../variables' as *;
+
+.Sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  padding: $space-4;
+
+  &__Inner {
+    height: 100%;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-2xl;
+    padding: $space-4;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  // -- Menu section --
+  &__Menu {
+    display: flex;
+    flex-direction: column;
+    gap: $space-1;
+  }
+
+  &__MenuItem {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: 8px $space-3;
+    border-radius: $radius-lg;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-text-secondary;
+    transition: all $transition-fast;
+    cursor: pointer;
+
+    &:hover {
+      background: $color-surface;
+      color: $color-text;
+    }
+
+    &--active {
+      background: $color-surface;
+      color: $color-text;
+    }
+  }
+
+  &__MenuIcon {
+    flex-shrink: 0;
+    color: inherit;
+  }
+
+  // -- Divider --
+  &__Divider {
+    height: 1px;
+    background: $color-border;
+    margin: $space-3 0;
+  }
+
+  // -- Branch section --
+  &__SectionHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 $space-3;
+    margin-bottom: $space-1;
+  }
+
+  &__SectionLabel {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-semibold;
+    color: $color-text-tertiary;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  &__SectionAddBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: $radius-sm;
+    color: $color-text-tertiary;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+      color: $color-text;
+    }
+  }
+
+  &__Branches {
+    display: flex;
+    flex-direction: column;
+    gap: $space-1;
+    flex: 1;
+    overflow-y: auto;
+  }
+
+  &__BranchItem {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: 8px $space-3;
+    border-radius: $radius-lg;
+    font-size: $font-size-sm;
+    color: $color-text-secondary;
+    transition: all $transition-fast;
+    cursor: pointer;
+
+    &:hover {
+      background: $color-surface;
+      color: $color-text;
+    }
+
+    &--active {
+      background: $color-primary-subtle;
+      color: $color-primary;
+    }
+  }
+
+  &__BranchDot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  &__BranchName {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  // -- Empty state --
+  &__Empty {
+    padding: $space-4 $space-3;
+    text-align: center;
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+    line-height: 1.5;
+  }
+}

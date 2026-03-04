@@ -1,0 +1,138 @@
+@use '../../variables' as *;
+
+.CreateBranch__Backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.CreateBranch {
+  width: 100%;
+  max-width: 440px;
+  background: $color-bg;
+  border-radius: $radius-xl;
+  box-shadow: $shadow-lg;
+  overflow: hidden;
+
+  &__Header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: $space-4 $space-5;
+    border-bottom: 1px solid $color-border;
+  }
+
+  &__Title {
+    font-size: $font-size-md;
+    font-weight: $font-weight-semibold;
+    color: $color-text;
+  }
+
+  &__CloseBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: $radius-md;
+    color: $color-text-secondary;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+      color: $color-text;
+    }
+  }
+
+  &__Body {
+    padding: $space-5;
+    display: flex;
+    flex-direction: column;
+    gap: $space-4;
+  }
+
+  &__Field {
+    display: flex;
+    flex-direction: column;
+    gap: $space-1;
+  }
+
+  &__Label {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-text;
+  }
+
+  &__Input,
+  &__Textarea {
+    width: 100%;
+    padding: 10px $space-3;
+    background: $color-input-bg;
+    border: 1px solid $color-input-border;
+    border-radius: $radius-lg;
+    font-size: $font-size-base;
+    color: $color-text;
+    transition: all $transition-fast;
+    outline: none;
+
+    &::placeholder {
+      color: $color-text-tertiary;
+    }
+
+    &:focus {
+      border-color: $color-border-focus;
+      box-shadow: $shadow-focus;
+    }
+  }
+
+  &__Textarea {
+    resize: vertical;
+    min-height: 80px;
+    font-family: inherit;
+  }
+
+  &__Footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: $space-2;
+    padding: $space-3 $space-5;
+    border-top: 1px solid $color-border;
+  }
+
+  &__CancelBtn {
+    padding: $space-2 $space-4;
+    border-radius: $radius-md;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-text-secondary;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+      color: $color-text;
+    }
+  }
+
+  &__SubmitBtn {
+    padding: $space-2 $space-4;
+    background: $color-primary;
+    color: $color-text-inverse;
+    border-radius: $radius-md;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    transition: background $transition-fast;
+
+    &:hover:not(:disabled) {
+      background: $color-primary-hover;
+    }
+
+    &:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+  }
+}

@@ -1,0 +1,109 @@
+@use '../../variables' as *;
+
+.CommandPalette__Backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 120px;
+  z-index: 1000;
+}
+
+.CommandPalette {
+  width: 100%;
+  max-width: 560px;
+  background: $color-bg;
+  border: 1px solid $color-border;
+  border-radius: $radius-xl;
+  box-shadow: $shadow-lg;
+  overflow: hidden;
+
+  &__InputWrap {
+    display: flex;
+    align-items: center;
+    padding: $space-3 $space-4;
+    border-bottom: 1px solid $color-border;
+  }
+
+  &__SearchIcon {
+    flex-shrink: 0;
+    color: $color-text-tertiary;
+    margin-right: $space-2;
+  }
+
+  &__Input {
+    flex: 1;
+    border: none;
+    outline: none;
+    font-size: $font-size-base;
+    color: $color-text;
+    background: transparent;
+
+    &::placeholder {
+      color: $color-text-tertiary;
+    }
+  }
+
+  &__Shortcut {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+    background: $color-surface;
+    border: 1px solid $color-border;
+    border-radius: $radius-sm;
+    padding: 1px 6px;
+  }
+
+  &__List {
+    max-height: 320px;
+    overflow-y: auto;
+    padding: $space-2;
+  }
+
+  &__Group {
+    padding: $space-1 $space-2;
+    margin-bottom: $space-1;
+  }
+
+  &__GroupLabel {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-semibold;
+    color: $color-text-tertiary;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: $space-1;
+  }
+
+  &__Item {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: 8px $space-3;
+    border-radius: $radius-md;
+    font-size: $font-size-sm;
+    color: $color-text-secondary;
+    transition: all $transition-fast;
+    cursor: pointer;
+    width: 100%;
+    text-align: left;
+
+    &:hover,
+    &--active {
+      background: $color-surface;
+      color: $color-text;
+    }
+  }
+
+  &__ItemIcon {
+    flex-shrink: 0;
+    color: inherit;
+  }
+
+  &__Empty {
+    padding: $space-6;
+    text-align: center;
+    font-size: $font-size-sm;
+    color: $color-text-tertiary;
+  }
+}

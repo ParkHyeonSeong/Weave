@@ -1,0 +1,139 @@
+@use '../../variables' as *;
+
+.Header {
+  display: flex;
+  align-items: center;
+  height: 48px;
+  padding: 0 $space-4;
+  background: $color-bg;
+  border-bottom: 1px solid $color-border;
+  z-index: 100;
+
+  // -- Left section --
+  &__Left {
+    display: flex;
+    align-items: center;
+    gap: $space-3;
+    min-width: 0;
+  }
+
+  &__LogoIcon {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+  }
+
+  &__LogoText {
+    font-size: $font-size-md;
+    font-weight: $font-weight-bold;
+    color: $color-text;
+    letter-spacing: -0.3px;
+    white-space: nowrap;
+  }
+
+  &__Separator {
+    color: $color-text-tertiary;
+    font-size: $font-size-sm;
+    user-select: none;
+  }
+
+  &__WorkspaceName {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-text-secondary;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  // -- Center section --
+  &__Center {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    padding: 0 $space-8;
+  }
+
+  &__SearchBtn {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    width: 100%;
+    max-width: 480px;
+    padding: 6px $space-3;
+    background: $color-surface;
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+    color: $color-text-tertiary;
+    font-size: $font-size-sm;
+    transition: all $transition-fast;
+    cursor: pointer;
+
+    &:hover {
+      border-color: $color-border-hover;
+      color: $color-text-secondary;
+    }
+  }
+
+  &__SearchIcon {
+    flex-shrink: 0;
+  }
+
+  &__SearchText {
+    flex: 1;
+    text-align: left;
+  }
+
+  &__SearchShortcut {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-sm;
+    padding: 1px 6px;
+    line-height: 1.4;
+  }
+
+  // -- Right section --
+  &__Right {
+    display: flex;
+    align-items: center;
+    gap: $space-1;
+  }
+
+  &__IconBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: $radius-md;
+    color: $color-text-secondary;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+      color: $color-text;
+    }
+  }
+
+  &__Avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: $color-primary;
+    color: $color-text-inverse;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-semibold;
+    margin-left: $space-1;
+    cursor: pointer;
+    transition: opacity $transition-fast;
+
+    &:hover {
+      opacity: 0.85;
+    }
+  }
+}
