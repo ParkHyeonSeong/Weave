@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
 import "@/styles/globals.scss";
+import "@/styles/fonts.css";
 import "@/styles/components/auth/login.scss";
 import "@/styles/components/modal/alert.scss";
 
