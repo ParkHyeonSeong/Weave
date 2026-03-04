@@ -42,3 +42,14 @@ async def update_login(user_id: int, ip: str, db: AsyncSession):
         WHERE user_id = :user_id
     """), {'user_id': user_id, 'ip': ip})
     await db.commit()
+
+
+async def find_all(db: AsyncSession):
+    """전체 사용자 목록 (비밀번호 제외)"""
+    result = await db.execute(text("""
+        SELECT user_id, email, username, role, created_at, last_login_at
+        FROM "user"
+        ORDER BY username
+    """))
+    rows = result.fetchall()
+    return [dict(row._mapping) for row in rows]

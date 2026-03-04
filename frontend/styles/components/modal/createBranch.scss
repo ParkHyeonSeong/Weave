@@ -89,6 +89,22 @@
     }
   }
 
+  &__Input--key {
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: $font-weight-semibold;
+  }
+
+  &__Hint {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+  }
+
+  &__Error {
+    font-size: $font-size-sm;
+    color: $color-error;
+  }
+
   &__Textarea {
     resize: vertical;
     min-height: 80px;

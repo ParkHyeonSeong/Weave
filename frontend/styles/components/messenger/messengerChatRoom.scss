@@ -1,0 +1,130 @@
+@use '../../variables' as *;
+
+.MessengerChatRoom {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: $color-bg;
+  border: 1px solid $color-border;
+  border-radius: $radius-2xl;
+
+  &__Header {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: $space-3 $space-4;
+    border-bottom: 1px solid $color-border;
+    flex-shrink: 0;
+  }
+
+  &__BackBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: $radius-md;
+    color: $color-text-secondary;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+      color: $color-text;
+    }
+  }
+
+  &__Title {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-semibold;
+    color: $color-text;
+  }
+
+  &__Messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: $space-4;
+    display: flex;
+    flex-direction: column;
+    gap: $space-2;
+  }
+
+  &__Msg {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    max-width: 80%;
+
+    &--mine {
+      align-self: flex-end;
+      align-items: flex-end;
+    }
+  }
+
+  &__MsgSender {
+    font-size: 11px;
+    color: $color-text-tertiary;
+    margin-bottom: 2px;
+    padding-left: $space-1;
+  }
+
+  &__MsgBubble {
+    padding: $space-2 $space-3;
+    border-radius: $radius-lg;
+    font-size: $font-size-sm;
+    color: $color-text;
+    background: $color-surface;
+    word-break: break-word;
+    line-height: 1.5;
+
+    .MessengerChatRoom__Msg--mine & {
+      background: $color-primary;
+      color: $color-text-inverse;
+    }
+  }
+
+  &__Input {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: $space-3;
+    border-top: 1px solid $color-border;
+    flex-shrink: 0;
+  }
+
+  &__InputField {
+    flex: 1;
+    padding: $space-2 $space-3;
+    border: 1px solid $color-input-border;
+    border-radius: $radius-lg;
+    font-size: $font-size-sm;
+    color: $color-text;
+    background: $color-input-bg;
+    outline: none;
+    transition: border-color $transition-fast;
+
+    &::placeholder {
+      color: $color-text-tertiary;
+    }
+
+    &:focus {
+      border-color: $color-border-focus;
+    }
+  }
+
+  &__SendBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: $radius-md;
+    background: $color-primary;
+    color: $color-text-inverse;
+    transition: background $transition-fast;
+    flex-shrink: 0;
+
+    &:hover {
+      background: $color-primary-hover;
+    }
+  }
+}

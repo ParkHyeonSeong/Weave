@@ -1,4 +1,3 @@
-import re
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -6,30 +5,17 @@ from core.model import branch as branch_model
 from core.model import branch_member as member_model
 
 
-def _slugify(name: str) -> str:
-    """Branch 이름을 URL-safe slug로 변환"""
-    slug = name.lower().strip()
-    slug = re.sub(r'[^a-z0-9가-힣\s-]', '', slug)
-    slug = re.sub(r'[\s]+', '-', slug)
-    slug = re.sub(r'-+', '-', slug).strip('-')
-    return slug or 'branch'
-
-
 async def create(body, request: Request, db: AsyncSession):
     """Branch 생성"""
     user_id = request.state.payload.get('user_id')
 
-    # slug 생성 + 중복 체크
-    slug = _slugify(body.branch_name)
-    base_slug = slug
-    counter = 1
-    while await branch_model.find_by_slug(slug, db):
-        slug = f'{base_slug}-{counter}'
-        counter += 1
+    # key 중복 체크
+    if await branch_model.find_by_key(body.key, db):
+        return {'status': False, 'message': 'KEY_ALREADY_EXISTS'}
 
     branch_id = await branch_model.create(
         branch_name=body.branch_name,
-        slug=slug,
+        key=body.key,
         description=body.description or '',
         visibility=body.visibility,
         created_by=user_id,
@@ -42,7 +28,7 @@ async def create(body, request: Request, db: AsyncSession):
     return {
         'status': True,
         'branch_id': branch_id,
-        'slug': slug,
+        'key': body.key,
     }
 
 

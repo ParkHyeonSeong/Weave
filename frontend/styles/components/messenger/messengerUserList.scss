@@ -1,0 +1,71 @@
+@use '../../variables' as *;
+
+.MessengerUserList {
+  &__Header {
+    display: flex;
+    align-items: center;
+    padding: $space-3 $space-4;
+    border-bottom: 1px solid $color-border;
+  }
+
+  &__Title {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-semibold;
+    color: $color-text;
+  }
+
+  &__Items {
+    display: flex;
+    flex-direction: column;
+  }
+
+  &__Item {
+    display: flex;
+    align-items: center;
+    gap: $space-3;
+    padding: $space-3 $space-4;
+    transition: background $transition-fast;
+    text-align: left;
+    width: 100%;
+
+    &:hover {
+      background: $color-surface;
+    }
+  }
+
+  &__Avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: $color-primary;
+    color: $color-text-inverse;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-semibold;
+    flex-shrink: 0;
+  }
+
+  &__Info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  &__Name {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-text;
+  }
+
+  &__Email {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}

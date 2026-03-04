@@ -11,6 +11,11 @@ import "@/styles/components/layout/header.scss";
 import "@/styles/components/layout/sidebar.scss";
 import "@/styles/components/modal/commandPalette.scss";
 import "@/styles/components/modal/createBranch.scss";
+import "@/styles/components/layout/footer.scss";
+import "@/styles/components/messenger/messenger.scss";
+import "@/styles/components/messenger/messengerChatList.scss";
+import "@/styles/components/messenger/messengerUserList.scss";
+import "@/styles/components/messenger/messengerChatRoom.scss";
 
 const publicPaths = ['/auth/login', '/setup'];
 

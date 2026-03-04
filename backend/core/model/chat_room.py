@@ -1,0 +1,68 @@
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+
+async def create(room_type: str, room_name: str | None, created_by: int,
+                 db: AsyncSession) -> int:
+    """채팅방 생성"""
+    result = await db.execute(text("""
+        INSERT INTO chat_room (room_type, room_name, created_by)
+        VALUES (:room_type, :room_name, :created_by)
+        RETURNING room_id
+    """), {'room_type': room_type, 'room_name': room_name, 'created_by': created_by})
+    await db.commit()
+    return result.scalar_one()
+
+
+async def find_by_id(room_id: int, db: AsyncSession):
+    """채팅방 상세 조회"""
+    result = await db.execute(text("""
+        SELECT room_id, room_type, room_name, created_by, created_at
+        FROM chat_room
+        WHERE room_id = :room_id
+    """), {'room_id': room_id})
+    row = result.fetchone()
+    return dict(row._mapping) if row else None
+
+
+async def find_rooms_by_user(user_id: int, db: AsyncSession):
+    """사용자가 참여 중인 채팅방 목록 (unread_count, last_message 포함)"""
+    result = await db.execute(text("""
+        SELECT cr.room_id, cr.room_type, cr.room_name, cr.created_at,
+               crm.last_read_at,
+               (SELECT COUNT(*) FROM chat_message cm
+                WHERE cm.room_id = cr.room_id
+                  AND cm.created_at > COALESCE(crm.last_read_at, '1970-01-01')) AS unread_count,
+               (SELECT cm2.content FROM chat_message cm2
+                WHERE cm2.room_id = cr.room_id
+                ORDER BY cm2.created_at DESC LIMIT 1) AS last_message,
+               (SELECT cm3.created_at FROM chat_message cm3
+                WHERE cm3.room_id = cr.room_id
+                ORDER BY cm3.created_at DESC LIMIT 1) AS last_message_at
+        FROM chat_room cr
+        INNER JOIN chat_room_member crm ON cr.room_id = crm.room_id
+        WHERE crm.user_id = :user_id
+        ORDER BY last_message_at DESC NULLS LAST, cr.created_at DESC
+    """), {'user_id': user_id})
+    rows = result.fetchall()
+    return [dict(row._mapping) for row in rows]
+
+
+async def find_dm_room(user_id_1: int, user_id_2: int, db: AsyncSession):
+    """두 사용자 간 기존 DM방 찾기"""
+    result = await db.execute(text("""
+        SELECT cr.room_id
+        FROM chat_room cr
+        WHERE cr.room_type = 'dm'
+          AND EXISTS (
+            SELECT 1 FROM chat_room_member crm1
+            WHERE crm1.room_id = cr.room_id AND crm1.user_id = :user_id_1
+          )
+          AND EXISTS (
+            SELECT 1 FROM chat_room_member crm2
+            WHERE crm2.room_id = cr.room_id AND crm2.user_id = :user_id_2
+          )
+        LIMIT 1
+    """), {'user_id_1': user_id_1, 'user_id_2': user_id_2})
+    row = result.fetchone()
+    return row[0] if row else None

@@ -2,16 +2,16 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
-async def create(branch_name: str, slug: str, description: str,
+async def create(branch_name: str, key: str, description: str,
                  visibility: str, created_by: int, db: AsyncSession) -> int:
     """Branch 생성"""
     result = await db.execute(text("""
-        INSERT INTO branch (branch_name, slug, description, visibility, created_by)
-        VALUES (:branch_name, :slug, :description, :visibility, :created_by)
+        INSERT INTO branch (branch_name, key, description, visibility, created_by)
+        VALUES (:branch_name, :key, :description, :visibility, :created_by)
         RETURNING branch_id
     """), {
         'branch_name': branch_name,
-        'slug': slug,
+        'key': key,
         'description': description,
         'visibility': visibility,
         'created_by': created_by,
@@ -23,7 +23,7 @@ async def create(branch_name: str, slug: str, description: str,
 async def find_by_id(branch_id: int, db: AsyncSession):
     """Branch 상세 조회"""
     result = await db.execute(text("""
-        SELECT b.branch_id, b.branch_name, b.slug, b.description,
+        SELECT b.branch_id, b.branch_name, b.key, b.description,
                b.icon, b.color, b.visibility, b.is_archived,
                b.created_by, b.created_at, b.updated_at
         FROM branch b
@@ -36,7 +36,7 @@ async def find_by_id(branch_id: int, db: AsyncSession):
 async def find_accessible(user_id: int, db: AsyncSession):
     """사용자가 접근 가능한 Branch 목록"""
     result = await db.execute(text("""
-        SELECT b.branch_id, b.branch_name, b.slug, b.description,
+        SELECT b.branch_id, b.branch_name, b.key, b.description,
                b.icon, b.color, b.visibility, b.created_at,
                bm.role AS my_role
         FROM branch b
@@ -48,9 +48,9 @@ async def find_accessible(user_id: int, db: AsyncSession):
     return [dict(row._mapping) for row in rows]
 
 
-async def find_by_slug(slug: str, db: AsyncSession):
-    """slug로 Branch 조회 (중복 체크용)"""
+async def find_by_key(key: str, db: AsyncSession):
+    """key로 Branch 조회 (중복 체크용)"""
     result = await db.execute(text("""
-        SELECT branch_id FROM branch WHERE slug = :slug
-    """), {'slug': slug})
+        SELECT branch_id FROM branch WHERE key = :key
+    """), {'key': key})
     return result.fetchone() is not None

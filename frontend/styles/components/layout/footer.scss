@@ -1,0 +1,43 @@
+@use '../../variables' as *;
+
+.Footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 28px;
+  padding: 0 $space-2;
+  background: $color-bg;
+  border-top: 1px solid $color-border;
+  font-size: $font-size-xs;
+  color: $color-text-secondary;
+  flex-shrink: 0;
+
+  &__Left, &__Center, &__Right {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+  }
+
+  &__Center {
+    flex: 1;
+    justify-content: center;
+  }
+
+  &__Toggle {
+    display: flex;
+    align-items: center;
+    padding: 2px $space-1;
+    border-radius: $radius-sm;
+    color: $color-text-tertiary;
+    transition: all $transition-fast;
+
+    &:hover {
+      color: $color-text;
+      background: $color-surface-hover;
+    }
+
+    &--active {
+      color: $color-primary;
+    }
+  }
+}
