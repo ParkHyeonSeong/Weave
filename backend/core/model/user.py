@@ -16,12 +16,22 @@ async def create(email: str, password_hash: bytes, username: str, db: AsyncSessi
 async def find_by_email(email: str, db: AsyncSession):
     """이메일로 사용자 조회"""
     result = await db.execute(text("""
-        SELECT user_id, email, password, username, created_at
+        SELECT user_id, email, password, username, role, created_at
         FROM "user"
         WHERE email = :email
     """), {'email': email})
     row = result.fetchone()
     return dict(row._mapping) if row else None
+
+
+async def update_role(user_id: int, role: str, db: AsyncSession):
+    """사용자 역할 변경"""
+    await db.execute(text("""
+        UPDATE "user"
+        SET role = :role
+        WHERE user_id = :user_id
+    """), {'user_id': user_id, 'role': role})
+    await db.commit()
 
 
 async def update_login(user_id: int, ip: str, db: AsyncSession):

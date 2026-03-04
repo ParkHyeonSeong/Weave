@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 
 from library import validator
 from routers import auth as auth_router
+from routers import setup as setup_router
 
 # -- Logging ---------------------------------------------------------------
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -53,6 +54,7 @@ async def auth_middleware(request: Request, call_next):
 
 # -- Routers ---------------------------------------------------------------
 app.include_router(auth_router.router, prefix="/auth", tags=["auth"])
+app.include_router(setup_router.router, prefix="/setup", tags=["setup"])
 
 
 # -- Health ----------------------------------------------------------------

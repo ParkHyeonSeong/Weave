@@ -68,6 +68,8 @@ export default function Login() {
         const messages = {
           'INVALID_CREDENTIALS': 'Invalid email or password.',
           'EMAIL_ALREADY_EXISTS': 'This email is already registered.',
+          'REGISTRATION_DISABLED': 'Registration is not available. Contact your administrator.',
+          'NOT_INITIALIZED': 'System setup is required first.',
         };
         showAlert('Error', messages[response.data.message] || response.data.message);
       }
