@@ -18,4 +18,19 @@
     overflow-y: auto;
     min-width: 0;
   }
+
+  // 메신저 리사이즈 핸들
+  &__ResizeHandle {
+    width: 4px;
+    cursor: col-resize;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 10;
+    transition: background $transition-fast;
+
+    &:hover,
+    &:active {
+      background: $color-primary;
+    }
+  }
 }

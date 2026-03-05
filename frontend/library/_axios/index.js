@@ -48,4 +48,4 @@ const api = axios.create({
 api.interceptors.request.use(handleRequestFulfilled);
 api.interceptors.response.use(handleResponseFulfilled, handleResponseRejected);
 
-export { api as axios };
+export { api as axios, getBaseURL };

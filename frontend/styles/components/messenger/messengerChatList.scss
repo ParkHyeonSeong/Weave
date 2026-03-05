@@ -55,6 +55,14 @@
     &:hover {
       background: $color-surface;
     }
+
+    &--active {
+      background: $color-primary-subtle;
+
+      &:hover {
+        background: $color-primary-subtle;
+      }
+    }
   }
 
   &__ItemInfo {

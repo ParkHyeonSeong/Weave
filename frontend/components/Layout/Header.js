@@ -2,12 +2,14 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { Search, Bell, CircleHelp, Settings, Shield } from 'lucide-react';
 import { formatMessageTime } from '@/library/formatTime';
+import { getBaseURL } from '@/library/_axios';
 
 export default function Header({ onSearchClick, notifications = [], onClearNotifications, onReadNotification, onNotiClick }) {
   const router = useRouter();
   const [workspaceName, setWorkspaceName] = useState('');
   const [username, setUsername] = useState('');
   const [role, setRole] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [showNotiMenu, setShowNotiMenu] = useState(false);
   const settingsRef = useRef(null);
@@ -20,6 +22,7 @@ export default function Header({ onSearchClick, notifications = [], onClearNotif
       const profile = JSON.parse(sessionStorage.getItem('profile') || '{}');
       setUsername(profile.username || '');
       setRole(profile.role || '');
+      setAvatarUrl(sessionStorage.getItem('avatar_url') || '');
     } catch {}
 
     const fetchWorkspace = async () => {
@@ -32,6 +35,19 @@ export default function Header({ onSearchClick, notifications = [], onClearNotif
       } catch {}
     };
     fetchWorkspace();
+  }, []);
+
+  // 프로필 변경 시 헤더 갱신
+  useEffect(() => {
+    const handleProfileUpdate = () => {
+      try {
+        const profile = JSON.parse(sessionStorage.getItem('profile') || '{}');
+        setUsername(profile.username || '');
+        setAvatarUrl(sessionStorage.getItem('avatar_url') || '');
+      } catch {}
+    };
+    window.addEventListener('profile:updated', handleProfileUpdate);
+    return () => window.removeEventListener('profile:updated', handleProfileUpdate);
   }, []);
 
   // 클릭 외부 감지로 드롭다운 닫기
@@ -152,8 +168,12 @@ export default function Header({ onSearchClick, notifications = [], onClearNotif
             </div>
           )}
         </div>
-        <div className="Header__Avatar" title={username}>
-          {initial}
+        <div className="Header__Avatar" title={username} onClick={() => router.push('/profile')}>
+          {avatarUrl ? (
+            <img src={`${getBaseURL()}${avatarUrl}`} alt={username} className="Header__AvatarImg" />
+          ) : (
+            initial
+          )}
         </div>
       </div>
     </header>

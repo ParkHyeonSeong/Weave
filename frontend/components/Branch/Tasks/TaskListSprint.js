@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ChevronRight, ChevronDown, Plus, Settings } from 'lucide-react';
 import TaskListRow from './TaskListRow';
 
-export default function TaskListSprint({ sprint, branchKey, branchId, onEditTask, onEditSprint, isBacklog }) {
+export default function TaskListSprint({ sprint, branchKey, branchId, taskTypes, onEditTask, onEditSprint, isBacklog }) {
   const [collapsed, setCollapsed] = useState(false);
   const [inlineTitle, setInlineTitle] = useState('');
   const [showInline, setShowInline] = useState(false);
@@ -95,6 +95,8 @@ export default function TaskListSprint({ sprint, branchKey, branchId, onEditTask
             <TaskListRow
               key={task.task_id}
               task={task}
+              branchId={branchId}
+              taskTypes={taskTypes}
               onClick={() => onEditTask(task)}
             />
           ))}

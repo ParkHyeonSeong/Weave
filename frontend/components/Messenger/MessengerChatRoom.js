@@ -3,7 +3,7 @@ import { ArrowLeft, Send } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import { formatMessageTime } from '@/library/formatTime';
 
-export default function MessengerChatRoom({ roomId, wsRef, onBack }) {
+export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [partnerName, setPartnerName] = useState('Chat');
@@ -99,9 +99,11 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack }) {
   return (
     <div className="MessengerChatRoom">
       <div className="MessengerChatRoom__Header">
-        <button className="MessengerChatRoom__BackBtn" onClick={onBack}>
-          <ArrowLeft size={16} />
-        </button>
+        {!hideback && (
+          <button className="MessengerChatRoom__BackBtn" onClick={onBack}>
+            <ArrowLeft size={16} />
+          </button>
+        )}
         <span className="MessengerChatRoom__Title">{partnerName}</span>
       </div>
 

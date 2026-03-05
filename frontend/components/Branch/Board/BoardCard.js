@@ -1,22 +1,28 @@
-import { CheckSquare, Bug, BookOpen } from 'lucide-react';
+import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 
-const typeIcons = {
-  task: CheckSquare,
-  bug: Bug,
-  story: BookOpen,
-};
+export default function BoardCard({ task, taskTypes, onClick }) {
+  const typeConfig = (taskTypes || []).find((t) => t.type_key === task.task_type);
 
-export default function BoardCard({ task, onClick }) {
-  const TypeIcon = typeIcons[task.task_type] || CheckSquare;
+  const handleDragStart = (e) => {
+    e.dataTransfer.setData('text/plain', String(task.task_id));
+    e.dataTransfer.effectAllowed = 'move';
+  };
 
   return (
-    <div className="BoardCard" onClick={onClick}>
+    <div
+      className="BoardCard"
+      onClick={onClick}
+      draggable
+      onDragStart={handleDragStart}
+    >
       <div className="BoardCard__Top">
-        <TypeIcon
-          size={13}
-          className="BoardCard__TypeIcon"
-          style={{ color: task.task_type === 'bug' ? '#DC2626' : '#5E6AD2' }}
-        />
+        <span className="BoardCard__TypeIcon">
+          <TaskTypeIcon
+            name={typeConfig?.icon || 'CheckSquare'}
+            size={13}
+            color={typeConfig?.color || '#5E6AD2'}
+          />
+        </span>
         <span className="BoardCard__Id">{task.display_id}</span>
       </div>
 

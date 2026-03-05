@@ -17,12 +17,7 @@ class TaskCreate(BaseModel):
     start_date: Optional[date] = None
     due_date: Optional[date] = None
 
-    @field_validator('task_type')
-    @classmethod
-    def validate_task_type(cls, v):
-        if v not in ('task', 'bug', 'story'):
-            raise ValueError('task_type must be "task", "bug", or "story"')
-        return v
+    # task_type 검증은 controller에서 branch의 task_type_config로 동적 검증
 
     @field_validator('status')
     @classmethod
@@ -51,13 +46,6 @@ class TaskUpdate(BaseModel):
     label_ids: Optional[List[int]] = None
     start_date: Optional[date] = None
     due_date: Optional[date] = None
-
-    @field_validator('task_type')
-    @classmethod
-    def validate_task_type(cls, v):
-        if v is not None and v not in ('task', 'bug', 'story'):
-            raise ValueError('task_type must be "task", "bug", or "story"')
-        return v
 
     @field_validator('status')
     @classmethod

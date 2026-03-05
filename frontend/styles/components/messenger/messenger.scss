@@ -1,12 +1,70 @@
 @use '../../variables' as *;
 
 .Messenger {
-  width: 320px;
   flex-shrink: 0;
   padding: $space-4;
   padding-left: 0;
   display: flex;
   flex-direction: column;
+
+  // -- Split view 모드 --
+  &--split {
+    flex-direction: row;
+    gap: 0;
+
+    .Messenger__ListPanel {
+      width: 240px;
+      min-width: 200px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .Messenger__Tabs {
+      border-radius: $radius-2xl 0 0 0;
+      border-right: none;
+    }
+
+    .Messenger__Content {
+      border-radius: 0 0 0 $radius-2xl;
+      border-right: none;
+    }
+
+    .Messenger__RoomPanel {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+
+      .MessengerChatRoom {
+        border-radius: 0 $radius-2xl $radius-2xl 0;
+      }
+
+      .MessengerNewChat {
+        border-radius: 0 $radius-2xl $radius-2xl 0;
+      }
+    }
+
+    .Messenger__RoomEmpty {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: $font-size-sm;
+      color: $color-text-tertiary;
+      background: $color-bg;
+      border: 1px solid $color-border;
+      border-radius: 0 $radius-2xl $radius-2xl 0;
+    }
+  }
+
+  // -- 리스트 패널 (narrow에서도 사용) --
+  &__ListPanel {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
 
   &__Tabs {
     display: flex;

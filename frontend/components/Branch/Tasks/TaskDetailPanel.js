@@ -1,14 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { axios } from '@/library/_axios';
-import { X, CheckSquare, Bug, BookOpen, Trash2 } from 'lucide-react';
+import { X, Trash2 } from 'lucide-react';
+import CustomSelect from '@/components/common/CustomSelect';
+import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 
-const typeIcons = { task: CheckSquare, bug: Bug, story: BookOpen };
-const typeLabels = { task: 'Task', bug: 'Bug', story: 'Story' };
-const statusLabels = { todo: 'To Do', in_progress: 'In Progress', done: 'Done' };
-const priorityLabels = { low: 'Low', medium: 'Medium', high: 'High', urgent: 'Urgent' };
-const priorityColors = { urgent: '#DC2626', high: '#F59E0B', medium: '#5E6AD2', low: '#9CA3AF' };
-
-export default function TaskDetailPanel({ branchId, branchKey, taskSummary, onClose }) {
+export default function TaskDetailPanel({ branchId, branchKey, taskTypes, taskSummary, onClose }) {
   const [task, setTask] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -17,10 +13,6 @@ export default function TaskDetailPanel({ branchId, branchKey, taskSummary, onCl
   const [epics, setEpics] = useState([]);
   const [members, setMembers] = useState([]);
   const [labels, setLabels] = useState([]);
-
-  // 인라인 편집 중인 필드
-  const [editingField, setEditingField] = useState(null);
-  const [editValue, setEditValue] = useState('');
 
   // 제목 편집
   const [editingTitle, setEditingTitle] = useState(false);
@@ -122,7 +114,6 @@ export default function TaskDetailPanel({ branchId, branchKey, taskSummary, onCl
   const handleSelectChange = (field, value) => {
     const parsed = value === '' ? null : (field.endsWith('_id') ? Number(value) : value);
     updateField(field, parsed);
-    setEditingField(null);
   };
 
   if (loading || !task) {
@@ -138,7 +129,7 @@ export default function TaskDetailPanel({ branchId, branchKey, taskSummary, onCl
     );
   }
 
-  const TypeIcon = typeIcons[task.task_type] || CheckSquare;
+  const typeConfig = (taskTypes || []).find((t) => t.type_key === task.task_type);
   const displayId = task.display_id || `${branchKey}-${task.display_number}`;
 
   return (
@@ -146,9 +137,10 @@ export default function TaskDetailPanel({ branchId, branchKey, taskSummary, onCl
       {/* 헤더 */}
       <div className="TaskDetailPanel__Header">
         <div className="TaskDetailPanel__HeaderLeft">
-          <TypeIcon
+          <TaskTypeIcon
+            name={typeConfig?.icon || 'CheckSquare'}
             size={14}
-            style={{ color: task.task_type === 'bug' ? '#DC2626' : '#5E6AD2' }}
+            color={typeConfig?.color || '#5E6AD2'}
           />
           <span className="TaskDetailPanel__Id">{displayId}</span>
         </div>
@@ -182,15 +174,15 @@ export default function TaskDetailPanel({ branchId, branchKey, taskSummary, onCl
 
         {/* 상태 버튼 */}
         <div className="TaskDetailPanel__StatusWrap">
-          <select
-            className={`TaskDetailPanel__StatusSelect TaskDetailPanel__StatusSelect--${task.status}`}
+          <CustomSelect
             value={task.status}
-            onChange={(e) => updateField('status', e.target.value)}
-          >
-            <option value="todo">To Do</option>
-            <option value="in_progress">In Progress</option>
-            <option value="done">Done</option>
-          </select>
+            options={[
+              { value: 'todo', label: 'To Do', color: '#9CA3AF' },
+              { value: 'in_progress', label: 'In Progress', color: '#2563EB' },
+              { value: 'done', label: 'Done', color: '#16A34A' },
+            ]}
+            onChange={(val) => updateField('status', val)}
+          />
         </div>
 
         {/* 설명 */}
@@ -224,137 +216,74 @@ export default function TaskDetailPanel({ branchId, branchKey, taskSummary, onCl
           <div className="TaskDetailPanel__Fields">
             {/* 타입 */}
             <DetailRow label="Type">
-              {editingField === 'task_type' ? (
-                <select
-                  className="TaskDetailPanel__InlineSelect"
-                  value={task.task_type}
-                  onChange={(e) => handleSelectChange('task_type', e.target.value)}
-                  onBlur={() => setEditingField(null)}
-                  autoFocus
-                >
-                  <option value="task">Task</option>
-                  <option value="bug">Bug</option>
-                  <option value="story">Story</option>
-                </select>
-              ) : (
-                <span
-                  className="TaskDetailPanel__FieldValue TaskDetailPanel__FieldValue--clickable"
-                  onClick={() => setEditingField('task_type')}
-                >
-                  <TypeIcon size={12} style={{ color: task.task_type === 'bug' ? '#DC2626' : '#5E6AD2' }} />
-                  {typeLabels[task.task_type] || task.task_type}
-                </span>
-              )}
+              <CustomSelect
+                value={task.task_type}
+                options={(taskTypes || []).map((t) => ({
+                  value: t.type_key,
+                  label: t.type_name,
+                  icon: <TaskTypeIcon name={t.icon} size={12} color={t.color} />,
+                }))}
+                onChange={(val) => handleSelectChange('task_type', val)}
+                size="sm"
+              />
             </DetailRow>
 
             {/* 우선순위 */}
             <DetailRow label="Priority">
-              {editingField === 'priority' ? (
-                <select
-                  className="TaskDetailPanel__InlineSelect"
-                  value={task.priority}
-                  onChange={(e) => handleSelectChange('priority', e.target.value)}
-                  onBlur={() => setEditingField(null)}
-                  autoFocus
-                >
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                  <option value="urgent">Urgent</option>
-                </select>
-              ) : (
-                <span
-                  className="TaskDetailPanel__FieldValue TaskDetailPanel__FieldValue--clickable"
-                  onClick={() => setEditingField('priority')}
-                >
-                  <span style={{ color: priorityColors[task.priority], fontWeight: 600 }}>
-                    {task.priority === 'urgent' ? '!!!' : task.priority === 'high' ? '!!' : task.priority === 'medium' ? '!' : ''}
-                  </span>
-                  {priorityLabels[task.priority] || task.priority}
-                </span>
-              )}
+              <CustomSelect
+                value={task.priority}
+                options={[
+                  { value: 'urgent', label: 'Urgent', color: '#DC2626' },
+                  { value: 'high', label: 'High', color: '#F59E0B' },
+                  { value: 'medium', label: 'Medium', color: '#5E6AD2' },
+                  { value: 'low', label: 'Low', color: '#9CA3AF' },
+                ]}
+                onChange={(val) => handleSelectChange('priority', val)}
+                size="sm"
+              />
             </DetailRow>
 
             {/* Sprint */}
             <DetailRow label="Sprint">
-              {editingField === 'sprint_id' ? (
-                <select
-                  className="TaskDetailPanel__InlineSelect"
-                  value={task.sprint_id || ''}
-                  onChange={(e) => handleSelectChange('sprint_id', e.target.value)}
-                  onBlur={() => setEditingField(null)}
-                  autoFocus
-                >
-                  <option value="">Backlog</option>
-                  {sprints.map((s) => (
-                    <option key={s.sprint_id} value={s.sprint_id}>{s.sprint_name}</option>
-                  ))}
-                </select>
-              ) : (
-                <span
-                  className="TaskDetailPanel__FieldValue TaskDetailPanel__FieldValue--clickable"
-                  onClick={() => setEditingField('sprint_id')}
-                >
-                  {task.sprint_name || 'Backlog'}
-                </span>
-              )}
+              <CustomSelect
+                value={task.sprint_id || ''}
+                options={[
+                  { value: '', label: 'Backlog' },
+                  ...sprints.map((s) => ({ value: s.sprint_id, label: s.sprint_name })),
+                ]}
+                onChange={(val) => handleSelectChange('sprint_id', val)}
+                size="sm"
+              />
             </DetailRow>
 
             {/* Epic */}
             <DetailRow label="Epic">
-              {editingField === 'epic_id' ? (
-                <select
-                  className="TaskDetailPanel__InlineSelect"
-                  value={task.epic_id || ''}
-                  onChange={(e) => handleSelectChange('epic_id', e.target.value)}
-                  onBlur={() => setEditingField(null)}
-                  autoFocus
-                >
-                  <option value="">None</option>
-                  {epics.map((ep) => (
-                    <option key={ep.epic_id} value={ep.epic_id}>{ep.epic_name}</option>
-                  ))}
-                </select>
-              ) : (
-                <span
-                  className="TaskDetailPanel__FieldValue TaskDetailPanel__FieldValue--clickable"
-                  onClick={() => setEditingField('epic_id')}
-                >
-                  {task.epic_name || 'None'}
-                </span>
-              )}
+              <CustomSelect
+                value={task.epic_id || ''}
+                options={[
+                  { value: '', label: 'None' },
+                  ...epics.map((ep) => ({
+                    value: ep.epic_id,
+                    label: ep.epic_name,
+                    color: ep.color || '#5E6AD2',
+                  })),
+                ]}
+                onChange={(val) => handleSelectChange('epic_id', val)}
+                size="sm"
+              />
             </DetailRow>
 
             {/* 담당자 */}
             <DetailRow label="Assignee">
-              {editingField === 'assignee_id' ? (
-                <select
-                  className="TaskDetailPanel__InlineSelect"
-                  value={task.assignee_id || ''}
-                  onChange={(e) => handleSelectChange('assignee_id', e.target.value)}
-                  onBlur={() => setEditingField(null)}
-                  autoFocus
-                >
-                  <option value="">Unassigned</option>
-                  {members.map((m) => (
-                    <option key={m.user_id} value={m.user_id}>{m.username}</option>
-                  ))}
-                </select>
-              ) : (
-                <span
-                  className="TaskDetailPanel__FieldValue TaskDetailPanel__FieldValue--clickable"
-                  onClick={() => setEditingField('assignee_id')}
-                >
-                  {task.assignee_name ? (
-                    <>
-                      <span className="TaskDetailPanel__Avatar">
-                        {task.assignee_name.charAt(0).toUpperCase()}
-                      </span>
-                      {task.assignee_name}
-                    </>
-                  ) : 'Unassigned'}
-                </span>
-              )}
+              <CustomSelect
+                value={task.assignee_id || ''}
+                options={[
+                  { value: '', label: 'Unassigned' },
+                  ...members.map((m) => ({ value: m.user_id, label: m.username })),
+                ]}
+                onChange={(val) => handleSelectChange('assignee_id', val)}
+                size="sm"
+              />
             </DetailRow>
 
             {/* 라벨 */}

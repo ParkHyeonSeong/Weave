@@ -1,16 +1,7 @@
-import { CheckSquare, Bug, BookOpen } from 'lucide-react';
-
-const typeIcons = {
-  task: CheckSquare,
-  bug: Bug,
-  story: BookOpen,
-};
-
-const statusLabels = {
-  todo: 'To Do',
-  in_progress: 'In Progress',
-  done: 'Done',
-};
+import { User } from 'lucide-react';
+import { axios } from '@/library/_axios';
+import CustomSelect from '@/components/common/CustomSelect';
+import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 
 const priorityColors = {
   urgent: '#DC2626',
@@ -19,8 +10,8 @@ const priorityColors = {
   low: '#9CA3AF',
 };
 
-export default function TaskListRow({ task, onClick }) {
-  const TypeIcon = typeIcons[task.task_type] || CheckSquare;
+export default function TaskListRow({ task, branchId, taskTypes, onClick }) {
+  const typeConfig = (taskTypes || []).find((t) => t.type_key === task.task_type);
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
@@ -29,20 +20,40 @@ export default function TaskListRow({ task, onClick }) {
     });
   };
 
+  // 상태 인라인 변경
+  const handleStatusChange = async (newStatus) => {
+    try {
+      await axios.patch(`/branches/${branchId}/tasks/${task.task_id}`, { status: newStatus });
+      window.dispatchEvent(new Event('task:updated'));
+    } catch {}
+  };
+
   return (
     <div className="TaskListRow" onClick={onClick}>
       {/* 타입 아이콘 */}
-      <TypeIcon
-        size={14}
-        className="TaskListRow__TypeIcon"
-        style={{ color: task.task_type === 'bug' ? '#DC2626' : '#5E6AD2' }}
-      />
+      <span className="TaskListRow__TypeIcon">
+        <TaskTypeIcon
+          name={typeConfig?.icon || 'CheckSquare'}
+          size={14}
+          color={typeConfig?.color || '#5E6AD2'}
+        />
+      </span>
 
       {/* Display ID */}
       <span className="TaskListRow__Id">{task.display_id}</span>
 
       {/* 제목 */}
       <span className="TaskListRow__Title">{task.title}</span>
+
+      {/* 에픽 */}
+      {task.epic_name && (
+        <span
+          className="TaskListRow__Epic"
+          style={{ backgroundColor: (task.epic_color || '#5E6AD2') + '15', color: task.epic_color || '#5E6AD2' }}
+        >
+          {task.epic_name}
+        </span>
+      )}
 
       {/* 라벨 */}
       <div className="TaskListRow__Labels">
@@ -57,10 +68,18 @@ export default function TaskListRow({ task, onClick }) {
         ))}
       </div>
 
-      {/* 상태 */}
-      <span className={`TaskListRow__Status TaskListRow__Status--${task.status}`}>
-        {statusLabels[task.status] || task.status}
-      </span>
+      {/* 상태 (인라인 변경) */}
+      <CustomSelect
+        value={task.status}
+        options={[
+          { value: 'todo', label: 'To Do', color: '#9CA3AF' },
+          { value: 'in_progress', label: 'In Progress', color: '#2563EB' },
+          { value: 'done', label: 'Done', color: '#16A34A' },
+        ]}
+        onChange={handleStatusChange}
+        size="sm"
+        className={`TaskListRow__Status TaskListRow__Status--${task.status}`}
+      />
 
       {/* 우선순위 */}
       <span
@@ -71,12 +90,16 @@ export default function TaskListRow({ task, onClick }) {
         {task.priority === 'urgent' ? '!!!' : task.priority === 'high' ? '!!' : task.priority === 'medium' ? '!' : ''}
       </span>
 
-      {/* 담당자 */}
-      {task.assignee_name && (
-        <span className="TaskListRow__Assignee" title={task.assignee_name}>
-          {task.assignee_name.charAt(0).toUpperCase()}
-        </span>
-      )}
+      {/* 담당자 (항상 표시) */}
+      <span
+        className={`TaskListRow__Assignee ${!task.assignee_name ? 'TaskListRow__Assignee--empty' : ''}`}
+        title={task.assignee_name || 'Unassigned'}
+      >
+        {task.assignee_name
+          ? task.assignee_name.charAt(0).toUpperCase()
+          : <User size={12} />
+        }
+      </span>
 
       {/* 마감일 */}
       {task.due_date && (

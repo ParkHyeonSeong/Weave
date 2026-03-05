@@ -4,7 +4,7 @@ import { Plus } from 'lucide-react';
 import TaskListSprint from './TaskListSprint';
 import SprintModal from '@/components/modal/SprintModal';
 
-export default function TaskList({ branchId, branchKey, onSelectTask }) {
+export default function TaskList({ branchId, branchKey, taskTypes, onSelectTask }) {
   const [sprints, setSprints] = useState([]);
   const [backlogTasks, setBacklogTasks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -74,6 +74,7 @@ export default function TaskList({ branchId, branchKey, onSelectTask }) {
           sprint={sprint}
           branchId={branchId}
           branchKey={branchKey}
+          taskTypes={taskTypes}
           onEditTask={onSelectTask}
           onEditSprint={() => setSprintModal({ open: true, sprint })}
         />
@@ -84,6 +85,7 @@ export default function TaskList({ branchId, branchKey, onSelectTask }) {
         sprint={{ sprint_name: 'Backlog', status: 'backlog', tasks: backlogTasks }}
         branchId={branchId}
         branchKey={branchKey}
+        taskTypes={taskTypes}
         onEditTask={onSelectTask}
         isBacklog
       />

@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.model import task as task_model
 from core.model import branch_member as member_model
+from core.model import task_type_config as type_model
 
 
 async def create(body, branch_id: int, request: Request, db: AsyncSession):
@@ -10,6 +11,11 @@ async def create(body, branch_id: int, request: Request, db: AsyncSession):
     user_id = request.state.payload.get('user_id')
     if not await member_model.is_member(branch_id, user_id, db):
         return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+
+    # task_type 동적 검증
+    valid_type = await type_model.find_by_key(branch_id, body.task_type, db)
+    if not valid_type:
+        return {'status': False, 'message': 'INVALID_TASK_TYPE'}
 
     # display_number 발급
     display_number = await task_model.next_display_number(branch_id, db)

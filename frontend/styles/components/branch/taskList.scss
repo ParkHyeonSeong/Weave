@@ -223,6 +223,18 @@
     text-overflow: ellipsis;
   }
 
+  &__Epic {
+    font-size: 10px;
+    font-weight: $font-weight-medium;
+    padding: 1px 8px;
+    border-radius: $radius-sm;
+    white-space: nowrap;
+    flex-shrink: 0;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   &__Labels {
     display: flex;
     gap: 4px;
@@ -240,10 +252,14 @@
   &__Status {
     font-size: $font-size-xs;
     font-weight: $font-weight-medium;
-    padding: 1px 8px;
+    padding: 1px 6px;
     border-radius: $radius-sm;
     white-space: nowrap;
     flex-shrink: 0;
+    border: none;
+    cursor: pointer;
+    outline: none;
+    appearance: auto;
 
     &--todo {
       background: $color-surface;
@@ -281,6 +297,12 @@
     font-size: 10px;
     font-weight: $font-weight-bold;
     flex-shrink: 0;
+
+    &--empty {
+      background: transparent;
+      border: 1px dashed $color-text-tertiary;
+      color: $color-text-tertiary;
+    }
   }
 
   &__DueDate {

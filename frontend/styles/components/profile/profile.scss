@@ -1,0 +1,190 @@
+@use '../../variables' as *;
+
+.Profile {
+  max-width: 640px;
+  padding: $space-6;
+
+  &__Title {
+    font-size: $font-size-xl;
+    font-weight: $font-weight-bold;
+    color: $color-text;
+    margin-bottom: $space-6;
+  }
+
+  &__Section {
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-xl;
+    padding: $space-6;
+    margin-bottom: $space-5;
+  }
+
+  &__SectionTitle {
+    font-size: $font-size-md;
+    font-weight: $font-weight-semibold;
+    color: $color-text;
+    margin-bottom: $space-4;
+  }
+
+  // -- Avatar --
+  &__AvatarArea {
+    display: flex;
+    align-items: center;
+    gap: $space-4;
+  }
+
+  &__AvatarPreview {
+    position: relative;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: $color-primary;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  &__AvatarImg {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  &__AvatarInitial {
+    font-size: $font-size-2xl;
+    font-weight: $font-weight-bold;
+    color: $color-text-inverse;
+  }
+
+  &__AvatarOverlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.4);
+    color: #fff;
+    opacity: 0;
+    transition: opacity $transition-fast;
+
+    .Profile__AvatarPreview:hover & {
+      opacity: 1;
+    }
+  }
+
+  &__AvatarSpinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: profile-spin 0.6s linear infinite;
+  }
+
+  &__AvatarHint {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+  }
+
+  // -- Form --
+  &__Form {
+    display: flex;
+    flex-direction: column;
+    gap: $space-4;
+  }
+
+  &__Field {
+    display: flex;
+    flex-direction: column;
+    gap: $space-1;
+  }
+
+  &__Label {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-text;
+  }
+
+  &__InputWrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  &__InputIcon {
+    position: absolute;
+    left: $space-3;
+    color: $color-text-tertiary;
+    pointer-events: none;
+  }
+
+  &__Input {
+    width: 100%;
+    padding: 10px $space-3 10px 36px;
+    background: $color-input-bg;
+    border: 1px solid $color-input-border;
+    border-radius: $radius-lg;
+    font-size: $font-size-base;
+    color: $color-text;
+    transition: all $transition-fast;
+    outline: none;
+
+    &::placeholder {
+      color: $color-text-tertiary;
+    }
+
+    &:focus {
+      border-color: $color-border-focus;
+      box-shadow: $shadow-focus;
+    }
+
+    &--disabled {
+      background: $color-surface;
+      color: $color-text-tertiary;
+      cursor: not-allowed;
+    }
+  }
+
+  &__TogglePassword {
+    position: absolute;
+    right: $space-3;
+    display: flex;
+    align-items: center;
+    color: $color-text-tertiary;
+    transition: color $transition-fast;
+
+    &:hover {
+      color: $color-text-secondary;
+    }
+  }
+
+  &__SaveBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    align-self: flex-start;
+    padding: 8px $space-5;
+    background: $color-primary;
+    color: $color-text-inverse;
+    border-radius: $radius-lg;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    transition: all $transition-fast;
+
+    &:hover:not(:disabled) {
+      background: $color-primary-hover;
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+}
+
+@keyframes profile-spin {
+  to { transform: rotate(360deg); }
+}

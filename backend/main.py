@@ -4,6 +4,7 @@ import os
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from library import validator
 from routers import auth as auth_router
@@ -16,6 +17,8 @@ from routers import sprint as sprint_router
 from routers import label as label_router
 from routers import epic as epic_router
 from routers import task as task_router
+from routers import profile as profile_router
+from routers import task_type_config as task_type_config_router
 
 # -- Logging ---------------------------------------------------------------
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -78,6 +81,13 @@ app.include_router(sprint_router.router, prefix="/branches/{branch_id}/sprints",
 app.include_router(label_router.router, prefix="/branches/{branch_id}/labels", tags=["labels"])
 app.include_router(epic_router.router, prefix="/branches/{branch_id}/epics", tags=["epics"])
 app.include_router(task_router.router, prefix="/branches/{branch_id}/tasks", tags=["tasks"])
+app.include_router(task_type_config_router.router, prefix="/branches/{branch_id}/task-types", tags=["task-types"])
+app.include_router(profile_router.router, prefix="/profile", tags=["profile"])
+
+# -- Static files (업로드 파일 서빙) -----------------------------------------
+uploads_dir = os.path.join(os.path.dirname(__file__), 'uploads')
+os.makedirs(os.path.join(uploads_dir, 'avatars'), exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
 
 # -- Health ----------------------------------------------------------------

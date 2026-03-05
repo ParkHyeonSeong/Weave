@@ -108,10 +108,12 @@ async def find_by_branch(branch_id: int, sprint_id, db: AsyncSession):
                t.epic_id, t.sprint_id, t.parent_task_id, t.assignee_id,
                t.start_date, t.due_date, t.sort_order, t.created_at,
                b.key AS branch_key,
-               u.username AS assignee_name
+               u.username AS assignee_name,
+               e.epic_name, e.color AS epic_color
         FROM task t
         INNER JOIN branch b ON t.branch_id = b.branch_id
         LEFT JOIN "user" u ON t.assignee_id = u.user_id
+        LEFT JOIN epic e ON t.epic_id = e.epic_id
         WHERE t.branch_id = :branch_id AND t.parent_task_id IS NULL
               {where_sprint}
         ORDER BY t.sort_order, t.created_at

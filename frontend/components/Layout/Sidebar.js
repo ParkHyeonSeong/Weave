@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { LayoutDashboard, CheckSquare, Plus } from 'lucide-react';
+import { LayoutDashboard, CheckSquare, Plus, Compass } from 'lucide-react';
 import { axios } from '@/library/_axios';
 
 export default function Sidebar({ onCreateBranch }) {
@@ -42,6 +42,13 @@ export default function Sidebar({ onCreateBranch }) {
           <button className="Sidebar__MenuItem">
             <CheckSquare size={16} className="Sidebar__MenuIcon" />
             My Tasks
+          </button>
+          <button
+            className={`Sidebar__MenuItem ${router.pathname === '/browse' ? 'Sidebar__MenuItem--active' : ''}`}
+            onClick={() => router.push('/browse')}
+          >
+            <Compass size={16} className="Sidebar__MenuIcon" />
+            Browse
           </button>
         </nav>
 

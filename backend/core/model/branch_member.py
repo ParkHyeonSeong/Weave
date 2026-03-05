@@ -32,3 +32,57 @@ async def find_by_branch(branch_id: int, db: AsyncSession):
     """), {'branch_id': branch_id})
     rows = result.fetchall()
     return [dict(row._mapping) for row in rows]
+
+
+async def get_role(branch_id: int, user_id: int, db: AsyncSession):
+    """사용자의 Branch 내 역할 반환"""
+    result = await db.execute(text("""
+        SELECT role FROM branch_member
+        WHERE branch_id = :branch_id AND user_id = :user_id
+    """), {'branch_id': branch_id, 'user_id': user_id})
+    row = result.fetchone()
+    return row._mapping['role'] if row else None
+
+
+async def update_role(branch_id: int, user_id: int, role: str, db: AsyncSession):
+    """멤버 역할 변경"""
+    await db.execute(text("""
+        UPDATE branch_member SET role = :role
+        WHERE branch_id = :branch_id AND user_id = :user_id
+    """), {'branch_id': branch_id, 'user_id': user_id, 'role': role})
+    await db.commit()
+
+
+async def remove(branch_id: int, user_id: int, db: AsyncSession):
+    """멤버 제거"""
+    await db.execute(text("""
+        DELETE FROM branch_member
+        WHERE branch_id = :branch_id AND user_id = :user_id
+    """), {'branch_id': branch_id, 'user_id': user_id})
+    await db.commit()
+
+
+async def count_admins(branch_id: int, db: AsyncSession) -> int:
+    """Branch의 admin 수"""
+    result = await db.execute(text("""
+        SELECT COUNT(*) FROM branch_member
+        WHERE branch_id = :branch_id AND role = 'admin'
+    """), {'branch_id': branch_id})
+    return result.scalar_one()
+
+
+async def search_non_members(branch_id: int, query: str, db: AsyncSession):
+    """초대 가능한 사용자 검색 (아직 멤버가 아닌 active 유저)"""
+    result = await db.execute(text("""
+        SELECT u.user_id, u.username, u.email
+        FROM "user" u
+        WHERE u.status = 'active'
+          AND u.user_id NOT IN (
+              SELECT user_id FROM branch_member WHERE branch_id = :branch_id
+          )
+          AND (u.username ILIKE :q OR u.email ILIKE :q)
+        ORDER BY u.username
+        LIMIT 10
+    """), {'branch_id': branch_id, 'q': f'%{query}%'})
+    rows = result.fetchall()
+    return [dict(row._mapping) for row in rows]

@@ -41,6 +41,12 @@
   border-radius: $radius-xl;
   overflow: hidden;
   border: 1px solid $color-border;
+  transition: border-color $transition-fast, background $transition-fast;
+
+  &--drag-over {
+    border-color: $color-primary;
+    background: rgba($color-primary, 0.03);
+  }
 
   &__Header {
     display: flex;
@@ -109,8 +115,12 @@
   border: 1px solid $color-border;
   border-radius: $radius-lg;
   padding: $space-3;
-  cursor: pointer;
+  cursor: grab;
   transition: all $transition-fast;
+
+  &:active {
+    cursor: grabbing;
+  }
 
   &:hover {
     border-color: $color-border-hover;

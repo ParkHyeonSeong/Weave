@@ -1,0 +1,159 @@
+@use '../../variables' as *;
+
+.BrowseBranches {
+  padding: $space-6;
+  max-width: 720px;
+
+  &__Header {
+    margin-bottom: $space-6;
+  }
+
+  &__TitleRow {
+    display: flex;
+    align-items: center;
+    gap: $space-3;
+    color: $color-text;
+    margin-bottom: $space-2;
+  }
+
+  &__Title {
+    font-size: $font-size-xl;
+    font-weight: $font-weight-bold;
+    color: $color-text;
+  }
+
+  &__Desc {
+    font-size: $font-size-sm;
+    color: $color-text-secondary;
+  }
+
+  // 검색
+  &__SearchWrap {
+    position: relative;
+    margin-bottom: $space-5;
+  }
+
+  &__SearchIcon {
+    position: absolute;
+    left: $space-3;
+    top: 50%;
+    transform: translateY(-50%);
+    color: $color-text-tertiary;
+  }
+
+  &__SearchInput {
+    width: 100%;
+    padding: $space-3 $space-3 $space-3 40px;
+    font-size: $font-size-sm;
+    color: $color-text;
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+    outline: none;
+    background: $color-bg;
+    transition: border-color $transition-fast;
+
+    &:focus {
+      border-color: $color-primary;
+      box-shadow: $shadow-focus;
+    }
+
+    &::placeholder {
+      color: $color-text-tertiary;
+    }
+  }
+
+  // 목록
+  &__List {
+    display: flex;
+    flex-direction: column;
+    gap: $space-3;
+  }
+
+  &__Empty {
+    padding: $space-10;
+    text-align: center;
+    font-size: $font-size-sm;
+    color: $color-text-tertiary;
+  }
+
+  &__Card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: $space-4;
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+    transition: all $transition-fast;
+
+    &:hover {
+      border-color: $color-border-hover;
+      box-shadow: $shadow-sm;
+    }
+  }
+
+  &__CardMain {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__CardHeader {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    margin-bottom: $space-1;
+  }
+
+  &__CardDot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  &__CardName {
+    font-size: $font-size-base;
+    font-weight: $font-weight-semibold;
+    color: $color-text;
+  }
+
+  &__CardKey {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+    background: $color-surface;
+    padding: 1px 6px;
+    border-radius: $radius-sm;
+  }
+
+  &__CardDesc {
+    font-size: $font-size-sm;
+    color: $color-text-secondary;
+    margin-bottom: $space-2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__CardMeta {
+    display: flex;
+    align-items: center;
+    gap: $space-1;
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+  }
+
+  &__JoinBtn {
+    padding: $space-2 $space-4;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-text-inverse;
+    background: $color-primary;
+    border-radius: $radius-md;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background $transition-fast;
+
+    &:hover {
+      background: $color-primary-hover;
+    }
+  }
+}

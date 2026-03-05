@@ -100,6 +100,37 @@
     color: $color-text-tertiary;
   }
 
+  &__VisibilityGroup {
+    display: flex;
+    gap: $space-2;
+  }
+
+  &__VisibilityBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: $space-2 $space-3;
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-text-secondary;
+    background: $color-bg;
+    cursor: pointer;
+    transition: all $transition-fast;
+
+    &:hover {
+      border-color: $color-border-hover;
+      color: $color-text;
+    }
+
+    &--active {
+      border-color: $color-primary;
+      background: $color-primary-subtle;
+      color: $color-primary;
+    }
+  }
+
   &__Error {
     font-size: $font-size-sm;
     color: $color-error;

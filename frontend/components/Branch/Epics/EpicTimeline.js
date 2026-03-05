@@ -4,11 +4,11 @@ import { Plus } from 'lucide-react';
 import EpicBar from './EpicBar';
 import EpicModal from '@/components/modal/EpicModal';
 
-export default function EpicTimeline({ branchId }) {
+export default function EpicTimeline({ branchId, onSelectEpic }) {
   const [epics, setEpics] = useState([]);
   const [sprints, setSprints] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [epicModal, setEpicModal] = useState({ open: false, epic: null });
+  const [epicModal, setEpicModal] = useState({ open: false });
 
   useEffect(() => {
     fetchData();
@@ -33,7 +33,7 @@ export default function EpicTimeline({ branchId }) {
     setLoading(false);
   };
 
-  // 타임라인 범위 계산 (전체 에픽 + 스프린트 기간을 기준으로)
+  // 타임라인 범위 계산
   const { timelineStart, timelineEnd, totalDays, months } = useMemo(() => {
     const allDates = [];
 
@@ -47,7 +47,6 @@ export default function EpicTimeline({ branchId }) {
     });
 
     if (allDates.length === 0) {
-      // 날짜가 없으면 현재 달 기준 3개월
       const now = new Date();
       const start = new Date(now.getFullYear(), now.getMonth(), 1);
       const end = new Date(now.getFullYear(), now.getMonth() + 3, 0);
@@ -57,18 +56,15 @@ export default function EpicTimeline({ branchId }) {
     const minDate = new Date(Math.min(...allDates));
     const maxDate = new Date(Math.max(...allDates));
 
-    // 한달 여유 추가
     const start = new Date(minDate.getFullYear(), minDate.getMonth() - 1, 1);
     const end = new Date(maxDate.getFullYear(), maxDate.getMonth() + 2, 0);
 
     const total = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
 
-    // 월 레이블 생성
     const monthLabels = [];
     const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
     while (cursor <= end) {
-      const monthStart = new Date(cursor);
-      const dayOffset = Math.ceil((monthStart - start) / (1000 * 60 * 60 * 24));
+      const dayOffset = Math.ceil((new Date(cursor) - start) / (1000 * 60 * 60 * 24));
       monthLabels.push({
         label: cursor.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
         offset: dayOffset,
@@ -76,15 +72,9 @@ export default function EpicTimeline({ branchId }) {
       cursor.setMonth(cursor.getMonth() + 1);
     }
 
-    return {
-      timelineStart: start,
-      timelineEnd: end,
-      totalDays: total,
-      months: monthLabels,
-    };
+    return { timelineStart: start, timelineEnd: end, totalDays: total, months: monthLabels };
   }, [epics, sprints]);
 
-  // 날짜 -> left% 계산
   const getPosition = (dateStr) => {
     if (!dateStr) return null;
     const date = new Date(dateStr);
@@ -92,7 +82,6 @@ export default function EpicTimeline({ branchId }) {
     return (days / totalDays) * 100;
   };
 
-  // 오늘 마커
   const todayPos = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -109,7 +98,7 @@ export default function EpicTimeline({ branchId }) {
       <div className="EpicTimeline__Actions">
         <button
           className="EpicTimeline__CreateBtn"
-          onClick={() => setEpicModal({ open: true, epic: null })}
+          onClick={() => setEpicModal({ open: true })}
         >
           <Plus size={14} />
           Create Epic
@@ -171,19 +160,19 @@ export default function EpicTimeline({ branchId }) {
                 key={epic.epic_id}
                 epic={epic}
                 getPosition={getPosition}
-                onClick={() => setEpicModal({ open: true, epic })}
+                onClick={() => onSelectEpic(epic)}
               />
             ))}
           </div>
         </div>
       )}
 
-      {/* Epic 모달 */}
+      {/* Epic 생성 모달 (생성 전용) */}
       {epicModal.open && (
         <EpicModal
           branchId={branchId}
-          epic={epicModal.epic}
-          onClose={() => setEpicModal({ open: false, epic: null })}
+          epic={null}
+          onClose={() => setEpicModal({ open: false })}
         />
       )}
     </div>

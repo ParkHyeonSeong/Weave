@@ -48,9 +48,46 @@ async def find_accessible(user_id: int, db: AsyncSession):
     return [dict(row._mapping) for row in rows]
 
 
+async def update(branch_id: int, fields: dict, db: AsyncSession):
+    """Branch 정보 수정"""
+    set_clauses = ', '.join(f'{k} = :{k}' for k in fields)
+    params = {**fields, 'branch_id': branch_id}
+    await db.execute(text(f"""
+        UPDATE branch SET {set_clauses}, updated_at = NOW()
+        WHERE branch_id = :branch_id
+    """), params)
+    await db.commit()
+
+
 async def find_by_key(key: str, db: AsyncSession):
     """key로 Branch 조회 (중복 체크용)"""
     result = await db.execute(text("""
         SELECT branch_id FROM branch WHERE key = :key
     """), {'key': key})
     return result.fetchone() is not None
+
+
+async def find_public(user_id: int, query: str, db: AsyncSession):
+    """public이면서 내가 멤버가 아닌 Branch 목록"""
+    params = {'user_id': user_id}
+    where_search = ''
+    if query:
+        where_search = "AND (b.branch_name ILIKE :q OR b.key ILIKE :q)"
+        params['q'] = f'%{query}%'
+
+    result = await db.execute(text(f"""
+        SELECT b.branch_id, b.branch_name, b.key, b.description,
+               b.color, b.created_at,
+               (SELECT COUNT(*) FROM branch_member bm2
+                WHERE bm2.branch_id = b.branch_id) AS member_count
+        FROM branch b
+        WHERE b.visibility = 'public'
+          AND b.is_archived = FALSE
+          AND b.branch_id NOT IN (
+              SELECT branch_id FROM branch_member WHERE user_id = :user_id
+          )
+          {where_search}
+        ORDER BY b.branch_name
+    """), params)
+    rows = result.fetchall()
+    return [dict(row._mapping) for row in rows]

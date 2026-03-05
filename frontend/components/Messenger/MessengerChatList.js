@@ -3,7 +3,7 @@ import { Plus } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import { formatMessageTime } from '@/library/formatTime';
 
-export default function MessengerChatList({ onOpenRoom, onNewChat }) {
+export default function MessengerChatList({ onOpenRoom, onNewChat, activeRoomId }) {
   const [rooms, setRooms] = useState([]);
 
   const fetchRooms = async () => {
@@ -45,7 +45,7 @@ export default function MessengerChatList({ onOpenRoom, onNewChat }) {
           rooms.map((room) => (
             <button
               key={room.room_id}
-              className="MessengerChatList__Item"
+              className={`MessengerChatList__Item ${activeRoomId === room.room_id ? 'MessengerChatList__Item--active' : ''}`}
               onClick={() => onOpenRoom(room.room_id)}
             >
               <div className="MessengerChatList__ItemInfo">

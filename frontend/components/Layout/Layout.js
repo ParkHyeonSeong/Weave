@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import Footer from './Footer';
@@ -7,14 +7,48 @@ import CreateBranch from '@/components/modal/CreateBranch';
 import CommandPalette from '@/components/modal/CommandPalette';
 import { requestNotificationPermission, showNotification } from '@/library/notification';
 
+const MESSENGER_MIN_WIDTH = 280;
+const MESSENGER_DEFAULT_WIDTH = 320;
+
 export default function Layout({ children }) {
   const [showCreateBranch, setShowCreateBranch] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMessengerCollapsed, setIsMessengerCollapsed] = useState(true);
   const [notifications, setNotifications] = useState([]);
+  const [messengerWidth, setMessengerWidth] = useState(MESSENGER_DEFAULT_WIDTH);
+  const isResizingRef = useRef(false);
   const wsRef = useRef(null);
   const activeRoomRef = useRef(null);
+
+  // 메신저 패널 리사이즈 드래그 핸들러
+  const handleResizeStart = useCallback((e) => {
+    e.preventDefault();
+    isResizingRef.current = true;
+    const startX = e.clientX;
+    const startWidth = messengerWidth;
+
+    const handleMouseMove = (e) => {
+      if (!isResizingRef.current) return;
+      const maxWidth = Math.floor(window.innerWidth * 0.5);
+      const delta = startX - e.clientX;
+      const newWidth = Math.min(maxWidth, Math.max(MESSENGER_MIN_WIDTH, startWidth + delta));
+      setMessengerWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      isResizingRef.current = false;
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [messengerWidth]);
 
   // 글로벌 Cmd+K 단축키
   useEffect(() => {
@@ -154,7 +188,17 @@ export default function Layout({ children }) {
           {children}
         </main>
         {!isMessengerCollapsed && (
-          <Messenger wsRef={wsRef} activeRoomRef={activeRoomRef} />
+          <>
+            <div
+              className="Layout__ResizeHandle"
+              onMouseDown={handleResizeStart}
+            />
+            <Messenger
+              wsRef={wsRef}
+              activeRoomRef={activeRoomRef}
+              panelWidth={messengerWidth}
+            />
+          </>
         )}
       </div>
       <Footer

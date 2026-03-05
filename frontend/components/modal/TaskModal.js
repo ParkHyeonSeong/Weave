@@ -25,6 +25,7 @@ export default function TaskModal({ branchId, branchKey, task, defaultSprintId, 
   const [epics, setEpics] = useState([]);
   const [members, setMembers] = useState([]);
   const [labels, setLabels] = useState([]);
+  const [taskTypes, setTaskTypes] = useState([]);
 
   useEffect(() => {
     fetchOptions();
@@ -35,16 +36,18 @@ export default function TaskModal({ branchId, branchKey, task, defaultSprintId, 
 
   const fetchOptions = async () => {
     try {
-      const [sprintRes, epicRes, memberRes, labelRes] = await Promise.all([
+      const [sprintRes, epicRes, memberRes, labelRes, typeRes] = await Promise.all([
         axios.get(`/branches/${branchId}/sprints`),
         axios.get(`/branches/${branchId}/epics`),
         axios.get(`/branches/${branchId}/members`),
         axios.get(`/branches/${branchId}/labels`),
+        axios.get(`/branches/${branchId}/task-types`),
       ]);
       if (sprintRes.data.status) setSprints(sprintRes.data.sprints);
       if (epicRes.data.status) setEpics(epicRes.data.epics);
       if (memberRes.data.status) setMembers(memberRes.data.members);
       if (labelRes.data.status) setLabels(labelRes.data.labels);
+      if (typeRes.data.status) setTaskTypes(typeRes.data.task_types);
     } catch {}
   };
 
@@ -150,9 +153,10 @@ export default function TaskModal({ branchId, branchKey, task, defaultSprintId, 
             <div className="TaskModal__Field TaskModal__Field--small">
               <label className="TaskModal__Label">Type</label>
               <select className="TaskModal__Select" value={taskType} onChange={(e) => setTaskType(e.target.value)}>
-                <option value="task">Task</option>
-                <option value="bug">Bug</option>
-                <option value="story">Story</option>
+                {taskTypes.map((t) => (
+                  <option key={t.type_key} value={t.type_key}>{t.type_name}</option>
+                ))}
+                {taskTypes.length === 0 && <option value="task">Task</option>}
               </select>
             </div>
             <div className="TaskModal__Field TaskModal__Field--small">

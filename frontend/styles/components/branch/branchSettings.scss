@@ -1,0 +1,669 @@
+@use '../../variables' as *;
+
+// ===== BranchSettings =====
+.BranchSettings {
+  display: flex;
+  gap: $space-6;
+  max-width: 900px;
+
+  &__SubTabs {
+    display: flex;
+    flex-direction: column;
+    gap: $space-1;
+    width: 180px;
+    flex-shrink: 0;
+    padding-top: $space-1;
+  }
+
+  &__SubTab {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: $space-2 $space-3;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-text-secondary;
+    border-radius: $radius-md;
+    cursor: pointer;
+    transition: all $transition-fast;
+
+    &:hover {
+      color: $color-text;
+      background: $color-surface;
+    }
+
+    &--active {
+      color: $color-primary;
+      background: $color-primary-subtle;
+    }
+  }
+
+  &__Content {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+// ===== SettingsGeneral =====
+.SettingsGeneral {
+  display: flex;
+  flex-direction: column;
+  gap: $space-5;
+  max-width: 520px;
+
+  &__Field {
+    display: flex;
+    flex-direction: column;
+    gap: $space-2;
+  }
+
+  &__Label {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-text;
+  }
+
+  &__Input {
+    padding: $space-2 $space-3;
+    font-size: $font-size-sm;
+    color: $color-text;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    outline: none;
+    background: $color-bg;
+    transition: border-color $transition-fast;
+
+    &:focus {
+      border-color: $color-primary;
+      box-shadow: $shadow-focus;
+    }
+
+    &--readonly {
+      background: $color-surface;
+      color: $color-text-tertiary;
+      cursor: not-allowed;
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  }
+
+  &__Textarea {
+    padding: $space-2 $space-3;
+    font-size: $font-size-sm;
+    color: $color-text;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    outline: none;
+    resize: vertical;
+    font-family: inherit;
+    background: $color-bg;
+    transition: border-color $transition-fast;
+
+    &:focus {
+      border-color: $color-primary;
+      box-shadow: $shadow-focus;
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  }
+
+  &__Hint {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+  }
+
+  &__VisibilityGroup {
+    display: flex;
+    gap: $space-2;
+  }
+
+  &__VisibilityBtn {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: $space-2 $space-4;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-text-secondary;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    cursor: pointer;
+    transition: all $transition-fast;
+
+    &:hover:not(:disabled) {
+      border-color: $color-border-hover;
+    }
+
+    &--active {
+      color: $color-primary;
+      border-color: $color-primary;
+      background: $color-primary-subtle;
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  }
+
+  &__Actions {
+    padding-top: $space-2;
+  }
+
+  &__SaveBtn {
+    padding: $space-2 $space-5;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-text-inverse;
+    background: $color-primary;
+    border-radius: $radius-md;
+    cursor: pointer;
+    transition: background $transition-fast;
+
+    &:hover:not(:disabled) {
+      background: $color-primary-hover;
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  }
+}
+
+// ===== SettingsMembers =====
+.SettingsMembers {
+  display: flex;
+  flex-direction: column;
+  gap: $space-4;
+
+  &__Actions {
+    position: relative;
+  }
+
+  &__InviteBtn {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: $space-2 $space-3;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-primary;
+    background: $color-primary-subtle;
+    border-radius: $radius-md;
+    cursor: pointer;
+    transition: background $transition-fast;
+
+    &:hover {
+      background: rgba(94, 106, 210, 0.14);
+    }
+  }
+
+  // 초대 검색 드롭다운
+  &__InviteDropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    width: 360px;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+    box-shadow: $shadow-lg;
+    z-index: 10;
+    overflow: hidden;
+  }
+
+  &__SearchWrap {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: $space-3;
+    border-bottom: 1px solid $color-border;
+  }
+
+  &__SearchIcon {
+    color: $color-text-tertiary;
+    flex-shrink: 0;
+  }
+
+  &__SearchInput {
+    flex: 1;
+    border: none;
+    outline: none;
+    font-size: $font-size-sm;
+    color: $color-text;
+    background: transparent;
+
+    &::placeholder {
+      color: $color-text-tertiary;
+    }
+  }
+
+  &__SearchResults {
+    max-height: 240px;
+    overflow-y: auto;
+  }
+
+  &__SearchEmpty {
+    padding: $space-4;
+    text-align: center;
+    font-size: $font-size-sm;
+    color: $color-text-tertiary;
+  }
+
+  &__SearchItem {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: $space-2 $space-3;
+    cursor: pointer;
+    transition: background $transition-fast;
+    color: $color-text-secondary;
+
+    &:hover {
+      background: $color-surface-hover;
+      color: $color-primary;
+    }
+  }
+
+  &__SearchItemInfo {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__SearchItemName {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-text;
+  }
+
+  &__SearchItemEmail {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+  }
+
+  // 멤버 테이블
+  &__Table {
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+    overflow: hidden;
+  }
+
+  &__TableHeader {
+    display: flex;
+    align-items: center;
+    padding: $space-2 $space-4;
+    background: $color-surface;
+    border-bottom: 1px solid $color-border;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    color: $color-text-tertiary;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  &__Row {
+    display: flex;
+    align-items: center;
+    padding: $space-3 $space-4;
+    border-bottom: 1px solid $color-border;
+    transition: background $transition-fast;
+
+    &:last-child {
+      border-bottom: none;
+    }
+
+    &:hover {
+      background: $color-surface;
+    }
+  }
+
+  &__Col {
+    &--name {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: $space-2;
+      font-size: $font-size-sm;
+      font-weight: $font-weight-medium;
+      color: $color-text;
+      min-width: 0;
+    }
+
+    &--email {
+      flex: 1;
+      font-size: $font-size-sm;
+      color: $color-text-secondary;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    &--role {
+      width: 120px;
+      flex-shrink: 0;
+    }
+
+    &--action {
+      width: 40px;
+      flex-shrink: 0;
+      display: flex;
+      justify-content: center;
+    }
+  }
+
+  &__Avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: $color-primary-subtle;
+    color: $color-primary;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-semibold;
+    flex-shrink: 0;
+  }
+
+  &__RoleBadge {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    color: $color-text-secondary;
+    text-transform: capitalize;
+  }
+
+  &__RemoveBtn {
+    padding: $space-1;
+    color: $color-text-tertiary;
+    border-radius: $radius-sm;
+    cursor: pointer;
+    transition: all $transition-fast;
+    opacity: 0;
+
+    .SettingsMembers__Row:hover & {
+      opacity: 1;
+    }
+
+    &:hover {
+      color: $color-error;
+      background: $color-error-bg;
+    }
+  }
+}
+
+// ===== SettingsTaskTypes =====
+.SettingsTaskTypes {
+  display: flex;
+  flex-direction: column;
+  gap: $space-3;
+
+  &__List {
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+    overflow: hidden;
+  }
+
+  &__Item {
+    border-bottom: 1px solid $color-border;
+
+    &:last-child {
+      border-bottom: none;
+    }
+  }
+
+  // 표시 모드
+  &__DisplayRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: $space-3 $space-4;
+    transition: background $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+    }
+  }
+
+  &__Info {
+    display: flex;
+    align-items: center;
+    gap: $space-3;
+  }
+
+  &__Name {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-text;
+  }
+
+  &__Key {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+    background: $color-surface;
+    padding: 1px 6px;
+    border-radius: $radius-sm;
+  }
+
+  &__ItemActions {
+    display: flex;
+    gap: $space-1;
+    opacity: 0;
+    transition: opacity $transition-fast;
+
+    .SettingsTaskTypes__DisplayRow:hover & {
+      opacity: 1;
+    }
+  }
+
+  &__ActionBtn {
+    padding: $space-1;
+    color: $color-text-tertiary;
+    border-radius: $radius-sm;
+    cursor: pointer;
+    transition: all $transition-fast;
+
+    &:hover {
+      color: $color-text;
+      background: $color-surface-hover;
+    }
+
+    &--danger:hover {
+      color: $color-error;
+      background: $color-error-bg;
+    }
+  }
+
+  // 편집 모드
+  &__EditRow {
+    padding: $space-3 $space-4;
+    display: flex;
+    flex-direction: column;
+    gap: $space-3;
+    background: $color-surface;
+  }
+
+  &__EditFields {
+    display: flex;
+    flex-direction: column;
+    gap: $space-2;
+  }
+
+  &__EditInput {
+    padding: $space-2 $space-3;
+    font-size: $font-size-sm;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    outline: none;
+    color: $color-text;
+    background: $color-bg;
+
+    &:focus {
+      border-color: $color-primary;
+      box-shadow: $shadow-focus;
+    }
+  }
+
+  &__EditActions {
+    display: flex;
+    gap: $space-2;
+  }
+
+  // 아이콘 선택
+  &__IconPicker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $space-1;
+  }
+
+  &__IconBtn {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: $radius-md;
+    cursor: pointer;
+    transition: all $transition-fast;
+    border: 1px solid transparent;
+
+    &:hover {
+      background: $color-surface-hover;
+    }
+
+    &--active {
+      background: $color-primary-subtle;
+      border-color: $color-primary;
+    }
+  }
+
+  // 색상 선택
+  &__ColorPicker {
+    display: flex;
+    gap: $space-1;
+  }
+
+  &__ColorBtn {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: all $transition-fast;
+
+    &:hover {
+      transform: scale(1.15);
+    }
+
+    &--active {
+      border-color: $color-text;
+      box-shadow: 0 0 0 2px $color-bg;
+    }
+  }
+
+  // 추가 폼
+  &__AddForm {
+    display: flex;
+    flex-direction: column;
+    gap: $space-3;
+    padding: $space-4;
+    border: 1px dashed $color-border;
+    border-radius: $radius-lg;
+  }
+
+  &__AddFields {
+    display: flex;
+    gap: $space-2;
+  }
+
+  &__AddInput {
+    flex: 1;
+    padding: $space-2 $space-3;
+    font-size: $font-size-sm;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    outline: none;
+    color: $color-text;
+
+    &:focus {
+      border-color: $color-primary;
+      box-shadow: $shadow-focus;
+    }
+
+    &::placeholder {
+      color: $color-text-tertiary;
+    }
+  }
+
+  &__AddActions {
+    display: flex;
+    gap: $space-2;
+  }
+
+  &__SubmitBtn {
+    padding: $space-2 $space-4;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-text-inverse;
+    background: $color-primary;
+    border-radius: $radius-md;
+    cursor: pointer;
+    transition: background $transition-fast;
+
+    &:hover {
+      background: $color-primary-hover;
+    }
+  }
+
+  &__SaveBtn {
+    padding: $space-1;
+    color: $color-success;
+    border-radius: $radius-sm;
+    cursor: pointer;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: $color-success-bg;
+    }
+  }
+
+  &__CancelBtn {
+    padding: $space-1 $space-3;
+    font-size: $font-size-sm;
+    color: $color-text-secondary;
+    cursor: pointer;
+    border-radius: $radius-md;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: $color-surface-hover;
+    }
+  }
+
+  &__AddBtn {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: $space-2 $space-3;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-text-secondary;
+    cursor: pointer;
+    border-radius: $radius-md;
+    transition: all $transition-fast;
+
+    &:hover {
+      color: $color-primary;
+      background: $color-primary-subtle;
+    }
+  }
+}

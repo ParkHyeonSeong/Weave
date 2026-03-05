@@ -28,6 +28,10 @@ import "@/styles/components/branch/boardView.scss";
 import "@/styles/components/branch/epicTimeline.scss";
 import "@/styles/components/modal/epicModal.scss";
 import "@/styles/components/branch/taskDetailPanel.scss";
+import "@/styles/components/profile/profile.scss";
+import "@/styles/components/common/customSelect.scss";
+import "@/styles/components/branch/branchSettings.scss";
+import "@/styles/components/browse/browseBranches.scss";
 
 const publicPaths = ['/auth/login', '/setup'];
 

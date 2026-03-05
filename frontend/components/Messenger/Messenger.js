@@ -5,10 +5,14 @@ import MessengerUserList from './MessengerUserList';
 import MessengerChatRoom from './MessengerChatRoom';
 import MessengerNewChat from './MessengerNewChat';
 
-export default function Messenger({ wsRef, activeRoomRef }) {
+const SPLIT_THRESHOLD = 560;
+
+export default function Messenger({ wsRef, activeRoomRef, panelWidth }) {
   const [activeTab, setActiveTab] = useState('chats');
   const [activeRoomId, setActiveRoomId] = useState(null);
   const [showNewChat, setShowNewChat] = useState(false);
+
+  const isSplitView = panelWidth >= SPLIT_THRESHOLD;
 
   // 채팅방 진입
   const handleOpenRoom = (roomId) => {
@@ -41,33 +45,9 @@ export default function Messenger({ wsRef, activeRoomRef }) {
     setActiveRoomId(null);
   };
 
-  // 현재 표시할 화면 결정
-  if (activeRoomId) {
-    return (
-      <div className="Messenger">
-        <MessengerChatRoom
-          roomId={activeRoomId}
-          wsRef={wsRef}
-          onBack={handleBack}
-        />
-      </div>
-    );
-  }
-
-  if (showNewChat) {
-    return (
-      <div className="Messenger">
-        <MessengerNewChat
-          wsRef={wsRef}
-          onBack={handleBack}
-          onOpenRoom={handleOpenRoom}
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div className="Messenger">
+  // 목록 패널 (탭 + 컨텐츠)
+  const listPanel = (
+    <div className="Messenger__ListPanel">
       <div className="Messenger__Tabs">
         <button
           className={`Messenger__Tab ${activeTab === 'chats' ? 'Messenger__Tab--active' : ''}`}
@@ -86,11 +66,71 @@ export default function Messenger({ wsRef, activeRoomRef }) {
       </div>
       <div className="Messenger__Content">
         {activeTab === 'chats' ? (
-          <MessengerChatList onOpenRoom={handleOpenRoom} onNewChat={handleNewChat} />
+          <MessengerChatList onOpenRoom={handleOpenRoom} onNewChat={handleNewChat} activeRoomId={activeRoomId} />
         ) : (
           <MessengerUserList onOpenRoom={handleOpenRoom} />
         )}
       </div>
+    </div>
+  );
+
+  // --- Split view (넓은 패널) ---
+  if (isSplitView) {
+    return (
+      <div className="Messenger Messenger--split" style={{ width: panelWidth }}>
+        {listPanel}
+        <div className="Messenger__RoomPanel">
+          {showNewChat ? (
+            <MessengerNewChat
+              wsRef={wsRef}
+              onBack={handleBack}
+              onOpenRoom={handleOpenRoom}
+            />
+          ) : activeRoomId ? (
+            <MessengerChatRoom
+              roomId={activeRoomId}
+              wsRef={wsRef}
+              onBack={handleBack}
+              hideback
+            />
+          ) : (
+            <div className="Messenger__RoomEmpty">
+              Select a conversation
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // --- Narrow view (기존 동작: 뷰 전환) ---
+  if (activeRoomId) {
+    return (
+      <div className="Messenger" style={{ width: panelWidth }}>
+        <MessengerChatRoom
+          roomId={activeRoomId}
+          wsRef={wsRef}
+          onBack={handleBack}
+        />
+      </div>
+    );
+  }
+
+  if (showNewChat) {
+    return (
+      <div className="Messenger" style={{ width: panelWidth }}>
+        <MessengerNewChat
+          wsRef={wsRef}
+          onBack={handleBack}
+          onOpenRoom={handleOpenRoom}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="Messenger" style={{ width: panelWidth }}>
+      {listPanel}
     </div>
   );
 }

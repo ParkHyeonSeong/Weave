@@ -1,0 +1,160 @@
+@use '../../variables' as *;
+
+.CustomSelect {
+  position: relative;
+  display: inline-flex;
+
+  // -- 트리거 버튼 --
+  &__Trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $space-2;
+    width: 100%;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    cursor: pointer;
+    transition: border-color $transition-fast, box-shadow $transition-fast;
+    font-family: $font-family;
+    color: $color-text;
+    text-align: left;
+
+    &:hover {
+      border-color: $color-border-hover;
+    }
+  }
+
+  &--open &__Trigger {
+    border-color: $color-primary;
+    box-shadow: $shadow-focus;
+  }
+
+  // -- 크기 --
+  &--md &__Trigger {
+    padding: 6px $space-3;
+    font-size: $font-size-sm;
+    min-width: 140px;
+    height: 32px;
+  }
+
+  &--sm &__Trigger {
+    padding: 2px $space-2;
+    font-size: $font-size-xs;
+    min-width: 0;
+    height: 24px;
+    border-color: transparent;
+    background: transparent;
+    border-radius: $radius-sm;
+
+    &:hover {
+      background: $color-surface;
+      border-color: $color-border;
+    }
+  }
+
+  &--sm#{&}--open &__Trigger {
+    background: $color-bg;
+    border-color: $color-primary;
+  }
+
+  // -- 값 표시 --
+  &__Value {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  &__Placeholder {
+    color: $color-text-tertiary;
+  }
+
+  &__Arrow {
+    flex-shrink: 0;
+    color: $color-text-tertiary;
+    transition: transform $transition-fast;
+  }
+
+  &--open &__Arrow {
+    transform: rotate(180deg);
+  }
+
+  &__Dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  &__Icon {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  // -- 드롭다운 --
+  &__Dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    min-width: 100%;
+    max-height: 240px;
+    overflow-y: auto;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+    box-shadow: $shadow-md;
+    z-index: 100;
+    padding: $space-1 0;
+    animation: customSelectFadeIn 120ms ease;
+  }
+
+  // -- 옵션 --
+  &__Option {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 6px $space-3;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-family: $font-family;
+    font-size: $font-size-sm;
+    color: $color-text;
+    text-align: left;
+    transition: background $transition-fast;
+    white-space: nowrap;
+
+    &:hover {
+      background: $color-surface;
+    }
+
+    &--selected {
+      background: $color-primary-subtle;
+      color: $color-primary;
+      font-weight: $font-weight-medium;
+    }
+  }
+
+  &--sm &__Option {
+    padding: 4px $space-2;
+    font-size: $font-size-xs;
+  }
+}
+
+@keyframes customSelectFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

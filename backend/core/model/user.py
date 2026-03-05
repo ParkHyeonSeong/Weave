@@ -47,7 +47,7 @@ async def update_login(user_id: int, ip: str, db: AsyncSession):
 async def find_all(db: AsyncSession):
     """전체 사용자 목록 (비밀번호 제외)"""
     result = await db.execute(text("""
-        SELECT user_id, email, username, role, status, created_at, last_login_at
+        SELECT user_id, email, username, role, status, avatar_url, created_at, last_login_at
         FROM "user"
         ORDER BY created_at DESC
     """))
@@ -58,7 +58,18 @@ async def find_all(db: AsyncSession):
 async def find_by_id(user_id: int, db: AsyncSession):
     """사용자 ID로 조회 (비밀번호 제외)"""
     result = await db.execute(text("""
-        SELECT user_id, email, username, role, status, created_at, last_login_at
+        SELECT user_id, email, username, role, status, avatar_url, created_at, last_login_at
+        FROM "user"
+        WHERE user_id = :user_id
+    """), {'user_id': user_id})
+    row = result.fetchone()
+    return dict(row._mapping) if row else None
+
+
+async def find_by_id_with_password(user_id: int, db: AsyncSession):
+    """사용자 ID로 조회 (비밀번호 포함, 비밀번호 검증용)"""
+    result = await db.execute(text("""
+        SELECT user_id, email, password, username, role, status, avatar_url
         FROM "user"
         WHERE user_id = :user_id
     """), {'user_id': user_id})
@@ -73,4 +84,34 @@ async def update_status(user_id: int, status: str, db: AsyncSession):
         SET status = :status
         WHERE user_id = :user_id
     """), {'user_id': user_id, 'status': status})
+    await db.commit()
+
+
+async def update_username(user_id: int, username: str, db: AsyncSession):
+    """사용자 이름 변경"""
+    await db.execute(text("""
+        UPDATE "user"
+        SET username = :username
+        WHERE user_id = :user_id
+    """), {'user_id': user_id, 'username': username})
+    await db.commit()
+
+
+async def update_password(user_id: int, password_hash: bytes, db: AsyncSession):
+    """비밀번호 변경"""
+    await db.execute(text("""
+        UPDATE "user"
+        SET password = :password
+        WHERE user_id = :user_id
+    """), {'user_id': user_id, 'password': password_hash})
+    await db.commit()
+
+
+async def update_avatar(user_id: int, avatar_url: str, db: AsyncSession):
+    """아바타 URL 변경"""
+    await db.execute(text("""
+        UPDATE "user"
+        SET avatar_url = :avatar_url
+        WHERE user_id = :user_id
+    """), {'user_id': user_id, 'avatar_url': avatar_url})
     await db.commit()

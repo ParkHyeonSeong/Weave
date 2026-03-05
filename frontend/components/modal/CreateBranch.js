@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { X } from 'lucide-react';
+import { X, Globe, Lock } from 'lucide-react';
 import { axios } from '@/library/_axios';
 
 export default function CreateBranch({ onClose }) {
   const [branchName, setBranchName] = useState('');
   const [key, setKey] = useState('');
   const [description, setDescription] = useState('');
+  const [visibility, setVisibility] = useState('private');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -26,7 +27,7 @@ export default function CreateBranch({ onClose }) {
         branch_name: branchName.trim(),
         key: key.trim(),
         description: description.trim() || null,
-        visibility: 'private',
+        visibility,
       });
       if (res.data.status) {
         // Sidebar 목록 갱신 이벤트
@@ -88,6 +89,33 @@ export default function CreateBranch({ onClose }) {
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
             />
+          </div>
+
+          <div className="CreateBranch__Field">
+            <label className="CreateBranch__Label">Visibility</label>
+            <div className="CreateBranch__VisibilityGroup">
+              <button
+                type="button"
+                className={`CreateBranch__VisibilityBtn ${visibility === 'private' ? 'CreateBranch__VisibilityBtn--active' : ''}`}
+                onClick={() => setVisibility('private')}
+              >
+                <Lock size={14} />
+                Private
+              </button>
+              <button
+                type="button"
+                className={`CreateBranch__VisibilityBtn ${visibility === 'public' ? 'CreateBranch__VisibilityBtn--active' : ''}`}
+                onClick={() => setVisibility('public')}
+              >
+                <Globe size={14} />
+                Public
+              </button>
+            </div>
+            <span className="CreateBranch__Hint">
+              {visibility === 'private'
+                ? 'Only invited members can access this branch.'
+                : 'Anyone in the workspace can view this branch.'}
+            </span>
           </div>
 
           {error && <div className="CreateBranch__Error">{error}</div>}

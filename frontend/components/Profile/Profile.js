@@ -1,0 +1,326 @@
+import { useState, useEffect, useRef } from 'react';
+import { jwtDecode } from 'jwt-decode';
+import { User, Mail, Lock, Eye, EyeOff, Camera } from 'lucide-react';
+import { axios, getBaseURL } from '@/library/_axios';
+import Alert from '@/components/modal/Alert';
+
+export default function Profile() {
+  // 프로필 정보
+  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  // 이름 변경
+  const [newUsername, setNewUsername] = useState('');
+  const [usernameSaving, setUsernameSaving] = useState(false);
+
+  // 비밀번호 변경
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [passwordSaving, setPasswordSaving] = useState(false);
+
+  // 아바타 업로드
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const fileInputRef = useRef(null);
+
+  // Alert
+  const [alertOpen, setAlertOpen] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+
+  const showAlert = (title, message) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertOpen(true);
+  };
+
+  // 프로필 로드
+  useEffect(() => {
+    fetchProfile();
+  }, []);
+
+  const fetchProfile = async () => {
+    try {
+      const res = await axios.get('/profile/me');
+      if (res.data.status) {
+        const user = res.data.user;
+        setEmail(user.email);
+        setUsername(user.username);
+        setNewUsername(user.username);
+        setAvatarUrl(user.avatar_url || '');
+        if (user.avatar_url) {
+          sessionStorage.setItem('avatar_url', user.avatar_url);
+        }
+      }
+    } catch {
+      showAlert('Error', 'Failed to load profile.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 이름 변경
+  const handleUsernameSubmit = async (e) => {
+    e.preventDefault();
+    if (usernameSaving) return;
+    if (!newUsername.trim()) {
+      showAlert('Error', 'Name must not be empty.');
+      return;
+    }
+    if (newUsername === username) return;
+
+    setUsernameSaving(true);
+    try {
+      const res = await axios.patch('/profile/username', { username: newUsername });
+      if (res.data.status) {
+        const token = res.data.x_token;
+        sessionStorage.setItem('x_token', token);
+        sessionStorage.setItem('profile', JSON.stringify(jwtDecode(token)));
+        setUsername(newUsername);
+        window.dispatchEvent(new CustomEvent('profile:updated'));
+        showAlert('Success', 'Name updated.');
+      } else {
+        showAlert('Error', res.data.message);
+      }
+    } catch {
+      showAlert('Error', 'Failed to update name.');
+    } finally {
+      setUsernameSaving(false);
+    }
+  };
+
+  // 비밀번호 변경
+  const handlePasswordSubmit = async (e) => {
+    e.preventDefault();
+    if (passwordSaving) return;
+    if (!currentPassword) {
+      showAlert('Error', 'Please enter current password.');
+      return;
+    }
+    if (newPassword.length < 6) {
+      showAlert('Error', 'New password must be at least 6 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      showAlert('Error', 'Passwords do not match.');
+      return;
+    }
+
+    setPasswordSaving(true);
+    try {
+      const res = await axios.patch('/profile/password', {
+        current_password: currentPassword,
+        new_password: newPassword,
+        confirm_password: confirmPassword,
+      });
+      if (res.data.status) {
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+        showAlert('Success', 'Password updated.');
+      } else {
+        const messages = {
+          INVALID_CURRENT_PASSWORD: 'Current password is incorrect.',
+          PASSWORD_MISMATCH: 'New passwords do not match.',
+        };
+        showAlert('Error', messages[res.data.message] || res.data.message);
+      }
+    } catch {
+      showAlert('Error', 'Failed to update password.');
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
+
+  // 아바타 업로드
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      showAlert('Error', 'Only JPG, PNG, GIF, WebP images are allowed.');
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      showAlert('Error', 'File size must be less than 2MB.');
+      return;
+    }
+
+    setAvatarUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await axios.post('/profile/avatar', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      if (res.data.status) {
+        setAvatarUrl(res.data.avatar_url);
+        sessionStorage.setItem('avatar_url', res.data.avatar_url);
+        window.dispatchEvent(new CustomEvent('profile:updated'));
+        showAlert('Success', 'Avatar updated.');
+      } else {
+        const messages = {
+          INVALID_FILE_TYPE: 'Invalid file type.',
+          FILE_TOO_LARGE: 'File size must be less than 2MB.',
+        };
+        showAlert('Error', messages[res.data.message] || res.data.message);
+      }
+    } catch {
+      showAlert('Error', 'Failed to upload avatar.');
+    } finally {
+      setAvatarUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  if (loading) return null;
+
+  const initial = username ? username.charAt(0).toUpperCase() : '?';
+  const fullAvatarUrl = avatarUrl ? `${getBaseURL()}${avatarUrl}` : '';
+
+  return (
+    <div className="Profile">
+      <h1 className="Profile__Title">Profile Settings</h1>
+
+      {/* 아바타 섹션 */}
+      <div className="Profile__Section">
+        <h2 className="Profile__SectionTitle">Avatar</h2>
+        <div className="Profile__AvatarArea">
+          <div className="Profile__AvatarPreview" onClick={handleAvatarClick}>
+            {fullAvatarUrl ? (
+              <img src={fullAvatarUrl} alt={username} className="Profile__AvatarImg" />
+            ) : (
+              <span className="Profile__AvatarInitial">{initial}</span>
+            )}
+            <div className="Profile__AvatarOverlay">
+              {avatarUploading ? (
+                <span className="Profile__AvatarSpinner" />
+              ) : (
+                <Camera size={20} />
+              )}
+            </div>
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/gif,image/webp"
+            onChange={handleAvatarChange}
+            hidden
+          />
+          <p className="Profile__AvatarHint">Click to upload (JPG, PNG, GIF, WebP, max 2MB)</p>
+        </div>
+      </div>
+
+      {/* 이름 변경 섹션 */}
+      <div className="Profile__Section">
+        <h2 className="Profile__SectionTitle">Name</h2>
+        <form className="Profile__Form" onSubmit={handleUsernameSubmit}>
+          <div className="Profile__Field">
+            <label className="Profile__Label">Email</label>
+            <div className="Profile__InputWrap">
+              <Mail size={16} className="Profile__InputIcon" />
+              <input className="Profile__Input Profile__Input--disabled" value={email} disabled />
+            </div>
+          </div>
+          <div className="Profile__Field">
+            <label className="Profile__Label">Name</label>
+            <div className="Profile__InputWrap">
+              <User size={16} className="Profile__InputIcon" />
+              <input
+                className="Profile__Input"
+                value={newUsername}
+                onChange={(e) => setNewUsername(e.target.value)}
+                placeholder="Your name"
+              />
+            </div>
+          </div>
+          <button
+            type="submit"
+            className="Profile__SaveBtn"
+            disabled={usernameSaving || newUsername === username}
+          >
+            {usernameSaving ? 'Saving...' : 'Save Name'}
+          </button>
+        </form>
+      </div>
+
+      {/* 비밀번호 변경 섹션 */}
+      <div className="Profile__Section">
+        <h2 className="Profile__SectionTitle">Change Password</h2>
+        <form className="Profile__Form" onSubmit={handlePasswordSubmit}>
+          <div className="Profile__Field">
+            <label className="Profile__Label">Current Password</label>
+            <div className="Profile__InputWrap">
+              <Lock size={16} className="Profile__InputIcon" />
+              <input
+                className="Profile__Input"
+                type={showCurrentPw ? 'text' : 'password'}
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="Current password"
+              />
+              <button
+                type="button"
+                className="Profile__TogglePassword"
+                onClick={() => setShowCurrentPw((prev) => !prev)}
+              >
+                {showCurrentPw ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          </div>
+          <div className="Profile__Field">
+            <label className="Profile__Label">New Password</label>
+            <div className="Profile__InputWrap">
+              <Lock size={16} className="Profile__InputIcon" />
+              <input
+                className="Profile__Input"
+                type={showNewPw ? 'text' : 'password'}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="New password (min 6 chars)"
+              />
+              <button
+                type="button"
+                className="Profile__TogglePassword"
+                onClick={() => setShowNewPw((prev) => !prev)}
+              >
+                {showNewPw ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          </div>
+          <div className="Profile__Field">
+            <label className="Profile__Label">Confirm Password</label>
+            <div className="Profile__InputWrap">
+              <Lock size={16} className="Profile__InputIcon" />
+              <input
+                className="Profile__Input"
+                type={showNewPw ? 'text' : 'password'}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Confirm new password"
+              />
+            </div>
+          </div>
+          <button
+            type="submit"
+            className="Profile__SaveBtn"
+            disabled={passwordSaving || !currentPassword || !newPassword || !confirmPassword}
+          >
+            {passwordSaving ? 'Saving...' : 'Change Password'}
+          </button>
+        </form>
+      </div>
+
+      <Alert isOpen={alertOpen} title={alertTitle} contents={alertMessage} onClose={() => setAlertOpen(false)} />
+    </div>
+  );
+}

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { axios } from '@/library/_axios';
 import BoardColumn from './BoardColumn';
+import CustomSelect from '@/components/common/CustomSelect';
 
 const COLUMNS = [
   { key: 'todo', label: 'To Do' },
@@ -8,7 +9,7 @@ const COLUMNS = [
   { key: 'done', label: 'Done' },
 ];
 
-export default function BoardView({ branchId, branchKey, onSelectTask }) {
+export default function BoardView({ branchId, branchKey, taskTypes, onSelectTask }) {
   const [columns, setColumns] = useState({ todo: [], in_progress: [], done: [] });
   const [sprints, setSprints] = useState([]);
   const [selectedSprintId, setSelectedSprintId] = useState(null);
@@ -66,18 +67,18 @@ export default function BoardView({ branchId, branchKey, onSelectTask }) {
     <div className="BoardView">
       {/* Sprint 셀렉터 */}
       <div className="BoardView__Header">
-        <select
-          className="BoardView__SprintSelect"
+        <CustomSelect
           value={selectedSprintId || ''}
-          onChange={(e) => setSelectedSprintId(e.target.value ? Number(e.target.value) : null)}
-        >
-          <option value="">All Tasks</option>
-          {sprints.map((s) => (
-            <option key={s.sprint_id} value={s.sprint_id}>
-              {s.sprint_name} {s.status === 'active' ? '(Active)' : ''}
-            </option>
-          ))}
-        </select>
+          options={[
+            { value: '', label: 'All Tasks' },
+            ...sprints.map((s) => ({
+              value: s.sprint_id,
+              label: `${s.sprint_name}${s.status === 'active' ? ' (Active)' : ''}`,
+            })),
+          ]}
+          onChange={(val) => setSelectedSprintId(val ? Number(val) : null)}
+          placeholder="All Tasks"
+        />
       </div>
 
       {/* 칸반 컬럼 */}
@@ -88,6 +89,7 @@ export default function BoardView({ branchId, branchKey, onSelectTask }) {
             status={key}
             label={label}
             tasks={columns[key] || []}
+            taskTypes={taskTypes}
             onCardClick={(task) => onSelectTask(task)}
             onStatusChange={handleStatusChange}
           />

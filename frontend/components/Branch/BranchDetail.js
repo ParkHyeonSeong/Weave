@@ -1,16 +1,19 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { axios } from '@/library/_axios';
-import { Zap, ListTodo, Columns3 } from 'lucide-react';
+import { Zap, ListTodo, Columns3, Settings } from 'lucide-react';
 import TaskList from './Tasks/TaskList';
 import BoardView from './Board/BoardView';
 import EpicTimeline from './Epics/EpicTimeline';
 import TaskDetailPanel from './Tasks/TaskDetailPanel';
+import EpicDetailPanel from './Epics/EpicDetailPanel';
+import BranchSettings from './Settings/BranchSettings';
 
 const TABS = [
   { key: 'epics', label: 'Epics', icon: Zap },
   { key: 'tasks', label: 'Tasks', icon: ListTodo },
   { key: 'board', label: 'Board', icon: Columns3 },
+  { key: 'settings', label: 'Settings', icon: Settings },
 ];
 
 export default function BranchDetail() {
@@ -20,17 +23,23 @@ export default function BranchDetail() {
   const [activeTab, setActiveTab] = useState('tasks');
   const [loading, setLoading] = useState(true);
 
-  // 선택된 Task (오른쪽 패널)
+  // Task type 설정
+  const [taskTypes, setTaskTypes] = useState([]);
+
+  // 오른쪽 패널
   const [selectedTask, setSelectedTask] = useState(null);
+  const [selectedEpic, setSelectedEpic] = useState(null);
 
   useEffect(() => {
     if (!id) return;
     fetchBranch();
+    fetchTaskTypes();
   }, [id]);
 
   // 탭 전환 시 패널 닫기
   useEffect(() => {
     setSelectedTask(null);
+    setSelectedEpic(null);
   }, [activeTab]);
 
   const fetchBranch = async () => {
@@ -48,10 +57,29 @@ export default function BranchDetail() {
     }
   };
 
+  const fetchTaskTypes = async () => {
+    try {
+      const res = await axios.get(`/branches/${id}/task-types`);
+      if (res.data.status) setTaskTypes(res.data.task_types);
+    } catch {}
+  };
+
+  const handleSelectEpic = (epic) => {
+    setSelectedTask(null);
+    setSelectedEpic(epic);
+  };
+
+  const handleSelectTask = (task) => {
+    setSelectedEpic(null);
+    setSelectedTask(task);
+  };
+
+  const panelOpen = selectedTask || selectedEpic;
+
   if (loading || !branch) return null;
 
   return (
-    <div className={`BranchDetail ${selectedTask ? 'BranchDetail--panel-open' : ''}`}>
+    <div className={`BranchDetail ${panelOpen ? 'BranchDetail--panel-open' : ''}`}>
       <div className="BranchDetail__Main">
         {/* 헤더 */}
         <div className="BranchDetail__Header">
@@ -83,17 +111,30 @@ export default function BranchDetail() {
             <TaskList
               branchId={branch.branch_id}
               branchKey={branch.key}
-              onSelectTask={setSelectedTask}
+              taskTypes={taskTypes}
+              onSelectTask={handleSelectTask}
             />
           )}
           {activeTab === 'epics' && (
-            <EpicTimeline branchId={branch.branch_id} />
+            <EpicTimeline
+              branchId={branch.branch_id}
+              onSelectEpic={handleSelectEpic}
+            />
           )}
           {activeTab === 'board' && (
             <BoardView
               branchId={branch.branch_id}
               branchKey={branch.key}
-              onSelectTask={setSelectedTask}
+              taskTypes={taskTypes}
+              onSelectTask={handleSelectTask}
+            />
+          )}
+          {activeTab === 'settings' && (
+            <BranchSettings
+              branchId={branch.branch_id}
+              branch={branch}
+              myRole={branch.my_role}
+              onBranchUpdated={fetchBranch}
             />
           )}
         </div>
@@ -104,8 +145,18 @@ export default function BranchDetail() {
         <TaskDetailPanel
           branchId={branch.branch_id}
           branchKey={branch.key}
+          taskTypes={taskTypes}
           taskSummary={selectedTask}
           onClose={() => setSelectedTask(null)}
+        />
+      )}
+
+      {/* Epic 상세 패널 */}
+      {selectedEpic && (
+        <EpicDetailPanel
+          branchId={branch.branch_id}
+          epicSummary={selectedEpic}
+          onClose={() => setSelectedEpic(null)}
         />
       )}
     </div>
