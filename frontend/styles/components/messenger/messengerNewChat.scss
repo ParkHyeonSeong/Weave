@@ -1,0 +1,221 @@
+@use '../../variables' as *;
+
+.MessengerNewChat {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: $color-bg;
+  border: 1px solid $color-border;
+  border-radius: $radius-2xl;
+
+  &__Header {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: $space-3 $space-4;
+    border-bottom: 1px solid $color-border;
+    flex-shrink: 0;
+  }
+
+  &__BackBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: $radius-md;
+    color: $color-text-secondary;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+      color: $color-text;
+    }
+  }
+
+  &__Title {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-semibold;
+    color: $color-text;
+  }
+
+  &__To {
+    display: flex;
+    align-items: flex-start;
+    gap: $space-2;
+    padding: $space-3 $space-4;
+    border-bottom: 1px solid $color-border;
+    flex-shrink: 0;
+  }
+
+  &__ToLabel {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-text-tertiary;
+    padding-top: 4px;
+    flex-shrink: 0;
+  }
+
+  &__ToField {
+    flex: 1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  &__Chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px $space-2;
+    background: $color-primary;
+    color: $color-text-inverse;
+    border-radius: $radius-lg;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    white-space: nowrap;
+  }
+
+  &__ChipRemove {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: $color-text-inverse;
+    opacity: 0.7;
+    transition: opacity $transition-fast;
+
+    &:hover {
+      opacity: 1;
+    }
+  }
+
+  &__SearchInput {
+    flex: 1;
+    min-width: 60px;
+    border: none;
+    outline: none;
+    font-size: $font-size-sm;
+    color: $color-text;
+    background: transparent;
+    padding: 2px 0;
+
+    &::placeholder {
+      color: $color-text-tertiary;
+    }
+  }
+
+  &__UserList {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+
+  &__UserItem {
+    display: flex;
+    align-items: center;
+    gap: $space-3;
+    padding: $space-2 $space-4;
+    transition: background $transition-fast;
+    text-align: left;
+    width: 100%;
+
+    &:hover {
+      background: $color-surface;
+    }
+  }
+
+  &__Avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: $color-primary;
+    color: $color-text-inverse;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-semibold;
+    flex-shrink: 0;
+  }
+
+  &__UserInfo {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  &__UserName {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-text;
+  }
+
+  &__UserEmail {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__Input {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: $space-3;
+    border-top: 1px solid $color-border;
+    flex-shrink: 0;
+  }
+
+  &__InputField {
+    flex: 1;
+    padding: $space-2 $space-3;
+    border: 1px solid $color-input-border;
+    border-radius: $radius-lg;
+    font-size: $font-size-sm;
+    color: $color-text;
+    background: $color-input-bg;
+    outline: none;
+    transition: border-color $transition-fast;
+
+    &::placeholder {
+      color: $color-text-tertiary;
+    }
+
+    &:focus {
+      border-color: $color-border-focus;
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+
+  &__SendBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: $radius-md;
+    background: $color-primary;
+    color: $color-text-inverse;
+    transition: background $transition-fast;
+    flex-shrink: 0;
+
+    &:hover {
+      background: $color-primary-hover;
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+}

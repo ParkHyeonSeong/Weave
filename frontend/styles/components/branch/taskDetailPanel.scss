@@ -1,0 +1,322 @@
+@use '../../variables' as *;
+
+.TaskDetailPanel {
+  width: 420px;
+  height: 100%;
+  background: $color-bg;
+  border-left: 1px solid $color-border;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow: hidden;
+
+  &__Header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: $space-3 $space-4;
+    border-bottom: 1px solid $color-border;
+    flex-shrink: 0;
+  }
+
+  &__HeaderLeft {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+  }
+
+  &__Id {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-text-tertiary;
+  }
+
+  &__CloseBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: $radius-md;
+    color: $color-text-secondary;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+      color: $color-text;
+    }
+  }
+
+  &__Body {
+    flex: 1;
+    overflow-y: auto;
+    padding: $space-4;
+    display: flex;
+    flex-direction: column;
+    gap: $space-4;
+  }
+
+  // -- 제목 --
+  &__TitleWrap {
+    min-height: 32px;
+  }
+
+  &__Title {
+    font-size: $font-size-lg;
+    font-weight: $font-weight-semibold;
+    color: $color-text;
+    line-height: 1.4;
+    cursor: pointer;
+    padding: 2px 4px;
+    margin: -2px -4px;
+    border-radius: $radius-md;
+    transition: background $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+    }
+  }
+
+  &__TitleInput {
+    width: 100%;
+    font-size: $font-size-lg;
+    font-weight: $font-weight-semibold;
+    color: $color-text;
+    padding: 2px 4px;
+    margin: -2px -4px;
+    border: 1px solid $color-border-focus;
+    border-radius: $radius-md;
+    outline: none;
+    box-shadow: $shadow-focus;
+    background: $color-bg;
+  }
+
+  // -- 상태 --
+  &__StatusWrap {
+    display: flex;
+  }
+
+  &__StatusSelect {
+    padding: $space-1 $space-2;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-semibold;
+    border-radius: $radius-sm;
+    border: none;
+    cursor: pointer;
+    outline: none;
+    appearance: auto;
+
+    &--todo {
+      background: $color-surface;
+      color: $color-text-secondary;
+    }
+
+    &--in_progress {
+      background: #EFF6FF;
+      color: #2563EB;
+    }
+
+    &--done {
+      background: $color-success-bg;
+      color: $color-success;
+    }
+  }
+
+  // -- 섹션 --
+  &__Section {
+    display: flex;
+    flex-direction: column;
+    gap: $space-2;
+  }
+
+  &__SectionLabel {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-semibold;
+    color: $color-text-secondary;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+
+  &__Divider {
+    height: 1px;
+    background: $color-border;
+  }
+
+  // -- 설명 --
+  &__DescText {
+    font-size: $font-size-sm;
+    color: $color-text;
+    line-height: 1.6;
+    padding: $space-2;
+    border-radius: $radius-md;
+    cursor: pointer;
+    transition: background $transition-fast;
+    white-space: pre-wrap;
+
+    &:hover {
+      background: $color-surface;
+    }
+
+    &--empty {
+      color: $color-text-tertiary;
+      font-style: italic;
+    }
+  }
+
+  &__DescInput {
+    width: 100%;
+    padding: $space-2;
+    font-size: $font-size-sm;
+    color: $color-text;
+    line-height: 1.6;
+    border: 1px solid $color-border-focus;
+    border-radius: $radius-md;
+    outline: none;
+    box-shadow: $shadow-focus;
+    background: $color-bg;
+    resize: vertical;
+    min-height: 80px;
+    font-family: inherit;
+  }
+
+  // -- 필드 행 --
+  &__Fields {
+    display: flex;
+    flex-direction: column;
+  }
+
+  &__Row {
+    display: flex;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba($color-border, 0.5);
+
+    &:last-child {
+      border-bottom: none;
+    }
+
+    &--top {
+      align-items: flex-start;
+    }
+  }
+
+  &__RowLabel {
+    width: 90px;
+    flex-shrink: 0;
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+    font-weight: $font-weight-medium;
+  }
+
+  &__RowValue {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__FieldValue {
+    font-size: $font-size-sm;
+    color: $color-text;
+    display: inline-flex;
+    align-items: center;
+    gap: $space-1;
+
+    &--clickable {
+      cursor: pointer;
+      padding: 2px 6px;
+      margin: -2px -6px;
+      border-radius: $radius-sm;
+      transition: background $transition-fast;
+
+      &:hover {
+        background: $color-surface;
+      }
+    }
+  }
+
+  &__InlineSelect {
+    width: 100%;
+    padding: 2px 4px;
+    font-size: $font-size-sm;
+    color: $color-text;
+    background: $color-bg;
+    border: 1px solid $color-border-focus;
+    border-radius: $radius-sm;
+    outline: none;
+    box-shadow: $shadow-focus;
+  }
+
+  // -- 담당자 아바타 --
+  &__Avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: $color-primary;
+    color: $color-text-inverse;
+    font-size: 10px;
+    font-weight: $font-weight-bold;
+  }
+
+  // -- 라벨 --
+  &__Labels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  &__LabelChip {
+    font-size: 11px;
+    font-weight: $font-weight-medium;
+    padding: 1px 8px;
+    border-radius: $radius-sm;
+    border: 1px solid;
+    cursor: pointer;
+    transition: all $transition-fast;
+
+    &--selected {
+      font-weight: $font-weight-semibold;
+    }
+  }
+
+  // -- 날짜 --
+  &__DateInput {
+    padding: 2px 4px;
+    font-size: $font-size-sm;
+    color: $color-text;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: $radius-sm;
+    outline: none;
+    cursor: pointer;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+    }
+
+    &:focus {
+      border-color: $color-border-focus;
+      background: $color-bg;
+      box-shadow: $shadow-focus;
+    }
+  }
+
+  // -- 삭제 --
+  &__DeleteBtn {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: $space-2;
+    font-size: $font-size-sm;
+    color: $color-text-tertiary;
+    border-radius: $radius-md;
+    transition: all $transition-fast;
+
+    &:hover {
+      color: $color-error;
+      background: $color-error-bg;
+    }
+  }
+}

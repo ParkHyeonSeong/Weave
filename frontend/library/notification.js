@@ -7,15 +7,15 @@ export function requestNotificationPermission() {
   }
 }
 
-export function showNotification(title, body) {
+export function showNotification(senderName, content) {
   if ('Notification' in window && Notification.permission === 'granted') {
     // 탭이 포커스되어 있으면 알림 안 보냄
     if (document.hasFocus()) return;
 
-    const notification = new Notification(title, {
-      body,
+    const notification = new Notification('Weave', {
+      body: `${senderName}: ${content}`,
       icon: '/icons/weave_square.svg',
-      tag: 'weave-chat',
+      tag: `weave-chat-${Date.now()}`,
     });
 
     notification.onclick = () => {

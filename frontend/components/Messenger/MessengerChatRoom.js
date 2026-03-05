@@ -45,7 +45,11 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack }) {
     const handleWsMessage = (e) => {
       const data = e.detail;
       if (data.type === 'new_message' && data.room_id === roomId) {
-        setMessages((prev) => [...prev, data.message]);
+        setMessages((prev) => {
+          // 중복 메시지 방지
+          if (prev.some((m) => m.message_id === data.message.message_id)) return prev;
+          return [...prev, data.message];
+        });
         // 읽음 처리
         if (wsRef.current?.readyState === WebSocket.OPEN) {
           wsRef.current.send(JSON.stringify({ action: 'mark_read', room_id: roomId }));
@@ -80,7 +84,7 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack }) {
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       handleSend();
     }

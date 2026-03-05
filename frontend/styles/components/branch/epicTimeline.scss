@@ -1,0 +1,239 @@
+@use '../../variables' as *;
+
+.EpicTimeline {
+  // -- 상단 액션 --
+  &__Actions {
+    display: flex;
+    gap: $space-2;
+    margin-bottom: $space-5;
+  }
+
+  &__CreateBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: $space-1;
+    padding: $space-2 $space-3;
+    background: $color-primary;
+    color: $color-text-inverse;
+    border-radius: $radius-md;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    transition: background $transition-fast;
+
+    &:hover {
+      background: $color-primary-hover;
+    }
+  }
+
+  &__Empty {
+    padding: $space-10;
+    text-align: center;
+    font-size: $font-size-sm;
+    color: $color-text-tertiary;
+  }
+
+  // -- 타임라인 컨테이너 --
+  &__Container {
+    border: 1px solid $color-border;
+    border-radius: $radius-xl;
+    overflow: hidden;
+  }
+
+  // -- 월 헤더 --
+  &__Header {
+    display: flex;
+    border-bottom: 1px solid $color-border;
+    background: $color-surface;
+  }
+
+  &__NameCol {
+    width: 200px;
+    flex-shrink: 0;
+    border-right: 1px solid $color-border;
+  }
+
+  &__TimelineCol {
+    flex: 1;
+    position: relative;
+    height: 32px;
+    overflow: hidden;
+  }
+
+  &__Month {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    padding-left: $space-3;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    color: $color-text-secondary;
+    border-left: 1px solid $color-border;
+    white-space: nowrap;
+  }
+
+  // -- 본문 --
+  &__Body {
+    position: relative;
+    min-height: 100px;
+  }
+
+  // -- Sprint 배경 구간 --
+  &__SprintBg {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 200px;
+    right: 0;
+    pointer-events: none;
+  }
+
+  &__SprintRange {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: $color-primary-subtle;
+    border-left: 1px dashed rgba($color-primary, 0.2);
+    border-right: 1px dashed rgba($color-primary, 0.2);
+  }
+
+  // -- 오늘 마커 --
+  &__Today {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  &__TodayLine {
+    width: 2px;
+    height: 100%;
+    background: $color-error;
+    opacity: 0.6;
+  }
+}
+
+// -- 에픽 행 --
+.EpicBar {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid $color-border;
+  cursor: pointer;
+  transition: background $transition-fast;
+  min-height: 44px;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover {
+    background: $color-surface;
+  }
+
+  // -- 왼쪽 정보 영역 --
+  &__Info {
+    width: 200px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: $space-2 $space-3;
+    border-right: 1px solid $color-border;
+    overflow: hidden;
+  }
+
+  &__Color {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  &__Name {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-text;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+  }
+
+  &__Status {
+    font-size: 10px;
+    font-weight: $font-weight-medium;
+    padding: 1px 6px;
+    border-radius: $radius-sm;
+    white-space: nowrap;
+    flex-shrink: 0;
+
+    &--todo {
+      background: $color-surface;
+      color: $color-text-secondary;
+    }
+
+    &--in_progress {
+      background: #EFF6FF;
+      color: #2563EB;
+    }
+
+    &--done {
+      background: $color-success-bg;
+      color: $color-success;
+    }
+  }
+
+  &__TaskCount {
+    font-size: 10px;
+    color: $color-text-tertiary;
+    white-space: nowrap;
+    flex-shrink: 0;
+    display: none; // 공간 부족 시 숨김
+  }
+
+  // -- 오른쪽 타임라인 바 --
+  &__Timeline {
+    flex: 1;
+    position: relative;
+    height: 28px;
+    margin: 0 $space-2;
+  }
+
+  &__Bar {
+    position: absolute;
+    top: 4px;
+    height: 20px;
+    border-radius: $radius-sm;
+    opacity: 0.85;
+    display: flex;
+    align-items: center;
+    padding: 0 $space-2;
+    min-width: 4px;
+    transition: opacity $transition-fast;
+
+    .EpicBar:hover & {
+      opacity: 1;
+    }
+  }
+
+  &__BarLabel {
+    font-size: 10px;
+    font-weight: $font-weight-semibold;
+    color: $color-text-inverse;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__NoDate {
+    display: flex;
+    align-items: center;
+    height: 100%;
+    padding-left: $space-3;
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+    font-style: italic;
+  }
+}

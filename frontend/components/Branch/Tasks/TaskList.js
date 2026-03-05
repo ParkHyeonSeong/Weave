@@ -2,16 +2,14 @@ import { useState, useEffect } from 'react';
 import { axios } from '@/library/_axios';
 import { Plus } from 'lucide-react';
 import TaskListSprint from './TaskListSprint';
-import TaskModal from '@/components/modal/TaskModal';
 import SprintModal from '@/components/modal/SprintModal';
 
-export default function TaskList({ branchId, branchKey }) {
+export default function TaskList({ branchId, branchKey, onSelectTask }) {
   const [sprints, setSprints] = useState([]);
   const [backlogTasks, setBacklogTasks] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // 모달 상태
-  const [taskModal, setTaskModal] = useState({ open: false, task: null, sprintId: null });
   const [sprintModal, setSprintModal] = useState({ open: false, sprint: null });
 
   useEffect(() => {
@@ -57,14 +55,6 @@ export default function TaskList({ branchId, branchKey }) {
     }
   };
 
-  const handleCreateTask = (sprintId = null) => {
-    setTaskModal({ open: true, task: null, sprintId });
-  };
-
-  const handleEditTask = (task) => {
-    setTaskModal({ open: true, task, sprintId: task.sprint_id });
-  };
-
   if (loading) return null;
 
   return (
@@ -84,7 +74,7 @@ export default function TaskList({ branchId, branchKey }) {
           sprint={sprint}
           branchId={branchId}
           branchKey={branchKey}
-          onEditTask={handleEditTask}
+          onEditTask={onSelectTask}
           onEditSprint={() => setSprintModal({ open: true, sprint })}
         />
       ))}
@@ -94,20 +84,9 @@ export default function TaskList({ branchId, branchKey }) {
         sprint={{ sprint_name: 'Backlog', status: 'backlog', tasks: backlogTasks }}
         branchId={branchId}
         branchKey={branchKey}
-        onEditTask={handleEditTask}
+        onEditTask={onSelectTask}
         isBacklog
       />
-
-      {/* Task 모달 */}
-      {taskModal.open && (
-        <TaskModal
-          branchId={branchId}
-          branchKey={branchKey}
-          task={taskModal.task}
-          defaultSprintId={taskModal.sprintId}
-          onClose={() => setTaskModal({ open: false, task: null, sprintId: null })}
-        />
-      )}
 
       {/* Sprint 모달 */}
       {sprintModal.open && (

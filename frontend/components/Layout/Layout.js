@@ -12,7 +12,9 @@ export default function Layout({ children }) {
   const [showPalette, setShowPalette] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMessengerCollapsed, setIsMessengerCollapsed] = useState(true);
+  const [notifications, setNotifications] = useState([]);
   const wsRef = useRef(null);
+  const activeRoomRef = useRef(null);
 
   // 글로벌 Cmd+K 단축키
   useEffect(() => {
@@ -55,8 +57,17 @@ export default function Layout({ children }) {
     const wsUrl = `${wsProtocol}://${window.location.hostname}:${backendPort}/ws/chat?token=${token}`;
 
     let reconnectTimer = null;
+    let alive = true;
 
     const connect = () => {
+      if (!alive) return;
+
+      // 기존 연결 정리 (재연결 루프 방지)
+      if (wsRef.current) {
+        wsRef.current.onclose = null;
+        wsRef.current.close();
+      }
+
       const ws = new WebSocket(wsUrl);
 
       ws.onmessage = (event) => {
@@ -69,20 +80,40 @@ export default function Layout({ children }) {
             // 채팅 목록 갱신용
             window.dispatchEvent(new CustomEvent('chat:new_message', { detail: data }));
 
-            // Chrome 알림 (내가 보낸 메시지가 아닐 때)
+            // 내가 보낸 메시지가 아닐 때
             if (data.message.sender_id !== profile.user_id) {
-              showNotification(
-                data.message.sender_name || 'New Message',
-                data.message.content
-              );
+              // 현재 해당 채팅방에 들어와있으면 알림 생략
+              const isViewingRoom = activeRoomRef.current === data.room_id;
+
+              if (!isViewingRoom) {
+                // Chrome 알림
+                showNotification(
+                  data.message.sender_name || 'New Message',
+                  data.message.content
+                );
+
+                // 헤더 알림 누적
+                setNotifications((prev) => {
+                  if (prev.some((n) => n.id === data.message.message_id)) return prev;
+                  return [{
+                    id: data.message.message_id,
+                    roomId: data.room_id,
+                    senderName: data.message.sender_name,
+                    content: data.message.content,
+                    createdAt: data.message.created_at,
+                    read: false,
+                  }, ...prev].slice(0, 50);
+                });
+              }
             }
           }
         } catch {}
       };
 
       ws.onclose = () => {
-        // 3초 후 재연결 시도
-        reconnectTimer = setTimeout(connect, 3000);
+        if (alive) {
+          reconnectTimer = setTimeout(connect, 3000);
+        }
       };
 
       wsRef.current = ws;
@@ -91,8 +122,10 @@ export default function Layout({ children }) {
     connect();
 
     return () => {
+      alive = false;
       clearTimeout(reconnectTimer);
       if (wsRef.current) {
+        wsRef.current.onclose = null;
         wsRef.current.close();
       }
     };
@@ -100,7 +133,19 @@ export default function Layout({ children }) {
 
   return (
     <div className="Layout">
-      <Header onSearchClick={() => setShowPalette(true)} />
+      <Header
+        onSearchClick={() => setShowPalette(true)}
+        notifications={notifications}
+        onClearNotifications={() => setNotifications([])}
+        onReadNotification={(id) => setNotifications((prev) =>
+          prev.map((n) => n.id === id ? { ...n, read: true } : n)
+        )}
+        onNotiClick={(roomId) => {
+          // 메신저 열기 + 해당 채팅방으로 이동
+          setIsMessengerCollapsed(false);
+          window.dispatchEvent(new CustomEvent('chat:open_room', { detail: roomId }));
+        }}
+      />
       <div className="Layout__Body">
         {!isSidebarCollapsed && (
           <Sidebar onCreateBranch={() => setShowCreateBranch(true)} />
@@ -109,7 +154,7 @@ export default function Layout({ children }) {
           {children}
         </main>
         {!isMessengerCollapsed && (
-          <Messenger wsRef={wsRef} />
+          <Messenger wsRef={wsRef} activeRoomRef={activeRoomRef} />
         )}
       </div>
       <Footer

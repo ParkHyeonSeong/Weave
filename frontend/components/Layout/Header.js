@@ -1,25 +1,27 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { Search, Bell, CircleHelp, Settings, Shield } from 'lucide-react';
+import { formatMessageTime } from '@/library/formatTime';
 
-export default function Header({ onSearchClick }) {
+export default function Header({ onSearchClick, notifications = [], onClearNotifications, onReadNotification, onNotiClick }) {
   const router = useRouter();
   const [workspaceName, setWorkspaceName] = useState('');
   const [username, setUsername] = useState('');
   const [role, setRole] = useState('');
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+  const [showNotiMenu, setShowNotiMenu] = useState(false);
   const settingsRef = useRef(null);
+  const notiRef = useRef(null);
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
 
   useEffect(() => {
-    // sessionStorage에서 프로필 정보 가져오기
     try {
       const profile = JSON.parse(sessionStorage.getItem('profile') || '{}');
       setUsername(profile.username || '');
       setRole(profile.role || '');
     } catch {}
 
-    // workspace_name은 _app.js에서 setup/status 호출 시 이미 가져옴
-    // 여기서는 별도로 가져오기
     const fetchWorkspace = async () => {
       try {
         const { axios } = await import('@/library/_axios');
@@ -34,15 +36,29 @@ export default function Header({ onSearchClick }) {
 
   // 클릭 외부 감지로 드롭다운 닫기
   useEffect(() => {
-    if (!showSettingsMenu) return;
+    if (!showSettingsMenu && !showNotiMenu) return;
     const handleClickOutside = (e) => {
       if (settingsRef.current && !settingsRef.current.contains(e.target)) {
         setShowSettingsMenu(false);
       }
+      if (notiRef.current && !notiRef.current.contains(e.target)) {
+        setShowNotiMenu(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showSettingsMenu]);
+  }, [showSettingsMenu, showNotiMenu]);
+
+  // 알림 클릭 시 읽음 처리 + 해당 채팅방으로 이동
+  const handleNotiClick = (noti) => {
+    if (!noti.read && onReadNotification) {
+      onReadNotification(noti.id);
+    }
+    if (onNotiClick) {
+      onNotiClick(noti.roomId);
+    }
+    setShowNotiMenu(false);
+  };
 
   const initial = username ? username.charAt(0).toUpperCase() : '?';
 
@@ -68,9 +84,51 @@ export default function Header({ onSearchClick }) {
       </div>
 
       <div className="Header__Right">
-        <button className="Header__IconBtn" title="Notifications">
-          <Bell size={18} />
-        </button>
+        <div className="Header__NotiWrap" ref={notiRef}>
+          <button
+            className="Header__IconBtn"
+            title="Notifications"
+            onClick={() => setShowNotiMenu((prev) => !prev)}
+          >
+            <Bell size={18} />
+            {unreadCount > 0 && (
+              <span className="Header__NotiBadge">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </button>
+          {showNotiMenu && (
+            <div className="Header__NotiMenu">
+              <div className="Header__NotiHeader">
+                <span className="Header__NotiTitle">Notifications</span>
+                {notifications.length > 0 && (
+                  <button className="Header__NotiClear" onClick={onClearNotifications}>
+                    Clear all
+                  </button>
+                )}
+              </div>
+              <div className="Header__NotiList">
+                {notifications.length === 0 ? (
+                  <div className="Header__NotiEmpty">No notifications</div>
+                ) : (
+                  notifications.map((noti) => (
+                    <button
+                      key={noti.id}
+                      className={`Header__NotiItem ${!noti.read ? 'Header__NotiItem--unread' : ''}`}
+                      onClick={() => handleNotiClick(noti)}
+                    >
+                      <div className="Header__NotiItemTop">
+                        <span className="Header__NotiSender">{noti.senderName}</span>
+                        <span className="Header__NotiTime">{formatMessageTime(noti.createdAt)}</span>
+                      </div>
+                      <span className="Header__NotiContent">{noti.content}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
         <button className="Header__IconBtn" title="Help">
           <CircleHelp size={18} />
         </button>

@@ -1,7 +1,16 @@
 @use '../../variables' as *;
 
 .BranchDetail {
-  padding: $space-6;
+  display: flex;
+  height: 100%;
+
+  // -- 메인 영역 --
+  &__Main {
+    flex: 1;
+    min-width: 0;
+    overflow-y: auto;
+    padding: $space-6;
+  }
 
   &__Header {
     display: flex;
@@ -66,16 +75,5 @@
   // -- 콘텐츠 --
   &__Content {
     min-height: 400px;
-  }
-
-  &__Placeholder {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 300px;
-    color: $color-text-tertiary;
-    font-size: $font-size-sm;
-    border: 1px dashed $color-border;
-    border-radius: $radius-xl;
   }
 }

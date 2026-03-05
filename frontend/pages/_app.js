@@ -16,6 +16,7 @@ import "@/styles/components/messenger/messenger.scss";
 import "@/styles/components/messenger/messengerChatList.scss";
 import "@/styles/components/messenger/messengerUserList.scss";
 import "@/styles/components/messenger/messengerChatRoom.scss";
+import "@/styles/components/messenger/messengerNewChat.scss";
 import "@/styles/components/admin/admin.scss";
 import "@/styles/components/admin/adminSidebar.scss";
 import "@/styles/components/modal/addMember.scss";
@@ -23,6 +24,10 @@ import "@/styles/components/branch/branchDetail.scss";
 import "@/styles/components/branch/taskList.scss";
 import "@/styles/components/modal/taskModal.scss";
 import "@/styles/components/modal/sprintModal.scss";
+import "@/styles/components/branch/boardView.scss";
+import "@/styles/components/branch/epicTimeline.scss";
+import "@/styles/components/modal/epicModal.scss";
+import "@/styles/components/branch/taskDetailPanel.scss";
 
 const publicPaths = ['/auth/login', '/setup'];
 

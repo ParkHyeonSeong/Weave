@@ -94,7 +94,7 @@ async def update(task_id: int, body, branch_id: int, request: Request, db: Async
     if not task or task['branch_id'] != branch_id:
         return {'status': False, 'message': 'TASK_NOT_FOUND'}
 
-    fields = body.model_dump(exclude_none=True, exclude={'label_ids'})
+    fields = body.model_dump(exclude_unset=True, exclude={'label_ids'})
     if fields:
         await task_model.update(task_id, fields, db)
 
