@@ -11,6 +11,15 @@ async def add(branch_id: int, user_id: int, role: str, db: AsyncSession):
     await db.commit()
 
 
+async def is_member(branch_id: int, user_id: int, db: AsyncSession) -> bool:
+    """사용자가 해당 Branch의 멤버인지 확인"""
+    result = await db.execute(text("""
+        SELECT 1 FROM branch_member
+        WHERE branch_id = :branch_id AND user_id = :user_id
+    """), {'branch_id': branch_id, 'user_id': user_id})
+    return result.fetchone() is not None
+
+
 async def find_by_branch(branch_id: int, db: AsyncSession):
     """Branch 멤버 목록"""
     result = await db.execute(text("""

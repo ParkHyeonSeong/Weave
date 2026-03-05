@@ -1,0 +1,292 @@
+@use '../../variables' as *;
+
+.TaskList {
+  // -- 상단 액션 --
+  &__Actions {
+    display: flex;
+    gap: $space-2;
+    margin-bottom: $space-5;
+  }
+
+  &__CreateBtn,
+  &__SprintBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: $space-1;
+    padding: $space-2 $space-3;
+    border-radius: $radius-md;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    transition: all $transition-fast;
+  }
+
+  &__CreateBtn {
+    background: $color-primary;
+    color: $color-text-inverse;
+
+    &:hover {
+      background: $color-primary-hover;
+    }
+  }
+
+  &__SprintBtn {
+    background: $color-surface;
+    color: $color-text-secondary;
+    border: 1px solid $color-border;
+
+    &:hover {
+      background: darken(#F9FAFB, 2%);
+      color: $color-text;
+    }
+  }
+
+  // -- Sprint 섹션 --
+  &__Sprint {
+    margin-bottom: $space-4;
+    border: 1px solid $color-border;
+    border-radius: $radius-xl;
+    overflow: hidden;
+  }
+
+  &__SprintHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: $space-3 $space-4;
+    background: $color-surface;
+    cursor: pointer;
+    user-select: none;
+
+    &:hover {
+      background: darken(#F9FAFB, 1%);
+    }
+  }
+
+  &__SprintLeft {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    color: $color-text-secondary;
+  }
+
+  &__SprintName {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-semibold;
+    color: $color-text;
+  }
+
+  &__SprintBadge {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    padding: 1px 8px;
+    border-radius: $radius-sm;
+    background: $color-surface;
+    color: $color-text-tertiary;
+
+    &--active {
+      background: $color-success-bg;
+      color: $color-success;
+    }
+
+    &--closed {
+      background: $color-surface;
+      color: $color-text-tertiary;
+    }
+  }
+
+  &__SprintCount {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    padding: 0 6px;
+    border-radius: $radius-sm;
+    min-width: 20px;
+    text-align: center;
+  }
+
+  &__SprintRight {
+    display: flex;
+    gap: $space-1;
+  }
+
+  &__SprintAction {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: $radius-sm;
+    color: $color-text-tertiary;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: $color-bg;
+      color: $color-text;
+    }
+  }
+
+  &__SprintBody {
+    border-top: 1px solid $color-border;
+  }
+
+  &__Empty {
+    padding: $space-4;
+    text-align: center;
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+  }
+
+  // -- 인라인 생성 --
+  &__InlineCreate {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: $space-2 $space-4;
+    border-top: 1px solid $color-border;
+  }
+
+  &__InlineIcon {
+    flex-shrink: 0;
+    color: $color-text-tertiary;
+  }
+
+  &__InlineInput {
+    flex: 1;
+    padding: 6px 0;
+    border: none;
+    outline: none;
+    font-size: $font-size-sm;
+    color: $color-text;
+    background: transparent;
+
+    &::placeholder {
+      color: $color-text-tertiary;
+    }
+  }
+
+  &__InlineBtn {
+    display: flex;
+    align-items: center;
+    gap: $space-1;
+    padding: $space-2 $space-4;
+    font-size: $font-size-sm;
+    color: $color-text-tertiary;
+    cursor: pointer;
+    transition: all $transition-fast;
+    border-top: 1px solid $color-border;
+    width: 100%;
+
+    &:hover {
+      color: $color-text-secondary;
+      background: $color-surface;
+    }
+  }
+}
+
+// -- Task Row --
+.TaskListRow {
+  display: flex;
+  align-items: center;
+  gap: $space-2;
+  padding: $space-2 $space-4;
+  border-bottom: 1px solid $color-border;
+  cursor: pointer;
+  transition: background $transition-fast;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover {
+    background: $color-surface;
+  }
+
+  &__TypeIcon {
+    flex-shrink: 0;
+  }
+
+  &__Id {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    color: $color-text-tertiary;
+    white-space: nowrap;
+    min-width: 60px;
+  }
+
+  &__Title {
+    flex: 1;
+    font-size: $font-size-sm;
+    color: $color-text;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__Labels {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  &__Label {
+    font-size: 10px;
+    font-weight: $font-weight-medium;
+    padding: 1px 6px;
+    border-radius: $radius-sm;
+    white-space: nowrap;
+  }
+
+  &__Status {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    padding: 1px 8px;
+    border-radius: $radius-sm;
+    white-space: nowrap;
+    flex-shrink: 0;
+
+    &--todo {
+      background: $color-surface;
+      color: $color-text-secondary;
+    }
+
+    &--in_progress {
+      background: #EFF6FF;
+      color: #2563EB;
+    }
+
+    &--done {
+      background: $color-success-bg;
+      color: $color-success;
+    }
+  }
+
+  &__Priority {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-bold;
+    min-width: 20px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  &__Assignee {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: $color-primary;
+    color: $color-text-inverse;
+    font-size: 10px;
+    font-weight: $font-weight-bold;
+    flex-shrink: 0;
+  }
+
+  &__DueDate {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+}

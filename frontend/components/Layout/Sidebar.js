@@ -62,7 +62,13 @@ export default function Sidebar({ onCreateBranch }) {
             </div>
           ) : (
             branches.map((branch) => (
-              <button key={branch.branch_id} className="Sidebar__BranchItem">
+              <button
+                key={branch.branch_id}
+                className={`Sidebar__BranchItem ${
+                  router.query.id == branch.branch_id ? 'Sidebar__BranchItem--active' : ''
+                }`}
+                onClick={() => router.push(`/branch/${branch.branch_id}`)}
+              >
                 <span
                   className="Sidebar__BranchDot"
                   style={{ backgroundColor: branch.color || '#5E6AD2' }}

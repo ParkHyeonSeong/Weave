@@ -11,6 +11,11 @@ from routers import setup as setup_router
 from routers import branch as branch_router
 from routers import chat as chat_router
 from routers import ws_chat as ws_chat_router
+from routers import admin as admin_router
+from routers import sprint as sprint_router
+from routers import label as label_router
+from routers import epic as epic_router
+from routers import task as task_router
 
 # -- Logging ---------------------------------------------------------------
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -68,6 +73,11 @@ app.include_router(setup_router.router, prefix="/setup", tags=["setup"])
 app.include_router(branch_router.router, prefix="/branches", tags=["branches"])
 app.include_router(chat_router.router, prefix="/chat", tags=["chat"])
 app.include_router(ws_chat_router.router, tags=["websocket"])
+app.include_router(admin_router.router, prefix="/admin", tags=["admin"])
+app.include_router(sprint_router.router, prefix="/branches/{branch_id}/sprints", tags=["sprints"])
+app.include_router(label_router.router, prefix="/branches/{branch_id}/labels", tags=["labels"])
+app.include_router(epic_router.router, prefix="/branches/{branch_id}/epics", tags=["epics"])
+app.include_router(task_router.router, prefix="/branches/{branch_id}/tasks", tags=["tasks"])
 
 
 # -- Health ----------------------------------------------------------------

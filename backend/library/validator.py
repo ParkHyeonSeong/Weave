@@ -24,3 +24,10 @@ def require_login(request: Request):
     """로그인 필수 의존성"""
     if not request.state.payload.get('user_id'):
         raise UnAuthorizedException(status=False, message='NEED_LOGIN')
+
+
+def require_admin(request: Request):
+    """관리자 전용 의존성"""
+    require_login(request)
+    if request.state.payload.get('role') != 'admin':
+        raise UnAuthorizedException(status=False, message='ADMIN_REQUIRED')

@@ -34,17 +34,19 @@ async def register(body, request: Request, db: AsyncSession):
     if not settings:
         return {'status': False, 'message': 'NOT_INITIALIZED'}
 
-    # private 모드에서는 회원가입 차단
-    if settings['registration_policy'] == 'private':
-        return {'status': False, 'message': 'REGISTRATION_DISABLED'}
-
     existing = await user_model.find_by_email(body.email, db)
     if existing:
         return {'status': False, 'message': 'EMAIL_ALREADY_EXISTS'}
 
     password_hash = bcrypt.hashpw(body.password.encode('utf-8'), bcrypt.gensalt())
-    user_id = await user_model.create(body.email, password_hash, body.username, db)
 
+    # private 모드: pending 상태로 생성, 승인 대기
+    if settings['registration_policy'] == 'private':
+        await user_model.create(body.email, password_hash, body.username, db, status='pending')
+        return {'status': True, 'pending': True, 'message': 'ACCOUNT_PENDING'}
+
+    # public 모드: active 상태로 생성, 즉시 로그인
+    user_id = await user_model.create(body.email, password_hash, body.username, db)
     token = _create_token(user_id, body.email, body.username, 'member')
     return {'status': True, 'x_token': token}
 
@@ -61,6 +63,12 @@ async def login(body, request: Request, db: AsyncSession):
 
     if not bcrypt.checkpw(body.password.encode('utf-8'), stored_password):
         return {'status': False, 'message': 'INVALID_CREDENTIALS'}
+
+    # 계정 상태 확인
+    if user.get('status') == 'pending':
+        return {'status': False, 'message': 'ACCOUNT_PENDING'}
+    if user.get('status') == 'rejected':
+        return {'status': False, 'message': 'ACCOUNT_REJECTED'}
 
     ip = _get_client_ip(request)
     await user_model.update_login(user['user_id'], ip, db)

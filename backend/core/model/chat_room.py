@@ -26,22 +26,36 @@ async def find_by_id(room_id: int, db: AsyncSession):
 
 
 async def find_rooms_by_user(user_id: int, db: AsyncSession):
-    """사용자가 참여 중인 채팅방 목록 (unread_count, last_message 포함)"""
+    """사용자가 참여 중인 채팅방 목록 (unread_count, last_message, DM 상대방 정보 포함)"""
     result = await db.execute(text("""
         SELECT cr.room_id, cr.room_type, cr.room_name, cr.created_at,
                crm.last_read_at,
                (SELECT COUNT(*) FROM chat_message cm
                 WHERE cm.room_id = cr.room_id
-                  AND cm.created_at > COALESCE(crm.last_read_at, '1970-01-01')) AS unread_count,
+                  AND cm.created_at > COALESCE(crm.last_read_at, '1970-01-01')
+                  AND cm.sender_id != :user_id) AS unread_count,
                (SELECT cm2.content FROM chat_message cm2
                 WHERE cm2.room_id = cr.room_id
                 ORDER BY cm2.created_at DESC LIMIT 1) AS last_message,
                (SELECT cm3.created_at FROM chat_message cm3
                 WHERE cm3.room_id = cr.room_id
-                ORDER BY cm3.created_at DESC LIMIT 1) AS last_message_at
+                ORDER BY cm3.created_at DESC LIMIT 1) AS last_message_at,
+               CASE WHEN cr.room_type = 'dm' THEN
+                   (SELECT u.username FROM chat_room_member crm2
+                    INNER JOIN "user" u ON crm2.user_id = u.user_id
+                    WHERE crm2.room_id = cr.room_id AND crm2.user_id != :user_id
+                    LIMIT 1)
+               ELSE NULL END AS dm_partner_name,
+               CASE WHEN cr.room_type = 'dm' THEN
+                   (SELECT crm3.last_read_at FROM chat_room_member crm3
+                    WHERE crm3.room_id = cr.room_id AND crm3.user_id != :user_id
+                    LIMIT 1)
+               ELSE NULL END AS dm_partner_last_read_at
         FROM chat_room cr
         INNER JOIN chat_room_member crm ON cr.room_id = crm.room_id
         WHERE crm.user_id = :user_id
+          AND EXISTS (SELECT 1 FROM chat_message cm4
+                      WHERE cm4.room_id = cr.room_id)
         ORDER BY last_message_at DESC NULLS LAST, cr.created_at DESC
     """), {'user_id': user_id})
     rows = result.fetchall()

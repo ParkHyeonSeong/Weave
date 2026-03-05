@@ -1,10 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Send } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import { formatMessageTime } from '@/library/formatTime';
 
 export default function MessengerChatRoom({ roomId, wsRef, onBack }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
+  const [partnerName, setPartnerName] = useState('Chat');
+  const [partnerLastRead, setPartnerLastRead] = useState(null);
   const messagesEndRef = useRef(null);
 
   let myUserId = 0;
@@ -21,6 +24,11 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack }) {
         if (res.data.status) {
           // 최신순 -> 시간순으로 뒤집기
           setMessages(res.data.messages.reverse());
+          // DM 상대방 정보
+          if (res.data.partner) {
+            setPartnerName(res.data.partner.username);
+            setPartnerLastRead(res.data.partner.last_read_at);
+          }
         }
       } catch {}
     };
@@ -43,10 +51,14 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack }) {
           wsRef.current.send(JSON.stringify({ action: 'mark_read', room_id: roomId }));
         }
       }
+      // 상대방이 읽음 처리했을 때 read receipt 갱신
+      if (data.type === 'mark_read' && data.room_id === roomId && data.user_id !== myUserId) {
+        setPartnerLastRead(data.last_read_at);
+      }
     };
     window.addEventListener('chat:ws_message', handleWsMessage);
     return () => window.removeEventListener('chat:ws_message', handleWsMessage);
-  }, [roomId]);
+  }, [roomId, myUserId]);
 
   // 스크롤 하단 유지
   useEffect(() => {
@@ -74,13 +86,19 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack }) {
     }
   };
 
+  // 상대방이 해당 메시지를 아직 안 읽었는지 판별
+  const isUnread = (msg) => {
+    if (!partnerLastRead) return true;
+    return new Date(msg.created_at) > new Date(partnerLastRead);
+  };
+
   return (
     <div className="MessengerChatRoom">
       <div className="MessengerChatRoom__Header">
         <button className="MessengerChatRoom__BackBtn" onClick={onBack}>
           <ArrowLeft size={16} />
         </button>
-        <span className="MessengerChatRoom__Title">Chat</span>
+        <span className="MessengerChatRoom__Title">{partnerName}</span>
       </div>
 
       <div className="MessengerChatRoom__Messages">
@@ -94,8 +112,25 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack }) {
             {msg.sender_id !== myUserId && (
               <span className="MessengerChatRoom__MsgSender">{msg.sender_name}</span>
             )}
-            <div className="MessengerChatRoom__MsgBubble">
-              {msg.content}
+            <div className="MessengerChatRoom__MsgRow">
+              {msg.sender_id === myUserId && (
+                <div className="MessengerChatRoom__MsgMeta">
+                  {isUnread(msg) && (
+                    <span className="MessengerChatRoom__MsgUnread">1</span>
+                  )}
+                  <span className="MessengerChatRoom__MsgTime">
+                    {formatMessageTime(msg.created_at)}
+                  </span>
+                </div>
+              )}
+              <div className="MessengerChatRoom__MsgBubble">
+                {msg.content}
+              </div>
+              {msg.sender_id !== myUserId && (
+                <span className="MessengerChatRoom__MsgTime">
+                  {formatMessageTime(msg.created_at)}
+                </span>
+              )}
             </div>
           </div>
         ))}

@@ -1,0 +1,81 @@
+@use '../../variables' as *;
+
+.BranchDetail {
+  padding: $space-6;
+
+  &__Header {
+    display: flex;
+    align-items: center;
+    gap: $space-3;
+    margin-bottom: $space-5;
+  }
+
+  &__Icon {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  &__Name {
+    font-size: $font-size-xl;
+    font-weight: $font-weight-bold;
+    color: $color-text;
+  }
+
+  &__Key {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    color: $color-text-tertiary;
+    background: $color-surface;
+    padding: 2px 8px;
+    border-radius: $radius-sm;
+  }
+
+  // -- 탭 --
+  &__Tabs {
+    display: flex;
+    gap: $space-1;
+    border-bottom: 1px solid $color-border;
+    margin-bottom: $space-5;
+  }
+
+  &__Tab {
+    display: flex;
+    align-items: center;
+    gap: $space-1;
+    padding: $space-2 $space-3;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-text-secondary;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: all $transition-fast;
+    cursor: pointer;
+
+    &:hover {
+      color: $color-text;
+    }
+
+    &--active {
+      color: $color-primary;
+      border-bottom-color: $color-primary;
+    }
+  }
+
+  // -- 콘텐츠 --
+  &__Content {
+    min-height: 400px;
+  }
+
+  &__Placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 300px;
+    color: $color-text-tertiary;
+    font-size: $font-size-sm;
+    border: 1px dashed $color-border;
+    border-radius: $radius-xl;
+  }
+}

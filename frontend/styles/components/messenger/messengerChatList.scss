@@ -15,6 +15,22 @@
     color: $color-text;
   }
 
+  &__NewChatBtn {
+    display: flex;
+    align-items: center;
+    gap: $space-1;
+    padding: $space-1 $space-2;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    color: $color-primary;
+    border-radius: $radius-md;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+    }
+  }
+
   &__Items {
     display: flex;
     flex-direction: column;
@@ -49,6 +65,13 @@
     gap: 2px;
   }
 
+  &__ItemTop {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $space-2;
+  }
+
   &__ItemName {
     font-size: $font-size-sm;
     font-weight: $font-weight-medium;
@@ -58,7 +81,23 @@
     white-space: nowrap;
   }
 
+  &__ItemTime {
+    font-size: 10px;
+    color: $color-text-tertiary;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  &__ItemBottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $space-2;
+  }
+
   &__ItemPreview {
+    flex: 1;
+    min-width: 0;
     font-size: $font-size-xs;
     color: $color-text-tertiary;
     overflow: hidden;
@@ -79,6 +118,5 @@
     border-radius: 9px;
     font-size: 11px;
     font-weight: $font-weight-semibold;
-    margin-left: $space-2;
   }
 }

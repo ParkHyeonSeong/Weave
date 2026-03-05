@@ -1,4 +1,5 @@
 from fastapi import Request
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.model import branch as branch_model
@@ -24,6 +25,12 @@ async def create(body, request: Request, db: AsyncSession):
 
     # 생성자를 admin으로 자동 추가
     await member_model.add(branch_id, user_id, 'admin', db)
+
+    # task_sequence 초기화
+    await db.execute(text("""
+        INSERT INTO task_sequence (branch_id, last_number) VALUES (:branch_id, 0)
+    """), {'branch_id': branch_id})
+    await db.commit()
 
     return {
         'status': True,

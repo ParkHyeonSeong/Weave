@@ -60,6 +60,12 @@ export default function Login() {
       const response = await axios.post(endpoint, payload);
 
       if (response.data.status) {
+        // private 모드 회원가입: 승인 대기
+        if (response.data.pending) {
+          showAlert('Registration Complete', 'Your account has been created and is awaiting admin approval. You will be able to log in once approved.');
+          setMode('login');
+          return;
+        }
         const token = response.data.x_token;
         sessionStorage.setItem('x_token', token);
         sessionStorage.setItem('profile', JSON.stringify(jwtDecode(token)));
@@ -70,6 +76,8 @@ export default function Login() {
           'EMAIL_ALREADY_EXISTS': 'This email is already registered.',
           'REGISTRATION_DISABLED': 'Registration is not available. Contact your administrator.',
           'NOT_INITIALIZED': 'System setup is required first.',
+          'ACCOUNT_PENDING': 'Your account is awaiting admin approval.',
+          'ACCOUNT_REJECTED': 'Your registration was rejected. Contact your administrator.',
         };
         showAlert('Error', messages[response.data.message] || response.data.message);
       }

@@ -1,4 +1,6 @@
 import json
+from datetime import datetime, timezone
+
 import jwt
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 
@@ -82,6 +84,14 @@ async def websocket_chat(ws: WebSocket, token: str = Query(...)):
 
                 async with db.AsyncSessionLocal() as session:
                     await member_model.update_last_read(room_id, user_id, session)
+
+                    # 상대방에게 읽음 알림 전송
+                    await manager.broadcast_to_room(room_id, {
+                        'type': 'mark_read',
+                        'room_id': room_id,
+                        'user_id': user_id,
+                        'last_read_at': str(datetime.now(timezone.utc)),
+                    }, session)
 
     except WebSocketDisconnect:
         manager.disconnect(user_id, ws)

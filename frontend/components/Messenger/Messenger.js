@@ -18,6 +18,11 @@ export default function Messenger({ wsRef }) {
     setActiveRoomId(null);
   };
 
+  // 새 채팅 시작 -> Users 탭으로 전환
+  const handleNewChat = () => {
+    setActiveTab('users');
+  };
+
   return (
     <div className="Messenger">
       {activeRoomId ? (
@@ -46,7 +51,7 @@ export default function Messenger({ wsRef }) {
           </div>
           <div className="Messenger__Content">
             {activeTab === 'chats' ? (
-              <MessengerChatList onOpenRoom={handleOpenRoom} />
+              <MessengerChatList onOpenRoom={handleOpenRoom} onNewChat={handleNewChat} />
             ) : (
               <MessengerUserList onOpenRoom={handleOpenRoom} />
             )}

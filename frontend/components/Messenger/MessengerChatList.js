@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Plus } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import { formatMessageTime } from '@/library/formatTime';
 
-export default function MessengerChatList({ onOpenRoom }) {
+export default function MessengerChatList({ onOpenRoom, onNewChat }) {
   const [rooms, setRooms] = useState([]);
 
   const fetchRooms = async () => {
@@ -29,6 +30,10 @@ export default function MessengerChatList({ onOpenRoom }) {
     <div className="MessengerChatList">
       <div className="MessengerChatList__Header">
         <span className="MessengerChatList__Title">Messages</span>
+        <button className="MessengerChatList__NewChatBtn" onClick={onNewChat}>
+          <Plus size={14} />
+          New Chat
+        </button>
       </div>
 
       <div className="MessengerChatList__Items">
@@ -44,20 +49,29 @@ export default function MessengerChatList({ onOpenRoom }) {
               onClick={() => onOpenRoom(room.room_id)}
             >
               <div className="MessengerChatList__ItemInfo">
-                <span className="MessengerChatList__ItemName">
-                  {room.room_name || 'Direct Message'}
-                </span>
-                {room.last_message && (
-                  <span className="MessengerChatList__ItemPreview">
-                    {room.last_message}
+                <div className="MessengerChatList__ItemTop">
+                  <span className="MessengerChatList__ItemName">
+                    {room.dm_partner_name || room.room_name || 'Direct Message'}
                   </span>
-                )}
+                  {room.last_message_at && (
+                    <span className="MessengerChatList__ItemTime">
+                      {formatMessageTime(room.last_message_at)}
+                    </span>
+                  )}
+                </div>
+                <div className="MessengerChatList__ItemBottom">
+                  {room.last_message && (
+                    <span className="MessengerChatList__ItemPreview">
+                      {room.last_message}
+                    </span>
+                  )}
+                  {room.unread_count > 0 && (
+                    <span className="MessengerChatList__Badge">
+                      {room.unread_count}
+                    </span>
+                  )}
+                </div>
               </div>
-              {room.unread_count > 0 && (
-                <span className="MessengerChatList__Badge">
-                  {room.unread_count}
-                </span>
-              )}
             </button>
           ))
         )}

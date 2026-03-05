@@ -60,7 +60,26 @@ async def get_messages(room_id: int, request: Request, db: AsyncSession,
     # 읽음 시간 갱신
     await member_model.update_last_read(room_id, user_id, db)
 
-    return {'status': True, 'messages': messages}
+    # DM방인 경우 상대방 정보 포함
+    room = await room_model.find_by_id(room_id, db)
+    partner = None
+    if room and room['room_type'] == 'dm':
+        members = await member_model.find_by_room(room_id, db)
+        for m in members:
+            if m['user_id'] != user_id:
+                partner = {
+                    'user_id': m['user_id'],
+                    'username': m['username'],
+                    'last_read_at': m.get('last_read_at'),
+                }
+                break
+
+    return {
+        'status': True,
+        'messages': messages,
+        'room_type': room['room_type'] if room else None,
+        'partner': partner,
+    }
 
 
 async def get_users(db: AsyncSession):

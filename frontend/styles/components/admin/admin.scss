@@ -1,0 +1,185 @@
+@use '../../variables' as *;
+
+.Admin {
+  max-width: 900px;
+  padding: $space-6;
+
+  &__Header {
+    display: flex;
+    align-items: center;
+    gap: $space-3;
+    margin-bottom: $space-6;
+    color: $color-text;
+  }
+
+  &__Title {
+    font-size: $font-size-xl;
+    font-weight: $font-weight-bold;
+    color: $color-text;
+  }
+
+  &__Section {
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-xl;
+    padding: $space-6;
+  }
+
+  &__SectionHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: $space-5;
+  }
+
+  &__SectionTitle {
+    font-size: $font-size-lg;
+    font-weight: $font-weight-semibold;
+    color: $color-text;
+  }
+
+  &__AddBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: $space-1;
+    padding: $space-2 $space-3;
+    background: $color-primary;
+    color: $color-text-inverse;
+    border-radius: $radius-md;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    transition: background $transition-fast;
+
+    &:hover {
+      background: $color-primary-hover;
+    }
+  }
+
+  &__Subsection {
+    margin-bottom: $space-6;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+
+  &__SubsectionTitle {
+    font-size: $font-size-base;
+    font-weight: $font-weight-semibold;
+    color: $color-text-secondary;
+    margin-bottom: $space-3;
+  }
+
+  // -- 테이블 --
+  &__Table {
+    width: 100%;
+    border-collapse: collapse;
+
+    th,
+    td {
+      padding: $space-3 $space-4;
+      text-align: left;
+      border-bottom: 1px solid $color-border;
+      font-size: $font-size-sm;
+    }
+
+    th {
+      font-weight: $font-weight-semibold;
+      color: $color-text-secondary;
+      font-size: $font-size-xs;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    td {
+      color: $color-text;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+  }
+
+  // -- 상태 뱃지 --
+  &__Badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: $radius-sm;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    text-transform: capitalize;
+
+    &--active {
+      background: $color-success-bg;
+      color: $color-success;
+    }
+
+    &--pending {
+      background: #FFFBEB;
+      color: #D97706;
+    }
+
+    &--rejected {
+      background: $color-error-bg;
+      color: $color-error;
+    }
+  }
+
+  // -- 액션 버튼 --
+  &__Actions {
+    display: flex;
+    gap: $space-2;
+  }
+
+  &__ApproveBtn,
+  &__RejectBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: $space-1;
+    padding: $space-1 $space-3;
+    border-radius: $radius-md;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    transition: all $transition-fast;
+  }
+
+  &__ApproveBtn {
+    background: $color-success-bg;
+    color: $color-success;
+
+    &:hover {
+      background: darken(#F0FDF4, 5%);
+    }
+  }
+
+  &__RejectBtn {
+    background: $color-error-bg;
+    color: $color-error;
+
+    &:hover {
+      background: darken(#FEF2F2, 5%);
+    }
+  }
+
+  // -- 역할 셀렉트 --
+  &__RoleSelect {
+    padding: $space-1 $space-2;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    font-size: $font-size-xs;
+    color: $color-text;
+    background: $color-bg;
+    cursor: pointer;
+    outline: none;
+
+    &:focus {
+      border-color: $color-border-focus;
+    }
+  }
+
+  &__RoleText {
+    font-size: $font-size-xs;
+    color: $color-text-secondary;
+    text-transform: capitalize;
+  }
+}
