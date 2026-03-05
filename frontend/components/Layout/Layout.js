@@ -45,8 +45,14 @@ export default function Layout({ children }) {
       profile = JSON.parse(sessionStorage.getItem('profile') || '{}');
     } catch {}
 
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:10001';
-    const wsUrl = backendUrl.replace(/^http/, 'ws') + '/ws/chat?token=' + token;
+    // API URL에서 포트만 추출, 브라우저 hostname 사용 (LAN IP 대응)
+    let backendPort = '10001';
+    try {
+      const parsed = new URL(process.env.NEXT_PUBLIC_API_URL || '');
+      backendPort = parsed.port || '10001';
+    } catch {}
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const wsUrl = `${wsProtocol}://${window.location.hostname}:${backendPort}/ws/chat?token=${token}`;
 
     let reconnectTimer = null;
 

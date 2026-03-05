@@ -29,38 +29,46 @@ export default function App({ Component, pageProps }) {
 
   const checkAppState = async () => {
     setAppReady(false);
+    const token = sessionStorage.getItem('x_token');
 
-    try {
-      const res = await axios.get('/setup/status');
-      const { initialized } = res.data;
-      const token = sessionStorage.getItem('x_token');
-
-      if (!initialized) {
-        // 미초기화 상태: /setup 외 모든 경로 차단
-        if (router.pathname !== '/setup') {
-          router.replace('/setup');
+    // 초기화 여부: sessionStorage 캐시 우선, 없을 때만 API 호출
+    let initialized = sessionStorage.getItem('app_initialized') === 'true';
+    if (!initialized) {
+      try {
+        const res = await axios.get('/setup/status');
+        initialized = res.data.initialized;
+        if (initialized) {
+          sessionStorage.setItem('app_initialized', 'true');
+        }
+      } catch {
+        // API 실패 시: 토큰 없으면 로그인으로
+        if (!token && router.pathname !== '/auth/login') {
+          router.replace('/auth/login');
           return;
         }
-      } else if (router.pathname === '/setup') {
-        // 초기화 완료 후 /setup 접근 차단
-        router.replace(token ? '/' : '/auth/login');
-        return;
-      } else if (!token && !publicPaths.includes(router.pathname)) {
-        // 미인증 + 비공개 경로
-        router.replace('/auth/login');
-        return;
-      } else if (token && router.pathname === '/auth/login') {
-        // 인증 상태에서 로그인 페이지 접근
-        router.replace('/');
+        setAppReady(true);
         return;
       }
-    } catch (error) {
-      // API 실패 시: 토큰 없으면 로그인으로
-      const token = sessionStorage.getItem('x_token');
-      if (!token && router.pathname !== '/auth/login') {
-        router.replace('/auth/login');
+    }
+
+    if (!initialized) {
+      // 미초기화 상태: /setup 외 모든 경로 차단
+      if (router.pathname !== '/setup') {
+        router.replace('/setup');
         return;
       }
+    } else if (router.pathname === '/setup') {
+      // 초기화 완료 후 /setup 접근 차단
+      router.replace(token ? '/' : '/auth/login');
+      return;
+    } else if (!token && !publicPaths.includes(router.pathname)) {
+      // 미인증 + 비공개 경로
+      router.replace('/auth/login');
+      return;
+    } else if (token && router.pathname === '/auth/login') {
+      // 인증 상태에서 로그인 페이지 접근
+      router.replace('/');
+      return;
     }
 
     setAppReady(true);

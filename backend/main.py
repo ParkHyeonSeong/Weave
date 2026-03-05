@@ -30,18 +30,25 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
+DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 FRONTEND_PORT = os.getenv("FRONTEND_PORT", "3000")
-_default_origins = [
-    f"http://localhost:{FRONTEND_PORT}",
-    f"http://127.0.0.1:{FRONTEND_PORT}",
-]
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS")
-origins = ALLOWED_ORIGINS.split(",") if ALLOWED_ORIGINS else _default_origins
+
+if ALLOWED_ORIGINS:
+    origins = ALLOWED_ORIGINS.split(",")
+elif DEBUG:
+    # 개발 모드: 모든 origin 허용 (LAN IP 접근 등)
+    origins = ["*"]
+else:
+    origins = [
+        f"http://localhost:{FRONTEND_PORT}",
+        f"http://127.0.0.1:{FRONTEND_PORT}",
+    ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_credentials=True,
+    allow_credentials=not DEBUG,  # *와 credentials 동시 사용 불가
     allow_methods=["*"],
     allow_headers=["*"],
 )

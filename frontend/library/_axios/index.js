@@ -27,10 +27,22 @@ const handleResponseRejected = (error) => {
   return Promise.reject(error);
 };
 
+// API URL 동적 생성: LAN IP 접근 시에도 같은 호스트로 요청
+function getBaseURL() {
+  if (typeof window === 'undefined') return process.env.NEXT_PUBLIC_API_URL || '';
+  const envUrl = process.env.NEXT_PUBLIC_API_URL || '';
+  try {
+    const parsed = new URL(envUrl);
+    // 브라우저의 현재 hostname 사용 (LAN IP 대응)
+    return `${parsed.protocol}//${window.location.hostname}:${parsed.port}`;
+  } catch {
+    return envUrl;
+  }
+}
+
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL,
+  baseURL: getBaseURL(),
   headers: { 'Content-Type': 'application/json' },
-  withCredentials: true,
 });
 
 api.interceptors.request.use(handleRequestFulfilled);
