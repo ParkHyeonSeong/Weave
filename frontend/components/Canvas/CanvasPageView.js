@@ -48,12 +48,13 @@ export default function CanvasPageView() {
   // 읽기 모드에서 KaTeX 수식 렌더링
   useEffect(() => {
     if (isEditing || !contentRef.current) return;
-    const mathNodes = contentRef.current.querySelectorAll('[data-type="mathematics"]');
+    const mathNodes = contentRef.current.querySelectorAll('[data-type="block-math"], [data-type="inline-math"]');
     mathNodes.forEach((el) => {
       const latex = el.getAttribute('data-latex');
       if (latex && !el.querySelector('.katex')) {
+        const isBlock = el.getAttribute('data-type') === 'block-math';
         try {
-          katex.render(latex, el, { throwOnError: false });
+          katex.render(latex, el, { throwOnError: false, displayMode: isBlock });
         } catch {}
       }
     });

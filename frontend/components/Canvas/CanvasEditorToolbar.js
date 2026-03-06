@@ -276,7 +276,7 @@ export default function CanvasEditorToolbar({ editor }) {
       <Btn onClick={addTable} title="Table">
         <TableIcon size={16} />
       </Btn>
-      <Btn onClick={() => editor.chain().focus().insertContent('$E=mc^2$').run()} title="Math Equation">
+      <Btn onClick={() => editor.chain().focus().insertContent({ type: 'inlineMath', attrs: { latex: 'E=mc^2' } }).run()} title="Math Equation">
         <Sigma size={16} />
       </Btn>
 

@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import dynamic from 'next/dynamic';
 import { Pencil, Save, X } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import katex from 'katex';
 
 const CanvasEditor = dynamic(() => import('./CanvasEditor'), { ssr: false });
 
@@ -15,6 +16,7 @@ export default function CanvasOverview() {
   const [editContent, setEditContent] = useState('');
   const [editTitle, setEditTitle] = useState('');
   const [saving, setSaving] = useState(false);
+  const contentRef = useRef(null);
 
   const fetchCanvas = async () => {
     try {
@@ -47,6 +49,21 @@ export default function CanvasOverview() {
     fetchCanvas();
     fetchOverview();
   }, [canvasId, fetchOverview]);
+
+  // 읽기 모드에서 KaTeX 수식 렌더링
+  useEffect(() => {
+    if (isEditing || !contentRef.current) return;
+    const mathNodes = contentRef.current.querySelectorAll('[data-type="block-math"], [data-type="inline-math"]');
+    mathNodes.forEach((el) => {
+      const latex = el.getAttribute('data-latex');
+      if (latex && !el.querySelector('.katex')) {
+        const isBlock = el.getAttribute('data-type') === 'block-math';
+        try {
+          katex.render(latex, el, { throwOnError: false, displayMode: isBlock });
+        } catch {}
+      }
+    });
+  }, [isEditing, overview?.content]);
 
   const handleSave = async () => {
     if (!overview) return;
@@ -130,6 +147,7 @@ export default function CanvasOverview() {
             </>
           ) : (
             <div
+              ref={contentRef}
               className="CanvasOverview__OverviewContent ProseMirror"
               dangerouslySetInnerHTML={{
                 __html: overview.content || '<p>No content yet. Click Edit to start writing.</p>',
