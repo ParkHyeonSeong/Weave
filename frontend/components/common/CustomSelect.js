@@ -11,7 +11,7 @@ import { ChevronDown } from 'lucide-react';
  * @param {string} [size='md'] - 'sm' | 'md'
  * @param {string} [className='']
  */
-export default function CustomSelect({ value, options, onChange, placeholder = 'Select...', size = 'md', className = '' }) {
+export default function CustomSelect({ value, options, onChange, placeholder = 'Select...', size = 'md', className = '', hideArrow = false }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -77,7 +77,7 @@ export default function CustomSelect({ value, options, onChange, placeholder = '
             <span className="CustomSelect__Placeholder">{placeholder}</span>
           )}
         </span>
-        <ChevronDown size={size === 'sm' ? 12 : 14} className="CustomSelect__Arrow" />
+        {!hideArrow && <ChevronDown size={size === 'sm' ? 12 : 14} className="CustomSelect__Arrow" />}
       </button>
 
       {/* 드롭다운 */}

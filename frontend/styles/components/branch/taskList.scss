@@ -45,7 +45,6 @@
     margin-bottom: $space-4;
     border: 1px solid $color-border;
     border-radius: $radius-xl;
-    overflow: hidden;
   }
 
   &__SprintHeader {
@@ -54,6 +53,7 @@
     justify-content: space-between;
     padding: $space-3 $space-4;
     background: $color-surface;
+    border-radius: $radius-xl $radius-xl 0 0;
     cursor: pointer;
     user-select: none;
 
@@ -221,18 +221,7 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  &__Epic {
-    font-size: 10px;
-    font-weight: $font-weight-medium;
-    padding: 1px 8px;
-    border-radius: $radius-sm;
-    white-space: nowrap;
-    flex-shrink: 0;
-    max-width: 140px;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    min-width: 0;
   }
 
   &__Labels {
@@ -249,17 +238,46 @@
     white-space: nowrap;
   }
 
+  // 인라인 셀렉트 셀 공통
+  &__Cell {
+    flex-shrink: 0;
+
+    // row hover시에만 보이는 셀 (에픽 미설정 등)
+    &--hoverOnly {
+      opacity: 0;
+      transition: opacity $transition-fast;
+
+      .TaskListRow:hover & {
+        opacity: 1;
+      }
+    }
+  }
+
+  &__Epic {
+    font-size: $font-size-xs;
+    white-space: nowrap;
+
+    &--empty {
+      color: $color-text-tertiary;
+    }
+  }
+
+  &__Cell--status {
+    width: 92px;
+  }
+
+  &__Cell--dueDate {
+    width: 50px;
+  }
+
+  &__Cell--priority {
+    width: 62px;
+  }
+
   &__Status {
     font-size: $font-size-xs;
     font-weight: $font-weight-medium;
-    padding: 1px 6px;
-    border-radius: $radius-sm;
     white-space: nowrap;
-    flex-shrink: 0;
-    border: none;
-    cursor: pointer;
-    outline: none;
-    appearance: auto;
 
     &--todo {
       background: $color-surface;
@@ -277,11 +295,38 @@
     }
   }
 
+  &__DueDate {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+    white-space: nowrap;
+    text-align: center;
+  }
+
   &__Priority {
     font-size: $font-size-xs;
-    font-weight: $font-weight-bold;
-    min-width: 20px;
-    text-align: center;
+    font-weight: $font-weight-medium;
+    white-space: nowrap;
+
+    &--urgent {
+      color: #DC2626;
+    }
+
+    &--high {
+      color: #F59E0B;
+    }
+
+    &--medium {
+      color: #5E6AD2;
+    }
+
+    &--low {
+      color: $color-text-tertiary;
+    }
+  }
+
+  // 담당자 아바타 + 드롭다운
+  &__AssigneeWrap {
+    position: relative;
     flex-shrink: 0;
   }
 
@@ -289,14 +334,19 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 22px;
-    height: 22px;
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
     background: $color-primary;
     color: $color-text-inverse;
-    font-size: 10px;
+    font-size: 11px;
     font-weight: $font-weight-bold;
-    flex-shrink: 0;
+    cursor: pointer;
+    transition: opacity $transition-fast;
+
+    &:hover {
+      opacity: 0.85;
+    }
 
     &--empty {
       background: transparent;
@@ -305,10 +355,65 @@
     }
   }
 
-  &__DueDate {
-    font-size: $font-size-xs;
-    color: $color-text-tertiary;
+  &__AssigneeDropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    min-width: 200px;
+    max-height: 240px;
+    overflow-y: auto;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+    box-shadow: $shadow-md;
+    z-index: 100;
+    padding: $space-1 0;
+    animation: customSelectFadeIn 120ms ease;
+  }
+
+  &__AssigneeOption {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    width: 100%;
+    padding: 6px $space-3;
+    font-size: $font-size-sm;
+    color: $color-text;
+    cursor: pointer;
+    transition: background $transition-fast;
     white-space: nowrap;
+    text-align: left;
+    background: none;
+    border: none;
+
+    &:hover {
+      background: $color-surface;
+    }
+
+    &--selected {
+      background: $color-primary-subtle;
+      color: $color-primary;
+      font-weight: $font-weight-medium;
+    }
+  }
+
+  &__AssigneeAvatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: $color-primary;
+    color: $color-text-inverse;
+    font-size: 11px;
+    font-weight: $font-weight-bold;
     flex-shrink: 0;
+
+    &--empty {
+      background: transparent;
+      border: 1px dashed $color-text-tertiary;
+      color: $color-text-tertiary;
+    }
   }
 }

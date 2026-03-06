@@ -2,7 +2,6 @@
 
 .BrowseBranches {
   padding: $space-6;
-  max-width: 720px;
 
   &__Header {
     margin-bottom: $space-6;
@@ -154,6 +153,17 @@
 
     &:hover {
       background: $color-primary-hover;
+    }
+
+    &--joined {
+      background: transparent;
+      color: $color-text-secondary;
+      border: 1px solid $color-border;
+
+      &:hover {
+        background: $color-surface;
+        color: $color-text;
+      }
     }
   }
 }

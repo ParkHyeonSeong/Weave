@@ -77,7 +77,7 @@ async def archive(branch_id: int, db: AsyncSession):
 
 
 async def find_public(user_id: int, query: str, db: AsyncSession):
-    """public이면서 내가 멤버가 아닌 Branch 목록"""
+    """public Branch 목록 (가입 여부 포함)"""
     params = {'user_id': user_id}
     where_search = ''
     if query:
@@ -88,13 +88,14 @@ async def find_public(user_id: int, query: str, db: AsyncSession):
         SELECT b.branch_id, b.branch_name, b.key, b.description,
                b.color, b.created_at,
                (SELECT COUNT(*) FROM branch_member bm2
-                WHERE bm2.branch_id = b.branch_id) AS member_count
+                WHERE bm2.branch_id = b.branch_id) AS member_count,
+               EXISTS(
+                   SELECT 1 FROM branch_member bm3
+                   WHERE bm3.branch_id = b.branch_id AND bm3.user_id = :user_id
+               ) AS is_member
         FROM branch b
         WHERE b.visibility = 'public'
           AND b.is_archived = FALSE
-          AND b.branch_id NOT IN (
-              SELECT branch_id FROM branch_member WHERE user_id = :user_id
-          )
           {where_search}
         ORDER BY b.branch_name
     """), params)

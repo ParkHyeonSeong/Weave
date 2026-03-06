@@ -1,0 +1,144 @@
+@use '../../variables' as *;
+
+.WikiEditor {
+  border: 1px solid $color-border;
+  border-radius: $radius-xl;
+  overflow: hidden;
+
+  &__Content {
+    padding: $space-6;
+    min-height: 400px;
+    font-size: $font-size-base;
+    line-height: 1.7;
+    color: $color-text;
+
+    // TipTap ProseMirror 기본 스타일
+    .tiptap {
+      outline: none;
+
+      > * + * {
+        margin-top: 0.5em;
+      }
+
+      h1, h2, h3 {
+        margin: 1.2em 0 0.4em;
+        font-weight: $font-weight-bold;
+        color: $color-text;
+      }
+      h1 { font-size: 1.6em; }
+      h2 { font-size: 1.3em; }
+      h3 { font-size: 1.1em; }
+
+      p.is-editor-empty:first-child::before {
+        color: $color-text-tertiary;
+        content: attr(data-placeholder);
+        float: left;
+        height: 0;
+        pointer-events: none;
+      }
+
+      ul, ol {
+        padding-left: 1.5em;
+      }
+
+      blockquote {
+        border-left: 3px solid $color-border;
+        padding-left: $space-4;
+        color: $color-text-secondary;
+      }
+
+      code {
+        background: $color-surface;
+        padding: 2px 4px;
+        border-radius: $radius-sm;
+        font-size: 0.9em;
+      }
+
+      pre {
+        background: $color-surface;
+        border-radius: $radius-lg;
+        padding: $space-4;
+        overflow-x: auto;
+
+        code {
+          background: none;
+          padding: 0;
+          color: inherit;
+        }
+      }
+
+      a {
+        color: $color-primary;
+        cursor: pointer;
+      }
+
+      img {
+        max-width: 100%;
+        border-radius: $radius-lg;
+      }
+
+      table {
+        border-collapse: collapse;
+        width: 100%;
+
+        th, td {
+          border: 1px solid $color-border;
+          padding: 8px $space-3;
+          text-align: left;
+          position: relative;
+        }
+        th {
+          background: $color-surface;
+          font-weight: $font-weight-semibold;
+        }
+        .selectedCell {
+          background: $color-primary-subtle;
+        }
+      }
+
+      hr {
+        border: none;
+        border-top: 1px solid $color-border;
+        margin: 1.5em 0;
+      }
+    }
+  }
+}
+
+.WikiEditorToolbar {
+  display: flex;
+  align-items: center;
+  gap: $space-1;
+  padding: $space-2 $space-3;
+  border-bottom: 1px solid $color-border;
+  background: $color-surface;
+  flex-wrap: wrap;
+
+  &__Btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: $radius-md;
+    color: $color-text-secondary;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: $color-bg;
+      color: $color-text;
+    }
+
+    &--active {
+      background: $color-primary-subtle;
+      color: $color-primary;
+    }
+  }
+
+  &__Sep {
+    width: 1px;
+    height: 20px;
+    background: $color-border;
+    margin: 0 $space-1;
+  }
+}

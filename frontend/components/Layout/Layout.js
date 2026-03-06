@@ -4,22 +4,65 @@ import Sidebar from './Sidebar';
 import Footer from './Footer';
 import Messenger from '@/components/Messenger/Messenger';
 import CreateBranch from '@/components/modal/CreateBranch';
+import CreateCanvas from '@/components/modal/CreateCanvas';
 import CommandPalette from '@/components/modal/CommandPalette';
 import { requestNotificationPermission, showNotification } from '@/library/notification';
 
 const MESSENGER_MIN_WIDTH = 280;
 const MESSENGER_DEFAULT_WIDTH = 320;
+const SIDEBAR_MIN_WIDTH = 200;
+const SIDEBAR_DEFAULT_WIDTH = 240;
 
 export default function Layout({ children }) {
   const [showCreateBranch, setShowCreateBranch] = useState(false);
+  const [showCreateCanvas, setShowCreateCanvas] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMessengerCollapsed, setIsMessengerCollapsed] = useState(true);
   const [notifications, setNotifications] = useState([]);
   const [messengerWidth, setMessengerWidth] = useState(MESSENGER_DEFAULT_WIDTH);
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem('sidebar_width');
+      return saved ? Number(saved) : SIDEBAR_DEFAULT_WIDTH;
+    }
+    return SIDEBAR_DEFAULT_WIDTH;
+  });
   const isResizingRef = useRef(false);
   const wsRef = useRef(null);
   const activeRoomRef = useRef(null);
+
+  // 사이드바 리사이즈 드래그 핸들러
+  const handleSidebarResizeStart = useCallback((e) => {
+    e.preventDefault();
+    isResizingRef.current = true;
+    const startX = e.clientX;
+    const startWidth = sidebarWidth;
+
+    let latestWidth = startWidth;
+
+    const handleMouseMove = (e) => {
+      if (!isResizingRef.current) return;
+      const maxWidth = Math.floor(window.innerWidth / 3);
+      const delta = e.clientX - startX;
+      latestWidth = Math.min(maxWidth, Math.max(SIDEBAR_MIN_WIDTH, startWidth + delta));
+      setSidebarWidth(latestWidth);
+    };
+
+    const handleMouseUp = () => {
+      isResizingRef.current = false;
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      sessionStorage.setItem('sidebar_width', String(latestWidth));
+    };
+
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [sidebarWidth]);
 
   // 메신저 패널 리사이즈 드래그 핸들러
   const handleResizeStart = useCallback((e) => {
@@ -67,6 +110,13 @@ export default function Layout({ children }) {
     const handleCreate = () => setShowCreateBranch(true);
     window.addEventListener('palette:create-branch', handleCreate);
     return () => window.removeEventListener('palette:create-branch', handleCreate);
+  }, []);
+
+  // WikiHome에서 Canvas 생성 요청 수신
+  useEffect(() => {
+    const handleCreate = () => setShowCreateCanvas(true);
+    window.addEventListener('layout:create-canvas', handleCreate);
+    return () => window.removeEventListener('layout:create-canvas', handleCreate);
   }, []);
 
   // WebSocket 연결 관리
@@ -182,7 +232,12 @@ export default function Layout({ children }) {
       />
       <div className="Layout__Body">
         {!isSidebarCollapsed && (
-          <Sidebar onCreateBranch={() => setShowCreateBranch(true)} />
+          <Sidebar
+            width={sidebarWidth}
+            onResizeStart={handleSidebarResizeStart}
+            onCreateBranch={() => setShowCreateBranch(true)}
+            onCreateCanvas={() => setShowCreateCanvas(true)}
+          />
         )}
         <main className="Layout__Content">
           {children}
@@ -210,6 +265,9 @@ export default function Layout({ children }) {
 
       {showCreateBranch && (
         <CreateBranch onClose={() => setShowCreateBranch(false)} />
+      )}
+      {showCreateCanvas && (
+        <CreateCanvas onClose={() => setShowCreateCanvas(false)} />
       )}
       {showPalette && (
         <CommandPalette onClose={() => setShowPalette(false)} />

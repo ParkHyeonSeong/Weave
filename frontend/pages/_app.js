@@ -32,6 +32,12 @@ import "@/styles/components/profile/profile.scss";
 import "@/styles/components/common/customSelect.scss";
 import "@/styles/components/branch/branchSettings.scss";
 import "@/styles/components/browse/browseBranches.scss";
+import "@/styles/components/home/launchpad.scss";
+import "@/styles/components/modal/createCanvas.scss";
+import "@/styles/components/wiki/wikiHome.scss";
+import "@/styles/components/wiki/wikiCanvas.scss";
+import "@/styles/components/wiki/wikiPageView.scss";
+import "@/styles/components/wiki/wikiEditor.scss";
 
 const publicPaths = ['/auth/login', '/setup'];
 

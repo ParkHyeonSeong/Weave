@@ -7,6 +7,8 @@ import SprintModal from '@/components/modal/SprintModal';
 export default function TaskList({ branchId, branchKey, taskTypes, onSelectTask }) {
   const [sprints, setSprints] = useState([]);
   const [backlogTasks, setBacklogTasks] = useState([]);
+  const [epics, setEpics] = useState([]);
+  const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // 모달 상태
@@ -14,6 +16,7 @@ export default function TaskList({ branchId, branchKey, taskTypes, onSelectTask 
 
   useEffect(() => {
     fetchData();
+    fetchOptions();
   }, [branchId]);
 
   // task:updated 이벤트로 목록 갱신
@@ -22,6 +25,18 @@ export default function TaskList({ branchId, branchKey, taskTypes, onSelectTask 
     window.addEventListener('task:updated', handleRefresh);
     return () => window.removeEventListener('task:updated', handleRefresh);
   }, [branchId]);
+
+  const fetchOptions = async () => {
+    // 각각 독립적으로 fetch (하나 실패해도 나머지 영향 없음)
+    try {
+      const epicRes = await axios.get(`/branches/${branchId}/epics`);
+      if (epicRes.data.status) setEpics(epicRes.data.epics);
+    } catch {}
+    try {
+      const memberRes = await axios.get(`/branches/${branchId}/members`);
+      if (memberRes.data.status) setMembers(memberRes.data.members);
+    } catch {}
+  };
 
   const fetchData = async () => {
     try {
@@ -75,6 +90,8 @@ export default function TaskList({ branchId, branchKey, taskTypes, onSelectTask 
           branchId={branchId}
           branchKey={branchKey}
           taskTypes={taskTypes}
+          epics={epics}
+          members={members}
           onEditTask={onSelectTask}
           onEditSprint={() => setSprintModal({ open: true, sprint })}
         />
@@ -86,6 +103,8 @@ export default function TaskList({ branchId, branchKey, taskTypes, onSelectTask 
         branchId={branchId}
         branchKey={branchKey}
         taskTypes={taskTypes}
+        epics={epics}
+        members={members}
         onEditTask={onSelectTask}
         isBacklog
       />

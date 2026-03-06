@@ -19,6 +19,8 @@ from routers import epic as epic_router
 from routers import task as task_router
 from routers import profile as profile_router
 from routers import task_type_config as task_type_config_router
+from routers import canvas as canvas_router
+from routers import wiki_page as wiki_page_router
 
 # -- Logging ---------------------------------------------------------------
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -83,6 +85,8 @@ app.include_router(epic_router.router, prefix="/branches/{branch_id}/epics", tag
 app.include_router(task_router.router, prefix="/branches/{branch_id}/tasks", tags=["tasks"])
 app.include_router(task_type_config_router.router, prefix="/branches/{branch_id}/task-types", tags=["task-types"])
 app.include_router(profile_router.router, prefix="/profile", tags=["profile"])
+app.include_router(canvas_router.router, prefix="/wiki/canvases", tags=["wiki-canvases"])
+app.include_router(wiki_page_router.router, prefix="/wiki/canvases/{canvas_id}/pages", tags=["wiki-pages"])
 
 # -- Static files (업로드 파일 서빙) -----------------------------------------
 uploads_dir = os.path.join(os.path.dirname(__file__), 'uploads')

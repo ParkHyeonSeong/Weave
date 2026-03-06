@@ -1,0 +1,74 @@
+@use '../../variables' as *;
+
+.Launchpad {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+  padding: $space-10;
+
+  &__Header {
+    text-align: center;
+    margin-bottom: $space-10;
+  }
+
+  &__Title {
+    font-size: 32px;
+    font-weight: $font-weight-bold;
+    color: $color-text;
+    margin-bottom: $space-2;
+  }
+
+  &__Subtitle {
+    font-size: $font-size-base;
+    color: $color-text-tertiary;
+  }
+
+  &__Grid {
+    display: grid;
+    grid-template-columns: repeat(2, 200px);
+    gap: $space-6;
+  }
+
+  &__Card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: $space-3;
+    padding: $space-8 $space-6;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-2xl;
+    cursor: pointer;
+    transition: all $transition-base;
+
+    &:hover {
+      border-color: $color-primary;
+      box-shadow: $shadow-md;
+      transform: translateY(-2px);
+    }
+  }
+
+  &__IconWrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    border-radius: $radius-xl;
+  }
+
+  &__AppName {
+    font-size: $font-size-base;
+    font-weight: $font-weight-semibold;
+    color: $color-text;
+  }
+
+  &__AppDesc {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+    text-align: center;
+    line-height: 1.4;
+  }
+}

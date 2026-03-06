@@ -1,36 +1,22 @@
-import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { LayoutDashboard, CheckSquare, Plus, Compass } from 'lucide-react';
-import { axios } from '@/library/_axios';
+import { LayoutDashboard, CheckSquare, Compass } from 'lucide-react';
+import SidebarBranches from './SidebarBranches';
+import SidebarCanvases from './SidebarCanvases';
 
-export default function Sidebar({ onCreateBranch }) {
+function getAppContext(pathname) {
+  if (pathname.startsWith('/wiki')) return 'wiki';
+  if (pathname.startsWith('/branch') || pathname === '/browse') return 'branch';
+  return 'home';
+}
+
+export default function Sidebar({ width, onResizeStart, onCreateBranch, onCreateCanvas }) {
   const router = useRouter();
-  const [branches, setBranches] = useState([]);
-
-  const fetchBranches = async () => {
-    try {
-      const res = await axios.get('/branches');
-      if (res.data.status) {
-        setBranches(res.data.branches);
-      }
-    } catch {}
-  };
-
-  useEffect(() => {
-    fetchBranches();
-  }, []);
-
-  // CreateBranch 모달에서 생성 후 목록 갱신
-  useEffect(() => {
-    const handleRefresh = () => fetchBranches();
-    window.addEventListener('branch:created', handleRefresh);
-    return () => window.removeEventListener('branch:created', handleRefresh);
-  }, []);
+  const appContext = getAppContext(router.pathname);
 
   return (
-    <aside className="Sidebar">
+    <aside className="Sidebar" style={{ width }}>
       <div className="Sidebar__Inner">
-        {/* 기본 메뉴 */}
+        {/* 기본 메뉴 (항상 표시) */}
         <nav className="Sidebar__Menu">
           <button
             className={`Sidebar__MenuItem ${router.pathname === '/' ? 'Sidebar__MenuItem--active' : ''}`}
@@ -52,40 +38,25 @@ export default function Sidebar({ onCreateBranch }) {
           </button>
         </nav>
 
-        <div className="Sidebar__Divider" />
-
-        {/* Branches 섹션 */}
-        <div className="Sidebar__SectionHeader">
-          <span className="Sidebar__SectionLabel">Branches</span>
-          <button className="Sidebar__SectionAddBtn" onClick={onCreateBranch} title="Create Branch">
-            <Plus size={14} />
-          </button>
-        </div>
-
-        <div className="Sidebar__Branches">
-          {branches.length === 0 ? (
-            <div className="Sidebar__Empty">
-              No branches yet.<br />Create one to get started.
-            </div>
-          ) : (
-            branches.map((branch) => (
-              <button
-                key={branch.branch_id}
-                className={`Sidebar__BranchItem ${
-                  router.query.id == branch.branch_id ? 'Sidebar__BranchItem--active' : ''
-                }`}
-                onClick={() => router.push(`/branch/${branch.branch_id}`)}
-              >
-                <span
-                  className="Sidebar__BranchDot"
-                  style={{ backgroundColor: branch.color || '#5E6AD2' }}
-                />
-                <span className="Sidebar__BranchName">{branch.branch_name}</span>
-              </button>
-            ))
-          )}
-        </div>
+        {/* 컨텍스트별 하단 섹션 */}
+        {appContext !== 'home' && (
+          <>
+            <div className="Sidebar__Divider" />
+            {appContext === 'branch' && (
+              <SidebarBranches onCreateBranch={onCreateBranch} />
+            )}
+            {appContext === 'wiki' && (
+              <SidebarCanvases onCreateCanvas={onCreateCanvas} />
+            )}
+          </>
+        )}
       </div>
+
+      {/* 리사이즈 핸들 */}
+      <div
+        className="Sidebar__ResizeHandle"
+        onMouseDown={onResizeStart}
+      />
     </aside>
   );
 }

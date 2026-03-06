@@ -34,8 +34,10 @@ export default function BrowseBranches() {
     try {
       const res = await axios.post(`/branches/${branchId}/join`);
       if (res.data.status) {
-        // 목록에서 제거
-        setBranches((prev) => prev.filter((b) => b.branch_id !== branchId));
+        // 가입 완료 → is_member 플래그 갱신
+        setBranches((prev) =>
+          prev.map((b) => b.branch_id === branchId ? { ...b, is_member: true } : b)
+        );
         // Sidebar 갱신
         window.dispatchEvent(new Event('branch:created'));
       }
@@ -94,12 +96,21 @@ export default function BrowseBranches() {
                 <span>{branch.member_count || 0} members</span>
               </div>
             </div>
-            <button
-              className="BrowseBranches__JoinBtn"
-              onClick={() => handleJoin(branch.branch_id)}
-            >
-              Join
-            </button>
+            {branch.is_member ? (
+              <button
+                className="BrowseBranches__JoinBtn BrowseBranches__JoinBtn--joined"
+                onClick={() => router.push(`/branch/${branch.branch_id}`)}
+              >
+                Open
+              </button>
+            ) : (
+              <button
+                className="BrowseBranches__JoinBtn"
+                onClick={() => handleJoin(branch.branch_id)}
+              >
+                Join
+              </button>
+            )}
           </div>
         ))}
       </div>
