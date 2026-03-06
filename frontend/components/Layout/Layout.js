@@ -20,10 +20,16 @@ export default function Layout({ children }) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMessengerCollapsed, setIsMessengerCollapsed] = useState(true);
   const [notifications, setNotifications] = useState([]);
-  const [messengerWidth, setMessengerWidth] = useState(MESSENGER_DEFAULT_WIDTH);
+  const [messengerWidth, setMessengerWidth] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('messenger_width');
+      return saved ? Number(saved) : MESSENGER_DEFAULT_WIDTH;
+    }
+    return MESSENGER_DEFAULT_WIDTH;
+  });
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     if (typeof window !== 'undefined') {
-      const saved = sessionStorage.getItem('sidebar_width');
+      const saved = localStorage.getItem('sidebar_width');
       return saved ? Number(saved) : SIDEBAR_DEFAULT_WIDTH;
     }
     return SIDEBAR_DEFAULT_WIDTH;
@@ -55,7 +61,7 @@ export default function Layout({ children }) {
       document.removeEventListener('mouseup', handleMouseUp);
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
-      sessionStorage.setItem('sidebar_width', String(latestWidth));
+      localStorage.setItem('sidebar_width', String(latestWidth));
     };
 
     document.body.style.cursor = 'col-resize';
@@ -71,12 +77,14 @@ export default function Layout({ children }) {
     const startX = e.clientX;
     const startWidth = messengerWidth;
 
+    let latestMsgWidth = startWidth;
+
     const handleMouseMove = (e) => {
       if (!isResizingRef.current) return;
       const maxWidth = Math.floor(window.innerWidth * 0.5);
       const delta = startX - e.clientX;
-      const newWidth = Math.min(maxWidth, Math.max(MESSENGER_MIN_WIDTH, startWidth + delta));
-      setMessengerWidth(newWidth);
+      latestMsgWidth = Math.min(maxWidth, Math.max(MESSENGER_MIN_WIDTH, startWidth + delta));
+      setMessengerWidth(latestMsgWidth);
     };
 
     const handleMouseUp = () => {
@@ -85,6 +93,7 @@ export default function Layout({ children }) {
       document.removeEventListener('mouseup', handleMouseUp);
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
+      localStorage.setItem('messenger_width', String(latestMsgWidth));
     };
 
     document.body.style.cursor = 'col-resize';

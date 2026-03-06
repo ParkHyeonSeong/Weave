@@ -149,7 +149,7 @@
   &__BranchItem {
     display: flex;
     align-items: center;
-    flex: 1;
+    width: 100%;
     min-width: 0;
     gap: $space-2;
     padding: 8px $space-4;
@@ -157,6 +157,32 @@
     color: $color-text-secondary;
     cursor: pointer;
     text-align: left;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+      color: $color-text;
+    }
+
+    &--active {
+      background: $color-primary-subtle;
+      color: $color-primary;
+    }
+
+    // BranchRow 안에서는 hover/active를 Row가 처리
+    .Sidebar__BranchRow & {
+      width: auto;
+      flex: 1;
+      transition: none;
+
+      &:hover {
+        background: transparent;
+      }
+
+      &--active {
+        background: transparent;
+      }
+    }
   }
 
   &__BranchActions {
