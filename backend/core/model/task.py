@@ -389,6 +389,95 @@ async def search_for_chat(user_id: int, keyword: str, my_only: bool, db: AsyncSe
     return tasks
 
 
+async def find_by_assignee(user_id: int, status: str, priority: str,
+                           branch_id: int, sort_by: str, db: AsyncSession):
+    """사용자에게 할당된 모든 Task (cross-branch)"""
+    filters = []
+    params = {'user_id': user_id}
+
+    if status:
+        filters.append("AND t.status = :status")
+        params['status'] = status
+    if priority:
+        filters.append("AND t.priority = :priority")
+        params['priority'] = priority
+    if branch_id:
+        filters.append("AND t.branch_id = :branch_id")
+        params['branch_id'] = branch_id
+
+    filter_clause = ' '.join(filters)
+
+    order_map = {
+        'updated': 't.updated_at DESC NULLS LAST, t.created_at DESC',
+        'created': 't.created_at DESC',
+        'priority': "CASE t.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END, t.updated_at DESC NULLS LAST",
+        'due_date': 't.due_date ASC NULLS LAST, t.updated_at DESC NULLS LAST',
+    }
+    order_clause = order_map.get(sort_by, order_map['updated'])
+
+    result = await db.execute(text(f"""
+        SELECT t.task_id, t.branch_id, t.display_number, t.title,
+               t.task_type, t.status, t.priority,
+               t.start_date, t.due_date, t.updated_at, t.created_at,
+               b.key AS branch_key, b.branch_name, b.color AS branch_color
+        FROM task t
+        INNER JOIN branch b ON t.branch_id = b.branch_id
+        WHERE t.task_id IN (SELECT task_id FROM task_assignee WHERE user_id = :user_id)
+              {filter_clause}
+        ORDER BY {order_clause}
+    """), params)
+
+    rows = result.fetchall()
+    tasks = []
+    for row in rows:
+        task = dict(row._mapping)
+        task['display_id'] = f"{task['branch_key']}-{task['display_number']}"
+        tasks.append(task)
+
+    if tasks:
+        task_ids = [t['task_id'] for t in tasks]
+        placeholders = ', '.join(str(tid) for tid in task_ids)
+
+        # 담당자 일괄 조회
+        assignees_result = await db.execute(text(f"""
+            SELECT ta.task_id, ta.user_id, u.username, ta.role
+            FROM task_assignee ta
+            INNER JOIN "user" u ON ta.user_id = u.user_id
+            WHERE ta.task_id IN ({placeholders})
+            ORDER BY ta.role, u.username
+        """))
+        assignee_map = {}
+        for ar in assignees_result.fetchall():
+            ad = dict(ar._mapping)
+            assignee_map.setdefault(ad['task_id'], []).append({
+                'user_id': ad['user_id'],
+                'username': ad['username'],
+                'role': ad['role'],
+            })
+
+        # 라벨 일괄 조회
+        labels_result = await db.execute(text(f"""
+            SELECT tl.task_id, l.label_id, l.label_name, l.color
+            FROM task_label tl
+            INNER JOIN label l ON tl.label_id = l.label_id
+            WHERE tl.task_id IN ({placeholders})
+        """))
+        label_map = {}
+        for lr in labels_result.fetchall():
+            ld = dict(lr._mapping)
+            label_map.setdefault(ld['task_id'], []).append({
+                'label_id': ld['label_id'],
+                'label_name': ld['label_name'],
+                'color': ld['color'],
+            })
+
+        for task in tasks:
+            task['assignees'] = assignee_map.get(task['task_id'], [])
+            task['labels'] = label_map.get(task['task_id'], [])
+
+    return tasks
+
+
 async def set_labels(task_id: int, label_ids: list, db: AsyncSession):
     """Task 라벨 전체 교체"""
     await db.execute(text("""

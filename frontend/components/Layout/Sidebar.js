@@ -25,7 +25,10 @@ export default function Sidebar({ width, onResizeStart, onCreateBranch, onCreate
             <LayoutDashboard size={16} className="Sidebar__MenuIcon" />
             Home
           </button>
-          <button className="Sidebar__MenuItem">
+          <button
+            className={`Sidebar__MenuItem ${router.pathname === '/my-tasks' ? 'Sidebar__MenuItem--active' : ''}`}
+            onClick={() => router.push('/my-tasks')}
+          >
             <CheckSquare size={16} className="Sidebar__MenuIcon" />
             My Tasks
           </button>

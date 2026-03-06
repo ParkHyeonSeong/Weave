@@ -22,6 +22,7 @@ from routers import task_type_config as task_type_config_router
 from routers import canvas as canvas_router
 from routers import canvas_page as canvas_page_router
 from routers import task_issue as task_issue_router
+from routers import my_tasks as my_tasks_router
 
 # -- Logging ---------------------------------------------------------------
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -96,6 +97,7 @@ app.include_router(profile_router.router, prefix="/profile", tags=["profile"])
 app.include_router(canvas_router.router, prefix="/canvases", tags=["canvases"])
 app.include_router(canvas_page_router.router, prefix="/canvases/{canvas_id}/pages", tags=["canvas-pages"])
 app.include_router(task_issue_router.router, prefix="/branches/{branch_id}/tasks/{task_id}/issues", tags=["task-issues"])
+app.include_router(my_tasks_router.router, prefix="/my-tasks", tags=["my-tasks"])
 
 # -- Static files (업로드 파일 서빙) -----------------------------------------
 uploads_dir = os.path.join(os.path.dirname(__file__), 'uploads')

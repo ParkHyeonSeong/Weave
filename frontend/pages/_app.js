@@ -49,6 +49,7 @@ import "@/styles/components/branch/taskFullPage.scss";
 import "@/styles/components/branch/taskIssueSection.scss";
 import "@/styles/components/branch/taskIssueDetail.scss";
 import "@/styles/components/modal/createIssue.scss";
+import "@/styles/components/myTasks/myTasks.scss";
 
 const publicPaths = ['/auth/login', '/setup'];
 const noLayoutPaths = ['/auth/login', '/setup', '/admin'];
