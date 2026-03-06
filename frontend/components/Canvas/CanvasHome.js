@@ -58,7 +58,6 @@ export default function CanvasHome() {
                   style={{ backgroundColor: canvas.color || '#16A34A' }}
                 />
                 <span className="CanvasHome__CardName">{canvas.canvas_name}</span>
-                <span className="CanvasHome__CardKey">{canvas.key}</span>
               </div>
               {canvas.description && (
                 <p className="CanvasHome__CardDesc">{canvas.description}</p>

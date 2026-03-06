@@ -16,7 +16,10 @@ export default function Messenger({ wsRef, activeRoomRef, panelWidth }) {
     } catch { return null; }
   });
   const [showNewChat, setShowNewChat] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try { return sessionStorage.getItem('chat_sidebar_collapsed') === 'true'; }
+    catch { return false; }
+  });
 
   const isSplitView = panelWidth >= SPLIT_THRESHOLD;
 
@@ -41,6 +44,12 @@ export default function Messenger({ wsRef, activeRoomRef, panelWidth }) {
     } catch {}
     return () => { if (activeRoomRef) activeRoomRef.current = null; };
   }, [activeRoomId]);
+
+  // 사이드바 접힘 상태 저장
+  useEffect(() => {
+    try { sessionStorage.setItem('chat_sidebar_collapsed', sidebarCollapsed ? 'true' : 'false'); }
+    catch {}
+  }, [sidebarCollapsed]);
 
   // 알림 클릭 -> 해당 채팅방으로 이동
   useEffect(() => {

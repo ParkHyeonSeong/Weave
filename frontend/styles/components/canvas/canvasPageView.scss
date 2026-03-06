@@ -9,7 +9,13 @@
     display: flex;
     align-items: center;
     justify-content: flex-end;
+    gap: $space-3;
     margin-bottom: $space-6;
+  }
+
+  &__Error {
+    font-size: $font-size-sm;
+    color: $color-error;
   }
 
   &__Actions {

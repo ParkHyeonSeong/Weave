@@ -4,7 +4,7 @@ import {
   List, ListOrdered, ListChecks,
   Quote, Minus, CodeSquare,
   Link as LinkIcon, Image as ImageIcon, Table as TableIcon,
-  Undo2, Redo2,
+  Undo2, Redo2, Sigma,
   AlignLeft, AlignCenter, AlignRight,
   ChevronDown, Highlighter, Palette,
   Info, AlertTriangle, CheckCircle2, XCircle,
@@ -275,6 +275,9 @@ export default function CanvasEditorToolbar({ editor }) {
       </Btn>
       <Btn onClick={addTable} title="Table">
         <TableIcon size={16} />
+      </Btn>
+      <Btn onClick={() => editor.chain().focus().insertContent('$E=mc^2$').run()} title="Math Equation">
+        <Sigma size={16} />
       </Btn>
 
       <Sep />

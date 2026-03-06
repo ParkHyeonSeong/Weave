@@ -1,11 +1,21 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import dynamic from 'next/dynamic';
 import { Pencil, Save, X } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import katex from 'katex';
 
 // SSR 비활성화 (TipTap은 브라우저 전용)
 const CanvasEditor = dynamic(() => import('./CanvasEditor'), { ssr: false });
+
+const MAX_PLAIN_TEXT_LENGTH = 60000;
+
+function getPlainTextLength(html) {
+  if (!html) return 0;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  return (tmp.textContent || tmp.innerText || '').length;
+}
 
 export default function CanvasPageView() {
   const router = useRouter();
@@ -15,6 +25,8 @@ export default function CanvasPageView() {
   const [editContent, setEditContent] = useState('');
   const [editTitle, setEditTitle] = useState('');
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const contentRef = useRef(null);
 
   const fetchPage = useCallback(async () => {
     if (!canvasId || !pageId) return;
@@ -33,7 +45,27 @@ export default function CanvasPageView() {
     setIsEditing(false);
   }, [fetchPage]);
 
+  // 읽기 모드에서 KaTeX 수식 렌더링
+  useEffect(() => {
+    if (isEditing || !contentRef.current) return;
+    const mathNodes = contentRef.current.querySelectorAll('[data-type="mathematics"]');
+    mathNodes.forEach((el) => {
+      const latex = el.getAttribute('data-latex');
+      if (latex && !el.querySelector('.katex')) {
+        try {
+          katex.render(latex, el, { throwOnError: false });
+        } catch {}
+      }
+    });
+  }, [isEditing, page?.content]);
+
   const handleSave = async () => {
+    // 길이 제한 체크
+    if (getPlainTextLength(editContent) > MAX_PLAIN_TEXT_LENGTH) {
+      setSaveError(`Content exceeds the maximum length of ${MAX_PLAIN_TEXT_LENGTH.toLocaleString()} characters.`);
+      return;
+    }
+    setSaveError('');
     setSaving(true);
     try {
       const body = {};
@@ -53,6 +85,7 @@ export default function CanvasPageView() {
     setEditTitle(page.title);
     setEditContent(page.content || '');
     setIsEditing(false);
+    setSaveError('');
   };
 
   if (!page) return null;
@@ -89,6 +122,7 @@ export default function CanvasPageView() {
             </button>
           )}
         </div>
+        {saveError && <div className="CanvasPageView__Error">{saveError}</div>}
       </div>
 
       {/* 제목 */}
@@ -117,9 +151,11 @@ export default function CanvasPageView() {
           <CanvasEditor
             content={editContent}
             onChange={setEditContent}
+            canvasId={Number(canvasId)}
           />
         ) : (
           <div
+            ref={contentRef}
             className="CanvasPageView__Content ProseMirror"
             dangerouslySetInnerHTML={{ __html: page.content || '<p>No content yet. Click Edit to start writing.</p>' }}
           />

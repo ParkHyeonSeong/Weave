@@ -156,6 +156,11 @@
         }
       }
 
+      // 수학 수식 (KaTeX)
+      [data-type="mathematics"] {
+        cursor: pointer;
+      }
+
       // 콜아웃 패널
       .callout {
         border-radius: $radius-lg;
@@ -187,6 +192,19 @@
     }
   }
 
+  // 글자수 카운터
+  &__Counter {
+    padding: $space-2 $space-4;
+    text-align: right;
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+    border-top: 1px solid $color-border;
+
+    &--over {
+      color: $color-error;
+      font-weight: $font-weight-semibold;
+    }
+  }
 }
 
 // 툴바

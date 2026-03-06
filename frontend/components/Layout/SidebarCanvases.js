@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import {
   Plus, ChevronRight, ChevronDown,
-  FileText, Folder, FolderOpen, BookOpen, FolderPlus,
+  FileText, Folder, FolderOpen, BookOpen, FolderPlus, MoreHorizontal, Settings,
 } from 'lucide-react';
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
@@ -277,20 +277,24 @@ export default function SidebarCanvases({ onCreateCanvas }) {
   );
 }
 
-// 캔버스 제목 row + 호버 시 + 버튼 (드롭다운)
+// 캔버스 제목 row + 호버 시 더보기/+ 버튼
 function CanvasRow({ canvas, isActive, isExpanded, onToggle, onAddDocument, onAddFolder }) {
-  const [showMenu, setShowMenu] = useState(false);
-  const menuRef = useRef(null);
+  const router = useRouter();
+  const [showAddMenu, setShowAddMenu] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const addMenuRef = useRef(null);
+  const moreMenuRef = useRef(null);
 
   // 외부 클릭 시 메뉴 닫기
   useEffect(() => {
-    if (!showMenu) return;
+    if (!showAddMenu && !showMoreMenu) return;
     const handleClick = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) setShowMenu(false);
+      if (showAddMenu && addMenuRef.current && !addMenuRef.current.contains(e.target)) setShowAddMenu(false);
+      if (showMoreMenu && moreMenuRef.current && !moreMenuRef.current.contains(e.target)) setShowMoreMenu(false);
     };
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
-  }, [showMenu]);
+  }, [showAddMenu, showMoreMenu]);
 
   return (
     <div className={`Sidebar__BranchRow ${isActive ? 'Sidebar__BranchRow--active' : ''}`}>
@@ -308,27 +312,51 @@ function CanvasRow({ canvas, isActive, isExpanded, onToggle, onAddDocument, onAd
         <span className="Sidebar__BranchName">{canvas.canvas_name}</span>
       </button>
 
-      <div className="Sidebar__BranchActions" ref={menuRef}>
-        <button
-          className="Sidebar__BranchAddBtn"
-          onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
-          title="Add page"
-        >
-          <Plus size={13} />
-        </button>
+      <div className="Sidebar__BranchActions">
+        {/* 더보기 메뉴 */}
+        <div ref={moreMenuRef} style={{ position: 'relative' }}>
+          <button
+            className="Sidebar__BranchAddBtn"
+            onClick={(e) => { e.stopPropagation(); setShowMoreMenu(!showMoreMenu); }}
+            title="More"
+          >
+            <MoreHorizontal size={13} />
+          </button>
+          {showMoreMenu && (
+            <div className="Sidebar__AddMenu">
+              <button
+                className="Sidebar__AddMenuItem"
+                onClick={() => { setShowMoreMenu(false); router.push(`/canvas/${canvas.canvas_id}/settings`); }}
+              >
+                <Settings size={13} />
+                Settings
+              </button>
+            </div>
+          )}
+        </div>
 
-        {showMenu && (
-          <div className="Sidebar__AddMenu">
-            <button className="Sidebar__AddMenuItem" onClick={() => { setShowMenu(false); onAddDocument(); }}>
-              <FileText size={13} />
-              Document
-            </button>
-            <button className="Sidebar__AddMenuItem" onClick={() => { setShowMenu(false); onAddFolder(); }}>
-              <FolderPlus size={13} />
-              Folder
-            </button>
-          </div>
-        )}
+        {/* 추가 메뉴 */}
+        <div ref={addMenuRef} style={{ position: 'relative' }}>
+          <button
+            className="Sidebar__BranchAddBtn"
+            onClick={(e) => { e.stopPropagation(); setShowAddMenu(!showAddMenu); }}
+            title="Add page"
+          >
+            <Plus size={13} />
+          </button>
+          {showAddMenu && (
+            <div className="Sidebar__AddMenu">
+              <button className="Sidebar__AddMenuItem" onClick={() => { setShowAddMenu(false); onAddDocument(); }}>
+                <FileText size={13} />
+                Document
+              </button>
+              <button className="Sidebar__AddMenuItem" onClick={() => { setShowAddMenu(false); onAddFolder(); }}>
+                <FolderPlus size={13} />
+                Folder
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

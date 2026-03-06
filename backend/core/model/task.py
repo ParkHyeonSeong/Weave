@@ -63,7 +63,8 @@ async def find_by_id(task_id: int, db: AsyncSession):
                t.created_by, t.created_at, t.updated_at,
                b.key AS branch_key,
                e.epic_name,
-               s.sprint_name
+               s.sprint_name,
+               (SELECT COUNT(*) FROM task_issue ti WHERE ti.task_id = t.task_id) AS issue_count
         FROM task t
         INNER JOIN branch b ON t.branch_id = b.branch_id
         LEFT JOIN epic e ON t.epic_id = e.epic_id

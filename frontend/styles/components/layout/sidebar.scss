@@ -186,7 +186,9 @@
   }
 
   &__BranchActions {
-    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 2px;
     flex-shrink: 0;
     padding-right: $space-2;
   }

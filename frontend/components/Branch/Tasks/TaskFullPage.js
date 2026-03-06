@@ -1,28 +1,47 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { X, Maximize2, Trash2, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Trash2, ChevronDown } from 'lucide-react';
+import { axios } from '@/library/_axios';
 import CustomSelect from '@/components/common/CustomSelect';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import useTaskDetail from '@/hooks/useTaskDetail';
 import TaskIssueSection from './TaskIssueSection';
 
-export default function TaskDetailPanel({ branchId, branchKey, taskTypes, taskSummary, onClose }) {
+export default function TaskFullPage() {
   const router = useRouter();
+  const { id: branchId, taskId } = router.query;
+
+  const [branch, setBranch] = useState(null);
+  const [taskTypes, setTaskTypes] = useState([]);
+
   const {
     task, loading, sprints, epics, members, labels,
     updateField, updateAssignees, toggleLabel, handleDelete, handleSelectChange,
-  } = useTaskDetail(branchId, taskSummary?.task_id);
+  } = useTaskDetail(branchId, taskId);
 
   // 제목 편집
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState('');
-  const titleRef = useRef(null);
 
   // 설명 편집
   const [editingDesc, setEditingDesc] = useState(false);
   const [descValue, setDescValue] = useState('');
 
-  // 제목 저장
+  useEffect(() => {
+    if (!branchId) return;
+    const fetchBranch = async () => {
+      try {
+        const [branchRes, typeRes] = await Promise.all([
+          axios.get(`/branches/${branchId}`),
+          axios.get(`/branches/${branchId}/task-types`),
+        ]);
+        if (branchRes.data.status) setBranch(branchRes.data.branch);
+        if (typeRes.data.status) setTaskTypes(typeRes.data.task_types);
+      } catch {}
+    };
+    fetchBranch();
+  }, [branchId]);
+
   const saveTitle = () => {
     if (titleValue.trim() && titleValue.trim() !== task.title) {
       updateField('title', titleValue.trim());
@@ -30,7 +49,6 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes, taskSu
     setEditingTitle(false);
   };
 
-  // 설명 저장
   const saveDesc = () => {
     const val = descValue.trim() || null;
     if (val !== (task.description || null)) {
@@ -39,121 +57,113 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes, taskSu
     setEditingDesc(false);
   };
 
-  // 삭제
   const onDelete = async () => {
     const ok = await handleDelete();
-    if (ok) onClose();
+    if (ok) router.push(`/branch/${branchId}`);
   };
 
+  if (!branchId || !taskId) return null;
   if (loading || !task) {
-    return (
-      <div className="TaskDetailPanel">
-        <div className="TaskDetailPanel__Header">
-          <div />
-          <button className="TaskDetailPanel__CloseBtn" onClick={onClose}>
-            <X size={16} />
-          </button>
-        </div>
-      </div>
-    );
+    return <div className="TaskFullPage"><div className="TaskFullPage__Loading">Loading...</div></div>;
   }
 
+  const branchKey = branch?.key || '';
   const typeConfig = (taskTypes || []).find((t) => t.type_key === task.task_type);
   const displayId = task.display_id || `${branchKey}-${task.display_number}`;
 
   return (
-    <div className="TaskDetailPanel">
+    <div className="TaskFullPage">
       {/* 헤더 */}
-      <div className="TaskDetailPanel__Header">
-        <div className="TaskDetailPanel__HeaderLeft">
+      <div className="TaskFullPage__Header">
+        <div className="TaskFullPage__HeaderLeft">
+          <button className="TaskFullPage__BackBtn" onClick={() => router.push(`/branch/${branchId}`)}>
+            <ArrowLeft size={16} />
+          </button>
           <TaskTypeIcon
             name={typeConfig?.icon || 'CheckSquare'}
-            size={14}
+            size={16}
             color={typeConfig?.color || '#5E6AD2'}
           />
-          <span className="TaskDetailPanel__Id">{displayId}</span>
+          <span className="TaskFullPage__DisplayId">{displayId}</span>
         </div>
-        <div className="TaskDetailPanel__HeaderRight">
-          <button
-            className="TaskDetailPanel__ExpandBtn"
-            onClick={() => router.push(`/branch/${branchId}/task/${task.task_id}`)}
-            title="Open full page"
-          >
-            <Maximize2 size={14} />
-          </button>
-          <button className="TaskDetailPanel__CloseBtn" onClick={onClose}>
-            <X size={16} />
-          </button>
-        </div>
+        <button className="TaskFullPage__DeleteBtn" onClick={onDelete}>
+          <Trash2 size={14} />
+          Delete
+        </button>
       </div>
 
-      <div className="TaskDetailPanel__Body">
-        {/* 제목 */}
-        <div className="TaskDetailPanel__TitleWrap">
-          {editingTitle ? (
-            <input
-              ref={titleRef}
-              className="TaskDetailPanel__TitleInput"
-              value={titleValue}
-              onChange={(e) => setTitleValue(e.target.value)}
-              onBlur={saveTitle}
-              onKeyDown={(e) => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') setEditingTitle(false); }}
-              autoFocus
+      {/* 2단 레이아웃 */}
+      <div className="TaskFullPage__Layout">
+        {/* 왼쪽: 제목 + 상태 + 설명 + 이슈 */}
+        <div className="TaskFullPage__Main">
+          {/* 제목 */}
+          <div className="TaskFullPage__TitleWrap">
+            {editingTitle ? (
+              <input
+                className="TaskFullPage__TitleInput"
+                value={titleValue}
+                onChange={(e) => setTitleValue(e.target.value)}
+                onBlur={saveTitle}
+                onKeyDown={(e) => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') setEditingTitle(false); }}
+                autoFocus
+              />
+            ) : (
+              <h1
+                className="TaskFullPage__Title"
+                onClick={() => { setTitleValue(task.title); setEditingTitle(true); }}
+              >
+                {task.title}
+              </h1>
+            )}
+          </div>
+
+          {/* 상태 */}
+          <div className="TaskFullPage__StatusWrap">
+            <CustomSelect
+              value={task.status}
+              options={[
+                { value: 'todo', label: 'To Do', color: '#9CA3AF' },
+                { value: 'in_progress', label: 'In Progress', color: '#2563EB' },
+                { value: 'done', label: 'Done', color: '#16A34A' },
+              ]}
+              onChange={(val) => updateField('status', val)}
             />
-          ) : (
-            <h2
-              className="TaskDetailPanel__Title"
-              onClick={() => { setTitleValue(task.title); setEditingTitle(true); }}
-            >
-              {task.title}
-            </h2>
-          )}
+          </div>
+
+          {/* 설명 */}
+          <div className="TaskFullPage__Section">
+            <div className="TaskFullPage__SectionLabel">Description</div>
+            {editingDesc ? (
+              <textarea
+                className="TaskFullPage__DescInput"
+                value={descValue}
+                onChange={(e) => setDescValue(e.target.value)}
+                onBlur={saveDesc}
+                onKeyDown={(e) => { if (e.key === 'Escape') setEditingDesc(false); }}
+                autoFocus
+                rows={6}
+              />
+            ) : (
+              <div
+                className={`TaskFullPage__DescText ${!task.description ? 'TaskFullPage__DescText--empty' : ''}`}
+                onClick={() => { setDescValue(task.description || ''); setEditingDesc(true); }}
+              >
+                {task.description || 'Add description...'}
+              </div>
+            )}
+          </div>
+
+          <div className="TaskFullPage__Divider" />
+
+          {/* 이슈 */}
+          <TaskIssueSection branchId={branchId} taskId={task.task_id} expanded />
         </div>
 
-        {/* 상태 버튼 */}
-        <div className="TaskDetailPanel__StatusWrap">
-          <CustomSelect
-            value={task.status}
-            options={[
-              { value: 'todo', label: 'To Do', color: '#9CA3AF' },
-              { value: 'in_progress', label: 'In Progress', color: '#2563EB' },
-              { value: 'done', label: 'Done', color: '#16A34A' },
-            ]}
-            onChange={(val) => updateField('status', val)}
-          />
-        </div>
-
-        {/* 설명 */}
-        <div className="TaskDetailPanel__Section">
-          <div className="TaskDetailPanel__SectionLabel">Description</div>
-          {editingDesc ? (
-            <textarea
-              className="TaskDetailPanel__DescInput"
-              value={descValue}
-              onChange={(e) => setDescValue(e.target.value)}
-              onBlur={saveDesc}
-              onKeyDown={(e) => { if (e.key === 'Escape') setEditingDesc(false); }}
-              autoFocus
-              rows={4}
-            />
-          ) : (
-            <div
-              className={`TaskDetailPanel__DescText ${!task.description ? 'TaskDetailPanel__DescText--empty' : ''}`}
-              onClick={() => { setDescValue(task.description || ''); setEditingDesc(true); }}
-            >
-              {task.description || 'Add description...'}
-            </div>
-          )}
-        </div>
-
-        <div className="TaskDetailPanel__Divider" />
-
-        {/* 세부 사항 */}
-        <div className="TaskDetailPanel__Section">
-          <div className="TaskDetailPanel__SectionLabel">Details</div>
-          <div className="TaskDetailPanel__Fields">
-            {/* 타입 */}
-            <DetailRow label="Type">
+        {/* 오른쪽: 세부 사항 */}
+        <div className="TaskFullPage__Sidebar">
+          <div className="TaskFullPage__SectionLabel">Details</div>
+          <div className="TaskFullPage__Fields">
+            <FieldRow label="Type">
               <CustomSelect
                 value={task.task_type}
                 options={(taskTypes || []).map((t) => ({
@@ -164,10 +174,9 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes, taskSu
                 onChange={(val) => handleSelectChange('task_type', val)}
                 size="sm"
               />
-            </DetailRow>
+            </FieldRow>
 
-            {/* 우선순위 */}
-            <DetailRow label="Priority">
+            <FieldRow label="Priority">
               <CustomSelect
                 value={task.priority}
                 options={[
@@ -179,10 +188,9 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes, taskSu
                 onChange={(val) => handleSelectChange('priority', val)}
                 size="sm"
               />
-            </DetailRow>
+            </FieldRow>
 
-            {/* Sprint */}
-            <DetailRow label="Sprint">
+            <FieldRow label="Sprint">
               <CustomSelect
                 value={task.sprint_id || ''}
                 options={[
@@ -192,10 +200,9 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes, taskSu
                 onChange={(val) => handleSelectChange('sprint_id', val)}
                 size="sm"
               />
-            </DetailRow>
+            </FieldRow>
 
-            {/* Epic */}
-            <DetailRow label="Epic">
+            <FieldRow label="Epic">
               <CustomSelect
                 value={task.epic_id || ''}
                 options={[
@@ -209,10 +216,9 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes, taskSu
                 onChange={(val) => handleSelectChange('epic_id', val)}
                 size="sm"
               />
-            </DetailRow>
+            </FieldRow>
 
-            {/* 메인 담당자 */}
-            <DetailRow label="Main Assignee">
+            <FieldRow label="Main Assignee">
               <CustomSelect
                 value={(task.assignees || []).find((a) => a.role === 'main')?.user_id || ''}
                 options={[
@@ -226,10 +232,9 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes, taskSu
                 }}
                 size="sm"
               />
-            </DetailRow>
+            </FieldRow>
 
-            {/* 서브 담당자 */}
-            <DetailRow label="Sub Assignees">
+            <FieldRow label="Sub Assignees">
               <SubAssigneeDropdown
                 members={members.filter((m) => {
                   const mainId = (task.assignees || []).find((a) => a.role === 'main')?.user_id;
@@ -241,17 +246,16 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes, taskSu
                   updateAssignees(mainId, newSubs);
                 }}
               />
-            </DetailRow>
+            </FieldRow>
 
-            {/* 라벨 */}
-            <DetailRow label="Labels" align="top">
-              <div className="TaskDetailPanel__Labels">
+            <FieldRow label="Labels" align="top">
+              <div className="TaskFullPage__Labels">
                 {labels.map((label) => {
                   const selected = (task.labels || []).some((l) => l.label_id === label.label_id);
                   return (
                     <button
                       key={label.label_id}
-                      className={`TaskDetailPanel__LabelChip ${selected ? 'TaskDetailPanel__LabelChip--selected' : ''}`}
+                      className={`TaskFullPage__LabelChip ${selected ? 'TaskFullPage__LabelChip--selected' : ''}`}
                       style={{
                         backgroundColor: selected ? label.color + '20' : 'transparent',
                         borderColor: label.color,
@@ -263,56 +267,39 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes, taskSu
                     </button>
                   );
                 })}
-                {labels.length === 0 && (
-                  <span className="TaskDetailPanel__FieldValue">None</span>
-                )}
+                {labels.length === 0 && <span className="TaskFullPage__FieldEmpty">None</span>}
               </div>
-            </DetailRow>
+            </FieldRow>
 
-            {/* 시작일 */}
-            <DetailRow label="Start date">
+            <FieldRow label="Start date">
               <input
-                className="TaskDetailPanel__DateInput"
+                className="TaskFullPage__DateInput"
                 type="date"
                 value={task.start_date || ''}
                 onChange={(e) => updateField('start_date', e.target.value || null)}
               />
-            </DetailRow>
+            </FieldRow>
 
-            {/* 마감일 */}
-            <DetailRow label="Due date">
+            <FieldRow label="Due date">
               <input
-                className="TaskDetailPanel__DateInput"
+                className="TaskFullPage__DateInput"
                 type="date"
                 value={task.due_date || ''}
                 onChange={(e) => updateField('due_date', e.target.value || null)}
               />
-            </DetailRow>
+            </FieldRow>
           </div>
         </div>
-
-        <div className="TaskDetailPanel__Divider" />
-
-        {/* 이슈 섹션 */}
-        <TaskIssueSection branchId={branchId} taskId={task.task_id} />
-
-        <div className="TaskDetailPanel__Divider" />
-
-        {/* 삭제 */}
-        <button className="TaskDetailPanel__DeleteBtn" onClick={onDelete}>
-          <Trash2 size={14} />
-          Delete task
-        </button>
       </div>
     </div>
   );
 }
 
-function DetailRow({ label, children, align }) {
+function FieldRow({ label, children, align }) {
   return (
-    <div className={`TaskDetailPanel__Row ${align === 'top' ? 'TaskDetailPanel__Row--top' : ''}`}>
-      <span className="TaskDetailPanel__RowLabel">{label}</span>
-      <div className="TaskDetailPanel__RowValue">{children}</div>
+    <div className={`TaskFullPage__Row ${align === 'top' ? 'TaskFullPage__Row--top' : ''}`}>
+      <span className="TaskFullPage__RowLabel">{label}</span>
+      <div className="TaskFullPage__RowValue">{children}</div>
     </div>
   );
 }
@@ -342,21 +329,21 @@ function SubAssigneeDropdown({ members, selectedIds, onChange }) {
     .map((m) => m.username);
 
   return (
-    <div className="TaskDetailPanel__SubAssigneeWrap" ref={ref}>
+    <div className="TaskFullPage__SubAssigneeWrap" ref={ref}>
       <button
         type="button"
-        className="TaskDetailPanel__SubAssigneeBtn"
+        className="TaskFullPage__SubAssigneeBtn"
         onClick={() => setOpen((prev) => !prev)}
       >
-        <span className={selectedNames.length > 0 ? '' : 'TaskDetailPanel__SubAssigneePlaceholder'}>
+        <span className={selectedNames.length > 0 ? '' : 'TaskFullPage__Placeholder'}>
           {selectedNames.length > 0 ? selectedNames.join(', ') : 'None'}
         </span>
         <ChevronDown size={12} />
       </button>
       {open && members.length > 0 && (
-        <div className="TaskDetailPanel__SubAssigneeDropdown">
+        <div className="TaskFullPage__SubAssigneeDropdown">
           {members.map((m) => (
-            <label key={m.user_id} className="TaskDetailPanel__SubAssigneeOption">
+            <label key={m.user_id} className="TaskFullPage__SubAssigneeOption">
               <input
                 type="checkbox"
                 checked={selectedIds.includes(m.user_id)}

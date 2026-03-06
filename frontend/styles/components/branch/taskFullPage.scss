@@ -1,22 +1,28 @@
 @use '../../variables' as *;
 
-.TaskDetailPanel {
-  width: 420px;
-  height: 100%;
-  background: $color-bg;
-  border-left: 1px solid $color-border;
+.TaskFullPage {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: $space-6;
   display: flex;
   flex-direction: column;
-  flex-shrink: 0;
-  overflow: hidden;
+  gap: $space-5;
+  min-height: 100%;
 
+  &__Loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    color: $color-text-tertiary;
+    font-size: $font-size-sm;
+  }
+
+  // -- 헤더 --
   &__Header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: $space-3 $space-4;
-    border-bottom: 1px solid $color-border;
-    flex-shrink: 0;
   }
 
   &__HeaderLeft {
@@ -25,72 +31,80 @@
     gap: $space-2;
   }
 
-  &__Id {
+  &__BackBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: $radius-md;
+    color: $color-text-secondary;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+      color: $color-text;
+    }
+  }
+
+  &__DisplayId {
     font-size: $font-size-sm;
     font-weight: $font-weight-medium;
     color: $color-text-tertiary;
   }
 
-  &__HeaderRight {
+  &__DeleteBtn {
     display: flex;
     align-items: center;
     gap: $space-1;
-  }
-
-  &__ExpandBtn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
+    padding: $space-1 $space-3;
+    font-size: $font-size-sm;
+    color: $color-text-tertiary;
     border-radius: $radius-md;
-    color: $color-text-secondary;
     transition: all $transition-fast;
 
     &:hover {
-      background: $color-surface;
-      color: $color-text;
+      color: $color-error;
+      background: $color-error-bg;
     }
   }
 
-  &__CloseBtn {
+  // -- 2단 레이아웃 --
+  &__Layout {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: $radius-md;
-    color: $color-text-secondary;
-    transition: all $transition-fast;
-
-    &:hover {
-      background: $color-surface;
-      color: $color-text;
-    }
-  }
-
-  &__Body {
+    gap: $space-6;
     flex: 1;
-    overflow-y: auto;
-    padding: $space-4;
+  }
+
+  &__Main {
+    flex: 1;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     gap: $space-4;
   }
 
+  &__Sidebar {
+    width: 320px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: $space-3;
+  }
+
   // -- 제목 --
   &__TitleWrap {
-    min-height: 32px;
+    min-height: 36px;
   }
 
   &__Title {
-    font-size: $font-size-lg;
-    font-weight: $font-weight-semibold;
+    font-size: 24px;
+    font-weight: $font-weight-bold;
     color: $color-text;
-    line-height: 1.4;
+    line-height: 1.3;
     cursor: pointer;
-    padding: 2px 4px;
-    margin: -2px -4px;
+    padding: $space-1 $space-2;
+    margin: -#{$space-1} -#{$space-2};
     border-radius: $radius-md;
     transition: background $transition-fast;
 
@@ -101,11 +115,11 @@
 
   &__TitleInput {
     width: 100%;
-    font-size: $font-size-lg;
-    font-weight: $font-weight-semibold;
+    font-size: 24px;
+    font-weight: $font-weight-bold;
     color: $color-text;
-    padding: 2px 4px;
-    margin: -2px -4px;
+    padding: $space-1 $space-2;
+    margin: -#{$space-1} -#{$space-2};
     border: 1px solid $color-border-focus;
     border-radius: $radius-md;
     outline: none;
@@ -116,32 +130,6 @@
   // -- 상태 --
   &__StatusWrap {
     display: flex;
-  }
-
-  &__StatusSelect {
-    padding: $space-1 $space-2;
-    font-size: $font-size-xs;
-    font-weight: $font-weight-semibold;
-    border-radius: $radius-sm;
-    border: none;
-    cursor: pointer;
-    outline: none;
-    appearance: auto;
-
-    &--todo {
-      background: $color-surface;
-      color: $color-text-secondary;
-    }
-
-    &--in_progress {
-      background: #EFF6FF;
-      color: #2563EB;
-    }
-
-    &--done {
-      background: $color-success-bg;
-      color: $color-success;
-    }
   }
 
   // -- 섹션 --
@@ -162,6 +150,7 @@
   &__Divider {
     height: 1px;
     background: $color-border;
+    margin: $space-2 0;
   }
 
   // -- 설명 --
@@ -197,11 +186,11 @@
     box-shadow: $shadow-focus;
     background: $color-bg;
     resize: vertical;
-    min-height: 80px;
+    min-height: 100px;
     font-family: inherit;
   }
 
-  // -- 필드 행 --
+  // -- 사이드바 필드 --
   &__Fields {
     display: flex;
     flex-direction: column;
@@ -223,7 +212,7 @@
   }
 
   &__RowLabel {
-    width: 90px;
+    width: 100px;
     flex-shrink: 0;
     font-size: $font-size-xs;
     color: $color-text-tertiary;
@@ -235,50 +224,9 @@
     min-width: 0;
   }
 
-  &__FieldValue {
+  &__FieldEmpty {
     font-size: $font-size-sm;
-    color: $color-text;
-    display: inline-flex;
-    align-items: center;
-    gap: $space-1;
-
-    &--clickable {
-      cursor: pointer;
-      padding: 2px 6px;
-      margin: -2px -6px;
-      border-radius: $radius-sm;
-      transition: background $transition-fast;
-
-      &:hover {
-        background: $color-surface;
-      }
-    }
-  }
-
-  &__InlineSelect {
-    width: 100%;
-    padding: 2px 4px;
-    font-size: $font-size-sm;
-    color: $color-text;
-    background: $color-bg;
-    border: 1px solid $color-border-focus;
-    border-radius: $radius-sm;
-    outline: none;
-    box-shadow: $shadow-focus;
-  }
-
-  // -- 담당자 아바타 --
-  &__Avatar {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: $color-primary;
-    color: $color-text-inverse;
-    font-size: 10px;
-    font-weight: $font-weight-bold;
+    color: $color-text-tertiary;
   }
 
   // -- 라벨 --
@@ -328,19 +276,13 @@
       border-color: $color-border;
     }
 
-    span {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
     svg {
       flex-shrink: 0;
       color: $color-text-tertiary;
     }
   }
 
-  &__SubAssigneePlaceholder {
+  &__Placeholder {
     color: $color-text-tertiary;
   }
 
@@ -399,23 +341,6 @@
       border-color: $color-border-focus;
       background: $color-bg;
       box-shadow: $shadow-focus;
-    }
-  }
-
-  // -- 삭제 --
-  &__DeleteBtn {
-    display: flex;
-    align-items: center;
-    gap: $space-2;
-    padding: $space-2;
-    font-size: $font-size-sm;
-    color: $color-text-tertiary;
-    border-radius: $radius-md;
-    transition: all $transition-fast;
-
-    &:hover {
-      color: $color-error;
-      background: $color-error-bg;
     }
   }
 }

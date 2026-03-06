@@ -1,6 +1,8 @@
 from typing import Optional
 from pydantic import BaseModel, field_validator
 
+MAX_CONTENT_LENGTH = 300_000
+
 
 class CanvasPageCreate(BaseModel):
     title: str
@@ -15,12 +17,26 @@ class CanvasPageCreate(BaseModel):
             raise ValueError('type must be "document" or "folder"')
         return v
 
+    @field_validator('content')
+    @classmethod
+    def validate_content_length(cls, v):
+        if v is not None and len(v) > MAX_CONTENT_LENGTH:
+            raise ValueError(f'content exceeds maximum length of {MAX_CONTENT_LENGTH} characters')
+        return v
+
 
 class CanvasPageUpdate(BaseModel):
     title: Optional[str] = None
     content: Optional[str] = None
     parent_page_id: Optional[int] = None
     position: Optional[int] = None
+
+    @field_validator('content')
+    @classmethod
+    def validate_content_length(cls, v):
+        if v is not None and len(v) > MAX_CONTENT_LENGTH:
+            raise ValueError(f'content exceeds maximum length of {MAX_CONTENT_LENGTH} characters')
+        return v
 
 
 class CanvasPageMove(BaseModel):

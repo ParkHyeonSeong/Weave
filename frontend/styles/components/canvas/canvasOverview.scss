@@ -27,14 +27,6 @@
     color: $color-text;
   }
 
-  &__Key {
-    font-size: $font-size-xs;
-    color: $color-text-tertiary;
-    background: $color-surface;
-    padding: 2px 8px;
-    border-radius: $radius-sm;
-  }
-
   &__Desc {
     font-size: $font-size-sm;
     color: $color-text-secondary;

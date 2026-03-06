@@ -82,7 +82,6 @@ export default function CanvasOverview() {
             style={{ backgroundColor: canvas.color || '#16A34A' }}
           />
           <h2 className="CanvasOverview__Name">{canvas.canvas_name}</h2>
-          <span className="CanvasOverview__Key">{canvas.key}</span>
         </div>
         {canvas.description && (
           <p className="CanvasOverview__Desc">{canvas.description}</p>
