@@ -252,6 +252,29 @@ async def delete(task_id: int, db: AsyncSession):
     await db.commit()
 
 
+async def move_incomplete(from_sprint_id: int, to_sprint_id, db: AsyncSession) -> int:
+    """미완료 task를 다른 sprint로 이동 (to_sprint_id=None이면 backlog)"""
+    result = await db.execute(text("""
+        UPDATE task SET sprint_id = :to_sprint_id, updated_at = NOW()
+        WHERE sprint_id = :from_sprint_id AND status != 'done'
+    """), {'from_sprint_id': from_sprint_id, 'to_sprint_id': to_sprint_id})
+    await db.commit()
+    return result.rowcount
+
+
+async def count_by_sprint_status(sprint_id: int, db: AsyncSession):
+    """Sprint 내 완료/미완료 task 수"""
+    result = await db.execute(text("""
+        SELECT
+            COUNT(*) FILTER (WHERE status = 'done') AS done_count,
+            COUNT(*) FILTER (WHERE status != 'done') AS incomplete_count
+        FROM task
+        WHERE sprint_id = :sprint_id
+    """), {'sprint_id': sprint_id})
+    row = result.fetchone()
+    return {'done_count': row[0], 'incomplete_count': row[1]}
+
+
 async def set_labels(task_id: int, label_ids: list, db: AsyncSession):
     """Task 라벨 전체 교체"""
     await db.execute(text("""

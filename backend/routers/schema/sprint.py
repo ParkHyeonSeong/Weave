@@ -23,3 +23,7 @@ class SprintUpdate(BaseModel):
         if v is not None and v not in ('future', 'active', 'closed'):
             raise ValueError('status must be "future", "active", or "closed"')
         return v
+
+
+class SprintComplete(BaseModel):
+    move_to: str = 'backlog'  # 'backlog' 또는 sprint_id 문자열

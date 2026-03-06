@@ -1,7 +1,30 @@
 @use '../../variables' as *;
 
 .BoardView {
-  // -- 상단 Sprint 셀렉터 --
+  // -- Empty state --
+  &__Empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: $space-10;
+    color: $color-text-tertiary;
+    text-align: center;
+    gap: $space-3;
+  }
+
+  &__EmptyTitle {
+    font-size: $font-size-md;
+    font-weight: $font-weight-semibold;
+    color: $color-text-secondary;
+  }
+
+  &__EmptyDesc {
+    font-size: $font-size-sm;
+    color: $color-text-tertiary;
+  }
+
+  // -- 상단 Sprint 정보 + 필터 --
   &__Header {
     display: flex;
     align-items: center;
@@ -9,21 +32,29 @@
     margin-bottom: $space-4;
   }
 
-  &__SprintSelect {
-    padding: $space-2 $space-3;
-    background: $color-input-bg;
-    border: 1px solid $color-input-border;
-    border-radius: $radius-lg;
-    font-size: $font-size-sm;
-    color: $color-text;
-    outline: none;
-    cursor: pointer;
-    min-width: 180px;
-    transition: all $transition-fast;
+  &__SprintInfo {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    flex-shrink: 0;
+  }
 
-    &:focus {
-      border-color: $color-border-focus;
-      box-shadow: $shadow-focus;
+  &__SprintName {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-semibold;
+    color: $color-text;
+  }
+
+  &__SprintDays {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+    background: $color-surface;
+    padding: 2px 8px;
+    border-radius: $radius-sm;
+
+    &--overdue {
+      color: $color-error;
+      background: $color-error-bg;
     }
   }
 

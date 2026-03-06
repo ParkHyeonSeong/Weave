@@ -3,6 +3,7 @@ import { axios } from '@/library/_axios';
 import { Plus } from 'lucide-react';
 import TaskListSprint from './TaskListSprint';
 import SprintModal from '@/components/modal/SprintModal';
+import CompleteSprintModal from '@/components/modal/CompleteSprintModal';
 import TaskFilterBar from '../TaskFilterBar';
 
 export default function TaskList({ branchId, branchKey, taskTypes, onSelectTask }) {
@@ -18,6 +19,7 @@ export default function TaskList({ branchId, branchKey, taskTypes, onSelectTask 
 
   // 모달 상태
   const [sprintModal, setSprintModal] = useState({ open: false, sprint: null });
+  const [completeSprint, setCompleteSprint] = useState(null);
 
   useEffect(() => {
     fetchData();
@@ -124,8 +126,10 @@ export default function TaskList({ branchId, branchKey, taskTypes, onSelectTask 
           taskTypes={taskTypes}
           epics={epics}
           members={members}
+          sprints={sprints}
           onEditTask={onSelectTask}
           onEditSprint={() => setSprintModal({ open: true, sprint })}
+          onCompleteSprint={(s) => setCompleteSprint(s)}
         />
       ))}
 
@@ -147,6 +151,16 @@ export default function TaskList({ branchId, branchKey, taskTypes, onSelectTask 
           branchId={branchId}
           sprint={sprintModal.sprint}
           onClose={() => setSprintModal({ open: false, sprint: null })}
+        />
+      )}
+
+      {/* Complete Sprint 모달 */}
+      {completeSprint && (
+        <CompleteSprintModal
+          branchId={branchId}
+          sprint={completeSprint}
+          sprints={sprints.filter((s) => s.sprint_id !== completeSprint.sprint_id && s.status === 'future')}
+          onClose={() => setCompleteSprint(null)}
         />
       )}
     </div>

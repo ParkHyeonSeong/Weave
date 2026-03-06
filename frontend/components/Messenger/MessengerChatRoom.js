@@ -8,7 +8,7 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
   const [input, setInput] = useState('');
   const [roomName, setRoomName] = useState('Chat');
   const [roomType, setRoomType] = useState('dm');
-  const [partnerLastRead, setPartnerLastRead] = useState(null);
+  const [members, setMembers] = useState([]);
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState('');
   const messagesEndRef = useRef(null);
@@ -30,10 +30,11 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
           // 최신순 -> 시간순으로 뒤집기
           setMessages(res.data.messages.reverse());
           setRoomType(res.data.room_type || 'dm');
+          // 멤버 목록 저장 (읽음 처리용)
+          if (res.data.members) setMembers(res.data.members);
           // DM: 상대방 이름, Group: room_name
-          if (res.data.partner) {
-            setRoomName(res.data.partner.username);
-            setPartnerLastRead(res.data.partner.last_read_at);
+          if (res.data.room_type === 'dm' && res.data.members?.length) {
+            setRoomName(res.data.members[0].username);
           } else if (res.data.room_name) {
             setRoomName(res.data.room_name);
           }
@@ -63,9 +64,13 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
           wsRef.current.send(JSON.stringify({ action: 'mark_read', room_id: roomId }));
         }
       }
-      // 상대방이 읽음 처리했을 때 read receipt 갱신
+      // 상대방이 읽음 처리했을 때 해당 멤버의 last_read_at 갱신
       if (data.type === 'mark_read' && data.room_id === roomId && data.user_id !== myUserId) {
-        setPartnerLastRead(data.last_read_at);
+        setMembers((prev) =>
+          prev.map((m) =>
+            m.user_id === data.user_id ? { ...m, last_read_at: data.last_read_at } : m
+          )
+        );
       }
     };
     window.addEventListener('chat:ws_message', handleWsMessage);
@@ -200,10 +205,13 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
     return getMinuteKey(msg.created_at) !== getMinuteKey(next.created_at);
   };
 
-  // 상대방이 해당 메시지를 아직 안 읽었는지 판별
-  const isUnread = (msg) => {
-    if (!partnerLastRead) return true;
-    return new Date(msg.created_at) > new Date(partnerLastRead);
+  // 해당 메시지를 안 읽은 멤버 수
+  const getUnreadCount = (msg) => {
+    const msgTime = new Date(msg.created_at);
+    return members.filter((m) => {
+      if (!m.last_read_at) return true;
+      return msgTime > new Date(m.last_read_at);
+    }).length;
   };
 
   return (
@@ -260,9 +268,12 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
               <div className="MessengerChatRoom__MsgRow">
                 {msg.sender_id === myUserId && showTime && (
                   <div className="MessengerChatRoom__MsgMeta">
-                    {isUnread(msg) && (
-                      <span className="MessengerChatRoom__MsgUnread">1</span>
-                    )}
+                    {(() => {
+                      const unread = getUnreadCount(msg);
+                      return unread > 0 ? (
+                        <span className="MessengerChatRoom__MsgUnread">{unread}</span>
+                      ) : null;
+                    })()}
                     <span className="MessengerChatRoom__MsgTime">
                       {formatMessageTime(msg.created_at)}
                     </span>

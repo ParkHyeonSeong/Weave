@@ -175,3 +175,97 @@
     }
   }
 }
+
+// Complete Sprint Modal
+.CompleteSprintModal {
+  width: 100%;
+  max-width: 440px;
+  background: $color-bg;
+  border-radius: $radius-xl;
+  box-shadow: $shadow-lg;
+  overflow: hidden;
+
+  &__Header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: $space-4 $space-5;
+    border-bottom: 1px solid $color-border;
+  }
+
+  &__Title {
+    font-size: $font-size-md;
+    font-weight: $font-weight-semibold;
+    color: $color-text;
+  }
+
+  &__Body {
+    padding: $space-5;
+    display: flex;
+    flex-direction: column;
+    gap: $space-4;
+  }
+
+  &__Counts {
+    display: flex;
+    gap: $space-4;
+  }
+
+  &__CountItem {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+  }
+
+  &__CountNum {
+    font-size: $font-size-xl;
+    font-weight: $font-weight-bold;
+
+    &--done {
+      color: $color-success;
+    }
+
+    &--incomplete {
+      color: #F59E0B;
+    }
+  }
+
+  &__CountLabel {
+    font-size: $font-size-sm;
+    color: $color-text-secondary;
+  }
+
+  &__MoveSection {
+    display: flex;
+    flex-direction: column;
+    gap: $space-2;
+  }
+
+  &__Footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: $space-2;
+    padding: $space-3 $space-5;
+    border-top: 1px solid $color-border;
+  }
+
+  &__CompleteBtn {
+    padding: $space-2 $space-4;
+    background: $color-success;
+    color: $color-text-inverse;
+    border-radius: $radius-md;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    transition: background $transition-fast;
+
+    &:hover:not(:disabled) {
+      background: darken(#16A34A, 8%);
+    }
+
+    &:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+  }
+}

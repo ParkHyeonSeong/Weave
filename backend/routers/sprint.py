@@ -31,3 +31,22 @@ async def update_sprint(branch_id: int, sprint_id: int, body: sprint_schema.Spri
 async def delete_sprint(branch_id: int, sprint_id: int, request: Request,
                         session: AsyncSession = Depends(db.session)):
     return await sprint_controller.delete(sprint_id, branch_id, request, session)
+
+
+@router.post("/{sprint_id}/start", summary="Sprint 시작", dependencies=[Depends(require_login)])
+async def start_sprint(branch_id: int, sprint_id: int, request: Request,
+                       session: AsyncSession = Depends(db.session)):
+    return await sprint_controller.start(sprint_id, branch_id, request, session)
+
+
+@router.post("/{sprint_id}/complete", summary="Sprint 완료", dependencies=[Depends(require_login)])
+async def complete_sprint(branch_id: int, sprint_id: int,
+                          body: sprint_schema.SprintComplete,
+                          request: Request, session: AsyncSession = Depends(db.session)):
+    return await sprint_controller.complete(sprint_id, body, branch_id, request, session)
+
+
+@router.get("/{sprint_id}/task-counts", summary="Sprint task 수", dependencies=[Depends(require_login)])
+async def sprint_task_counts(branch_id: int, sprint_id: int, request: Request,
+                             session: AsyncSession = Depends(db.session)):
+    return await sprint_controller.get_task_counts(sprint_id, branch_id, request, session)

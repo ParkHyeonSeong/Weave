@@ -106,9 +106,50 @@
     text-align: center;
   }
 
+  &__SprintError {
+    font-size: $font-size-xs;
+    color: $color-error;
+    margin-left: $space-2;
+  }
+
   &__SprintRight {
     display: flex;
-    gap: $space-1;
+    align-items: center;
+    gap: $space-2;
+  }
+
+  &__SprintStartBtn,
+  &__SprintCompleteBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px $space-3;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    border-radius: $radius-md;
+    cursor: pointer;
+    transition: all $transition-fast;
+    white-space: nowrap;
+  }
+
+  &__SprintStartBtn {
+    color: #2563EB;
+    border: 1px solid #2563EB;
+    background: transparent;
+
+    &:hover {
+      background: #EFF6FF;
+    }
+  }
+
+  &__SprintCompleteBtn {
+    color: $color-success;
+    border: 1px solid $color-success;
+    background: transparent;
+
+    &:hover {
+      background: $color-success-bg;
+    }
   }
 
   &__SprintAction {

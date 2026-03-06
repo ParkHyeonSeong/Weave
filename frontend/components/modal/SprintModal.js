@@ -9,7 +9,6 @@ export default function SprintModal({ branchId, sprint, onClose }) {
   const [goal, setGoal] = useState(sprint?.goal || '');
   const [startDate, setStartDate] = useState(sprint?.start_date || '');
   const [endDate, setEndDate] = useState(sprint?.end_date || '');
-  const [status, setStatus] = useState(sprint?.status || 'future');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -29,7 +28,6 @@ export default function SprintModal({ branchId, sprint, onClose }) {
 
       let res;
       if (isEdit) {
-        payload.status = status;
         res = await axios.patch(`/branches/${branchId}/sprints/${sprint.sprint_id}`, payload);
       } else {
         res = await axios.post(`/branches/${branchId}/sprints`, payload);
@@ -39,10 +37,7 @@ export default function SprintModal({ branchId, sprint, onClose }) {
         window.dispatchEvent(new Event('task:updated'));
         onClose();
       } else {
-        const messages = {
-          'ACTIVE_SPRINT_EXISTS': 'There is already an active sprint.',
-        };
-        setError(messages[res.data.message] || res.data.message);
+        setError(res.data.message);
       }
     } catch {
       setError('Failed to save sprint.');
@@ -101,17 +96,6 @@ export default function SprintModal({ branchId, sprint, onClose }) {
               rows={2}
             />
           </div>
-
-          {isEdit && (
-            <div className="SprintModal__Field">
-              <label className="SprintModal__Label">Status</label>
-              <select className="SprintModal__Select" value={status} onChange={(e) => setStatus(e.target.value)}>
-                <option value="future">Future</option>
-                <option value="active">Active</option>
-                <option value="closed">Closed</option>
-              </select>
-            </div>
-          )}
 
           <div className="SprintModal__Row">
             <div className="SprintModal__Field SprintModal__Field--half">

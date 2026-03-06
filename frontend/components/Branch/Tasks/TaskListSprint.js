@@ -1,12 +1,14 @@
 import { useState } from 'react';
-import { ChevronRight, ChevronDown, Plus, Settings } from 'lucide-react';
+import { ChevronRight, ChevronDown, Plus, Settings, Play, CheckCircle } from 'lucide-react';
+import { axios } from '@/library/_axios';
 import TaskListRow from './TaskListRow';
 
-export default function TaskListSprint({ sprint, branchKey, branchId, taskTypes, epics, members, onEditTask, onEditSprint, isBacklog }) {
+export default function TaskListSprint({ sprint, branchKey, branchId, taskTypes, epics, members, sprints, onEditTask, onEditSprint, onCompleteSprint, isBacklog }) {
   const [collapsed, setCollapsed] = useState(false);
   const [inlineTitle, setInlineTitle] = useState('');
   const [showInline, setShowInline] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [startError, setStartError] = useState('');
   const tasks = sprint.tasks || [];
 
   const getStatusLabel = (status) => {
@@ -48,6 +50,26 @@ export default function TaskListSprint({ sprint, branchKey, branchId, taskTypes,
     }
   };
 
+  const handleStartSprint = async () => {
+    setStartError('');
+    try {
+      const res = await axios.post(`/branches/${branchId}/sprints/${sprint.sprint_id}/start`);
+      if (res.data.status) {
+        window.dispatchEvent(new Event('task:updated'));
+      } else {
+        const messages = {
+          'ACTIVE_SPRINT_EXISTS': 'There is already an active sprint.',
+          'SPRINT_NOT_FUTURE': 'Only future sprints can be started.',
+        };
+        setStartError(messages[res.data.message] || res.data.message);
+        setTimeout(() => setStartError(''), 3000);
+      }
+    } catch {
+      setStartError('Failed to start sprint.');
+      setTimeout(() => setStartError(''), 3000);
+    }
+  };
+
   const handleInlineKeyDown = (e) => {
     if (e.key === 'Escape') {
       setShowInline(false);
@@ -68,8 +90,22 @@ export default function TaskListSprint({ sprint, branchKey, branchId, taskTypes,
             </span>
           )}
           <span className="TaskList__SprintCount">{tasks.length}</span>
+          {startError && <span className="TaskList__SprintError">{startError}</span>}
         </div>
         <div className="TaskList__SprintRight" onClick={(e) => e.stopPropagation()}>
+          {/* Start / Complete 버튼 */}
+          {!isBacklog && sprint.status === 'future' && (
+            <button className="TaskList__SprintStartBtn" onClick={handleStartSprint}>
+              <Play size={12} />
+              Start Sprint
+            </button>
+          )}
+          {!isBacklog && sprint.status === 'active' && onCompleteSprint && (
+            <button className="TaskList__SprintCompleteBtn" onClick={() => onCompleteSprint(sprint)}>
+              <CheckCircle size={12} />
+              Complete Sprint
+            </button>
+          )}
           {!isBacklog && onEditSprint && (
             <button className="TaskList__SprintAction" onClick={onEditSprint} title="Sprint 설정">
               <Settings size={14} />
