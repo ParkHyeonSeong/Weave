@@ -115,6 +115,63 @@
     white-space: nowrap;
   }
 
+  // -- 스프린트 라벨 행 --
+  &__SprintRow {
+    display: flex;
+    border-bottom: 1px solid $color-border;
+    background: $color-surface;
+    min-height: 28px;
+  }
+
+  &__SprintRowLabel {
+    display: flex;
+    align-items: center;
+    padding: 0 $space-3;
+    font-size: 10px;
+    font-weight: $font-weight-medium;
+    color: $color-text-tertiary;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  &__SprintRowTimeline {
+    flex: 1;
+    position: relative;
+    height: 28px;
+  }
+
+  &__SprintLabel {
+    position: absolute;
+    top: 4px;
+    height: 20px;
+    background: $color-primary-subtle;
+    border: 1px solid rgba($color-primary, 0.2);
+    border-radius: $radius-sm;
+    display: flex;
+    align-items: center;
+    padding: 0 $space-2;
+    overflow: hidden;
+
+    &--active {
+      background: rgba(#2563EB, 0.1);
+      border-color: rgba(#2563EB, 0.3);
+    }
+
+    &--closed {
+      background: $color-surface;
+      border-color: $color-border;
+    }
+  }
+
+  &__SprintLabelText {
+    font-size: 10px;
+    font-weight: $font-weight-medium;
+    color: $color-text-secondary;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   // -- 본문 --
   &__Body {
     position: relative;

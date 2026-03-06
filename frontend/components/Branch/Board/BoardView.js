@@ -90,8 +90,9 @@ export default function BoardView({ branchId, branchKey, taskTypes, onSelectTask
   const filterTasks = (tasks) => tasks.filter((t) => {
     if (searchQuery && !t.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     if (selectedUserIds.size > 0) {
-      if (selectedUserIds.has(0) && !t.assignee_id) return true;
-      if (!selectedUserIds.has(t.assignee_id)) return false;
+      const taskUserIds = (t.assignees || []).map((a) => a.user_id);
+      if (selectedUserIds.has(0) && taskUserIds.length === 0) return true;
+      if (!taskUserIds.some((uid) => selectedUserIds.has(uid))) return false;
     }
     return true;
   });

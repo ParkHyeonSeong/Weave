@@ -3,13 +3,13 @@ import { useRouter } from 'next/router';
 import { Plus, Users } from 'lucide-react';
 import { axios } from '@/library/_axios';
 
-export default function WikiHome() {
+export default function CanvasHome() {
   const router = useRouter();
   const [canvases, setCanvases] = useState([]);
 
   const fetchCanvases = async () => {
     try {
-      const res = await axios.get('/wiki/canvases');
+      const res = await axios.get('/canvases');
       if (res.data.status) {
         setCanvases(res.data.canvases);
       }
@@ -27,11 +27,11 @@ export default function WikiHome() {
   }, []);
 
   return (
-    <div className="WikiHome">
-      <div className="WikiHome__Header">
-        <h2 className="WikiHome__Title">Wiki</h2>
+    <div className="CanvasHome">
+      <div className="CanvasHome__Header">
+        <h2 className="CanvasHome__Title">Canvas</h2>
         <button
-          className="WikiHome__CreateBtn"
+          className="CanvasHome__CreateBtn"
           onClick={() => window.dispatchEvent(new CustomEvent('layout:create-canvas'))}
         >
           <Plus size={16} />
@@ -40,28 +40,28 @@ export default function WikiHome() {
       </div>
 
       {canvases.length === 0 ? (
-        <div className="WikiHome__Empty">
+        <div className="CanvasHome__Empty">
           <p>No canvases yet.</p>
           <p>Create a canvas to start documenting.</p>
         </div>
       ) : (
-        <div className="WikiHome__Grid">
+        <div className="CanvasHome__Grid">
           {canvases.map((canvas) => (
             <button
               key={canvas.canvas_id}
-              className="WikiHome__Card"
-              onClick={() => router.push(`/wiki/${canvas.canvas_id}`)}
+              className="CanvasHome__Card"
+              onClick={() => router.push(`/canvas/${canvas.canvas_id}`)}
             >
-              <div className="WikiHome__CardHeader">
+              <div className="CanvasHome__CardHeader">
                 <span
-                  className="WikiHome__CardDot"
+                  className="CanvasHome__CardDot"
                   style={{ backgroundColor: canvas.color || '#16A34A' }}
                 />
-                <span className="WikiHome__CardName">{canvas.canvas_name}</span>
-                <span className="WikiHome__CardKey">{canvas.key}</span>
+                <span className="CanvasHome__CardName">{canvas.canvas_name}</span>
+                <span className="CanvasHome__CardKey">{canvas.key}</span>
               </div>
               {canvas.description && (
-                <p className="WikiHome__CardDesc">{canvas.description}</p>
+                <p className="CanvasHome__CardDesc">{canvas.description}</p>
               )}
             </button>
           ))}

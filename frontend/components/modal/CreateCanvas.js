@@ -23,7 +23,7 @@ export default function CreateCanvas({ onClose }) {
     setError('');
     setLoading(true);
     try {
-      const res = await axios.post('/wiki/canvases', {
+      const res = await axios.post('/canvases', {
         canvas_name: canvasName.trim(),
         key: key.trim(),
         description: description.trim() || null,

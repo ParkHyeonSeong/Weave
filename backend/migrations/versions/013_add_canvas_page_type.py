@@ -1,4 +1,4 @@
-"""add type column to wiki_page
+"""add type column to canvas_page
 
 Revision ID: 013
 Revises: 012
@@ -16,12 +16,12 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # type: 'overview' (캔버스 소개), 'folder' (그룹), 'document' (문서)
-    op.add_column('wiki_page', sa.Column(
+    op.add_column('canvas_page', sa.Column(
         'type', sa.String(20), nullable=False, server_default='document'
     ))
-    op.create_index('idx_wiki_page_type', 'wiki_page', ['type'])
+    op.create_index('idx_canvas_page_type', 'canvas_page', ['type'])
 
 
 def downgrade() -> None:
-    op.drop_index('idx_wiki_page_type', table_name='wiki_page')
-    op.drop_column('wiki_page', 'type')
+    op.drop_index('idx_canvas_page_type', table_name='canvas_page')
+    op.drop_column('canvas_page', 'type')

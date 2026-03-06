@@ -27,7 +27,7 @@ const HIGHLIGHT_COLORS = [
   { label: 'Purple', color: '#DDD6FE' },
 ];
 
-export default function WikiEditorToolbar({ editor }) {
+export default function CanvasEditorToolbar({ editor }) {
   const [openDropdown, setOpenDropdown] = useState(null);
 
   if (!editor) return null;
@@ -67,7 +67,7 @@ export default function WikiEditorToolbar({ editor }) {
   const Btn = ({ onClick, active, children, title, className = '' }) => (
     <button
       type="button"
-      className={`WikiEditorToolbar__Btn ${active ? 'WikiEditorToolbar__Btn--active' : ''} ${className}`}
+      className={`CanvasEditorToolbar__Btn ${active ? 'CanvasEditorToolbar__Btn--active' : ''} ${className}`}
       onClick={onClick}
       title={title}
     >
@@ -75,10 +75,10 @@ export default function WikiEditorToolbar({ editor }) {
     </button>
   );
 
-  const Sep = () => <div className="WikiEditorToolbar__Sep" />;
+  const Sep = () => <div className="CanvasEditorToolbar__Sep" />;
 
   return (
-    <div className="WikiEditorToolbar">
+    <div className="CanvasEditorToolbar">
       {/* 헤딩 드롭다운 */}
       <DropdownWrapper
         isOpen={openDropdown === 'heading'}
@@ -86,7 +86,7 @@ export default function WikiEditorToolbar({ editor }) {
       >
         <button
           type="button"
-          className="WikiEditorToolbar__Dropdown"
+          className="CanvasEditorToolbar__Dropdown"
           onClick={() => toggleDropdown('heading')}
         >
           <Type size={14} />
@@ -94,9 +94,9 @@ export default function WikiEditorToolbar({ editor }) {
           <ChevronDown size={12} />
         </button>
         {openDropdown === 'heading' && (
-          <div className="WikiEditorToolbar__DropdownMenu">
+          <div className="CanvasEditorToolbar__DropdownMenu">
             <button
-              className={`WikiEditorToolbar__DropdownItem ${!editor.isActive('heading') ? 'WikiEditorToolbar__DropdownItem--active' : ''}`}
+              className={`CanvasEditorToolbar__DropdownItem ${!editor.isActive('heading') ? 'CanvasEditorToolbar__DropdownItem--active' : ''}`}
               onClick={() => { editor.chain().focus().setParagraph().run(); closeDropdown(); }}
             >
               <span style={{ fontSize: '14px' }}>Normal text</span>
@@ -104,7 +104,7 @@ export default function WikiEditorToolbar({ editor }) {
             {[1, 2, 3].map((level) => (
               <button
                 key={level}
-                className={`WikiEditorToolbar__DropdownItem ${editor.isActive('heading', { level }) ? 'WikiEditorToolbar__DropdownItem--active' : ''}`}
+                className={`CanvasEditorToolbar__DropdownItem ${editor.isActive('heading', { level }) ? 'CanvasEditorToolbar__DropdownItem--active' : ''}`}
                 onClick={() => { editor.chain().focus().toggleHeading({ level }).run(); closeDropdown(); }}
               >
                 <span style={{ fontSize: `${20 - level * 2}px`, fontWeight: 700 }}>Heading {level}</span>
@@ -144,33 +144,33 @@ export default function WikiEditorToolbar({ editor }) {
           <Palette size={16} />
         </Btn>
         {openDropdown === 'color' && (
-          <div className="WikiEditorToolbar__DropdownMenu WikiEditorToolbar__ColorMenu">
-            <div className="WikiEditorToolbar__ColorSection">
-              <span className="WikiEditorToolbar__ColorLabel">Text</span>
-              <div className="WikiEditorToolbar__ColorGrid">
+          <div className="CanvasEditorToolbar__DropdownMenu CanvasEditorToolbar__ColorMenu">
+            <div className="CanvasEditorToolbar__ColorSection">
+              <span className="CanvasEditorToolbar__ColorLabel">Text</span>
+              <div className="CanvasEditorToolbar__ColorGrid">
                 {TEXT_COLORS.map((c) => (
                   <button
                     key={c}
-                    className="WikiEditorToolbar__ColorSwatch"
+                    className="CanvasEditorToolbar__ColorSwatch"
                     style={{ backgroundColor: c }}
                     onClick={() => { editor.chain().focus().setColor(c).run(); closeDropdown(); }}
                   />
                 ))}
               </div>
               <button
-                className="WikiEditorToolbar__ColorReset"
+                className="CanvasEditorToolbar__ColorReset"
                 onClick={() => { editor.chain().focus().unsetColor().run(); closeDropdown(); }}
               >
                 Reset color
               </button>
             </div>
-            <div className="WikiEditorToolbar__ColorSection">
-              <span className="WikiEditorToolbar__ColorLabel">Highlight</span>
-              <div className="WikiEditorToolbar__ColorGrid">
+            <div className="CanvasEditorToolbar__ColorSection">
+              <span className="CanvasEditorToolbar__ColorLabel">Highlight</span>
+              <div className="CanvasEditorToolbar__ColorGrid">
                 {HIGHLIGHT_COLORS.map((h) => (
                   <button
                     key={h.color}
-                    className="WikiEditorToolbar__ColorSwatch WikiEditorToolbar__ColorSwatch--highlight"
+                    className="CanvasEditorToolbar__ColorSwatch CanvasEditorToolbar__ColorSwatch--highlight"
                     style={{ backgroundColor: h.color }}
                     title={h.label}
                     onClick={() => { editor.chain().focus().toggleHighlight({ color: h.color }).run(); closeDropdown(); }}
@@ -178,7 +178,7 @@ export default function WikiEditorToolbar({ editor }) {
                 ))}
               </div>
               <button
-                className="WikiEditorToolbar__ColorReset"
+                className="CanvasEditorToolbar__ColorReset"
                 onClick={() => { editor.chain().focus().unsetHighlight().run(); closeDropdown(); }}
               >
                 Remove highlight
@@ -235,20 +235,20 @@ export default function WikiEditorToolbar({ editor }) {
           <Info size={16} />
         </Btn>
         {openDropdown === 'callout' && (
-          <div className="WikiEditorToolbar__DropdownMenu">
-            <button className="WikiEditorToolbar__DropdownItem"
+          <div className="CanvasEditorToolbar__DropdownMenu">
+            <button className="CanvasEditorToolbar__DropdownItem"
               onClick={() => { editor.chain().focus().toggleCallout('info').run(); closeDropdown(); }}>
               <Info size={14} style={{ color: '#2563EB' }} /> Info
             </button>
-            <button className="WikiEditorToolbar__DropdownItem"
+            <button className="CanvasEditorToolbar__DropdownItem"
               onClick={() => { editor.chain().focus().toggleCallout('warning').run(); closeDropdown(); }}>
               <AlertTriangle size={14} style={{ color: '#D97706' }} /> Warning
             </button>
-            <button className="WikiEditorToolbar__DropdownItem"
+            <button className="CanvasEditorToolbar__DropdownItem"
               onClick={() => { editor.chain().focus().toggleCallout('success').run(); closeDropdown(); }}>
               <CheckCircle2 size={14} style={{ color: '#16A34A' }} /> Success
             </button>
-            <button className="WikiEditorToolbar__DropdownItem"
+            <button className="CanvasEditorToolbar__DropdownItem"
               onClick={() => { editor.chain().focus().toggleCallout('error').run(); closeDropdown(); }}>
               <XCircle size={14} style={{ color: '#DC2626' }} /> Error
             </button>
@@ -304,7 +304,7 @@ function DropdownWrapper({ isOpen, onClose, children }) {
   }, [isOpen, onClose]);
 
   return (
-    <div className="WikiEditorToolbar__DropdownWrap" ref={ref}>
+    <div className="CanvasEditorToolbar__DropdownWrap" ref={ref}>
       {children}
     </div>
   );

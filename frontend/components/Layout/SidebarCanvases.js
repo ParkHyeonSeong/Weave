@@ -31,14 +31,14 @@ export default function SidebarCanvases({ onCreateCanvas }) {
 
   const fetchCanvases = async () => {
     try {
-      const res = await axios.get('/wiki/canvases');
+      const res = await axios.get('/canvases');
       if (res.data.status) setCanvases(res.data.canvases);
     } catch {}
   };
 
   const fetchPages = useCallback(async (canvasId) => {
     try {
-      const res = await axios.get(`/wiki/canvases/${canvasId}/pages`);
+      const res = await axios.get(`/canvases/${canvasId}/pages`);
       if (res.data.status) setPages(res.data.pages);
     } catch {}
   }, []);
@@ -112,7 +112,7 @@ export default function SidebarCanvases({ onCreateCanvas }) {
 
     try {
       await axios.patch(
-        `/wiki/canvases/${expandedId}/pages/${active.id}/move`,
+        `/canvases/${expandedId}/pages/${active.id}/move`,
         { parent_page_id: targetParent, position: newPosition },
       );
       fetchPages(expandedId);
@@ -128,14 +128,14 @@ export default function SidebarCanvases({ onCreateCanvas }) {
         type: inlineCreate.type,
       };
       if (inlineCreate.parentPageId) body.parent_page_id = inlineCreate.parentPageId;
-      const res = await axios.post(`/wiki/canvases/${inlineCreate.canvasId}/pages`, body);
+      const res = await axios.post(`/canvases/${inlineCreate.canvasId}/pages`, body);
       if (res.data.status) {
         setInlineTitle('');
         setInlineCreate(null);
         fetchPages(inlineCreate.canvasId);
         window.dispatchEvent(new CustomEvent('canvas:page_created'));
         if (inlineCreate.type === 'document') {
-          router.push(`/wiki/${inlineCreate.canvasId}/${res.data.page_id}`);
+          router.push(`/canvas/${inlineCreate.canvasId}/${res.data.page_id}`);
         }
       }
     } catch {}
@@ -183,7 +183,7 @@ export default function SidebarCanvases({ onCreateCanvas }) {
                 isExpanded={expandedId === canvas.canvas_id}
                 onToggle={() => {
                   toggleExpand(canvas.canvas_id);
-                  router.push(`/wiki/${canvas.canvas_id}`);
+                  router.push(`/canvas/${canvas.canvas_id}`);
                 }}
                 onAddDocument={() => {
                   setExpandedId(canvas.canvas_id);
@@ -204,7 +204,7 @@ export default function SidebarCanvases({ onCreateCanvas }) {
                       className={`Sidebar__PageItem ${
                         router.query.pageId == overviewPage.page_id ? 'Sidebar__PageItem--active' : ''
                       }`}
-                      onClick={() => router.push(`/wiki/${canvas.canvas_id}/${overviewPage.page_id}`)}
+                      onClick={() => router.push(`/canvas/${canvas.canvas_id}/${overviewPage.page_id}`)}
                     >
                       <BookOpen size={13} className="Sidebar__PageIcon" />
                       <span className="Sidebar__BranchName">Overview</span>
@@ -428,7 +428,7 @@ function SidebarPageItem({
           className={`Sidebar__PageItem ${
             router.query.pageId == page.page_id ? 'Sidebar__PageItem--active' : ''
           }`}
-          onClick={() => router.push(`/wiki/${canvasId}/${page.page_id}`)}
+          onClick={() => router.push(`/canvas/${canvasId}/${page.page_id}`)}
         >
           <FileText size={13} className="Sidebar__PageIcon" />
           <span className="Sidebar__BranchName">{page.title}</span>

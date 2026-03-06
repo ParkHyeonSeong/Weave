@@ -3,6 +3,11 @@ from datetime import date
 from pydantic import BaseModel, field_validator
 
 
+class AssigneeInput(BaseModel):
+    main: Optional[int] = None
+    sub: Optional[List[int]] = None
+
+
 class TaskCreate(BaseModel):
     title: str
     description: Optional[str] = None
@@ -12,7 +17,7 @@ class TaskCreate(BaseModel):
     epic_id: Optional[int] = None
     sprint_id: Optional[int] = None
     parent_task_id: Optional[int] = None
-    assignee_id: Optional[int] = None
+    assignees: Optional[AssigneeInput] = None
     label_ids: Optional[List[int]] = None
     start_date: Optional[date] = None
     due_date: Optional[date] = None
@@ -42,7 +47,7 @@ class TaskUpdate(BaseModel):
     priority: Optional[str] = None
     epic_id: Optional[int] = None
     sprint_id: Optional[int] = None
-    assignee_id: Optional[int] = None
+    assignees: Optional[AssigneeInput] = None
     label_ids: Optional[List[int]] = None
     start_date: Optional[date] = None
     due_date: Optional[date] = None

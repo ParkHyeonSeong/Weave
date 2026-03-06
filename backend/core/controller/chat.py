@@ -5,6 +5,7 @@ from core.model import chat_room as room_model
 from core.model import chat_member as member_model
 from core.model import chat_message as message_model
 from core.model import user as user_model
+from core.model import task as task_model
 
 
 async def create_room(body, request: Request, db: AsyncSession):
@@ -87,6 +88,14 @@ async def rename_room(room_id: int, body, request: Request, db: AsyncSession):
 
     await room_model.update_room_name(room_id, body.room_name, db)
     return {'status': True, 'room_name': body.room_name}
+
+
+async def search_tasks(keyword: str, mode: str, request: Request, db: AsyncSession):
+    """채팅용 Task 검색"""
+    user_id = request.state.payload.get('user_id')
+    my_only = mode == 'my'
+    tasks = await task_model.search_for_chat(user_id, keyword, my_only, db)
+    return {'status': True, 'tasks': tasks}
 
 
 async def get_users(db: AsyncSession):

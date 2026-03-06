@@ -1,12 +1,12 @@
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.model import wiki_page as page_model
+from core.model import canvas_page as page_model
 from core.model import canvas_member as member_model
 
 
 async def create(canvas_id: int, body, request: Request, db: AsyncSession):
-    """Wiki 페이지/폴더 생성"""
+    """Canvas 페이지/폴더 생성"""
     user_id = request.state.payload.get('user_id')
 
     if not await member_model.is_member(canvas_id, user_id, db):

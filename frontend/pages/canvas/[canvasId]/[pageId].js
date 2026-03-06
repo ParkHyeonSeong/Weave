@@ -1,14 +1,14 @@
 import Head from 'next/head';
 import Layout from '@/components/Layout/Layout';
-import WikiPageView from '@/components/Wiki/WikiPageView';
+import CanvasPageView from '@/components/Canvas/CanvasPageView';
 
-export default function WikiPageRoute() {
+export default function CanvasPageRoute() {
   return (
     <Layout>
       <Head>
         <title>Page - Weave</title>
       </Head>
-      <WikiPageView />
+      <CanvasPageView />
     </Layout>
   );
 }

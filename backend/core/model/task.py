@@ -23,16 +23,16 @@ async def next_display_number(branch_id: int, db: AsyncSession) -> int:
 
 async def create(branch_id: int, display_number: int, title: str,
                  description: str, task_type: str, status: str, priority: str,
-                 epic_id, sprint_id, parent_task_id, assignee_id,
+                 epic_id, sprint_id, parent_task_id,
                  start_date, due_date, created_by: int, db: AsyncSession) -> int:
     """Task 생성"""
     result = await db.execute(text("""
         INSERT INTO task (branch_id, display_number, title, description,
                           task_type, status, priority, epic_id, sprint_id,
-                          parent_task_id, assignee_id, start_date, due_date, created_by)
+                          parent_task_id, start_date, due_date, created_by)
         VALUES (:branch_id, :display_number, :title, :description,
                 :task_type, :status, :priority, :epic_id, :sprint_id,
-                :parent_task_id, :assignee_id, :start_date, :due_date, :created_by)
+                :parent_task_id, :start_date, :due_date, :created_by)
         RETURNING task_id
     """), {
         'branch_id': branch_id,
@@ -45,7 +45,6 @@ async def create(branch_id: int, display_number: int, title: str,
         'epic_id': epic_id,
         'sprint_id': sprint_id,
         'parent_task_id': parent_task_id,
-        'assignee_id': assignee_id,
         'start_date': start_date,
         'due_date': due_date,
         'created_by': created_by,
@@ -59,16 +58,14 @@ async def find_by_id(task_id: int, db: AsyncSession):
     result = await db.execute(text("""
         SELECT t.task_id, t.branch_id, t.display_number, t.title, t.description,
                t.task_type, t.status, t.priority,
-               t.epic_id, t.sprint_id, t.parent_task_id, t.assignee_id,
+               t.epic_id, t.sprint_id, t.parent_task_id,
                t.start_date, t.due_date, t.sort_order,
                t.created_by, t.created_at, t.updated_at,
                b.key AS branch_key,
-               u.username AS assignee_name,
                e.epic_name,
                s.sprint_name
         FROM task t
         INNER JOIN branch b ON t.branch_id = b.branch_id
-        LEFT JOIN "user" u ON t.assignee_id = u.user_id
         LEFT JOIN epic e ON t.epic_id = e.epic_id
         LEFT JOIN sprint s ON t.sprint_id = s.sprint_id
         WHERE t.task_id = :task_id
@@ -90,6 +87,16 @@ async def find_by_id(task_id: int, db: AsyncSession):
     """), {'task_id': task_id})
     task['labels'] = [dict(r._mapping) for r in labels_result.fetchall()]
 
+    # 담당자 조회
+    assignees_result = await db.execute(text("""
+        SELECT ta.user_id, u.username, ta.role
+        FROM task_assignee ta
+        INNER JOIN "user" u ON ta.user_id = u.user_id
+        WHERE ta.task_id = :task_id
+        ORDER BY ta.role, u.username
+    """), {'task_id': task_id})
+    task['assignees'] = [dict(r._mapping) for r in assignees_result.fetchall()]
+
     return task
 
 
@@ -105,14 +112,12 @@ async def find_by_branch(branch_id: int, sprint_id, db: AsyncSession):
     result = await db.execute(text(f"""
         SELECT t.task_id, t.display_number, t.title,
                t.task_type, t.status, t.priority,
-               t.epic_id, t.sprint_id, t.parent_task_id, t.assignee_id,
+               t.epic_id, t.sprint_id, t.parent_task_id,
                t.start_date, t.due_date, t.sort_order, t.created_at,
                b.key AS branch_key,
-               u.username AS assignee_name,
                e.epic_name, e.color AS epic_color
         FROM task t
         INNER JOIN branch b ON t.branch_id = b.branch_id
-        LEFT JOIN "user" u ON t.assignee_id = u.user_id
         LEFT JOIN epic e ON t.epic_id = e.epic_id
         WHERE t.branch_id = :branch_id AND t.parent_task_id IS NULL
               {where_sprint}
@@ -125,10 +130,11 @@ async def find_by_branch(branch_id: int, sprint_id, db: AsyncSession):
         task['display_id'] = f"{task['branch_key']}-{task['display_number']}"
         tasks.append(task)
 
-    # 라벨 일괄 조회
     if tasks:
         task_ids = [t['task_id'] for t in tasks]
         placeholders = ', '.join(str(tid) for tid in task_ids)
+
+        # 라벨 일괄 조회
         labels_result = await db.execute(text(f"""
             SELECT tl.task_id, l.label_id, l.label_name, l.color
             FROM task_label tl
@@ -144,8 +150,27 @@ async def find_by_branch(branch_id: int, sprint_id, db: AsyncSession):
                 'label_name': ld['label_name'],
                 'color': ld['color'],
             })
+
+        # 담당자 일괄 조회
+        assignees_result = await db.execute(text(f"""
+            SELECT ta.task_id, ta.user_id, u.username, ta.role
+            FROM task_assignee ta
+            INNER JOIN "user" u ON ta.user_id = u.user_id
+            WHERE ta.task_id IN ({placeholders})
+            ORDER BY ta.role, u.username
+        """))
+        assignee_map = {}
+        for ar in assignees_result.fetchall():
+            ad = dict(ar._mapping)
+            assignee_map.setdefault(ad['task_id'], []).append({
+                'user_id': ad['user_id'],
+                'username': ad['username'],
+                'role': ad['role'],
+            })
+
         for task in tasks:
             task['labels'] = label_map.get(task['task_id'], [])
+            task['assignees'] = assignee_map.get(task['task_id'], [])
 
     return tasks
 
@@ -162,12 +187,10 @@ async def find_for_board(branch_id: int, sprint_id, db: AsyncSession):
     result = await db.execute(text(f"""
         SELECT t.task_id, t.display_number, t.title,
                t.task_type, t.status, t.priority,
-               t.assignee_id, t.sort_order,
-               b.key AS branch_key,
-               u.username AS assignee_name
+               t.sort_order,
+               b.key AS branch_key
         FROM task t
         INNER JOIN branch b ON t.branch_id = b.branch_id
-        LEFT JOIN "user" u ON t.assignee_id = u.user_id
         WHERE t.branch_id = :branch_id AND t.parent_task_id IS NULL
               {where_sprint}
         ORDER BY t.sort_order, t.created_at
@@ -179,10 +202,11 @@ async def find_for_board(branch_id: int, sprint_id, db: AsyncSession):
         task['display_id'] = f"{task['branch_key']}-{task['display_number']}"
         tasks.append(task)
 
-    # 라벨 일괄 조회
     if tasks:
         task_ids = [t['task_id'] for t in tasks]
         placeholders = ', '.join(str(tid) for tid in task_ids)
+
+        # 라벨 일괄 조회
         labels_result = await db.execute(text(f"""
             SELECT tl.task_id, l.label_id, l.label_name, l.color
             FROM task_label tl
@@ -197,8 +221,27 @@ async def find_for_board(branch_id: int, sprint_id, db: AsyncSession):
                 'label_name': ld['label_name'],
                 'color': ld['color'],
             })
+
+        # 담당자 일괄 조회
+        assignees_result = await db.execute(text(f"""
+            SELECT ta.task_id, ta.user_id, u.username, ta.role
+            FROM task_assignee ta
+            INNER JOIN "user" u ON ta.user_id = u.user_id
+            WHERE ta.task_id IN ({placeholders})
+            ORDER BY ta.role, u.username
+        """))
+        assignee_map = {}
+        for ar in assignees_result.fetchall():
+            ad = dict(ar._mapping)
+            assignee_map.setdefault(ad['task_id'], []).append({
+                'user_id': ad['user_id'],
+                'username': ad['username'],
+                'role': ad['role'],
+            })
+
         for task in tasks:
             task['labels'] = label_map.get(task['task_id'], [])
+            task['assignees'] = assignee_map.get(task['task_id'], [])
 
     return tasks
 
@@ -207,13 +250,11 @@ async def find_subtasks(parent_task_id: int, db: AsyncSession):
     """하위 Task 목록"""
     result = await db.execute(text("""
         SELECT t.task_id, t.display_number, t.title,
-               t.task_type, t.status, t.priority, t.assignee_id,
+               t.task_type, t.status, t.priority,
                t.sort_order, t.created_at,
-               b.key AS branch_key,
-               u.username AS assignee_name
+               b.key AS branch_key
         FROM task t
         INNER JOIN branch b ON t.branch_id = b.branch_id
-        LEFT JOIN "user" u ON t.assignee_id = u.user_id
         WHERE t.parent_task_id = :parent_task_id
         ORDER BY t.sort_order, t.created_at
     """), {'parent_task_id': parent_task_id})
@@ -223,13 +264,36 @@ async def find_subtasks(parent_task_id: int, db: AsyncSession):
         task = dict(row._mapping)
         task['display_id'] = f"{task['branch_key']}-{task['display_number']}"
         tasks.append(task)
+
+    # 담당자 일괄 조회
+    if tasks:
+        task_ids = [t['task_id'] for t in tasks]
+        placeholders = ', '.join(str(tid) for tid in task_ids)
+        assignees_result = await db.execute(text(f"""
+            SELECT ta.task_id, ta.user_id, u.username, ta.role
+            FROM task_assignee ta
+            INNER JOIN "user" u ON ta.user_id = u.user_id
+            WHERE ta.task_id IN ({placeholders})
+            ORDER BY ta.role, u.username
+        """))
+        assignee_map = {}
+        for ar in assignees_result.fetchall():
+            ad = dict(ar._mapping)
+            assignee_map.setdefault(ad['task_id'], []).append({
+                'user_id': ad['user_id'],
+                'username': ad['username'],
+                'role': ad['role'],
+            })
+        for task in tasks:
+            task['assignees'] = assignee_map.get(task['task_id'], [])
+
     return tasks
 
 
 async def update(task_id: int, fields: dict, db: AsyncSession):
     """Task 수정 (동적 필드)"""
     allowed = {'title', 'description', 'task_type', 'status', 'priority',
-               'epic_id', 'sprint_id', 'assignee_id', 'start_date', 'due_date', 'sort_order'}
+               'epic_id', 'sprint_id', 'start_date', 'due_date', 'sort_order'}
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
         return
@@ -275,6 +339,55 @@ async def count_by_sprint_status(sprint_id: int, db: AsyncSession):
     return {'done_count': row[0], 'incomplete_count': row[1]}
 
 
+async def search_for_chat(user_id: int, keyword: str, my_only: bool, db: AsyncSession):
+    """채팅용 Task 검색 (접근 가능한 Branch의 Task만)"""
+    keyword_like = f'%{keyword}%' if keyword else '%'
+    assignee_filter = "AND t.task_id IN (SELECT task_id FROM task_assignee WHERE user_id = :user_id)" if my_only else ""
+
+    result = await db.execute(text(f"""
+        SELECT DISTINCT t.task_id, t.branch_id, t.display_number, t.title, t.status, t.priority,
+               b.key AS branch_key,
+               t.updated_at, t.created_at
+        FROM task t
+        INNER JOIN branch b ON t.branch_id = b.branch_id
+        INNER JOIN branch_member bm ON b.branch_id = bm.branch_id AND bm.user_id = :user_id
+        WHERE t.title ILIKE :keyword_like
+              {assignee_filter}
+        ORDER BY t.updated_at DESC NULLS LAST, t.created_at DESC
+        LIMIT 10
+    """), {'user_id': user_id, 'keyword_like': keyword_like})
+    rows = result.fetchall()
+    tasks = []
+    for row in rows:
+        task = dict(row._mapping)
+        task['display_id'] = f"{task['branch_key']}-{task['display_number']}"
+        tasks.append(task)
+
+    # 담당자 일괄 조회
+    if tasks:
+        task_ids = [t['task_id'] for t in tasks]
+        placeholders = ', '.join(str(tid) for tid in task_ids)
+        assignees_result = await db.execute(text(f"""
+            SELECT ta.task_id, ta.user_id, u.username, ta.role
+            FROM task_assignee ta
+            INNER JOIN "user" u ON ta.user_id = u.user_id
+            WHERE ta.task_id IN ({placeholders})
+            ORDER BY ta.role, u.username
+        """))
+        assignee_map = {}
+        for ar in assignees_result.fetchall():
+            ad = dict(ar._mapping)
+            assignee_map.setdefault(ad['task_id'], []).append({
+                'user_id': ad['user_id'],
+                'username': ad['username'],
+                'role': ad['role'],
+            })
+        for task in tasks:
+            task['assignees'] = assignee_map.get(task['task_id'], [])
+
+    return tasks
+
+
 async def set_labels(task_id: int, label_ids: list, db: AsyncSession):
     """Task 라벨 전체 교체"""
     await db.execute(text("""
@@ -284,4 +397,20 @@ async def set_labels(task_id: int, label_ids: list, db: AsyncSession):
         await db.execute(text("""
             INSERT INTO task_label (task_id, label_id) VALUES (:task_id, :label_id)
         """), {'task_id': task_id, 'label_id': label_id})
+    await db.commit()
+
+
+async def set_assignees(task_id: int, main_user_id, sub_user_ids: list, db: AsyncSession):
+    """Task 담당자 전체 교체 (메인 1명 + 서브 N명)"""
+    await db.execute(text("""
+        DELETE FROM task_assignee WHERE task_id = :task_id
+    """), {'task_id': task_id})
+    if main_user_id:
+        await db.execute(text("""
+            INSERT INTO task_assignee (task_id, user_id, role) VALUES (:task_id, :user_id, 'main')
+        """), {'task_id': task_id, 'user_id': main_user_id})
+    for sub_id in sub_user_ids:
+        await db.execute(text("""
+            INSERT INTO task_assignee (task_id, user_id, role) VALUES (:task_id, :user_id, 'sub')
+        """), {'task_id': task_id, 'user_id': sub_id})
     await db.commit()

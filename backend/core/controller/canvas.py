@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.model import canvas as canvas_model
 from core.model import canvas_member as member_model
-from core.model import wiki_page as page_model
+from core.model import canvas_page as page_model
 
 
 async def create(body, request: Request, db: AsyncSession):

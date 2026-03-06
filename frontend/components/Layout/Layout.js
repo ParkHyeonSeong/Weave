@@ -18,7 +18,11 @@ export default function Layout({ children }) {
   const [showCreateCanvas, setShowCreateCanvas] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [isMessengerCollapsed, setIsMessengerCollapsed] = useState(true);
+  const [isMessengerCollapsed, setIsMessengerCollapsed] = useState(() => {
+    try {
+      return sessionStorage.getItem('messenger_open') !== 'true';
+    } catch { return true; }
+  });
   const [notifications, setNotifications] = useState([]);
   const [messengerWidth, setMessengerWidth] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -37,6 +41,13 @@ export default function Layout({ children }) {
   const isResizingRef = useRef(false);
   const wsRef = useRef(null);
   const activeRoomRef = useRef(null);
+
+  // 메신저 열림 상태 저장
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('messenger_open', isMessengerCollapsed ? 'false' : 'true');
+    } catch {}
+  }, [isMessengerCollapsed]);
 
   // 사이드바 리사이즈 드래그 핸들러
   const handleSidebarResizeStart = useCallback((e) => {
@@ -121,7 +132,7 @@ export default function Layout({ children }) {
     return () => window.removeEventListener('palette:create-branch', handleCreate);
   }, []);
 
-  // WikiHome에서 Canvas 생성 요청 수신
+  // CanvasHome에서 Canvas 생성 요청 수신
   useEffect(() => {
     const handleCreate = () => setShowCreateCanvas(true);
     window.addEventListener('layout:create-canvas', handleCreate);

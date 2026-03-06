@@ -5,9 +5,9 @@ import { Pencil, Save, X } from 'lucide-react';
 import { axios } from '@/library/_axios';
 
 // SSR 비활성화 (TipTap은 브라우저 전용)
-const WikiEditor = dynamic(() => import('./WikiEditor'), { ssr: false });
+const CanvasEditor = dynamic(() => import('./CanvasEditor'), { ssr: false });
 
-export default function WikiPageView() {
+export default function CanvasPageView() {
   const router = useRouter();
   const { canvasId, pageId } = router.query;
   const [page, setPage] = useState(null);
@@ -19,7 +19,7 @@ export default function WikiPageView() {
   const fetchPage = useCallback(async () => {
     if (!canvasId || !pageId) return;
     try {
-      const res = await axios.get(`/wiki/canvases/${canvasId}/pages/${pageId}`);
+      const res = await axios.get(`/canvases/${canvasId}/pages/${pageId}`);
       if (res.data.status) {
         setPage(res.data.page);
         setEditTitle(res.data.page.title);
@@ -41,7 +41,7 @@ export default function WikiPageView() {
       if (editContent !== (page.content || '')) body.content = editContent;
 
       if (Object.keys(body).length > 0) {
-        await axios.patch(`/wiki/canvases/${canvasId}/pages/${pageId}`, body);
+        await axios.patch(`/canvases/${canvasId}/pages/${pageId}`, body);
         await fetchPage();
       }
       setIsEditing(false);
@@ -58,20 +58,20 @@ export default function WikiPageView() {
   if (!page) return null;
 
   return (
-    <div className="WikiPageView">
-      <div className="WikiPageView__TopBar">
-        <div className="WikiPageView__Actions">
+    <div className="CanvasPageView">
+      <div className="CanvasPageView__TopBar">
+        <div className="CanvasPageView__Actions">
           {isEditing ? (
             <>
               <button
-                className="WikiPageView__ActionBtn WikiPageView__ActionBtn--secondary"
+                className="CanvasPageView__ActionBtn CanvasPageView__ActionBtn--secondary"
                 onClick={handleCancel}
               >
                 <X size={15} />
                 Cancel
               </button>
               <button
-                className="WikiPageView__ActionBtn WikiPageView__ActionBtn--primary"
+                className="CanvasPageView__ActionBtn CanvasPageView__ActionBtn--primary"
                 onClick={handleSave}
                 disabled={saving}
               >
@@ -81,7 +81,7 @@ export default function WikiPageView() {
             </>
           ) : (
             <button
-              className="WikiPageView__ActionBtn"
+              className="CanvasPageView__ActionBtn"
               onClick={() => setIsEditing(true)}
             >
               <Pencil size={15} />
@@ -92,19 +92,19 @@ export default function WikiPageView() {
       </div>
 
       {/* 제목 */}
-      <div className="WikiPageView__TitleArea">
+      <div className="CanvasPageView__TitleArea">
         {isEditing ? (
           <input
-            className="WikiPageView__TitleInput"
+            className="CanvasPageView__TitleInput"
             value={editTitle}
             onChange={(e) => setEditTitle(e.target.value)}
             placeholder="Page title..."
           />
         ) : (
-          <h1 className="WikiPageView__Title">{page.title}</h1>
+          <h1 className="CanvasPageView__Title">{page.title}</h1>
         )}
         {!isEditing && page.updated_at && (
-          <span className="WikiPageView__Meta">
+          <span className="CanvasPageView__Meta">
             Last updated {new Date(page.updated_at).toLocaleDateString()}
             {page.created_by_name && ` by ${page.created_by_name}`}
           </span>
@@ -112,15 +112,15 @@ export default function WikiPageView() {
       </div>
 
       {/* 내용 */}
-      <div className="WikiPageView__Body">
+      <div className="CanvasPageView__Body">
         {isEditing ? (
-          <WikiEditor
+          <CanvasEditor
             content={editContent}
             onChange={setEditContent}
           />
         ) : (
           <div
-            className="WikiPageView__Content ProseMirror"
+            className="CanvasPageView__Content ProseMirror"
             dangerouslySetInnerHTML={{ __html: page.content || '<p>No content yet. Click Edit to start writing.</p>' }}
           />
         )}

@@ -11,12 +11,12 @@ const apps = [
     href: '/browse',
   },
   {
-    id: 'wiki',
-    name: 'Wiki',
+    id: 'canvas',
+    name: 'Canvas',
     description: 'Documents, knowledge base and team notes',
     icon: BookOpen,
     color: '#16A34A',
-    href: '/wiki',
+    href: '/canvas',
   },
 ];
 

@@ -31,7 +31,6 @@ async def create(body, branch_id: int, request: Request, db: AsyncSession):
         epic_id=body.epic_id,
         sprint_id=body.sprint_id,
         parent_task_id=body.parent_task_id,
-        assignee_id=body.assignee_id,
         start_date=body.start_date,
         due_date=body.due_date,
         created_by=user_id,
@@ -41,6 +40,10 @@ async def create(body, branch_id: int, request: Request, db: AsyncSession):
     # 라벨 할당
     if body.label_ids:
         await task_model.set_labels(task_id, body.label_ids, db)
+
+    # 담당자 할당
+    if body.assignees:
+        await task_model.set_assignees(task_id, body.assignees.main, body.assignees.sub or [], db)
 
     return {'status': True, 'task_id': task_id, 'display_number': display_number}
 
@@ -100,13 +103,17 @@ async def update(task_id: int, body, branch_id: int, request: Request, db: Async
     if not task or task['branch_id'] != branch_id:
         return {'status': False, 'message': 'TASK_NOT_FOUND'}
 
-    fields = body.model_dump(exclude_unset=True, exclude={'label_ids'})
+    fields = body.model_dump(exclude_unset=True, exclude={'label_ids', 'assignees'})
     if fields:
         await task_model.update(task_id, fields, db)
 
     # 라벨 업데이트
     if body.label_ids is not None:
         await task_model.set_labels(task_id, body.label_ids, db)
+
+    # 담당자 업데이트
+    if body.assignees is not None:
+        await task_model.set_assignees(task_id, body.assignees.main, body.assignees.sub or [], db)
 
     return {'status': True}
 

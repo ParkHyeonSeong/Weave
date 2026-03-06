@@ -12,7 +12,12 @@ export default function TaskModal({ branchId, branchKey, task, defaultSprintId, 
   const [priority, setPriority] = useState(task?.priority || 'medium');
   const [epicId, setEpicId] = useState(task?.epic_id || '');
   const [sprintId, setSprintId] = useState(task?.sprint_id || defaultSprintId || '');
-  const [assigneeId, setAssigneeId] = useState(task?.assignee_id || '');
+  const [mainAssigneeId, setMainAssigneeId] = useState(
+    () => (task?.assignees || []).find((a) => a.role === 'main')?.user_id || ''
+  );
+  const [subAssigneeIds, setSubAssigneeIds] = useState(
+    () => (task?.assignees || []).filter((a) => a.role === 'sub').map((a) => a.user_id)
+  );
   const [labelIds, setLabelIds] = useState([]);
   const [startDate, setStartDate] = useState(task?.start_date || '');
   const [dueDate, setDueDate] = useState(task?.due_date || '');
@@ -79,7 +84,10 @@ export default function TaskModal({ branchId, branchKey, task, defaultSprintId, 
         priority,
         epic_id: epicId || null,
         sprint_id: sprintId || null,
-        assignee_id: assigneeId || null,
+        assignees: {
+          main: mainAssigneeId ? Number(mainAssigneeId) : null,
+          sub: subAssigneeIds.length > 0 ? subAssigneeIds : [],
+        },
         label_ids: labelIds.length > 0 ? labelIds : null,
         start_date: startDate || null,
         due_date: dueDate || null,
@@ -212,16 +220,43 @@ export default function TaskModal({ branchId, branchKey, task, defaultSprintId, 
             </div>
           </div>
 
-          {/* 담당자 */}
+          {/* 메인 담당자 */}
           <div className="TaskModal__Field">
-            <label className="TaskModal__Label">Assignee</label>
-            <select className="TaskModal__Select" value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}>
+            <label className="TaskModal__Label">Main Assignee</label>
+            <select className="TaskModal__Select" value={mainAssigneeId} onChange={(e) => setMainAssigneeId(e.target.value)}>
               <option value="">Unassigned</option>
               {members.map((m) => (
                 <option key={m.user_id} value={m.user_id}>{m.username}</option>
               ))}
             </select>
           </div>
+
+          {/* 서브 담당자 */}
+          {members.length > 0 && (
+            <div className="TaskModal__Field">
+              <label className="TaskModal__Label">Sub Assignees</label>
+              <div className="TaskModal__SubAssignees">
+                {members
+                  .filter((m) => String(m.user_id) !== String(mainAssigneeId))
+                  .map((m) => (
+                    <button
+                      key={m.user_id}
+                      type="button"
+                      className={`TaskModal__SubAssigneeChip ${subAssigneeIds.includes(m.user_id) ? 'TaskModal__SubAssigneeChip--selected' : ''}`}
+                      onClick={() =>
+                        setSubAssigneeIds((prev) =>
+                          prev.includes(m.user_id)
+                            ? prev.filter((id) => id !== m.user_id)
+                            : [...prev, m.user_id]
+                        )
+                      }
+                    >
+                      {m.username}
+                    </button>
+                  ))}
+              </div>
+            </div>
+          )}
 
           {/* 라벨 */}
           {labels.length > 0 && (

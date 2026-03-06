@@ -4,7 +4,7 @@ import SidebarBranches from './SidebarBranches';
 import SidebarCanvases from './SidebarCanvases';
 
 function getAppContext(pathname) {
-  if (pathname.startsWith('/wiki')) return 'wiki';
+  if (pathname.startsWith('/canvas')) return 'canvas';
   if (pathname.startsWith('/branch') || pathname === '/browse') return 'branch';
   return 'home';
 }
@@ -45,7 +45,7 @@ export default function Sidebar({ width, onResizeStart, onCreateBranch, onCreate
             {appContext === 'branch' && (
               <SidebarBranches onCreateBranch={onCreateBranch} />
             )}
-            {appContext === 'wiki' && (
+            {appContext === 'canvas' && (
               <SidebarCanvases onCreateCanvas={onCreateCanvas} />
             )}
           </>

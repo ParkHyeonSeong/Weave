@@ -1,6 +1,6 @@
 @use '../../variables' as *;
 
-.WikiEditor {
+.CanvasEditor {
   border: 1px solid $color-border;
   border-radius: $radius-xl;
   overflow: hidden;
@@ -190,7 +190,7 @@
 }
 
 // 툴바
-.WikiEditorToolbar {
+.CanvasEditorToolbar {
   display: flex;
   align-items: center;
   gap: $space-1;

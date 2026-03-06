@@ -9,7 +9,12 @@ const SPLIT_THRESHOLD = 560;
 
 export default function Messenger({ wsRef, activeRoomRef, panelWidth }) {
   const [activeTab, setActiveTab] = useState('chats');
-  const [activeRoomId, setActiveRoomId] = useState(null);
+  const [activeRoomId, setActiveRoomId] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('chat_active_room');
+      return saved ? Number(saved) : null;
+    } catch { return null; }
+  });
   const [showNewChat, setShowNewChat] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
@@ -27,9 +32,13 @@ export default function Messenger({ wsRef, activeRoomRef, panelWidth }) {
     setShowNewChat(false);
   };
 
-  // 현재 열린 방 ID를 Layout에 공유
+  // 현재 열린 방 ID를 Layout에 공유 + sessionStorage 저장
   useEffect(() => {
     if (activeRoomRef) activeRoomRef.current = activeRoomId;
+    try {
+      if (activeRoomId) sessionStorage.setItem('chat_active_room', String(activeRoomId));
+      else sessionStorage.removeItem('chat_active_room');
+    } catch {}
     return () => { if (activeRoomRef) activeRoomRef.current = null; };
   }, [activeRoomId]);
 

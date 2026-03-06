@@ -160,6 +160,35 @@ export default function EpicTimeline({ branchId, onSelectEpic }) {
             </div>
           </div>
 
+          {/* 스프린트 라벨 행 */}
+          {sprints.some((s) => s.start_date && s.end_date) && (
+            <div className="EpicTimeline__SprintRow">
+              <div className="EpicTimeline__NameCol">
+                <span className="EpicTimeline__SprintRowLabel">Sprints</span>
+              </div>
+              <div className="EpicTimeline__SprintRowTimeline">
+                {sprints
+                  .filter((s) => s.start_date && s.end_date)
+                  .map((s) => {
+                    const left = getPosition(s.start_date);
+                    const right = getPosition(s.end_date);
+                    if (left == null || right == null) return null;
+                    const statusClass = s.status === 'active' ? 'EpicTimeline__SprintLabel--active'
+                      : s.status === 'closed' ? 'EpicTimeline__SprintLabel--closed' : '';
+                    return (
+                      <div
+                        key={s.sprint_id}
+                        className={`EpicTimeline__SprintLabel ${statusClass}`}
+                        style={{ left: `${left}%`, width: `${Math.max(right - left, 1)}%` }}
+                      >
+                        <span className="EpicTimeline__SprintLabelText">{s.sprint_name}</span>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
+
           {/* 에픽 행 */}
           <div className="EpicTimeline__Body">
             {/* Sprint 구간 배경 */}
@@ -175,7 +204,6 @@ export default function EpicTimeline({ branchId, onSelectEpic }) {
                       key={s.sprint_id}
                       className="EpicTimeline__SprintRange"
                       style={{ left: `${left}%`, width: `${right - left}%` }}
-                      title={s.sprint_name}
                     />
                   );
                 })}

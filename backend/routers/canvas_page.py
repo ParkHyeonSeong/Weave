@@ -1,17 +1,17 @@
 from fastapi import APIRouter, Request, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .schema import wiki_page as page_schema
-from core.controller import wiki_page as page_controller
+from .schema import canvas_page as page_schema
+from core.controller import canvas_page as page_controller
 from library.validator import require_login
 import db_engine as db
 
 router = APIRouter()
 
 
-@router.post("", summary="Wiki 페이지 생성", dependencies=[Depends(require_login)])
+@router.post("", summary="Canvas 페이지 생성", dependencies=[Depends(require_login)])
 async def create_page(canvas_id: int, request: Request,
-                      body: page_schema.WikiPageCreate,
+                      body: page_schema.CanvasPageCreate,
                       session: AsyncSession = Depends(db.session)):
     return await page_controller.create(canvas_id, body, request, session)
 
@@ -30,14 +30,14 @@ async def get_page(canvas_id: int, page_id: int, request: Request,
 
 @router.patch("/{page_id}", summary="페이지 수정", dependencies=[Depends(require_login)])
 async def update_page(canvas_id: int, page_id: int, request: Request,
-                      body: page_schema.WikiPageUpdate,
+                      body: page_schema.CanvasPageUpdate,
                       session: AsyncSession = Depends(db.session)):
     return await page_controller.update(canvas_id, page_id, body, request, session)
 
 
 @router.patch("/{page_id}/move", summary="페이지 이동", dependencies=[Depends(require_login)])
 async def move_page(canvas_id: int, page_id: int, request: Request,
-                    body: page_schema.WikiPageMove,
+                    body: page_schema.CanvasPageMove,
                     session: AsyncSession = Depends(db.session)):
     return await page_controller.move(canvas_id, page_id, body, request, session)
 

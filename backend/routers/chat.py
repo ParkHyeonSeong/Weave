@@ -20,6 +20,15 @@ async def list_rooms(request: Request, session: AsyncSession = Depends(db.sessio
     return await chat_controller.get_rooms(request, session)
 
 
+@router.get("/task-search", summary="채팅용 Task 검색",
+            dependencies=[Depends(require_login)])
+async def search_tasks(request: Request,
+                       q: str = Query('', max_length=100),
+                       mode: str = Query('my'),
+                       session: AsyncSession = Depends(db.session)):
+    return await chat_controller.search_tasks(q, mode, request, session)
+
+
 @router.get("/users", summary="전체 사용자 목록", dependencies=[Depends(require_login)])
 async def list_users(session: AsyncSession = Depends(db.session)):
     return await chat_controller.get_users(session)

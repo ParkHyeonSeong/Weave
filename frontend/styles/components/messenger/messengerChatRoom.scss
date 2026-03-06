@@ -125,6 +125,12 @@
     }
   }
 
+  &__MsgTaskRef {
+    margin-bottom: $space-1;
+    width: 100%;
+    max-width: 260px;
+  }
+
   &__MsgSender {
     font-size: 11px;
     color: $color-text-tertiary;
@@ -217,6 +223,13 @@
     padding: $space-3;
     border-top: 1px solid $color-border;
     flex-shrink: 0;
+    position: relative;
+    flex-wrap: wrap;
+  }
+
+  &__AttachedTask {
+    width: 100%;
+    margin-bottom: $space-1;
   }
 
   &__InputWrap {

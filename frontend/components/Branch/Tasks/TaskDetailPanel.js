@@ -67,6 +67,19 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes, taskSu
     } catch {}
   };
 
+  // 담당자 업데이트
+  const updateAssignees = async (mainId, subIds) => {
+    try {
+      const res = await axios.patch(`/branches/${branchId}/tasks/${task.task_id}`, {
+        assignees: { main: mainId || null, sub: subIds },
+      });
+      if (res.data.status) {
+        await fetchTask();
+        window.dispatchEvent(new Event('task:updated'));
+      }
+    } catch {}
+  };
+
   // 라벨 토글
   const toggleLabel = async (labelId) => {
     const currentIds = (task.labels || []).map((l) => l.label_id);
@@ -273,17 +286,54 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes, taskSu
               />
             </DetailRow>
 
-            {/* 담당자 */}
-            <DetailRow label="Assignee">
+            {/* 메인 담당자 */}
+            <DetailRow label="Main Assignee">
               <CustomSelect
-                value={task.assignee_id || ''}
+                value={(task.assignees || []).find((a) => a.role === 'main')?.user_id || ''}
                 options={[
                   { value: '', label: 'Unassigned' },
                   ...members.map((m) => ({ value: m.user_id, label: m.username })),
                 ]}
-                onChange={(val) => handleSelectChange('assignee_id', val)}
+                onChange={(val) => {
+                  const mainId = val === '' ? null : Number(val);
+                  const currentSubs = (task.assignees || []).filter((a) => a.role === 'sub').map((a) => a.user_id);
+                  updateAssignees(mainId, currentSubs);
+                }}
                 size="sm"
               />
+            </DetailRow>
+
+            {/* 서브 담당자 */}
+            <DetailRow label="Sub Assignees" align="top">
+              <div className="TaskDetailPanel__SubAssignees">
+                {members
+                  .filter((m) => {
+                    const mainId = (task.assignees || []).find((a) => a.role === 'main')?.user_id;
+                    return m.user_id !== mainId;
+                  })
+                  .map((m) => {
+                    const selected = (task.assignees || []).some((a) => a.role === 'sub' && a.user_id === m.user_id);
+                    return (
+                      <button
+                        key={m.user_id}
+                        className={`TaskDetailPanel__SubAssigneeChip ${selected ? 'TaskDetailPanel__SubAssigneeChip--selected' : ''}`}
+                        onClick={() => {
+                          const mainId = (task.assignees || []).find((a) => a.role === 'main')?.user_id || null;
+                          const currentSubs = (task.assignees || []).filter((a) => a.role === 'sub').map((a) => a.user_id);
+                          const newSubs = selected
+                            ? currentSubs.filter((id) => id !== m.user_id)
+                            : [...currentSubs, m.user_id];
+                          updateAssignees(mainId, newSubs);
+                        }}
+                      >
+                        {m.username}
+                      </button>
+                    );
+                  })}
+                {members.length === 0 && (
+                  <span className="TaskDetailPanel__FieldValue">None</span>
+                )}
+              </div>
             </DetailRow>
 
             {/* 라벨 */}

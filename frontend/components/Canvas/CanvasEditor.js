@@ -17,11 +17,11 @@ import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import { common, createLowlight } from 'lowlight';
 import CalloutExtension from './extensions/CalloutExtension';
-import WikiEditorToolbar from './WikiEditorToolbar';
+import CanvasEditorToolbar from './CanvasEditorToolbar';
 
 const lowlight = createLowlight(common);
 
-export default function WikiEditor({ content, onChange }) {
+export default function CanvasEditor({ content, onChange }) {
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -65,9 +65,9 @@ export default function WikiEditor({ content, onChange }) {
   if (!editor) return null;
 
   return (
-    <div className="WikiEditor">
-      <WikiEditorToolbar editor={editor} />
-      <EditorContent editor={editor} className="WikiEditor__Content" />
+    <div className="CanvasEditor">
+      <CanvasEditorToolbar editor={editor} />
+      <EditorContent editor={editor} className="CanvasEditor__Content" />
     </div>
   );
 }

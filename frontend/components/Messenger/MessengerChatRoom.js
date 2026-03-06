@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Send, Pencil, Check, X } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import { formatMessageTime } from '@/library/formatTime';
+import TaskSearchPopup from './TaskSearchPopup';
+import TaskRefCard from './TaskRefCard';
 
 export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, headerLeft }) {
   const [messages, setMessages] = useState([]);
@@ -11,6 +13,10 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
   const [members, setMembers] = useState([]);
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState('');
+  const [attachedTask, setAttachedTask] = useState(null);
+  const [slashCommand, setSlashCommand] = useState(null); // { mode: 'my'|'all', keyword: '' }
+  const [showSlashMenu, setShowSlashMenu] = useState(false);
+  const [slashMenuIdx, setSlashMenuIdx] = useState(0);
   const messagesEndRef = useRef(null);
   const editInputRef = useRef(null);
   const textareaRef = useRef(null);
@@ -100,23 +106,50 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
   const handleSend = () => {
     if (isCodeMode) return; // 코드블록이 닫히지 않으면 전송 차단
     const content = input.trim();
-    if (!content) return;
+    if (!content && !attachedTask) return;
 
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        action: 'send_message',
-        room_id: roomId,
-        content,
-      }));
+      const payload = { action: 'send_message', room_id: roomId, content };
+      if (attachedTask) payload.task_id = attachedTask.task_id;
+      wsRef.current.send(JSON.stringify(payload));
     }
     setInput('');
+    setAttachedTask(null);
+    setSlashCommand(null);
   };
+
+  const SLASH_COMMANDS = ['/t', '/ta'];
 
   const handleKeyDown = (e) => {
     if (e.nativeEvent.isComposing) return;
+    // 슬래시 메뉴 키보드 네비게이션
+    if (showSlashMenu) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSlashMenuIdx((prev) => Math.min(prev + 1, SLASH_COMMANDS.length - 1));
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSlashMenuIdx((prev) => Math.max(prev - 1, 0));
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        handleSlashMenuSelect(SLASH_COMMANDS[slashMenuIdx]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        setShowSlashMenu(false);
+        return;
+      }
+    }
+    // 슬래시 커맨드 팝업 활성화 시 키보드 이벤트 위임 (TaskSearchPopup에서 처리)
+    if (slashCommand && ['ArrowDown', 'ArrowUp', 'Escape'].includes(e.key)) return;
+    if (slashCommand && e.key === 'Enter' && !e.shiftKey) return;
     if (e.key === 'Enter') {
-      if (isCodeMode) {
-        // 코드모드: 모든 Enter는 줄바꿈 (전송 불가)
+      if (isCodeMode || slashCommand) {
+        // 코드모드 또는 검색중: Enter는 줄바꿈 또는 무시
       } else {
         // 일반모드: Enter로 전송, Shift+Enter로 줄바꿈
         if (!e.shiftKey) {
@@ -125,6 +158,64 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
         }
       }
     }
+  };
+
+  // 슬래시 커맨드 감지
+  const handleInputChange = (e) => {
+    const val = e.target.value;
+    setInput(val);
+
+    // '/'만 입력하면 커맨드 목록 표시
+    if (val === '/') {
+      setShowSlashMenu(true);
+      setSlashMenuIdx(0);
+      setSlashCommand(null);
+      return;
+    }
+
+    // /ta 또는 /t 로 시작하는지 감지 (/ta를 먼저 체크)
+    if (val.match(/^\/ta\s/)) {
+      setSlashCommand({ mode: 'all', keyword: val.slice(4) });
+      setShowSlashMenu(false);
+    } else if (val.match(/^\/t\s/)) {
+      setSlashCommand({ mode: 'my', keyword: val.slice(3) });
+      setShowSlashMenu(false);
+    } else if (val.match(/^\/t$/) || val.match(/^\/ta?$/)) {
+      // /t 또는 /ta 타이핑 중 (아직 스페이스 안 침)
+      setShowSlashMenu(true);
+      if (slashCommand) setSlashCommand(null);
+    } else {
+      if (slashCommand) setSlashCommand(null);
+      if (showSlashMenu) setShowSlashMenu(false);
+    }
+  };
+
+  // 슬래시 메뉴에서 커맨드 선택
+  const handleSlashMenuSelect = (cmd) => {
+    setInput(cmd + ' ');
+    setShowSlashMenu(false);
+    if (cmd === '/t') {
+      setSlashCommand({ mode: 'my', keyword: '' });
+    } else if (cmd === '/ta') {
+      setSlashCommand({ mode: 'all', keyword: '' });
+    }
+    textareaRef.current?.focus();
+  };
+
+  // 태스크 선택 시
+  const handleTaskSelect = (task) => {
+    setAttachedTask({
+      task_id: task.task_id,
+      branch_id: task.branch_id,
+      display_id: task.display_id,
+      title: task.title,
+      status: task.status,
+      priority: task.priority,
+      assignee_name: task.assignee_name,
+    });
+    setInput('');
+    setSlashCommand(null);
+    textareaRef.current?.focus();
   };
 
   // 채팅방 이름 변경
@@ -265,6 +356,11 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
               {msg.sender_id !== myUserId && (
                 <span className="MessengerChatRoom__MsgSender">{msg.sender_name}</span>
               )}
+              {msg.task_ref && (
+                <div className="MessengerChatRoom__MsgTaskRef">
+                  <TaskRefCard taskRef={msg.task_ref} />
+                </div>
+              )}
               <div className="MessengerChatRoom__MsgRow">
                 {msg.sender_id === myUserId && showTime && (
                   <div className="MessengerChatRoom__MsgMeta">
@@ -279,9 +375,11 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
                     </span>
                   </div>
                 )}
-                <div className="MessengerChatRoom__MsgBubble">
-                  {renderContent(msg.content)}
-                </div>
+                {msg.content ? (
+                  <div className="MessengerChatRoom__MsgBubble">
+                    {renderContent(msg.content)}
+                  </div>
+                ) : null}
                 {msg.sender_id !== myUserId && showTime && (
                   <span className="MessengerChatRoom__MsgTime">
                     {formatMessageTime(msg.created_at)}
@@ -295,6 +393,46 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
       </div>
 
       <div className="MessengerChatRoom__Input">
+        {showSlashMenu && (
+          <div className="SlashMenu">
+            <div className="SlashMenu__Header">Commands</div>
+            <ul className="SlashMenu__List">
+              <li
+                className={`SlashMenu__Item ${slashMenuIdx === 0 ? 'SlashMenu__Item--active' : ''}`}
+                onClick={() => handleSlashMenuSelect('/t')}
+                onMouseEnter={() => setSlashMenuIdx(0)}
+              >
+                <span className="SlashMenu__Cmd">/t</span>
+                <span className="SlashMenu__Desc">Search my tasks</span>
+              </li>
+              <li
+                className={`SlashMenu__Item ${slashMenuIdx === 1 ? 'SlashMenu__Item--active' : ''}`}
+                onClick={() => handleSlashMenuSelect('/ta')}
+                onMouseEnter={() => setSlashMenuIdx(1)}
+              >
+                <span className="SlashMenu__Cmd">/ta</span>
+                <span className="SlashMenu__Desc">Search all tasks</span>
+              </li>
+            </ul>
+          </div>
+        )}
+        {slashCommand && (
+          <TaskSearchPopup
+            keyword={slashCommand.keyword}
+            mode={slashCommand.mode}
+            onSelect={handleTaskSelect}
+            onClose={() => setSlashCommand(null)}
+          />
+        )}
+        {attachedTask && (
+          <div className="MessengerChatRoom__AttachedTask">
+            <TaskRefCard
+              taskRef={attachedTask}
+              removable
+              onRemove={() => setAttachedTask(null)}
+            />
+          </div>
+        )}
         <div className={`MessengerChatRoom__InputWrap ${isCodeMode ? 'MessengerChatRoom__InputWrap--code' : ''}`}>
           {isCodeMode && (
             <div className="MessengerChatRoom__CodeLabel">Code</div>
@@ -302,17 +440,17 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
           <textarea
             ref={textareaRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            placeholder={isCodeMode ? 'Enter code... (close with ``` to send)' : 'Type a message... (Shift+Enter for newline)'}
+            placeholder={isCodeMode ? 'Enter code... (close with ``` to send)' : 'Type a message... (/ for commands)'}
             className={`MessengerChatRoom__InputField ${isCodeMode ? 'MessengerChatRoom__InputField--code' : ''}`}
             rows={1}
           />
         </div>
         <button
-          className={`MessengerChatRoom__SendBtn ${isCodeMode ? 'MessengerChatRoom__SendBtn--disabled' : ''}`}
+          className={`MessengerChatRoom__SendBtn ${isCodeMode || slashCommand ? 'MessengerChatRoom__SendBtn--disabled' : ''}`}
           onClick={handleSend}
-          disabled={isCodeMode}
+          disabled={isCodeMode || !!slashCommand}
         >
           <Send size={14} />
         </button>

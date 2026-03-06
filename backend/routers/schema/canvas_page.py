@@ -2,7 +2,7 @@ from typing import Optional
 from pydantic import BaseModel, field_validator
 
 
-class WikiPageCreate(BaseModel):
+class CanvasPageCreate(BaseModel):
     title: str
     content: Optional[str] = ''
     parent_page_id: Optional[int] = None
@@ -16,13 +16,13 @@ class WikiPageCreate(BaseModel):
         return v
 
 
-class WikiPageUpdate(BaseModel):
+class CanvasPageUpdate(BaseModel):
     title: Optional[str] = None
     content: Optional[str] = None
     parent_page_id: Optional[int] = None
     position: Optional[int] = None
 
 
-class WikiPageMove(BaseModel):
+class CanvasPageMove(BaseModel):
     parent_page_id: Optional[int] = None
     position: int

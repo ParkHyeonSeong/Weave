@@ -36,6 +36,16 @@ export default function BranchDetail() {
     fetchTaskTypes();
   }, [id]);
 
+  // 쿼리 파라미터로 태스크 상세 패널 열기 (채팅 카드 클릭 등)
+  useEffect(() => {
+    const taskId = router.query.task;
+    if (taskId && branch) {
+      setActiveTab('tasks');
+      setSelectedTask({ task_id: Number(taskId) });
+      router.replace(`/branch/${id}`, undefined, { shallow: true });
+    }
+  }, [router.query.task, branch]);
+
   // 탭 전환 시 패널 닫기
   useEffect(() => {
     setSelectedTask(null);

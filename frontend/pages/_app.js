@@ -17,6 +17,8 @@ import "@/styles/components/messenger/messengerChatList.scss";
 import "@/styles/components/messenger/messengerUserList.scss";
 import "@/styles/components/messenger/messengerChatRoom.scss";
 import "@/styles/components/messenger/messengerNewChat.scss";
+import "@/styles/components/messenger/taskSearchPopup.scss";
+import "@/styles/components/messenger/taskRefCard.scss";
 import "@/styles/components/admin/admin.scss";
 import "@/styles/components/admin/adminSidebar.scss";
 import "@/styles/components/modal/addMember.scss";
@@ -34,10 +36,10 @@ import "@/styles/components/branch/branchSettings.scss";
 import "@/styles/components/browse/browseBranches.scss";
 import "@/styles/components/home/launchpad.scss";
 import "@/styles/components/modal/createCanvas.scss";
-import "@/styles/components/wiki/wikiHome.scss";
-import "@/styles/components/wiki/wikiCanvas.scss";
-import "@/styles/components/wiki/wikiPageView.scss";
-import "@/styles/components/wiki/wikiEditor.scss";
+import "@/styles/components/canvas/canvasHome.scss";
+import "@/styles/components/canvas/canvasOverview.scss";
+import "@/styles/components/canvas/canvasPageView.scss";
+import "@/styles/components/canvas/canvasEditor.scss";
 
 const publicPaths = ['/auth/login', '/setup'];
 

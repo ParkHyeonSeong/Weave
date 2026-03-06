@@ -137,31 +137,43 @@ export default function TaskListRow({ task, branchId, taskTypes, epics, members,
         />
       </div>
 
-      {/* 담당자 (동그란 아바타 + 드롭다운) */}
+      {/* 담당자 (메인 아바타 + 서브 카운트 + 드롭다운) */}
       <div
         className="TaskListRow__AssigneeWrap"
         ref={assigneeRef}
         onClick={(e) => e.stopPropagation()}
       >
-        <button
-          type="button"
-          className={`TaskListRow__Assignee ${!task.assignee_name ? 'TaskListRow__Assignee--empty' : ''}`}
-          title={task.assignee_name || 'Unassigned'}
-          onClick={() => setAssigneeOpen((prev) => !prev)}
-        >
-          {task.assignee_name
-            ? task.assignee_name.charAt(0).toUpperCase()
-            : <User size={12} />
-          }
-        </button>
+        {(() => {
+          const mainAssignee = (task.assignees || []).find((a) => a.role === 'main');
+          const subCount = (task.assignees || []).filter((a) => a.role === 'sub').length;
+          return (
+            <>
+              <button
+                type="button"
+                className={`TaskListRow__Assignee ${!mainAssignee ? 'TaskListRow__Assignee--empty' : ''}`}
+                title={mainAssignee?.username || 'Unassigned'}
+                onClick={() => setAssigneeOpen((prev) => !prev)}
+              >
+                {mainAssignee
+                  ? mainAssignee.username.charAt(0).toUpperCase()
+                  : <User size={12} />
+                }
+              </button>
+              {subCount > 0 && (
+                <span className="TaskListRow__SubCount">+{subCount}</span>
+              )}
+            </>
+          );
+        })()}
 
         {assigneeOpen && (
           <div className="TaskListRow__AssigneeDropdown">
             <button
               type="button"
-              className={`TaskListRow__AssigneeOption ${!task.assignee_id ? 'TaskListRow__AssigneeOption--selected' : ''}`}
+              className={`TaskListRow__AssigneeOption ${!(task.assignees || []).find((a) => a.role === 'main') ? 'TaskListRow__AssigneeOption--selected' : ''}`}
               onClick={() => {
-                handleFieldChange('assignee_id', null);
+                const currentSubs = (task.assignees || []).filter((a) => a.role === 'sub').map((a) => a.user_id);
+                handleFieldChange('assignees', { main: null, sub: currentSubs });
                 setAssigneeOpen(false);
               }}
             >
@@ -171,22 +183,26 @@ export default function TaskListRow({ task, branchId, taskTypes, epics, members,
               <span>Unassigned</span>
             </button>
 
-            {memberList.map((m) => (
-              <button
-                key={m.user_id}
-                type="button"
-                className={`TaskListRow__AssigneeOption ${task.assignee_id === m.user_id ? 'TaskListRow__AssigneeOption--selected' : ''}`}
-                onClick={() => {
-                  handleFieldChange('assignee_id', m.user_id);
-                  setAssigneeOpen(false);
-                }}
-              >
-                <span className="TaskListRow__AssigneeAvatar">
-                  {(m.display_name || m.email).charAt(0).toUpperCase()}
-                </span>
-                <span>{m.display_name || m.email}</span>
-              </button>
-            ))}
+            {memberList.map((m) => {
+              const isMain = (task.assignees || []).some((a) => a.role === 'main' && a.user_id === m.user_id);
+              return (
+                <button
+                  key={m.user_id}
+                  type="button"
+                  className={`TaskListRow__AssigneeOption ${isMain ? 'TaskListRow__AssigneeOption--selected' : ''}`}
+                  onClick={() => {
+                    const currentSubs = (task.assignees || []).filter((a) => a.role === 'sub' && a.user_id !== m.user_id).map((a) => a.user_id);
+                    handleFieldChange('assignees', { main: m.user_id, sub: currentSubs });
+                    setAssigneeOpen(false);
+                  }}
+                >
+                  <span className="TaskListRow__AssigneeAvatar">
+                    {(m.display_name || m.email).charAt(0).toUpperCase()}
+                  </span>
+                  <span>{m.display_name || m.email}</span>
+                </button>
+              );
+            })}
           </div>
         )}
       </div>

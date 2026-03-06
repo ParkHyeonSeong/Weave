@@ -8,6 +8,7 @@ from config import JWT_SECRET_KEY, JWT_ALGORITHM
 from library.ws_manager import manager
 from core.model import chat_message as message_model
 from core.model import chat_member as member_model
+from core.model import task as task_model
 import db_engine as db
 
 router = APIRouter()
@@ -51,7 +52,9 @@ async def websocket_chat(ws: WebSocket, token: str = Query(...)):
             if action == 'send_message':
                 room_id = data.get('room_id')
                 content = data.get('content', '').strip()
-                if not room_id or not content:
+                task_id = data.get('task_id')
+                # content 또는 task_id 중 하나는 있어야 함
+                if not room_id or (not content and not task_id):
                     continue
 
                 # DB 세션 생성 (WebSocket은 Depends 사용 불가)
@@ -61,7 +64,24 @@ async def websocket_chat(ws: WebSocket, token: str = Query(...)):
                         continue
 
                     # 메시지 저장
-                    msg = await message_model.create(room_id, user_id, content, session)
+                    msg = await message_model.create(
+                        room_id, user_id, content, session, task_id=task_id
+                    )
+
+                    # task_ref 정보 조회
+                    task_ref = None
+                    if task_id:
+                        task = await task_model.find_by_id(task_id, session)
+                        if task:
+                            task_ref = {
+                                'task_id': task['task_id'],
+                                'branch_id': task['branch_id'],
+                                'display_id': task['display_id'],
+                                'title': task['title'],
+                                'status': task['status'],
+                                'priority': task['priority'],
+                                'assignee_name': task.get('assignee_name'),
+                            }
 
                     # room 멤버에게 broadcast
                     await manager.broadcast_to_room(room_id, {
@@ -74,6 +94,7 @@ async def websocket_chat(ws: WebSocket, token: str = Query(...)):
                             'sender_name': username,
                             'content': msg['content'],
                             'created_at': msg['created_at'],
+                            'task_ref': task_ref,
                         },
                     }, session)
 

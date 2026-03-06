@@ -44,13 +44,22 @@ export default function BoardCard({ task, taskTypes, onClick }) {
       )}
 
       {/* 하단: 담당자 */}
-      {task.assignee_name && (
-        <div className="BoardCard__Bottom">
-          <span className="BoardCard__Assignee" title={task.assignee_name}>
-            {task.assignee_name.charAt(0).toUpperCase()}
-          </span>
-        </div>
-      )}
+      {(task.assignees || []).length > 0 && (() => {
+        const mainAssignee = (task.assignees || []).find((a) => a.role === 'main');
+        const subCount = (task.assignees || []).filter((a) => a.role === 'sub').length;
+        return (
+          <div className="BoardCard__Bottom">
+            {mainAssignee && (
+              <span className="BoardCard__Assignee" title={mainAssignee.username}>
+                {mainAssignee.username.charAt(0).toUpperCase()}
+              </span>
+            )}
+            {subCount > 0 && (
+              <span className="BoardCard__SubCount">+{subCount}</span>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
