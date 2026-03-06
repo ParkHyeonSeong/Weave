@@ -111,5 +111,68 @@
     font-size: $font-size-sm;
     color: $color-text;
     line-height: 1.7;
+
+    h1, h2, h3 {
+      margin: 1.2em 0 0.4em;
+      font-weight: $font-weight-bold;
+    }
+    h1 { font-size: 1.6em; }
+    h2 { font-size: 1.3em; }
+    h3 { font-size: 1.1em; }
+
+    p { margin: 0.5em 0; }
+
+    ul, ol { padding-left: 1.5em; margin: 0.5em 0; }
+
+    blockquote {
+      border-left: 3px solid $color-border;
+      padding-left: $space-4;
+      color: $color-text-secondary;
+      margin: 0.8em 0;
+    }
+
+    code {
+      background: #F1F3F5;
+      padding: 2px 6px;
+      border-radius: $radius-sm;
+      font-size: 0.85em;
+      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+      color: #EB5757;
+    }
+
+    pre {
+      background: #F6F8FA;
+      border: 1px solid $color-border;
+      border-radius: $radius-lg;
+      padding: $space-4;
+      overflow-x: auto;
+      margin: 0.8em 0;
+
+      code {
+        background: none;
+        padding: 0;
+        color: inherit;
+        font-size: $font-size-sm;
+      }
+    }
+
+    a { color: $color-primary; text-decoration: underline; }
+
+    img { max-width: 100%; border-radius: $radius-lg; margin: 0.8em 0; }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 0.8em 0;
+
+      th, td {
+        border: 1px solid $color-border;
+        padding: 8px $space-3;
+        text-align: left;
+      }
+      th { background: $color-surface; font-weight: $font-weight-semibold; }
+    }
+
+    hr { border: none; border-top: 1px solid $color-border; margin: 1.5em 0; }
   }
 }

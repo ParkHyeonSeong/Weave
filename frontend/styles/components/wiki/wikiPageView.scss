@@ -8,24 +8,8 @@
   &__TopBar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-end;
     margin-bottom: $space-6;
-  }
-
-  &__BackBtn {
-    display: flex;
-    align-items: center;
-    gap: $space-2;
-    font-size: $font-size-sm;
-    color: $color-text-secondary;
-    padding: 6px $space-3;
-    border-radius: $radius-lg;
-    transition: all $transition-fast;
-
-    &:hover {
-      background: $color-surface;
-      color: $color-text;
-    }
   }
 
   &__Actions {
@@ -142,14 +126,17 @@
     }
 
     code {
-      background: $color-surface;
-      padding: 2px 4px;
+      background: #F1F3F5;
+      padding: 2px 6px;
       border-radius: $radius-sm;
-      font-size: 0.9em;
+      font-size: 0.85em;
+      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+      color: #EB5757;
     }
 
     pre {
-      background: $color-surface;
+      background: #F6F8FA;
+      border: 1px solid $color-border;
       border-radius: $radius-lg;
       padding: $space-4;
       overflow-x: auto;
@@ -158,6 +145,8 @@
       code {
         background: none;
         padding: 0;
+        color: inherit;
+        font-size: $font-size-sm;
       }
     }
 
@@ -192,6 +181,83 @@
       border: none;
       border-top: 1px solid $color-border;
       margin: 1.5em 0;
+    }
+
+    // 하이라이트
+    mark {
+      border-radius: 2px;
+      padding: 1px 2px;
+    }
+
+    // 밑줄
+    u {
+      text-decoration: underline;
+    }
+
+    // 텍스트 정렬 (TipTap이 style="text-align:..." 으로 출력)
+    [style*="text-align: center"] { text-align: center; }
+    [style*="text-align: right"] { text-align: right; }
+
+    // 체크리스트
+    ul[data-type="taskList"] {
+      list-style: none;
+      padding-left: 0;
+
+      li[data-type="taskItem"] {
+        display: flex;
+        align-items: flex-start;
+        gap: $space-2;
+        margin: 4px 0;
+
+        > label {
+          flex-shrink: 0;
+          margin-top: 3px;
+
+          input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            accent-color: $color-primary;
+          }
+        }
+
+        > div {
+          flex: 1;
+        }
+
+        &[data-checked="true"] > div {
+          text-decoration: line-through;
+          color: $color-text-tertiary;
+        }
+      }
+    }
+
+    // 콜아웃 패널
+    .callout {
+      border-radius: $radius-lg;
+      padding: $space-4;
+      margin: 0.8em 0;
+      border-left: 4px solid;
+
+      &[data-callout="info"] {
+        background: #EFF6FF;
+        border-left-color: #2563EB;
+      }
+      &[data-callout="warning"] {
+        background: #FFFBEB;
+        border-left-color: #D97706;
+      }
+      &[data-callout="success"] {
+        background: $color-success-bg;
+        border-left-color: $color-success;
+      }
+      &[data-callout="error"] {
+        background: $color-error-bg;
+        border-left-color: $color-error;
+      }
+
+      p {
+        margin: 0;
+      }
     }
   }
 }

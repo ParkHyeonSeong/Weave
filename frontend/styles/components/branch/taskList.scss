@@ -4,7 +4,8 @@
   // -- 상단 액션 --
   &__Actions {
     display: flex;
-    gap: $space-2;
+    align-items: center;
+    gap: $space-3;
     margin-bottom: $space-5;
   }
 
@@ -181,6 +182,106 @@
       color: $color-text-secondary;
       background: $color-surface;
     }
+  }
+}
+
+// -- 필터 바 --
+.TaskFilterBar {
+  display: flex;
+  align-items: center;
+  gap: $space-4;
+  flex: 1;
+
+  &__Search {
+    position: relative;
+  }
+
+  &__SearchIcon {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: $color-text-tertiary;
+    pointer-events: none;
+  }
+
+  &__SearchInput {
+    padding: 6px 10px 6px 30px;
+    font-size: $font-size-sm;
+    color: $color-text;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    outline: none;
+    background: $color-bg;
+    width: 200px;
+    transition: border-color $transition-fast;
+
+    &:focus {
+      border-color: $color-primary;
+      box-shadow: $shadow-focus;
+    }
+
+    &::placeholder {
+      color: $color-text-tertiary;
+    }
+  }
+
+  &__Members {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  &__Avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: $color-primary;
+    color: $color-text-inverse;
+    font-size: 11px;
+    font-weight: $font-weight-bold;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: all $transition-fast;
+
+    &:hover {
+      opacity: 0.85;
+    }
+
+    &--selected {
+      border-color: $color-primary;
+      box-shadow: 0 0 0 2px rgba($color-primary, 0.25);
+    }
+
+    &--unassigned {
+      background: transparent;
+      border: 2px dashed $color-text-tertiary;
+      color: $color-text-tertiary;
+
+      &.TaskFilterBar__Avatar--selected {
+        border-style: solid;
+        border-color: $color-primary;
+        color: $color-primary;
+        box-shadow: 0 0 0 2px rgba($color-primary, 0.25);
+      }
+    }
+  }
+
+  &__More {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: $color-surface;
+    color: $color-text-tertiary;
+    font-size: 10px;
+    font-weight: $font-weight-bold;
+    border: 1px solid $color-border;
   }
 }
 

@@ -3,6 +3,7 @@ import { axios } from '@/library/_axios';
 import { Plus } from 'lucide-react';
 import TaskListSprint from './TaskListSprint';
 import SprintModal from '@/components/modal/SprintModal';
+import TaskFilterBar from '../TaskFilterBar';
 
 export default function TaskList({ branchId, branchKey, taskTypes, onSelectTask }) {
   const [sprints, setSprints] = useState([]);
@@ -10,6 +11,10 @@ export default function TaskList({ branchId, branchKey, taskTypes, onSelectTask 
   const [epics, setEpics] = useState([]);
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // 필터 상태
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedUserIds, setSelectedUserIds] = useState(new Set());
 
   // 모달 상태
   const [sprintModal, setSprintModal] = useState({ open: false, sprint: null });
@@ -70,12 +75,39 @@ export default function TaskList({ branchId, branchKey, taskTypes, onSelectTask 
     }
   };
 
+  // 필터 토글
+  const handleToggleUser = (userId) => {
+    setSelectedUserIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+  };
+
+  // 클라이언트 사이드 필터링
+  const filterTasks = (tasks) => tasks.filter((t) => {
+    if (searchQuery && !t.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    if (selectedUserIds.size > 0) {
+      if (selectedUserIds.has(0) && !t.assignee_id) return true;
+      if (!selectedUserIds.has(t.assignee_id)) return false;
+    }
+    return true;
+  });
+
   if (loading) return null;
 
   return (
     <div className="TaskList">
-      {/* 상단 액션 */}
+      {/* 상단 필터 + 액션 */}
       <div className="TaskList__Actions">
+        <TaskFilterBar
+          members={members}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          selectedUserIds={selectedUserIds}
+          onToggleUser={handleToggleUser}
+        />
         <button className="TaskList__SprintBtn" onClick={() => setSprintModal({ open: true, sprint: null })}>
           <Plus size={14} />
           Create Sprint
@@ -86,7 +118,7 @@ export default function TaskList({ branchId, branchKey, taskTypes, onSelectTask 
       {sprints.map((sprint) => (
         <TaskListSprint
           key={sprint.sprint_id}
-          sprint={sprint}
+          sprint={{ ...sprint, tasks: filterTasks(sprint.tasks) }}
           branchId={branchId}
           branchKey={branchKey}
           taskTypes={taskTypes}
@@ -99,7 +131,7 @@ export default function TaskList({ branchId, branchKey, taskTypes, onSelectTask 
 
       {/* Backlog 섹션 */}
       <TaskListSprint
-        sprint={{ sprint_name: 'Backlog', status: 'backlog', tasks: backlogTasks }}
+        sprint={{ sprint_name: 'Backlog', status: 'backlog', tasks: filterTasks(backlogTasks) }}
         branchId={branchId}
         branchKey={branchKey}
         taskTypes={taskTypes}

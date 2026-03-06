@@ -3,6 +3,9 @@
 .BoardView {
   // -- 상단 Sprint 셀렉터 --
   &__Header {
+    display: flex;
+    align-items: center;
+    gap: $space-4;
     margin-bottom: $space-4;
   }
 

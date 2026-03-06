@@ -311,6 +311,54 @@
     color: inherit;
   }
 
+  // -- Page row (폴더 + 호버 시 + 버튼) --
+  &__PageRow {
+    display: flex;
+    align-items: center;
+    position: relative;
+    transition: background $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+
+      .Sidebar__PageAddBtn {
+        opacity: 1;
+      }
+    }
+  }
+
+  &__PageItem--inRow {
+    flex: 1;
+    padding-left: 0 !important;
+
+    &:hover {
+      background: transparent;
+    }
+  }
+
+  &__PageActions {
+    position: relative;
+    flex-shrink: 0;
+    padding-right: $space-2;
+  }
+
+  &__PageAddBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: $radius-sm;
+    color: $color-text-tertiary;
+    opacity: 0;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: $color-border;
+      color: $color-text;
+    }
+  }
+
   &__PageItem--input {
     cursor: default;
 

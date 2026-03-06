@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import dynamic from 'next/dynamic';
-import { ArrowLeft, Pencil, Save, X } from 'lucide-react';
+import { Pencil, Save, X } from 'lucide-react';
 import { axios } from '@/library/_axios';
 
 // SSR 비활성화 (TipTap은 브라우저 전용)
@@ -59,16 +59,7 @@ export default function WikiPageView() {
 
   return (
     <div className="WikiPageView">
-      {/* 상단 Breadcrumb + 액션 */}
       <div className="WikiPageView__TopBar">
-        <button
-          className="WikiPageView__BackBtn"
-          onClick={() => router.push(`/wiki/${canvasId}`)}
-        >
-          <ArrowLeft size={16} />
-          Back
-        </button>
-
         <div className="WikiPageView__Actions">
           {isEditing ? (
             <>

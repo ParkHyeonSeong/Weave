@@ -123,10 +123,12 @@ export default function SidebarCanvases({ onCreateCanvas }) {
   const handleInlineCreate = async () => {
     if (!inlineTitle.trim() || !inlineCreate) return;
     try {
-      const res = await axios.post(`/wiki/canvases/${inlineCreate.canvasId}/pages`, {
+      const body = {
         title: inlineTitle.trim(),
         type: inlineCreate.type,
-      });
+      };
+      if (inlineCreate.parentPageId) body.parent_page_id = inlineCreate.parentPageId;
+      const res = await axios.post(`/wiki/canvases/${inlineCreate.canvasId}/pages`, body);
       if (res.data.status) {
         setInlineTitle('');
         setInlineCreate(null);
@@ -137,6 +139,13 @@ export default function SidebarCanvases({ onCreateCanvas }) {
         }
       }
     } catch {}
+  };
+
+  // 폴더 내 아이템 추가
+  const startFolderInlineCreate = (canvasId, parentPageId, type) => {
+    setExpandedFolders((prev) => ({ ...prev, [parentPageId]: true }));
+    setInlineCreate({ canvasId, type, parentPageId });
+    setInlineTitle('');
   };
 
   const handleInlineKeyDown = (e) => {
@@ -219,6 +228,12 @@ export default function SidebarCanvases({ onCreateCanvas }) {
                           toggleFolder={toggleFolder}
                           getChildren={getChildren}
                           router={router}
+                          onFolderAdd={startFolderInlineCreate}
+                          inlineCreate={inlineCreate}
+                          inlineTitle={inlineTitle}
+                          setInlineTitle={setInlineTitle}
+                          handleInlineKeyDown={handleInlineKeyDown}
+                          setInlineCreate={setInlineCreate}
                         />
                       ))}
                     </SortableContext>
@@ -319,10 +334,15 @@ function CanvasRow({ canvas, isActive, isExpanded, onToggle, onAddDocument, onAd
   );
 }
 
-function SidebarPageItem({ page, canvasId, depth, expandedFolders, toggleFolder, getChildren, router }) {
+function SidebarPageItem({
+  page, canvasId, depth, expandedFolders, toggleFolder, getChildren, router,
+  onFolderAdd, inlineCreate, inlineTitle, setInlineTitle, handleInlineKeyDown, setInlineCreate,
+}) {
   const {
     attributes, listeners, setNodeRef, transform, transition, isDragging,
   } = useSortable({ id: page.page_id });
+  const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef(null);
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -335,51 +355,125 @@ function SidebarPageItem({ page, canvasId, depth, expandedFolders, toggleFolder,
   const isExpanded = expandedFolders[page.page_id];
   const children = isFolder ? getChildren(page.page_id) : [];
 
+  // 폴더 메뉴 외부 클릭 닫기
+  useEffect(() => {
+    if (!showMenu) return;
+    const handleClick = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setShowMenu(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showMenu]);
+
+  // 이 폴더 안에 인라인 생성 중인지
+  const isInlineInThisFolder = inlineCreate
+    && inlineCreate.parentPageId === page.page_id
+    && inlineCreate.canvasId === canvasId;
+
   return (
     <>
-      <button
-        ref={setNodeRef}
-        style={style}
-        {...attributes}
-        {...listeners}
-        className={`Sidebar__PageItem ${
-          router.query.pageId == page.page_id ? 'Sidebar__PageItem--active' : ''
-        }`}
-        onClick={() => {
-          if (isFolder) {
-            toggleFolder(page.page_id);
-          } else {
-            router.push(`/wiki/${canvasId}/${page.page_id}`);
-          }
-        }}
-      >
-        {isFolder ? (
-          <>
+      {isFolder ? (
+        <div className="Sidebar__PageRow" style={{ paddingLeft: `${40 + depth * 14}px` }}>
+          <button
+            ref={setNodeRef}
+            {...attributes}
+            {...listeners}
+            style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
+            className={`Sidebar__PageItem Sidebar__PageItem--inRow ${
+              router.query.pageId == page.page_id ? 'Sidebar__PageItem--active' : ''
+            }`}
+            onClick={() => toggleFolder(page.page_id)}
+          >
             <span className="Sidebar__ExpandIcon">
               {isExpanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
             </span>
             {isExpanded
               ? <FolderOpen size={13} className="Sidebar__PageIcon" />
               : <Folder size={13} className="Sidebar__PageIcon" />}
-          </>
-        ) : (
-          <FileText size={13} className="Sidebar__PageIcon" />
-        )}
-        <span className="Sidebar__BranchName">{page.title}</span>
-      </button>
+            <span className="Sidebar__BranchName">{page.title}</span>
+          </button>
 
-      {isFolder && isExpanded && children.map((child) => (
-        <SidebarPageItem
-          key={child.page_id}
-          page={child}
-          canvasId={canvasId}
-          depth={depth + 1}
-          expandedFolders={expandedFolders}
-          toggleFolder={toggleFolder}
-          getChildren={getChildren}
-          router={router}
-        />
-      ))}
+          <div className="Sidebar__PageActions" ref={menuRef}>
+            <button
+              className="Sidebar__PageAddBtn"
+              onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
+              title="Add to folder"
+            >
+              <Plus size={12} />
+            </button>
+            {showMenu && (
+              <div className="Sidebar__AddMenu">
+                <button className="Sidebar__AddMenuItem" onClick={() => {
+                  setShowMenu(false);
+                  onFolderAdd(canvasId, page.page_id, 'document');
+                }}>
+                  <FileText size={13} /> Document
+                </button>
+                <button className="Sidebar__AddMenuItem" onClick={() => {
+                  setShowMenu(false);
+                  onFolderAdd(canvasId, page.page_id, 'folder');
+                }}>
+                  <FolderPlus size={13} /> Folder
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <button
+          ref={setNodeRef}
+          style={style}
+          {...attributes}
+          {...listeners}
+          className={`Sidebar__PageItem ${
+            router.query.pageId == page.page_id ? 'Sidebar__PageItem--active' : ''
+          }`}
+          onClick={() => router.push(`/wiki/${canvasId}/${page.page_id}`)}
+        >
+          <FileText size={13} className="Sidebar__PageIcon" />
+          <span className="Sidebar__BranchName">{page.title}</span>
+        </button>
+      )}
+
+      {isFolder && isExpanded && (
+        <>
+          {children.map((child) => (
+            <SidebarPageItem
+              key={child.page_id}
+              page={child}
+              canvasId={canvasId}
+              depth={depth + 1}
+              expandedFolders={expandedFolders}
+              toggleFolder={toggleFolder}
+              getChildren={getChildren}
+              router={router}
+              onFolderAdd={onFolderAdd}
+              inlineCreate={inlineCreate}
+              inlineTitle={inlineTitle}
+              setInlineTitle={setInlineTitle}
+              handleInlineKeyDown={handleInlineKeyDown}
+              setInlineCreate={setInlineCreate}
+            />
+          ))}
+          {/* 폴더 내 인라인 생성 입력 */}
+          {isInlineInThisFolder && (
+            <div className="Sidebar__PageItem Sidebar__PageItem--input" style={{ paddingLeft: `${40 + (depth + 1) * 14}px` }}>
+              {inlineCreate.type === 'folder'
+                ? <Folder size={13} className="Sidebar__PageIcon" />
+                : <FileText size={13} className="Sidebar__PageIcon" />}
+              <input
+                autoFocus
+                className="Sidebar__InlineInput"
+                value={inlineTitle}
+                onChange={(e) => setInlineTitle(e.target.value)}
+                onKeyDown={handleInlineKeyDown}
+                onBlur={() => { if (!inlineTitle.trim()) { setInlineCreate(null); setInlineTitle(''); } }}
+                placeholder={inlineCreate.type === 'folder' ? 'Folder name...' : 'Document title...'}
+              />
+            </div>
+          )}
+        </>
+      )}
     </>
   );
 }

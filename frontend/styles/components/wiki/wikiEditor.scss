@@ -48,14 +48,17 @@
       }
 
       code {
-        background: $color-surface;
-        padding: 2px 4px;
+        background: #F1F3F5;
+        padding: 2px 6px;
         border-radius: $radius-sm;
-        font-size: 0.9em;
+        font-size: 0.85em;
+        font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+        color: #EB5757;
       }
 
       pre {
-        background: $color-surface;
+        background: #F6F8FA;
+        border: 1px solid $color-border;
         border-radius: $radius-lg;
         padding: $space-4;
         overflow-x: auto;
@@ -64,6 +67,7 @@
           background: none;
           padding: 0;
           color: inherit;
+          font-size: $font-size-sm;
         }
       }
 
@@ -101,10 +105,91 @@
         border-top: 1px solid $color-border;
         margin: 1.5em 0;
       }
+
+      // 텍스트 정렬
+      .has-text-align-center { text-align: center; }
+      .has-text-align-right { text-align: right; }
+      .has-text-align-left { text-align: left; }
+
+      // 하이라이트
+      mark {
+        border-radius: 2px;
+        padding: 1px 2px;
+      }
+
+      // 밑줄
+      u {
+        text-decoration: underline;
+      }
+
+      // 체크리스트 (TaskList)
+      ul[data-type="taskList"] {
+        list-style: none;
+        padding-left: 0;
+
+        li[data-type="taskItem"] {
+          display: flex;
+          align-items: flex-start;
+          gap: $space-2;
+          margin: 4px 0;
+
+          > label {
+            flex-shrink: 0;
+            margin-top: 3px;
+
+            input[type="checkbox"] {
+              width: 16px;
+              height: 16px;
+              accent-color: $color-primary;
+              cursor: pointer;
+            }
+          }
+
+          > div {
+            flex: 1;
+          }
+
+          &[data-checked="true"] > div {
+            text-decoration: line-through;
+            color: $color-text-tertiary;
+          }
+        }
+      }
+
+      // 콜아웃 패널
+      .callout {
+        border-radius: $radius-lg;
+        padding: $space-4;
+        margin: 0.8em 0;
+        border-left: 4px solid;
+
+        &[data-callout="info"] {
+          background: #EFF6FF;
+          border-left-color: #2563EB;
+        }
+        &[data-callout="warning"] {
+          background: #FFFBEB;
+          border-left-color: #D97706;
+        }
+        &[data-callout="success"] {
+          background: $color-success-bg;
+          border-left-color: $color-success;
+        }
+        &[data-callout="error"] {
+          background: $color-error-bg;
+          border-left-color: $color-error;
+        }
+
+        p {
+          margin: 0;
+        }
+      }
     }
   }
+
 }
 
+// 툴바
 .WikiEditorToolbar {
   display: flex;
   align-items: center;
@@ -140,5 +225,126 @@
     height: 20px;
     background: $color-border;
     margin: 0 $space-1;
+  }
+
+  // 드롭다운 래퍼
+  &__DropdownWrap {
+    position: relative;
+  }
+
+  // 헤딩 드롭다운 트리거
+  &__Dropdown {
+    display: flex;
+    align-items: center;
+    gap: $space-1;
+    padding: 4px $space-2;
+    border-radius: $radius-md;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-text-secondary;
+    transition: all $transition-fast;
+    white-space: nowrap;
+
+    &:hover {
+      background: $color-bg;
+      color: $color-text;
+    }
+  }
+
+  // 드롭다운 메뉴
+  &__DropdownMenu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    min-width: 160px;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+    box-shadow: $shadow-md;
+    padding: $space-1;
+    z-index: 100;
+  }
+
+  &__DropdownItem {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    width: 100%;
+    padding: 8px $space-3;
+    border-radius: $radius-md;
+    font-size: $font-size-sm;
+    color: $color-text;
+    text-align: left;
+    transition: background $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+    }
+
+    &--active {
+      background: $color-primary-subtle;
+      color: $color-primary;
+    }
+  }
+
+  // 컬러 메뉴
+  &__ColorMenu {
+    min-width: 200px;
+    padding: $space-3;
+  }
+
+  &__ColorSection {
+    & + & {
+      margin-top: $space-3;
+      padding-top: $space-3;
+      border-top: 1px solid $color-border;
+    }
+  }
+
+  &__ColorLabel {
+    display: block;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    color: $color-text-secondary;
+    margin-bottom: $space-2;
+  }
+
+  &__ColorGrid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 4px;
+  }
+
+  &__ColorSwatch {
+    width: 24px;
+    height: 24px;
+    border-radius: $radius-sm;
+    border: 1px solid $color-border;
+    cursor: pointer;
+    transition: transform $transition-fast;
+
+    &:hover {
+      transform: scale(1.2);
+      border-color: $color-text-secondary;
+    }
+
+    &--highlight {
+      border-radius: $radius-sm;
+    }
+  }
+
+  &__ColorReset {
+    width: 100%;
+    padding: 4px;
+    margin-top: $space-2;
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+    text-align: center;
+    border-radius: $radius-sm;
+
+    &:hover {
+      background: $color-surface;
+      color: $color-text-secondary;
+    }
   }
 }
