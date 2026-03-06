@@ -132,6 +132,13 @@ export default function Layout({ children }) {
     return () => window.removeEventListener('palette:create-branch', handleCreate);
   }, []);
 
+  // BranchHome에서 Branch 생성 요청 수신
+  useEffect(() => {
+    const handleCreate = () => setShowCreateBranch(true);
+    window.addEventListener('layout:create-branch', handleCreate);
+    return () => window.removeEventListener('layout:create-branch', handleCreate);
+  }, []);
+
   // CanvasHome에서 Canvas 생성 요청 수신
   useEffect(() => {
     const handleCreate = () => setShowCreateCanvas(true);

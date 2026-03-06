@@ -8,7 +8,7 @@ const apps = [
     description: 'Project management, tasks, boards and sprints',
     icon: GitBranch,
     color: '#5E6AD2',
-    href: '/browse',
+    href: '/branch',
   },
   {
     id: 'canvas',

@@ -36,6 +36,7 @@ import "@/styles/components/branch/branchSettings.scss";
 import "@/styles/components/browse/browseBranches.scss";
 import "@/styles/components/home/launchpad.scss";
 import "@/styles/components/modal/createCanvas.scss";
+import "@/styles/components/branch/branchHome.scss";
 import "@/styles/components/canvas/canvasHome.scss";
 import "@/styles/components/canvas/canvasOverview.scss";
 import "@/styles/components/canvas/canvasPageView.scss";

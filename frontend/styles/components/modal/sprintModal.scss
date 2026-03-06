@@ -1,3 +1,4 @@
+@use 'sass:color';
 @use '../../variables' as *;
 
 .SprintModal__Backdrop {
@@ -260,7 +261,7 @@
     transition: background $transition-fast;
 
     &:hover:not(:disabled) {
-      background: darken(#16A34A, 8%);
+      background: color.adjust(#16A34A, $lightness: -8%);
     }
 
     &:disabled {

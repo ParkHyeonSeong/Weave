@@ -15,6 +15,9 @@ Thumbs.db
 *.swo
 *~
 
+# AI
+CLAUDE.md
+
 # Python
 __pycache__/
 *.pyc
