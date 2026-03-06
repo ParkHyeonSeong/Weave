@@ -39,6 +39,12 @@ async def update_branch(branch_id: int, request: Request,
     return await branch_controller.update(branch_id, body, request, session)
 
 
+@router.delete("/{branch_id}", summary="Branch 삭제", dependencies=[Depends(require_login)])
+async def delete_branch(branch_id: int, request: Request,
+                        session: AsyncSession = Depends(db.session)):
+    return await branch_controller.delete(branch_id, request, session)
+
+
 @router.post("/{branch_id}/join", summary="Public Branch 가입", dependencies=[Depends(require_login)])
 async def join_branch(branch_id: int, request: Request,
                       session: AsyncSession = Depends(db.session)):

@@ -1,14 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Send } from 'lucide-react';
+import { ArrowLeft, Send, Pencil, Check, X } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import { formatMessageTime } from '@/library/formatTime';
 
 export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
-  const [partnerName, setPartnerName] = useState('Chat');
+  const [roomName, setRoomName] = useState('Chat');
+  const [roomType, setRoomType] = useState('dm');
   const [partnerLastRead, setPartnerLastRead] = useState(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState('');
   const messagesEndRef = useRef(null);
+  const editInputRef = useRef(null);
 
   let myUserId = 0;
   try {
@@ -24,10 +28,13 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback }) {
         if (res.data.status) {
           // 최신순 -> 시간순으로 뒤집기
           setMessages(res.data.messages.reverse());
-          // DM 상대방 정보
+          setRoomType(res.data.room_type || 'dm');
+          // DM: 상대방 이름, Group: room_name
           if (res.data.partner) {
-            setPartnerName(res.data.partner.username);
+            setRoomName(res.data.partner.username);
             setPartnerLastRead(res.data.partner.last_read_at);
+          } else if (res.data.room_name) {
+            setRoomName(res.data.room_name);
           }
         }
       } catch {}
@@ -90,6 +97,43 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback }) {
     }
   };
 
+  // 채팅방 이름 변경
+  const handleStartEdit = () => {
+    setEditName(roomName);
+    setIsEditing(true);
+    setTimeout(() => editInputRef.current?.focus(), 0);
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+  };
+
+  const handleSaveEdit = async () => {
+    const trimmed = editName.trim();
+    if (!trimmed || trimmed === roomName) {
+      setIsEditing(false);
+      return;
+    }
+    try {
+      const res = await axios.patch(`/chat/${roomId}/name`, { room_name: trimmed });
+      if (res.data.status) {
+        setRoomName(res.data.room_name);
+        // 채팅 목록 갱신
+        window.dispatchEvent(new CustomEvent('chat:new_message'));
+      }
+    } catch {}
+    setIsEditing(false);
+  };
+
+  const handleEditKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSaveEdit();
+    } else if (e.key === 'Escape') {
+      handleCancelEdit();
+    }
+  };
+
   // 상대방이 해당 메시지를 아직 안 읽었는지 판별
   const isUnread = (msg) => {
     if (!partnerLastRead) return true;
@@ -104,7 +148,33 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback }) {
             <ArrowLeft size={16} />
           </button>
         )}
-        <span className="MessengerChatRoom__Title">{partnerName}</span>
+        {isEditing ? (
+          <div className="MessengerChatRoom__TitleEdit">
+            <input
+              ref={editInputRef}
+              className="MessengerChatRoom__TitleInput"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              onKeyDown={handleEditKeyDown}
+              maxLength={200}
+            />
+            <button className="MessengerChatRoom__TitleBtn" onClick={handleSaveEdit}>
+              <Check size={14} />
+            </button>
+            <button className="MessengerChatRoom__TitleBtn" onClick={handleCancelEdit}>
+              <X size={14} />
+            </button>
+          </div>
+        ) : (
+          <div className="MessengerChatRoom__TitleArea">
+            <span className="MessengerChatRoom__Title">{roomName}</span>
+            {roomType !== 'dm' && (
+              <button className="MessengerChatRoom__TitleBtn" onClick={handleStartEdit}>
+                <Pencil size={12} />
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="MessengerChatRoom__Messages">

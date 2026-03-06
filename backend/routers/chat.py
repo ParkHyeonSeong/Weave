@@ -32,3 +32,11 @@ async def list_messages(room_id: int, request: Request,
                         offset: int = Query(0, ge=0),
                         session: AsyncSession = Depends(db.session)):
     return await chat_controller.get_messages(room_id, request, session, limit, offset)
+
+
+@router.patch("/{room_id}/name", summary="채팅방 이름 변경",
+              dependencies=[Depends(require_login)])
+async def rename_room(room_id: int, request: Request,
+                      body: chat_schema.ChatRoomRename,
+                      session: AsyncSession = Depends(db.session)):
+    return await chat_controller.rename_room(room_id, body, request, session)

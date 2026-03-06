@@ -162,6 +162,21 @@ async def remove_member(branch_id: int, target_user_id: int, request: Request, d
     return {'status': True}
 
 
+async def delete(branch_id: int, request: Request, db: AsyncSession):
+    """Branch 삭제/아카이브 (admin만)"""
+    user_id = request.state.payload.get('user_id')
+    role = await member_model.get_role(branch_id, user_id, db)
+    if role != 'admin':
+        return {'status': False, 'message': 'ADMIN_ONLY'}
+
+    branch = await branch_model.find_by_id(branch_id, db)
+    if not branch:
+        return {'status': False, 'message': 'BRANCH_NOT_FOUND'}
+
+    await branch_model.archive(branch_id, db)
+    return {'status': True}
+
+
 async def search_non_members(branch_id: int, query: str, request: Request, db: AsyncSession):
     """초대 가능한 사용자 검색"""
     user_id = request.state.payload.get('user_id')

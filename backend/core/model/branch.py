@@ -67,6 +67,15 @@ async def find_by_key(key: str, db: AsyncSession):
     return result.fetchone() is not None
 
 
+async def archive(branch_id: int, db: AsyncSession):
+    """Branch 아카이브 (soft delete)"""
+    await db.execute(text("""
+        UPDATE branch SET is_archived = TRUE, updated_at = NOW()
+        WHERE branch_id = :branch_id
+    """), {'branch_id': branch_id})
+    await db.commit()
+
+
 async def find_public(user_id: int, query: str, db: AsyncSession):
     """public이면서 내가 멤버가 아닌 Branch 목록"""
     params = {'user_id': user_id}

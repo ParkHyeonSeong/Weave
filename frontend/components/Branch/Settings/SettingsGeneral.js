@@ -1,13 +1,18 @@
 import { useState } from 'react';
+import { useRouter } from 'next/router';
 import { axios } from '@/library/_axios';
-import { Globe, Lock } from 'lucide-react';
+import { Globe, Lock, AlertTriangle } from 'lucide-react';
 
 export default function SettingsGeneral({ branchId, branch, isAdmin, onUpdated }) {
+  const router = useRouter();
   const [branchName, setBranchName] = useState(branch?.branch_name || '');
   const [description, setDescription] = useState(branch?.description || '');
   const [visibility, setVisibility] = useState(branch?.visibility || 'private');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteInput, setDeleteInput] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   const handleSave = async () => {
     if (!branchName.trim() || saving) return;
@@ -105,6 +110,70 @@ export default function SettingsGeneral({ branchId, branch, isAdmin, onUpdated }
           >
             {saving ? 'Saving...' : saved ? 'Saved' : 'Save Changes'}
           </button>
+        </div>
+      )}
+
+      {/* Danger Zone */}
+      {isAdmin && (
+        <div className="SettingsGeneral__Danger">
+          <div className="SettingsGeneral__DangerHeader">
+            <AlertTriangle size={16} />
+            <span>Danger Zone</span>
+          </div>
+
+          {!showDeleteConfirm ? (
+            <div className="SettingsGeneral__DangerRow">
+              <div className="SettingsGeneral__DangerInfo">
+                <span className="SettingsGeneral__DangerTitle">Delete this branch</span>
+                <span className="SettingsGeneral__DangerDesc">
+                  Once deleted, all tasks, epics, and settings will be permanently removed.
+                </span>
+              </div>
+              <button
+                className="SettingsGeneral__DeleteBtn"
+                onClick={() => setShowDeleteConfirm(true)}
+              >
+                Delete Branch
+              </button>
+            </div>
+          ) : (
+            <div className="SettingsGeneral__DeleteConfirm">
+              <p className="SettingsGeneral__DeleteWarning">
+                This action cannot be undone. Please type <strong>{branch?.key}</strong> to confirm.
+              </p>
+              <input
+                className="SettingsGeneral__Input"
+                value={deleteInput}
+                onChange={(e) => setDeleteInput(e.target.value)}
+                placeholder={branch?.key}
+              />
+              <div className="SettingsGeneral__DeleteActions">
+                <button
+                  className="SettingsGeneral__DeleteConfirmBtn"
+                  disabled={deleteInput !== branch?.key || deleting}
+                  onClick={async () => {
+                    setDeleting(true);
+                    try {
+                      const res = await axios.delete(`/branches/${branchId}`);
+                      if (res.data.status) {
+                        window.dispatchEvent(new Event('branch:created'));
+                        router.replace('/');
+                      }
+                    } catch {}
+                    setDeleting(false);
+                  }}
+                >
+                  {deleting ? 'Deleting...' : 'I understand, delete this branch'}
+                </button>
+                <button
+                  className="SettingsGeneral__CancelBtn"
+                  onClick={() => { setShowDeleteConfirm(false); setDeleteInput(''); }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

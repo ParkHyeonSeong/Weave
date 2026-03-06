@@ -78,8 +78,21 @@ async def get_messages(room_id: int, request: Request, db: AsyncSession,
         'status': True,
         'messages': messages,
         'room_type': room['room_type'] if room else None,
+        'room_name': room['room_name'] if room else None,
         'partner': partner,
     }
+
+
+async def rename_room(room_id: int, body, request: Request, db: AsyncSession):
+    """채팅방 이름 변경"""
+    user_id = request.state.payload.get('user_id')
+
+    # 멤버 확인
+    if not await member_model.is_member(room_id, user_id, db):
+        return {'status': False, 'message': 'NOT_A_MEMBER'}
+
+    await room_model.update_room_name(room_id, body.room_name, db)
+    return {'status': True, 'room_name': body.room_name}
 
 
 async def get_users(db: AsyncSession):

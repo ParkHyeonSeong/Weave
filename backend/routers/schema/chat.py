@@ -15,6 +15,20 @@ class ChatRoomCreate(BaseModel):
         return v
 
 
+class ChatRoomRename(BaseModel):
+    room_name: str
+
+    @field_validator('room_name')
+    @classmethod
+    def validate_room_name(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError('room_name must not be empty')
+        if len(v) > 200:
+            raise ValueError('room_name must be 200 characters or fewer')
+        return v
+
+
 class ChatMessageSend(BaseModel):
     content: str
 

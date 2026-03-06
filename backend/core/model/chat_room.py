@@ -62,6 +62,14 @@ async def find_rooms_by_user(user_id: int, db: AsyncSession):
     return [dict(row._mapping) for row in rows]
 
 
+async def update_room_name(room_id: int, room_name: str, db: AsyncSession):
+    """채팅방 이름 변경"""
+    await db.execute(text("""
+        UPDATE chat_room SET room_name = :room_name WHERE room_id = :room_id
+    """), {'room_id': room_id, 'room_name': room_name})
+    await db.commit()
+
+
 async def find_dm_room(user_id_1: int, user_id_2: int, db: AsyncSession):
     """두 사용자 간 기존 DM방 찾기"""
     result = await db.execute(text("""

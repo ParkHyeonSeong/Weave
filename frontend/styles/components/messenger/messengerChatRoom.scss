@@ -33,10 +33,58 @@
     }
   }
 
+  &__TitleArea {
+    display: flex;
+    align-items: center;
+    gap: $space-1;
+    min-width: 0;
+  }
+
   &__Title {
     font-size: $font-size-sm;
     font-weight: $font-weight-semibold;
     color: $color-text;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__TitleEdit {
+    display: flex;
+    align-items: center;
+    gap: $space-1;
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__TitleInput {
+    flex: 1;
+    min-width: 0;
+    padding: 2px $space-2;
+    border: 1px solid $color-border-focus;
+    border-radius: $radius-md;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-semibold;
+    color: $color-text;
+    background: $color-input-bg;
+    outline: none;
+  }
+
+  &__TitleBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: $radius-sm;
+    color: $color-text-tertiary;
+    flex-shrink: 0;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+      color: $color-text;
+    }
   }
 
   &__Messages {
