@@ -27,6 +27,27 @@ const HIGHLIGHT_COLORS = [
   { label: 'Purple', color: '#DDD6FE' },
 ];
 
+const CODE_LANGUAGES = [
+  { value: null, label: 'Plain Text' },
+  { value: 'javascript', label: 'JavaScript' },
+  { value: 'typescript', label: 'TypeScript' },
+  { value: 'python', label: 'Python' },
+  { value: 'java', label: 'Java' },
+  { value: 'html', label: 'HTML' },
+  { value: 'css', label: 'CSS' },
+  { value: 'sql', label: 'SQL' },
+  { value: 'bash', label: 'Bash' },
+  { value: 'json', label: 'JSON' },
+  { value: 'go', label: 'Go' },
+  { value: 'rust', label: 'Rust' },
+  { value: 'cpp', label: 'C++' },
+  { value: 'csharp', label: 'C#' },
+  { value: 'php', label: 'PHP' },
+  { value: 'ruby', label: 'Ruby' },
+  { value: 'yaml', label: 'YAML' },
+  { value: 'xml', label: 'XML' },
+];
+
 export default function CanvasEditorToolbar({ editor }) {
   const [openDropdown, setOpenDropdown] = useState(null);
 
@@ -256,10 +277,33 @@ export default function CanvasEditorToolbar({ editor }) {
         )}
       </DropdownWrapper>
 
-      <Btn onClick={() => editor.chain().focus().toggleCodeBlock().run()}
-        active={editor.isActive('codeBlock')} title="Code Block">
-        <CodeSquare size={16} />
-      </Btn>
+      {/* 코드 블록 언어 선택 드롭다운 */}
+      <DropdownWrapper isOpen={openDropdown === 'codeblock'} onClose={closeDropdown}>
+        <Btn onClick={() => toggleDropdown('codeblock')} title="Code Block"
+          active={editor.isActive('codeBlock')}>
+          <CodeSquare size={16} />
+        </Btn>
+        {openDropdown === 'codeblock' && (
+          <div className="CanvasEditorToolbar__DropdownMenu CanvasEditorToolbar__CodeMenu">
+            {CODE_LANGUAGES.map(({ value, label }) => (
+              <button
+                key={label}
+                className="CanvasEditorToolbar__DropdownItem"
+                onClick={() => {
+                  if (value) {
+                    editor.chain().focus().setCodeBlock({ language: value }).run();
+                  } else {
+                    editor.chain().focus().toggleCodeBlock().run();
+                  }
+                  closeDropdown();
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+      </DropdownWrapper>
       <Btn onClick={() => editor.chain().focus().setHorizontalRule().run()} title="Divider">
         <Minus size={16} />
       </Btn>

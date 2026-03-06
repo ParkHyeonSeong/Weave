@@ -4,7 +4,10 @@ import dynamic from 'next/dynamic';
 import { Pencil, Save, X } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import katex from 'katex';
+import { common, createLowlight } from 'lowlight';
+import { toHtml } from 'hast-util-to-html';
 
+const lowlight = createLowlight(common);
 const CanvasEditor = dynamic(() => import('./CanvasEditor'), { ssr: false });
 
 export default function CanvasOverview() {
@@ -64,6 +67,43 @@ export default function CanvasOverview() {
       }
     });
   }, [isEditing, overview?.content]);
+
+  // 읽기 모드에서 코드 블록 구문 강조
+  useEffect(() => {
+    if (isEditing || !contentRef.current) return;
+    const codeBlocks = contentRef.current.querySelectorAll('pre code');
+    codeBlocks.forEach((el) => {
+      if (el.dataset.highlighted) return;
+      const lang = (el.className.match(/language-(\w+)/) || [])[1];
+      const code = el.textContent || '';
+      try {
+        const tree = lang && lowlight.registered(lang)
+          ? lowlight.highlight(lang, code)
+          : lowlight.highlightAuto(code);
+        el.innerHTML = toHtml(tree);
+        el.dataset.highlighted = 'true';
+      } catch {}
+    });
+  }, [isEditing, overview?.content]);
+
+  // 읽기 모드에서 태스크 레퍼런스 클릭 핸들러
+  useEffect(() => {
+    if (isEditing || !contentRef.current) return;
+    const taskNodes = contentRef.current.querySelectorAll('[data-task-ref]');
+    const handlers = [];
+    taskNodes.forEach((el) => {
+      el.classList.add('task-ref', `task-ref--${el.getAttribute('data-status') || 'todo'}`);
+      el.style.cursor = 'pointer';
+      const handler = () => {
+        const branchId = el.getAttribute('data-branch-id');
+        const taskId = el.getAttribute('data-task-id');
+        if (branchId && taskId) router.push(`/branch/${branchId}?task=${taskId}`);
+      };
+      el.addEventListener('click', handler);
+      handlers.push({ el, handler });
+    });
+    return () => handlers.forEach(({ el, handler }) => el.removeEventListener('click', handler));
+  }, [isEditing, overview?.content, router]);
 
   const handleSave = async () => {
     if (!overview) return;

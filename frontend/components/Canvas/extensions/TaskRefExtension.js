@@ -1,0 +1,256 @@
+import { Node, mergeAttributes } from '@tiptap/core';
+import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { ReactRenderer } from '@tiptap/react';
+import TaskRefPopup from './TaskRefPopup';
+
+const taskRefPluginKey = new PluginKey('taskRefSuggestion');
+
+// 태스크 레퍼런스 인라인 노드
+const TaskRefNode = Node.create({
+  name: 'taskRef',
+  group: 'inline',
+  inline: true,
+  atom: true,
+
+  addAttributes() {
+    return {
+      taskId: { default: null },
+      branchId: { default: null },
+      displayId: { default: '' },
+      title: { default: '' },
+      status: { default: 'todo' },
+      priority: { default: 'medium' },
+    };
+  },
+
+  parseHTML() {
+    return [{ tag: 'span[data-task-ref]' }];
+  },
+
+  renderHTML({ node, HTMLAttributes }) {
+    return [
+      'span',
+      mergeAttributes(HTMLAttributes, {
+        'data-task-ref': 'true',
+        'data-task-id': node.attrs.taskId,
+        'data-branch-id': node.attrs.branchId,
+        'data-display-id': node.attrs.displayId,
+        'data-title': node.attrs.title,
+        'data-status': node.attrs.status,
+        'data-priority': node.attrs.priority,
+        class: 'task-ref',
+      }),
+      `${node.attrs.displayId} ${node.attrs.title}`,
+    ];
+  },
+
+  addNodeView() {
+    return ({ node }) => {
+      const dom = document.createElement('span');
+      dom.className = `task-ref task-ref--${node.attrs.status}`;
+      dom.contentEditable = 'false';
+      dom.textContent = `${node.attrs.displayId} ${node.attrs.title}`;
+      dom.title = `${node.attrs.displayId} - ${node.attrs.title}`;
+      return { dom };
+    };
+  },
+
+  addProseMirrorPlugins() {
+    const editor = this.editor;
+
+    return [
+      new Plugin({
+        key: taskRefPluginKey,
+        state: {
+          init() {
+            return { active: false, mode: null, keyword: '', from: 0 };
+          },
+          apply(tr, prev) {
+            const meta = tr.getMeta(taskRefPluginKey);
+            if (meta) return meta;
+            if (tr.docChanged) return { active: false, mode: null, keyword: '', from: 0 };
+            return prev;
+          },
+        },
+        props: {
+          handleTextInput(view, from, to, text) {
+            const { state } = view;
+            const pluginState = taskRefPluginKey.getState(state);
+
+            if (pluginState.active) {
+              // 팝업 활성 상태에서 키워드 업데이트
+              setTimeout(() => {
+                const newState = taskRefPluginKey.getState(view.state);
+                if (!newState.active) return;
+                const $pos = view.state.doc.resolve(view.state.selection.from);
+                const textBefore = $pos.parent.textBetween(
+                  Math.max(0, newState.from - $pos.start()),
+                  view.state.selection.from - $pos.start(),
+                  null,
+                  '\ufffc',
+                );
+                // /t 또는 /ta 이후 키워드 추출
+                const matchT = textBefore.match(/\/t\s(.*)$/);
+                const matchTa = textBefore.match(/\/ta\s(.*)$/);
+                if (matchTa) {
+                  view.dispatch(view.state.tr.setMeta(taskRefPluginKey, {
+                    active: true, mode: 'all', keyword: matchTa[1], from: newState.from,
+                  }));
+                } else if (matchT) {
+                  view.dispatch(view.state.tr.setMeta(taskRefPluginKey, {
+                    active: true, mode: 'my', keyword: matchT[1], from: newState.from,
+                  }));
+                } else {
+                  view.dispatch(view.state.tr.setMeta(taskRefPluginKey, {
+                    active: false, mode: null, keyword: '', from: 0,
+                  }));
+                }
+              }, 0);
+              return false;
+            }
+
+            // /t 또는 /ta 감지: 공백 입력 시 체크
+            if (text === ' ') {
+              const $pos = state.doc.resolve(from);
+              const textBefore = $pos.parent.textBetween(
+                Math.max(0, from - $pos.start() - 3),
+                from - $pos.start(),
+                null,
+                '\ufffc',
+              );
+              if (textBefore === '/ta' || textBefore.endsWith('/ta')) {
+                const slashFrom = from - 3;
+                setTimeout(() => {
+                  view.dispatch(view.state.tr.setMeta(taskRefPluginKey, {
+                    active: true, mode: 'all', keyword: '', from: slashFrom,
+                  }));
+                }, 0);
+                return false;
+              }
+              if (textBefore === '/t' || textBefore.endsWith('/t')) {
+                const slashFrom = from - 2;
+                setTimeout(() => {
+                  view.dispatch(view.state.tr.setMeta(taskRefPluginKey, {
+                    active: true, mode: 'my', keyword: '', from: slashFrom,
+                  }));
+                }, 0);
+                return false;
+              }
+            }
+            return false;
+          },
+
+          handleKeyDown(view, event) {
+            const pluginState = taskRefPluginKey.getState(view.state);
+            if (!pluginState.active) return false;
+
+            if (event.key === 'Escape') {
+              view.dispatch(view.state.tr.setMeta(taskRefPluginKey, {
+                active: false, mode: null, keyword: '', from: 0,
+              }));
+              return true;
+            }
+
+            // ArrowDown/ArrowUp/Enter는 팝업에서 처리
+            if (['ArrowDown', 'ArrowUp', 'Enter'].includes(event.key)) {
+              return true;
+            }
+
+            return false;
+          },
+        },
+
+        view(editorView) {
+          let popup = null;
+          let renderer = null;
+
+          function destroyPopup() {
+            if (renderer) {
+              renderer.destroy();
+              renderer = null;
+            }
+            if (popup) {
+              popup.remove();
+              popup = null;
+            }
+          }
+
+          function createPopup(pluginState) {
+            destroyPopup();
+
+            // 커서 위치에서 팝업 좌표 계산
+            const coords = editorView.coordsAtPos(editorView.state.selection.from);
+            const editorRect = editorView.dom.closest('.CanvasEditor').getBoundingClientRect();
+
+            popup = document.createElement('div');
+            popup.style.position = 'absolute';
+            popup.style.left = `${coords.left - editorRect.left}px`;
+            popup.style.top = `${coords.bottom - editorRect.top + 4}px`;
+            popup.style.zIndex = '200';
+            editorView.dom.closest('.CanvasEditor').appendChild(popup);
+
+            renderer = new ReactRenderer(TaskRefPopup, {
+              editor,
+              props: {
+                keyword: pluginState.keyword,
+                mode: pluginState.mode,
+                onSelect: (task) => {
+                  const { state } = editorView;
+                  const pluginSt = taskRefPluginKey.getState(state);
+                  // 슬래시 텍스트부터 현재 커서까지 교체
+                  const tr = state.tr.replaceWith(
+                    pluginSt.from,
+                    state.selection.from,
+                    state.schema.nodes.taskRef.create({
+                      taskId: task.task_id,
+                      branchId: task.branch_id,
+                      displayId: task.display_id,
+                      title: task.title,
+                      status: task.status,
+                      priority: task.priority,
+                    }),
+                  );
+                  tr.setMeta(taskRefPluginKey, { active: false, mode: null, keyword: '', from: 0 });
+                  editorView.dispatch(tr);
+                  editorView.focus();
+                },
+                onClose: () => {
+                  editorView.dispatch(
+                    editorView.state.tr.setMeta(taskRefPluginKey, {
+                      active: false, mode: null, keyword: '', from: 0,
+                    }),
+                  );
+                },
+              },
+            });
+
+            popup.appendChild(renderer.element);
+          }
+
+          return {
+            update(view) {
+              const pluginState = taskRefPluginKey.getState(view.state);
+              if (pluginState.active) {
+                if (renderer) {
+                  renderer.updateProps({
+                    keyword: pluginState.keyword,
+                    mode: pluginState.mode,
+                  });
+                } else {
+                  createPopup(pluginState);
+                }
+              } else {
+                destroyPopup();
+              }
+            },
+            destroy() {
+              destroyPopup();
+            },
+          };
+        },
+      }),
+    ];
+  },
+});
+
+export default TaskRefNode;

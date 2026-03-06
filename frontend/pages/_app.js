@@ -43,6 +43,7 @@ import "@/styles/components/canvas/canvasOverview.scss";
 import "@/styles/components/canvas/canvasPageView.scss";
 import "@/styles/components/canvas/canvasEditor.scss";
 import "katex/dist/katex.min.css";
+import "highlight.js/styles/github.min.css";
 import "@/styles/components/canvas/canvasSettings.scss";
 import "@/styles/components/branch/taskFullPage.scss";
 import "@/styles/components/branch/taskIssueSection.scss";

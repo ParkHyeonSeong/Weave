@@ -22,3 +22,8 @@ dev = [
     "httpx>=0.28.0",
     "ruff>=0.11.0",
 ]
+migration = [
+    "requests>=2.31.0",
+    "beautifulsoup4>=4.12.0",
+    "psycopg2-binary>=2.9.9",
+]

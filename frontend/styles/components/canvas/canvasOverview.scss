@@ -166,5 +166,38 @@
     }
 
     hr { border: none; border-top: 1px solid $color-border; margin: 1.5em 0; }
+
+    // 태스크 레퍼런스 인라인 칩
+    .task-ref {
+      display: inline-flex;
+      align-items: center;
+      padding: 1px 8px;
+      border-radius: $radius-md;
+      font-size: $font-size-xs;
+      font-weight: $font-weight-medium;
+      background: $color-primary-subtle;
+      color: $color-primary;
+      border: 1px solid transparent;
+      cursor: pointer;
+      vertical-align: baseline;
+      line-height: 1.6;
+      white-space: nowrap;
+
+      &:hover {
+        border-color: $color-primary;
+      }
+
+      &--done {
+        background: $color-success-bg;
+        color: $color-success;
+        &:hover { border-color: $color-success; }
+      }
+
+      &--in_progress {
+        background: #DBEAFE;
+        color: #1E40AF;
+        &:hover { border-color: #1E40AF; }
+      }
+    }
   }
 }
