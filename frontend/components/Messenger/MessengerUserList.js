@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
+import { Search } from 'lucide-react';
 import { axios } from '@/library/_axios';
 
 export default function MessengerUserList({ onOpenRoom }) {
   const [users, setUsers] = useState([]);
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -36,15 +38,30 @@ export default function MessengerUserList({ onOpenRoom }) {
     myUserId = profile.user_id || 0;
   } catch {}
 
+  const keyword = search.toLowerCase();
+  const filteredUsers = users
+    .filter((u) => u.user_id !== myUserId)
+    .filter((u) => !keyword || u.username.toLowerCase().includes(keyword) || u.email.toLowerCase().includes(keyword));
+
   return (
     <div className="MessengerUserList">
       <div className="MessengerUserList__Header">
         <span className="MessengerUserList__Title">Users</span>
       </div>
+      <div className="MessengerUserList__Search">
+        <Search size={14} className="MessengerUserList__SearchIcon" />
+        <input
+          className="MessengerUserList__SearchInput"
+          type="text"
+          placeholder="Search users..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
       <div className="MessengerUserList__Items">
-        {users
-          .filter((u) => u.user_id !== myUserId)
-          .map((user) => (
+        {filteredUsers.length === 0 ? (
+          <div className="MessengerUserList__Empty">No users found.</div>
+        ) : filteredUsers.map((user) => (
             <button
               key={user.user_id}
               className="MessengerUserList__Item"
@@ -58,7 +75,8 @@ export default function MessengerUserList({ onOpenRoom }) {
                 <span className="MessengerUserList__Email">{user.email}</span>
               </div>
             </button>
-          ))}
+          ))
+        }
       </div>
     </div>
   );

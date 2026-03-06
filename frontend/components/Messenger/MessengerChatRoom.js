@@ -3,7 +3,7 @@ import { ArrowLeft, Send, Pencil, Check, X } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import { formatMessageTime } from '@/library/formatTime';
 
-export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback }) {
+export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, headerLeft }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [roomName, setRoomName] = useState('Chat');
@@ -13,6 +13,7 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback }) {
   const [editName, setEditName] = useState('');
   const messagesEndRef = useRef(null);
   const editInputRef = useRef(null);
+  const textareaRef = useRef(null);
 
   let myUserId = 0;
   try {
@@ -76,7 +77,23 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback }) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // textarea 높이 자동 조절
+  const autoResize = () => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+  };
+
+  useEffect(() => {
+    autoResize();
+  }, [input]);
+
+  // 코드블록 모드 판별 (```가 홀수번 열린 상태 = 닫히지 않음)
+  const isCodeMode = (input.match(/```/g) || []).length % 2 === 1;
+
   const handleSend = () => {
+    if (isCodeMode) return; // 코드블록이 닫히지 않으면 전송 차단
     const content = input.trim();
     if (!content) return;
 
@@ -91,9 +108,17 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback }) {
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-      e.preventDefault();
-      handleSend();
+    if (e.nativeEvent.isComposing) return;
+    if (e.key === 'Enter') {
+      if (isCodeMode) {
+        // 코드모드: 모든 Enter는 줄바꿈 (전송 불가)
+      } else {
+        // 일반모드: Enter로 전송, Shift+Enter로 줄바꿈
+        if (!e.shiftKey) {
+          e.preventDefault();
+          handleSend();
+        }
+      }
     }
   };
 
@@ -134,6 +159,47 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback }) {
     }
   };
 
+  // 메시지 내용 렌더링 (코드블록, 인라인코드, 볼드)
+  const renderContent = (text) => {
+    // 코드블록 분리: ```...```
+    const parts = text.split(/(```[\s\S]*?```)/g);
+    return parts.map((part, i) => {
+      if (part.startsWith('```') && part.endsWith('```')) {
+        const code = part.slice(3, -3).replace(/^\n/, '');
+        return <pre key={i} className="MessengerChatRoom__CodeBlock"><code>{code}</code></pre>;
+      }
+      // 인라인 파싱: `code`, **bold**
+      return <span key={i}>{renderInline(part)}</span>;
+    });
+  };
+
+  const renderInline = (text) => {
+    const tokens = text.split(/(`[^`]+`|\*\*[^*]+\*\*)/g);
+    return tokens.map((token, i) => {
+      if (token.startsWith('`') && token.endsWith('`')) {
+        return <code key={i} className="MessengerChatRoom__InlineCode">{token.slice(1, -1)}</code>;
+      }
+      if (token.startsWith('**') && token.endsWith('**')) {
+        return <strong key={i}>{token.slice(2, -2)}</strong>;
+      }
+      return token;
+    });
+  };
+
+  // 같은 발신자 + 같은 분(HH:MM)이면 마지막 메시지에만 시간 표시
+  const getMinuteKey = (dateStr) => {
+    const d = new Date(dateStr);
+    return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}-${d.getHours()}-${d.getMinutes()}`;
+  };
+
+  const shouldShowTime = (index) => {
+    const msg = messages[index];
+    const next = messages[index + 1];
+    if (!next) return true;
+    if (next.sender_id !== msg.sender_id) return true;
+    return getMinuteKey(msg.created_at) !== getMinuteKey(next.created_at);
+  };
+
   // 상대방이 해당 메시지를 아직 안 읽었는지 판별
   const isUnread = (msg) => {
     if (!partnerLastRead) return true;
@@ -143,6 +209,7 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback }) {
   return (
     <div className="MessengerChatRoom">
       <div className="MessengerChatRoom__Header">
+        {headerLeft}
         {!hideback && (
           <button className="MessengerChatRoom__BackBtn" onClick={onBack}>
             <ArrowLeft size={16} />
@@ -178,51 +245,64 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback }) {
       </div>
 
       <div className="MessengerChatRoom__Messages">
-        {messages.map((msg) => (
-          <div
-            key={msg.message_id}
-            className={`MessengerChatRoom__Msg ${
-              msg.sender_id === myUserId ? 'MessengerChatRoom__Msg--mine' : ''
-            }`}
-          >
-            {msg.sender_id !== myUserId && (
-              <span className="MessengerChatRoom__MsgSender">{msg.sender_name}</span>
-            )}
-            <div className="MessengerChatRoom__MsgRow">
-              {msg.sender_id === myUserId && (
-                <div className="MessengerChatRoom__MsgMeta">
-                  {isUnread(msg) && (
-                    <span className="MessengerChatRoom__MsgUnread">1</span>
-                  )}
+        {messages.map((msg, idx) => {
+          const showTime = shouldShowTime(idx);
+          return (
+            <div
+              key={msg.message_id}
+              className={`MessengerChatRoom__Msg ${
+                msg.sender_id === myUserId ? 'MessengerChatRoom__Msg--mine' : ''
+              }`}
+            >
+              {msg.sender_id !== myUserId && (
+                <span className="MessengerChatRoom__MsgSender">{msg.sender_name}</span>
+              )}
+              <div className="MessengerChatRoom__MsgRow">
+                {msg.sender_id === myUserId && showTime && (
+                  <div className="MessengerChatRoom__MsgMeta">
+                    {isUnread(msg) && (
+                      <span className="MessengerChatRoom__MsgUnread">1</span>
+                    )}
+                    <span className="MessengerChatRoom__MsgTime">
+                      {formatMessageTime(msg.created_at)}
+                    </span>
+                  </div>
+                )}
+                <div className="MessengerChatRoom__MsgBubble">
+                  {renderContent(msg.content)}
+                </div>
+                {msg.sender_id !== myUserId && showTime && (
                   <span className="MessengerChatRoom__MsgTime">
                     {formatMessageTime(msg.created_at)}
                   </span>
-                </div>
-              )}
-              <div className="MessengerChatRoom__MsgBubble">
-                {msg.content}
+                )}
               </div>
-              {msg.sender_id !== myUserId && (
-                <span className="MessengerChatRoom__MsgTime">
-                  {formatMessageTime(msg.created_at)}
-                </span>
-              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
         <div ref={messagesEndRef} />
       </div>
 
       <div className="MessengerChatRoom__Input">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Type a message..."
-          className="MessengerChatRoom__InputField"
-        />
-        <button className="MessengerChatRoom__SendBtn" onClick={handleSend}>
+        <div className={`MessengerChatRoom__InputWrap ${isCodeMode ? 'MessengerChatRoom__InputWrap--code' : ''}`}>
+          {isCodeMode && (
+            <div className="MessengerChatRoom__CodeLabel">Code</div>
+          )}
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={isCodeMode ? 'Enter code... (close with ``` to send)' : 'Type a message... (Shift+Enter for newline)'}
+            className={`MessengerChatRoom__InputField ${isCodeMode ? 'MessengerChatRoom__InputField--code' : ''}`}
+            rows={1}
+          />
+        </div>
+        <button
+          className={`MessengerChatRoom__SendBtn ${isCodeMode ? 'MessengerChatRoom__SendBtn--disabled' : ''}`}
+          onClick={handleSend}
+          disabled={isCodeMode}
+        >
           <Send size={14} />
         </button>
       </div>

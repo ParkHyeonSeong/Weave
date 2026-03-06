@@ -26,6 +26,16 @@ export default function MessengerChatList({ onOpenRoom, onNewChat, activeRoomId 
     return () => window.removeEventListener('chat:new_message', handleNewMessage);
   }, []);
 
+  // 미리보기용 마크다운 문법 제거
+  const stripMarkdown = (text) => {
+    if (!text) return '';
+    return text
+      .replace(/```[\s\S]*?```/g, '[code]')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/\*\*([^*]+)\*\*/g, '$1')
+      .replace(/\n/g, ' ');
+  };
+
   return (
     <div className="MessengerChatList">
       <div className="MessengerChatList__Header">
@@ -62,7 +72,7 @@ export default function MessengerChatList({ onOpenRoom, onNewChat, activeRoomId 
                 <div className="MessengerChatList__ItemBottom">
                   {room.last_message && (
                     <span className="MessengerChatList__ItemPreview">
-                      {room.last_message}
+                      {stripMarkdown(room.last_message)}
                     </span>
                   )}
                   {room.unread_count > 0 && (

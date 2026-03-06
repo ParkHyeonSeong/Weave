@@ -14,9 +14,43 @@
     color: $color-text;
   }
 
+  &__Search {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: $space-2 $space-3;
+    border-bottom: 1px solid $color-border;
+  }
+
+  &__SearchIcon {
+    color: $color-text-tertiary;
+    flex-shrink: 0;
+  }
+
+  &__SearchInput {
+    flex: 1;
+    border: none;
+    outline: none;
+    font-size: $font-size-sm;
+    color: $color-text;
+    background: transparent;
+
+    &::placeholder {
+      color: $color-text-tertiary;
+    }
+  }
+
+  &__Empty {
+    padding: $space-6 $space-4;
+    text-align: center;
+    font-size: $font-size-sm;
+    color: $color-text-tertiary;
+  }
+
   &__Items {
     display: flex;
     flex-direction: column;
+    overflow-y: auto;
   }
 
   &__Item {

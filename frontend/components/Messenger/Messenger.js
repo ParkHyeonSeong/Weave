@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { MessageSquare, Users } from 'lucide-react';
+import { MessageSquare, Users, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import MessengerChatList from './MessengerChatList';
 import MessengerUserList from './MessengerUserList';
 import MessengerChatRoom from './MessengerChatRoom';
@@ -11,6 +11,7 @@ export default function Messenger({ wsRef, activeRoomRef, panelWidth }) {
   const [activeTab, setActiveTab] = useState('chats');
   const [activeRoomId, setActiveRoomId] = useState(null);
   const [showNewChat, setShowNewChat] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const isSplitView = panelWidth >= SPLIT_THRESHOLD;
 
@@ -77,8 +78,8 @@ export default function Messenger({ wsRef, activeRoomRef, panelWidth }) {
   // --- Split view (넓은 패널) ---
   if (isSplitView) {
     return (
-      <div className="Messenger Messenger--split" style={{ width: panelWidth }}>
-        {listPanel}
+      <div className={`Messenger Messenger--split ${sidebarCollapsed ? 'Messenger--collapsed' : ''}`} style={{ width: panelWidth }}>
+        {!sidebarCollapsed && listPanel}
         <div className="Messenger__RoomPanel">
           {showNewChat ? (
             <MessengerNewChat
@@ -92,9 +93,25 @@ export default function Messenger({ wsRef, activeRoomRef, panelWidth }) {
               wsRef={wsRef}
               onBack={handleBack}
               hideback
+              headerLeft={
+                <button
+                  className="MessengerChatRoom__CollapseBtn"
+                  onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                  title={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+                >
+                  {sidebarCollapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
+                </button>
+              }
             />
           ) : (
             <div className="Messenger__RoomEmpty">
+              <button
+                className="Messenger__CollapseBtn"
+                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                title={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+              >
+                {sidebarCollapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
+              </button>
               Select a conversation
             </div>
           )}

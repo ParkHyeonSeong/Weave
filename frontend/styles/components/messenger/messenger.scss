@@ -50,11 +50,47 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      gap: $space-2;
       font-size: $font-size-sm;
       color: $color-text-tertiary;
       background: $color-bg;
       border: 1px solid $color-border;
       border-radius: 0 $radius-2xl $radius-2xl 0;
+    }
+  }
+
+  // -- 사이드바 접힘 모드 --
+  &--collapsed {
+    .Messenger__RoomPanel {
+      .MessengerChatRoom {
+        border-radius: $radius-2xl;
+      }
+
+      .MessengerNewChat {
+        border-radius: $radius-2xl;
+      }
+    }
+
+    .Messenger__RoomEmpty {
+      border-radius: $radius-2xl;
+    }
+  }
+
+  &__CollapseBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: $radius-md;
+    color: $color-text-tertiary;
+    background: transparent;
+    transition: all $transition-fast;
+    flex-shrink: 0;
+
+    &:hover {
+      background: $color-surface;
+      color: $color-text;
     }
   }
 
