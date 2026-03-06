@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { axios } from '@/library/_axios';
+import Layout from '@/components/Layout/Layout';
 import "@/styles/globals.scss";
 import "@/styles/fonts.css";
 import "@/styles/components/auth/login.scss";
@@ -49,6 +50,7 @@ import "@/styles/components/branch/taskIssueDetail.scss";
 import "@/styles/components/modal/createIssue.scss";
 
 const publicPaths = ['/auth/login', '/setup'];
+const noLayoutPaths = ['/auth/login', '/setup', '/admin'];
 
 export default function App({ Component, pageProps }) {
   const router = useRouter();
@@ -128,5 +130,9 @@ export default function App({ Component, pageProps }) {
 
   if (!appReady) return null;
 
-  return <Component {...pageProps} />;
+  const needsLayout = !noLayoutPaths.some(p => router.pathname.startsWith(p));
+
+  return needsLayout
+    ? <Layout><Component {...pageProps} /></Layout>
+    : <Component {...pageProps} />;
 }

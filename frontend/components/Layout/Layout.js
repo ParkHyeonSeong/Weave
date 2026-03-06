@@ -17,7 +17,10 @@ export default function Layout({ children }) {
   const [showCreateBranch, setShowCreateBranch] = useState(false);
   const [showCreateCanvas, setShowCreateCanvas] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    try { return sessionStorage.getItem('sidebar_collapsed') === 'true'; }
+    catch { return false; }
+  });
   const [isMessengerCollapsed, setIsMessengerCollapsed] = useState(() => {
     try {
       return sessionStorage.getItem('messenger_open') !== 'true';
@@ -41,6 +44,12 @@ export default function Layout({ children }) {
   const isResizingRef = useRef(false);
   const wsRef = useRef(null);
   const activeRoomRef = useRef(null);
+
+  // 사이드바 접힘 상태 저장
+  useEffect(() => {
+    try { sessionStorage.setItem('sidebar_collapsed', isSidebarCollapsed ? 'true' : 'false'); }
+    catch {}
+  }, [isSidebarCollapsed]);
 
   // 메신저 열림 상태 저장
   useEffect(() => {
