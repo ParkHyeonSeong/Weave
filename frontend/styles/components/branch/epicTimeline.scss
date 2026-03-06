@@ -4,8 +4,49 @@
   // -- 상단 액션 --
   &__Actions {
     display: flex;
-    gap: $space-2;
+    align-items: center;
+    gap: $space-3;
     margin-bottom: $space-5;
+  }
+
+  &__ViewModes {
+    display: flex;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    overflow: hidden;
+    margin-left: auto;
+  }
+
+  &__ViewBtn {
+    padding: $space-2 $space-3;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    color: $color-text-secondary;
+    background: $color-bg;
+    cursor: pointer;
+    transition: all $transition-fast;
+    white-space: nowrap;
+    border-right: 1px solid $color-border;
+
+    &:last-child {
+      border-right: none;
+    }
+
+    &:hover {
+      background: $color-surface;
+      color: $color-text;
+    }
+
+    &--active {
+      color: $color-primary;
+      background: $color-bg;
+      border: 2px solid $color-primary;
+      border-right: 2px solid $color-primary;
+      margin: -1px;
+      border-radius: $radius-md;
+      z-index: 1;
+      position: relative;
+    }
   }
 
   &__CreateBtn {
@@ -36,7 +77,8 @@
   &__Container {
     border: 1px solid $color-border;
     border-radius: $radius-xl;
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: hidden;
   }
 
   // -- 월 헤더 --

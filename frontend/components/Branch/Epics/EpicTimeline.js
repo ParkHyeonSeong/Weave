@@ -4,11 +4,18 @@ import { Plus } from 'lucide-react';
 import EpicBar from './EpicBar';
 import EpicModal from '@/components/modal/EpicModal';
 
+const VIEW_MODES = [
+  { key: 'week', label: 'Week' },
+  { key: 'month', label: 'Month' },
+  { key: 'quarter', label: 'Quarter' },
+];
+
 export default function EpicTimeline({ branchId, onSelectEpic }) {
   const [epics, setEpics] = useState([]);
   const [sprints, setSprints] = useState([]);
   const [loading, setLoading] = useState(true);
   const [epicModal, setEpicModal] = useState({ open: false });
+  const [viewMode, setViewMode] = useState('month');
 
   useEffect(() => {
     fetchData();
@@ -33,47 +40,60 @@ export default function EpicTimeline({ branchId, onSelectEpic }) {
     setLoading(false);
   };
 
-  // 타임라인 범위 계산
-  const { timelineStart, timelineEnd, totalDays, months } = useMemo(() => {
-    const allDates = [];
+  // 타임라인 범위 계산 (viewMode 기준)
+  const { timelineStart, timelineEnd, totalDays, headerLabels } = useMemo(() => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    let start, end;
 
-    epics.forEach((e) => {
-      if (e.start_date) allDates.push(new Date(e.start_date));
-      if (e.due_date) allDates.push(new Date(e.due_date));
-    });
-    sprints.forEach((s) => {
-      if (s.start_date) allDates.push(new Date(s.start_date));
-      if (s.end_date) allDates.push(new Date(s.end_date));
-    });
-
-    if (allDates.length === 0) {
-      const now = new Date();
-      const start = new Date(now.getFullYear(), now.getMonth(), 1);
-      const end = new Date(now.getFullYear(), now.getMonth() + 3, 0);
-      allDates.push(start, end);
+    if (viewMode === 'week') {
+      // 이번 주 월요일 ~ 2주 후
+      const dayOfWeek = now.getDay() || 7; // 일요일=7
+      start = new Date(now);
+      start.setDate(now.getDate() - dayOfWeek + 1 - 7); // 1주 전 월요일
+      end = new Date(start);
+      end.setDate(start.getDate() + 28); // 4주간
+    } else if (viewMode === 'month') {
+      // 이번 달 기준 앞뒤 1달씩
+      start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      end = new Date(now.getFullYear(), now.getMonth() + 2, 0);
+    } else {
+      // quarter: 이번 분기 기준 앞뒤 1달씩
+      const qStart = Math.floor(now.getMonth() / 3) * 3;
+      start = new Date(now.getFullYear(), qStart - 1, 1);
+      end = new Date(now.getFullYear(), qStart + 4, 0);
     }
-
-    const minDate = new Date(Math.min(...allDates));
-    const maxDate = new Date(Math.max(...allDates));
-
-    const start = new Date(minDate.getFullYear(), minDate.getMonth() - 1, 1);
-    const end = new Date(maxDate.getFullYear(), maxDate.getMonth() + 2, 0);
 
     const total = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
 
-    const monthLabels = [];
-    const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
-    while (cursor <= end) {
-      const dayOffset = Math.ceil((new Date(cursor) - start) / (1000 * 60 * 60 * 24));
-      monthLabels.push({
-        label: cursor.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-        offset: dayOffset,
-      });
-      cursor.setMonth(cursor.getMonth() + 1);
+    // 헤더 라벨 생성
+    const labels = [];
+    if (viewMode === 'week') {
+      // 주 단위 라벨
+      const cursor = new Date(start);
+      while (cursor <= end) {
+        const dayOffset = Math.ceil((new Date(cursor) - start) / (1000 * 60 * 60 * 24));
+        labels.push({
+          label: cursor.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
+          offset: dayOffset,
+        });
+        cursor.setDate(cursor.getDate() + 7);
+      }
+    } else {
+      // 월 단위 라벨
+      const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+      while (cursor <= end) {
+        const dayOffset = Math.ceil((new Date(cursor) - start) / (1000 * 60 * 60 * 24));
+        labels.push({
+          label: cursor.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+          offset: dayOffset,
+        });
+        cursor.setMonth(cursor.getMonth() + 1);
+      }
     }
 
-    return { timelineStart: start, timelineEnd: end, totalDays: total, months: monthLabels };
-  }, [epics, sprints]);
+    return { timelineStart: start, timelineEnd: end, totalDays: total, headerLabels: labels };
+  }, [viewMode]);
 
   const getPosition = (dateStr) => {
     if (!dateStr) return null;
@@ -103,6 +123,19 @@ export default function EpicTimeline({ branchId, onSelectEpic }) {
           <Plus size={14} />
           Create Epic
         </button>
+
+        {/* 뷰 모드 토글 */}
+        <div className="EpicTimeline__ViewModes">
+          {VIEW_MODES.map((mode) => (
+            <button
+              key={mode.key}
+              className={`EpicTimeline__ViewBtn ${viewMode === mode.key ? 'EpicTimeline__ViewBtn--active' : ''}`}
+              onClick={() => setViewMode(mode.key)}
+            >
+              {mode.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {epics.length === 0 ? (
@@ -115,7 +148,7 @@ export default function EpicTimeline({ branchId, onSelectEpic }) {
           <div className="EpicTimeline__Header">
             <div className="EpicTimeline__NameCol" />
             <div className="EpicTimeline__TimelineCol">
-              {months.map((m, i) => (
+              {headerLabels.map((m, i) => (
                 <div
                   key={i}
                   className="EpicTimeline__Month"
