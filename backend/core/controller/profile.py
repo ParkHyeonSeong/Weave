@@ -2,11 +2,11 @@ import os
 import uuid
 
 import bcrypt
-from fastapi import Request, UploadFile
+from fastapi import Request, Response, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.model import user as user_model
-from core.controller.auth import _create_token
+from core.controller.auth import _create_token, _set_auth_cookie
 
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'uploads', 'avatars')
 ALLOWED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
@@ -22,17 +22,26 @@ async def get_profile(request: Request, db: AsyncSession):
     return {'status': True, 'user': user}
 
 
-async def update_username(body, request: Request, db: AsyncSession):
-    """사용자 이름 변경 + 토큰 재발급"""
+async def update_username(body, request: Request, response: Response, db: AsyncSession):
+    """사용자 이름 변경 + 쿠키 재발급"""
     user_id = request.state.payload.get('user_id')
     user = await user_model.find_by_id(user_id, db)
     if not user:
         return {'status': False, 'message': 'USER_NOT_FOUND'}
 
     await user_model.update_username(user_id, body.username, db)
-    # JWT 재발급 (username이 payload에 포함되므로)
+    # 쿠키 재발급 (username이 payload에 포함되므로)
     token = _create_token(user_id, user['email'], body.username, user['role'])
-    return {'status': True, 'x_token': token}
+    _set_auth_cookie(response, token)
+    return {
+        'status': True,
+        'profile': {
+            'user_id': user_id,
+            'email': user['email'],
+            'username': body.username,
+            'role': user['role'],
+        },
+    }
 
 
 async def update_password(body, request: Request, db: AsyncSession):

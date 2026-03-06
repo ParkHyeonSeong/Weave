@@ -1,6 +1,6 @@
 import jwt
 from fastapi import Request
-from config import JWT_SECRET_KEY, JWT_ALGORITHM
+from config import JWT_SECRET_KEY, JWT_ALGORITHM, COOKIE_NAME
 
 
 class UnAuthorizedException(Exception):
@@ -10,10 +10,9 @@ class UnAuthorizedException(Exception):
 
 
 def validate_login(request: Request):
-    """Authorization 헤더에서 JWT 추출 및 검증"""
+    """쿠키에서 JWT 추출 및 검증"""
     try:
-        auth = request.headers.get('Authorization', '').split(' ')
-        token = auth[1] if auth[0] == 'Bearer' else ''
+        token = request.cookies.get(COOKIE_NAME, '')
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
     except Exception:
         payload = {'user_id': 0}

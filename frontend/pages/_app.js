@@ -53,7 +53,6 @@ export default function App({ Component, pageProps }) {
 
   const checkAppState = async () => {
     setAppReady(false);
-    const token = sessionStorage.getItem('x_token');
 
     // 초기화 여부: sessionStorage 캐시 우선, 없을 때만 API 호출
     let initialized = sessionStorage.getItem('app_initialized') === 'true';
@@ -65,14 +64,26 @@ export default function App({ Component, pageProps }) {
           sessionStorage.setItem('app_initialized', 'true');
         }
       } catch {
-        // API 실패 시: 토큰 없으면 로그인으로
-        if (!token && router.pathname !== '/auth/login') {
+        // API 실패 시: 프로필 캐시 없으면 로그인으로
+        if (!sessionStorage.getItem('profile') && router.pathname !== '/auth/login') {
           router.replace('/auth/login');
           return;
         }
         setAppReady(true);
         return;
       }
+    }
+
+    // 인증 상태 확인: 캐시된 프로필 우선, 없으면 쿠키 기반 서버 확인
+    let isLoggedIn = !!sessionStorage.getItem('profile');
+    if (!isLoggedIn && !publicPaths.includes(router.pathname) && router.pathname !== '/setup') {
+      try {
+        const res = await axios.get('/auth/me');
+        if (res.data.status) {
+          sessionStorage.setItem('profile', JSON.stringify(res.data.profile));
+          isLoggedIn = true;
+        }
+      } catch {}
     }
 
     if (!initialized) {
@@ -83,13 +94,13 @@ export default function App({ Component, pageProps }) {
       }
     } else if (router.pathname === '/setup') {
       // 초기화 완료 후 /setup 접근 차단
-      router.replace(token ? '/' : '/auth/login');
+      router.replace(isLoggedIn ? '/' : '/auth/login');
       return;
-    } else if (!token && !publicPaths.includes(router.pathname)) {
+    } else if (!isLoggedIn && !publicPaths.includes(router.pathname)) {
       // 미인증 + 비공개 경로
       router.replace('/auth/login');
       return;
-    } else if (token && router.pathname === '/auth/login') {
+    } else if (isLoggedIn && router.pathname === '/auth/login') {
       // 인증 상태에서 로그인 페이지 접근
       router.replace('/');
       return;
@@ -101,7 +112,6 @@ export default function App({ Component, pageProps }) {
   // auth:expired 이벤트 수신 (axios 인터셉터에서 발송)
   useEffect(() => {
     const handleExpired = () => {
-      sessionStorage.removeItem('x_token');
       sessionStorage.removeItem('profile');
       router.replace('/auth/login');
     };

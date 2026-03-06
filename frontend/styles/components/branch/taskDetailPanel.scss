@@ -280,6 +280,83 @@
     }
   }
 
+  // -- 서브 담당자 --
+  &__SubAssigneeWrap {
+    position: relative;
+    width: 100%;
+  }
+
+  &__SubAssigneeBtn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+    width: 100%;
+    padding: 2px 4px;
+    font-size: $font-size-sm;
+    color: $color-text;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: $radius-sm;
+    cursor: pointer;
+    text-align: left;
+    transition: all $transition-fast;
+
+    &:hover {
+      border-color: $color-border;
+    }
+
+    span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    svg {
+      flex-shrink: 0;
+      color: $color-text-tertiary;
+    }
+  }
+
+  &__SubAssigneePlaceholder {
+    color: $color-text-tertiary;
+  }
+
+  &__SubAssigneeDropdown {
+    position: absolute;
+    left: 0;
+    top: calc(100% + 2px);
+    min-width: 180px;
+    max-height: 200px;
+    overflow-y: auto;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+    box-shadow: $shadow-md;
+    z-index: 100;
+    padding: $space-1 0;
+    animation: customSelectFadeIn 120ms ease;
+  }
+
+  &__SubAssigneeOption {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: 5px $space-3;
+    font-size: $font-size-sm;
+    color: $color-text;
+    cursor: pointer;
+    transition: background $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+    }
+
+    input[type="checkbox"] {
+      accent-color: $color-primary;
+    }
+  }
+
   // -- 날짜 --
   &__DateInput {
     padding: 2px 4px;

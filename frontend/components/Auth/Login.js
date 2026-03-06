@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useRouter } from 'next/router';
-import { jwtDecode } from 'jwt-decode';
 import { Mail, Lock, User, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import Alert from '@/components/modal/Alert';
@@ -66,9 +65,7 @@ export default function Login() {
           setMode('login');
           return;
         }
-        const token = response.data.x_token;
-        sessionStorage.setItem('x_token', token);
-        sessionStorage.setItem('profile', JSON.stringify(jwtDecode(token)));
+        sessionStorage.setItem('profile', JSON.stringify(response.data.profile));
         router.push('/');
       } else {
         const messages = {

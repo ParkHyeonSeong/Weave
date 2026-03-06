@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useRouter } from 'next/router';
-import { jwtDecode } from 'jwt-decode';
 import {
   Building2, Users, Shield, Mail, Lock, User,
   Eye, EyeOff, Loader2, ArrowRight, ArrowLeft, Check
@@ -80,9 +79,7 @@ export default function SetupWizard() {
       });
 
       if (res.data.status) {
-        const token = res.data.x_token;
-        sessionStorage.setItem('x_token', token);
-        sessionStorage.setItem('profile', JSON.stringify(jwtDecode(token)));
+        sessionStorage.setItem('profile', JSON.stringify(res.data.profile));
         router.push('/');
       } else {
         const messages = {

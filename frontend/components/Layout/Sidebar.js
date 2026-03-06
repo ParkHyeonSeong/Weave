@@ -5,7 +5,7 @@ import SidebarCanvases from './SidebarCanvases';
 
 function getAppContext(pathname) {
   if (pathname.startsWith('/canvas')) return 'canvas';
-  if (pathname.startsWith('/branch') || pathname === '/browse') return 'branch';
+  if (pathname.startsWith('/branch')) return 'branch';
   return 'home';
 }
 

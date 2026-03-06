@@ -2,9 +2,9 @@ import json
 from datetime import datetime, timezone
 
 import jwt
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from config import JWT_SECRET_KEY, JWT_ALGORITHM
+from config import JWT_SECRET_KEY, JWT_ALGORITHM, COOKIE_NAME
 from library.ws_manager import manager
 from core.model import chat_message as message_model
 from core.model import chat_member as member_model
@@ -26,9 +26,10 @@ def _verify_token(token: str) -> dict | None:
 
 
 @router.websocket("/ws/chat")
-async def websocket_chat(ws: WebSocket, token: str = Query(...)):
+async def websocket_chat(ws: WebSocket):
     """채팅 WebSocket 엔드포인트"""
-    # JWT 인증
+    # 쿠키에서 JWT 인증
+    token = ws.cookies.get(COOKIE_NAME, '')
     payload = _verify_token(token)
     if not payload:
         await ws.close(code=4001, reason="Unauthorized")
@@ -80,7 +81,7 @@ async def websocket_chat(ws: WebSocket, token: str = Query(...)):
                                 'title': task['title'],
                                 'status': task['status'],
                                 'priority': task['priority'],
-                                'assignee_name': task.get('assignee_name'),
+                                'assignees': task.get('assignees', []),
                             }
 
                     # room 멤버에게 broadcast

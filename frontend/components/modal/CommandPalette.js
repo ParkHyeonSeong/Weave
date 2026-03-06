@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { Search, GitBranch, LogOut, Plus } from 'lucide-react';
+import { axios } from '@/library/_axios';
 
 const ACTIONS = [
   { id: 'create-branch', label: 'Create Branch', icon: Plus, group: 'Actions' },
@@ -51,8 +52,9 @@ export default function CommandPalette({ onClose }) {
         onClose();
         break;
       case 'logout':
-        sessionStorage.removeItem('x_token');
+        axios.post('/auth/logout').catch(() => {});
         sessionStorage.removeItem('profile');
+        sessionStorage.removeItem('app_initialized');
         router.replace('/auth/login');
         onClose();
         break;

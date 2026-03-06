@@ -135,6 +135,59 @@
     }
   }
 
+  &__SubAssigneeBtn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    gap: $space-2;
+
+    span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    svg {
+      flex-shrink: 0;
+      color: $color-text-tertiary;
+    }
+  }
+
+  &__SubAssigneePlaceholder {
+    color: $color-text-tertiary;
+  }
+
+  &__SubAssigneeDropdown {
+    max-height: 200px;
+    overflow-y: auto;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    box-shadow: $shadow-md;
+    padding: $space-1 0;
+    margin-top: $space-1;
+  }
+
+  &__SubAssigneeOption {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: 6px $space-3;
+    font-size: $font-size-sm;
+    color: $color-text;
+    cursor: pointer;
+    transition: background $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+    }
+
+    input[type="checkbox"] {
+      accent-color: $color-primary;
+    }
+  }
+
   &__Error {
     font-size: $font-size-sm;
     color: $color-error;

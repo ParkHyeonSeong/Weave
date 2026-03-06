@@ -46,22 +46,29 @@ ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS")
 
 if ALLOWED_ORIGINS:
     origins = ALLOWED_ORIGINS.split(",")
-elif DEBUG:
-    # 개발 모드: 모든 origin 허용 (LAN IP 접근 등)
-    origins = ["*"]
 else:
     origins = [
         f"http://localhost:{FRONTEND_PORT}",
         f"http://127.0.0.1:{FRONTEND_PORT}",
     ]
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=not DEBUG,  # *와 credentials 동시 사용 불가
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+if DEBUG and not ALLOWED_ORIGINS:
+    # 개발 모드: 모든 origin 허용 (LAN IP 접근 등) + credentials 지원
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origin_regex=r"https?://.*",
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 
 # -- Middleware ------------------------------------------------------------

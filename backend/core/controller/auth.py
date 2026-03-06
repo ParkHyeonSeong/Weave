@@ -4,7 +4,10 @@ from datetime import datetime, timezone, timedelta
 from fastapi import Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from config import JWT_SECRET_KEY, JWT_ALGORITHM, JWT_EXPIRE_HOURS
+from config import (
+    JWT_SECRET_KEY, JWT_ALGORITHM, JWT_EXPIRE_HOURS,
+    COOKIE_NAME, COOKIE_SECURE, COOKIE_SAMESITE, COOKIE_HTTPONLY,
+)
 from core.model import user as user_model
 from core.model import workspace as workspace_model
 
@@ -27,7 +30,30 @@ def _create_token(user_id: int, email: str, username: str, role: str = 'member')
     return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
 
 
-async def register(body, request: Request, db: AsyncSession):
+def _set_auth_cookie(response: Response, token: str):
+    """응답에 인증 쿠키 설정"""
+    response.set_cookie(
+        key=COOKIE_NAME,
+        value=token,
+        max_age=JWT_EXPIRE_HOURS * 3600,
+        httponly=COOKIE_HTTPONLY,
+        samesite=COOKIE_SAMESITE,
+        secure=COOKIE_SECURE,
+        path="/",
+    )
+
+
+def _clear_auth_cookie(response: Response):
+    """인증 쿠키 삭제"""
+    response.delete_cookie(
+        key=COOKIE_NAME,
+        path="/",
+        samesite=COOKIE_SAMESITE,
+        secure=COOKIE_SECURE,
+    )
+
+
+async def register(body, request: Request, response: Response, db: AsyncSession):
     """회원가입"""
     # 초기화 여부 확인
     settings = await workspace_model.get_settings(db)
@@ -48,10 +74,19 @@ async def register(body, request: Request, db: AsyncSession):
     # public 모드: active 상태로 생성, 즉시 로그인
     user_id = await user_model.create(body.email, password_hash, body.username, db)
     token = _create_token(user_id, body.email, body.username, 'member')
-    return {'status': True, 'x_token': token}
+    _set_auth_cookie(response, token)
+    return {
+        'status': True,
+        'profile': {
+            'user_id': user_id,
+            'email': body.email,
+            'username': body.username,
+            'role': 'member',
+        },
+    }
 
 
-async def login(body, request: Request, db: AsyncSession):
+async def login(body, request: Request, response: Response, db: AsyncSession):
     """로그인"""
     user = await user_model.find_by_email(body.email, db)
     if not user:
@@ -73,16 +108,35 @@ async def login(body, request: Request, db: AsyncSession):
     ip = _get_client_ip(request)
     await user_model.update_login(user['user_id'], ip, db)
 
-    token = _create_token(user['user_id'], user['email'], user['username'], user.get('role', 'member'))
-    return {'status': True, 'x_token': token}
+    role = user.get('role', 'member')
+    token = _create_token(user['user_id'], user['email'], user['username'], role)
+    _set_auth_cookie(response, token)
+    return {
+        'status': True,
+        'profile': {
+            'user_id': user['user_id'],
+            'email': user['email'],
+            'username': user['username'],
+            'role': role,
+        },
+    }
 
 
-async def health_check(request: Request):
-    """인증 상태 확인"""
+async def me(request: Request):
+    """현재 인증 사용자 프로필 반환"""
     payload = request.state.payload
     return {
         'status': True,
-        'user_id': payload.get('user_id'),
-        'email': payload.get('email'),
-        'username': payload.get('username'),
+        'profile': {
+            'user_id': payload.get('user_id'),
+            'email': payload.get('email'),
+            'username': payload.get('username'),
+            'role': payload.get('role'),
+        },
     }
+
+
+async def logout(response: Response):
+    """로그아웃 - 쿠키 삭제"""
+    _clear_auth_cookie(response)
+    return {'status': True}

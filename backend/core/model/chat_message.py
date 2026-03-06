@@ -25,12 +25,14 @@ async def find_by_room(room_id: int, limit: int, offset: int, db: AsyncSession):
                t.title AS ref_task_title, t.status AS ref_task_status,
                t.priority AS ref_task_priority,
                b.key AS ref_branch_key,
-               au.username AS ref_assignee_name
+               (SELECT u2.username FROM task_assignee ta2
+                INNER JOIN "user" u2 ON ta2.user_id = u2.user_id
+                WHERE ta2.task_id = t.task_id AND ta2.role = 'main'
+                LIMIT 1) AS ref_main_assignee_name
         FROM chat_message cm
         INNER JOIN "user" u ON cm.sender_id = u.user_id
         LEFT JOIN task t ON cm.task_id = t.task_id
         LEFT JOIN branch b ON t.branch_id = b.branch_id
-        LEFT JOIN "user" au ON t.assignee_id = au.user_id
         WHERE cm.room_id = :room_id
         ORDER BY cm.created_at DESC
         LIMIT :limit OFFSET :offset
@@ -48,7 +50,7 @@ async def find_by_room(room_id: int, limit: int, offset: int, db: AsyncSession):
                 'title': msg['ref_task_title'],
                 'status': msg['ref_task_status'],
                 'priority': msg['ref_task_priority'],
-                'assignee_name': msg['ref_assignee_name'],
+                'assignee_name': msg['ref_main_assignee_name'],
             }
         else:
             msg['task_ref'] = None

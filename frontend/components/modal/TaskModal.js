@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { X, ChevronDown } from 'lucide-react';
 import { axios } from '@/library/_axios';
 
 export default function TaskModal({ branchId, branchKey, task, defaultSprintId, onClose }) {
@@ -232,31 +232,11 @@ export default function TaskModal({ branchId, branchKey, task, defaultSprintId, 
           </div>
 
           {/* 서브 담당자 */}
-          {members.length > 0 && (
-            <div className="TaskModal__Field">
-              <label className="TaskModal__Label">Sub Assignees</label>
-              <div className="TaskModal__SubAssignees">
-                {members
-                  .filter((m) => String(m.user_id) !== String(mainAssigneeId))
-                  .map((m) => (
-                    <button
-                      key={m.user_id}
-                      type="button"
-                      className={`TaskModal__SubAssigneeChip ${subAssigneeIds.includes(m.user_id) ? 'TaskModal__SubAssigneeChip--selected' : ''}`}
-                      onClick={() =>
-                        setSubAssigneeIds((prev) =>
-                          prev.includes(m.user_id)
-                            ? prev.filter((id) => id !== m.user_id)
-                            : [...prev, m.user_id]
-                        )
-                      }
-                    >
-                      {m.username}
-                    </button>
-                  ))}
-              </div>
-            </div>
-          )}
+          <SubAssigneeSelect
+            members={members.filter((m) => String(m.user_id) !== String(mainAssigneeId))}
+            selectedIds={subAssigneeIds}
+            onChange={setSubAssigneeIds}
+          />
 
           {/* 라벨 */}
           {labels.length > 0 && (
@@ -323,6 +303,62 @@ export default function TaskModal({ branchId, branchKey, task, defaultSprintId, 
           </div>
         </div>
       </form>
+    </div>
+  );
+}
+
+function SubAssigneeSelect({ members, selectedIds, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
+
+  const toggle = (userId) => {
+    onChange(
+      selectedIds.includes(userId)
+        ? selectedIds.filter((id) => id !== userId)
+        : [...selectedIds, userId]
+    );
+  };
+
+  const selectedNames = members
+    .filter((m) => selectedIds.includes(m.user_id))
+    .map((m) => m.username);
+
+  return (
+    <div className="TaskModal__Field" ref={ref}>
+      <label className="TaskModal__Label">Sub Assignees</label>
+      <button
+        type="button"
+        className="TaskModal__Select TaskModal__SubAssigneeBtn"
+        onClick={() => setOpen((prev) => !prev)}
+      >
+        <span className={selectedNames.length > 0 ? '' : 'TaskModal__SubAssigneePlaceholder'}>
+          {selectedNames.length > 0 ? selectedNames.join(', ') : 'None'}
+        </span>
+        <ChevronDown size={14} />
+      </button>
+      {open && members.length > 0 && (
+        <div className="TaskModal__SubAssigneeDropdown">
+          {members.map((m) => (
+            <label key={m.user_id} className="TaskModal__SubAssigneeOption">
+              <input
+                type="checkbox"
+                checked={selectedIds.includes(m.user_id)}
+                onChange={() => toggle(m.user_id)}
+              />
+              <span>{m.username}</span>
+            </label>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -46,9 +46,10 @@ export default function TaskRefCard({ taskRef, removable, onRemove }) {
         <span className={`TaskRefCard__Status TaskRefCard__Status--${taskRef.status}`}>
           {STATUS_LABELS[taskRef.status] || taskRef.status}
         </span>
-        {taskRef.assignee_name && (
-          <span className="TaskRefCard__Assignee">{taskRef.assignee_name}</span>
-        )}
+        {(() => {
+          const main = (taskRef.assignees || []).find((a) => a.role === 'main');
+          return main ? <span className="TaskRefCard__Assignee">{main.username}</span> : null;
+        })()}
       </div>
     </div>
   );

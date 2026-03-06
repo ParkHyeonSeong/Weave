@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { axios } from '@/library/_axios';
-import { X, Trash2 } from 'lucide-react';
+import { X, Trash2, ChevronDown } from 'lucide-react';
 import CustomSelect from '@/components/common/CustomSelect';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 
@@ -304,36 +304,18 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes, taskSu
             </DetailRow>
 
             {/* 서브 담당자 */}
-            <DetailRow label="Sub Assignees" align="top">
-              <div className="TaskDetailPanel__SubAssignees">
-                {members
-                  .filter((m) => {
-                    const mainId = (task.assignees || []).find((a) => a.role === 'main')?.user_id;
-                    return m.user_id !== mainId;
-                  })
-                  .map((m) => {
-                    const selected = (task.assignees || []).some((a) => a.role === 'sub' && a.user_id === m.user_id);
-                    return (
-                      <button
-                        key={m.user_id}
-                        className={`TaskDetailPanel__SubAssigneeChip ${selected ? 'TaskDetailPanel__SubAssigneeChip--selected' : ''}`}
-                        onClick={() => {
-                          const mainId = (task.assignees || []).find((a) => a.role === 'main')?.user_id || null;
-                          const currentSubs = (task.assignees || []).filter((a) => a.role === 'sub').map((a) => a.user_id);
-                          const newSubs = selected
-                            ? currentSubs.filter((id) => id !== m.user_id)
-                            : [...currentSubs, m.user_id];
-                          updateAssignees(mainId, newSubs);
-                        }}
-                      >
-                        {m.username}
-                      </button>
-                    );
-                  })}
-                {members.length === 0 && (
-                  <span className="TaskDetailPanel__FieldValue">None</span>
-                )}
-              </div>
+            <DetailRow label="Sub Assignees">
+              <SubAssigneeDropdown
+                members={members.filter((m) => {
+                  const mainId = (task.assignees || []).find((a) => a.role === 'main')?.user_id;
+                  return m.user_id !== mainId;
+                })}
+                selectedIds={(task.assignees || []).filter((a) => a.role === 'sub').map((a) => a.user_id)}
+                onChange={(newSubs) => {
+                  const mainId = (task.assignees || []).find((a) => a.role === 'main')?.user_id || null;
+                  updateAssignees(mainId, newSubs);
+                }}
+              />
             </DetailRow>
 
             {/* 라벨 */}
@@ -401,6 +383,60 @@ function DetailRow({ label, children, align }) {
     <div className={`TaskDetailPanel__Row ${align === 'top' ? 'TaskDetailPanel__Row--top' : ''}`}>
       <span className="TaskDetailPanel__RowLabel">{label}</span>
       <div className="TaskDetailPanel__RowValue">{children}</div>
+    </div>
+  );
+}
+
+function SubAssigneeDropdown({ members, selectedIds, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
+
+  const toggle = (userId) => {
+    const newIds = selectedIds.includes(userId)
+      ? selectedIds.filter((id) => id !== userId)
+      : [...selectedIds, userId];
+    onChange(newIds);
+  };
+
+  const selectedNames = members
+    .filter((m) => selectedIds.includes(m.user_id))
+    .map((m) => m.username);
+
+  return (
+    <div className="TaskDetailPanel__SubAssigneeWrap" ref={ref}>
+      <button
+        type="button"
+        className="TaskDetailPanel__SubAssigneeBtn"
+        onClick={() => setOpen((prev) => !prev)}
+      >
+        <span className={selectedNames.length > 0 ? '' : 'TaskDetailPanel__SubAssigneePlaceholder'}>
+          {selectedNames.length > 0 ? selectedNames.join(', ') : 'None'}
+        </span>
+        <ChevronDown size={12} />
+      </button>
+      {open && members.length > 0 && (
+        <div className="TaskDetailPanel__SubAssigneeDropdown">
+          {members.map((m) => (
+            <label key={m.user_id} className="TaskDetailPanel__SubAssigneeOption">
+              <input
+                type="checkbox"
+                checked={selectedIds.includes(m.user_id)}
+                onChange={() => toggle(m.user_id)}
+              />
+              <span>{m.username}</span>
+            </label>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

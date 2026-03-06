@@ -141,15 +141,13 @@ export default function Layout({ children }) {
 
   // WebSocket 연결 관리
   useEffect(() => {
-    const token = sessionStorage.getItem('x_token');
-    if (!token) return;
-
-    requestNotificationPermission();
-
     let profile = {};
     try {
       profile = JSON.parse(sessionStorage.getItem('profile') || '{}');
     } catch {}
+    if (!profile.user_id) return;
+
+    requestNotificationPermission();
 
     // API URL에서 포트만 추출, 브라우저 hostname 사용 (LAN IP 대응)
     let backendPort = '10001';
@@ -158,7 +156,7 @@ export default function Layout({ children }) {
       backendPort = parsed.port || '10001';
     } catch {}
     const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const wsUrl = `${wsProtocol}://${window.location.hostname}:${backendPort}/ws/chat?token=${token}`;
+    const wsUrl = `${wsProtocol}://${window.location.hostname}:${backendPort}/ws/chat`;
 
     let reconnectTimer = null;
     let alive = true;

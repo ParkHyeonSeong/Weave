@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Depends, UploadFile, File
+from fastapi import APIRouter, Request, Response, Depends, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .schema import profile as profile_schema
@@ -15,9 +15,9 @@ async def get_profile(request: Request, session: AsyncSession = Depends(db.sessi
 
 
 @router.patch("/username", summary="사용자 이름 변경", dependencies=[Depends(require_login)])
-async def update_username(body: profile_schema.UpdateUsername, request: Request,
+async def update_username(body: profile_schema.UpdateUsername, request: Request, response: Response,
                           session: AsyncSession = Depends(db.session)):
-    return await profile_controller.update_username(body, request, session)
+    return await profile_controller.update_username(body, request, response, session)
 
 
 @router.patch("/password", summary="비밀번호 변경", dependencies=[Depends(require_login)])

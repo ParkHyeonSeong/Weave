@@ -61,6 +61,20 @@
     }
   }
 
+  &__SectionLabel {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-semibold;
+    color: $color-text-secondary;
+    margin-top: $space-3;
+
+    &:first-child {
+      margin-top: 0;
+    }
+  }
+
   // 목록
   &__List {
     display: flex;

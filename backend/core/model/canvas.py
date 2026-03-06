@@ -78,7 +78,7 @@ async def archive(canvas_id: int, db: AsyncSession):
 
 
 async def find_public(user_id: int, query: str, db: AsyncSession):
-    """public이면서 내가 멤버가 아닌 Canvas 목록"""
+    """public Canvas 목록 (가입 여부 포함)"""
     params = {'user_id': user_id}
     where_search = ''
     if query:
@@ -89,13 +89,14 @@ async def find_public(user_id: int, query: str, db: AsyncSession):
         SELECT c.canvas_id, c.canvas_name, c.key, c.description,
                c.color, c.created_at,
                (SELECT COUNT(*) FROM canvas_member cm2
-                WHERE cm2.canvas_id = c.canvas_id) AS member_count
+                WHERE cm2.canvas_id = c.canvas_id) AS member_count,
+               EXISTS(
+                   SELECT 1 FROM canvas_member cm3
+                   WHERE cm3.canvas_id = c.canvas_id AND cm3.user_id = :user_id
+               ) AS is_member
         FROM canvas c
         WHERE c.visibility = 'public'
           AND c.is_archived = FALSE
-          AND c.canvas_id NOT IN (
-              SELECT canvas_id FROM canvas_member WHERE user_id = :user_id
-          )
           {where_search}
         ORDER BY c.canvas_name
     """), params)

@@ -78,9 +78,10 @@ export default function TaskSearchPopup({ keyword, mode, onSelect, onClose }) {
             <span className={`TaskSearchPopup__ItemStatus TaskSearchPopup__ItemStatus--${task.status}`}>
               {STATUS_LABELS[task.status] || task.status}
             </span>
-            {task.assignee_name && (
-              <span className="TaskSearchPopup__ItemAssignee">{task.assignee_name}</span>
-            )}
+            {(() => {
+              const main = (task.assignees || []).find((a) => a.role === 'main');
+              return main ? <span className="TaskSearchPopup__ItemAssignee">{main.username}</span> : null;
+            })()}
           </li>
         ))}
       </ul>

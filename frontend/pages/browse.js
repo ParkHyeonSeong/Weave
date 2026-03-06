@@ -6,7 +6,7 @@ export default function Browse() {
   return (
     <Layout>
       <Head>
-        <title>Browse Branches - Weave</title>
+        <title>Browse - Weave</title>
       </Head>
       <BrowseBranches />
     </Layout>

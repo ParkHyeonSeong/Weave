@@ -211,7 +211,7 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
       title: task.title,
       status: task.status,
       priority: task.priority,
-      assignee_name: task.assignee_name,
+      assignees: task.assignees || [],
     });
     setInput('');
     setSlashCommand(null);

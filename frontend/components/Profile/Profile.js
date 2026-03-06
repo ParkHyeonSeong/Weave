@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { jwtDecode } from 'jwt-decode';
 import { User, Mail, Lock, Eye, EyeOff, Camera } from 'lucide-react';
 import { axios, getBaseURL } from '@/library/_axios';
 import Alert from '@/components/modal/Alert';
@@ -77,9 +76,7 @@ export default function Profile() {
     try {
       const res = await axios.patch('/profile/username', { username: newUsername });
       if (res.data.status) {
-        const token = res.data.x_token;
-        sessionStorage.setItem('x_token', token);
-        sessionStorage.setItem('profile', JSON.stringify(jwtDecode(token)));
+        sessionStorage.setItem('profile', JSON.stringify(res.data.profile));
         setUsername(newUsername);
         window.dispatchEvent(new CustomEvent('profile:updated'));
         showAlert('Success', 'Name updated.');

@@ -222,4 +222,11 @@
     font-weight: $font-weight-bold;
     cursor: default;
   }
+
+  &__SubCount {
+    font-size: 10px;
+    font-weight: $font-weight-semibold;
+    color: $color-text-secondary;
+    margin-left: 2px;
+  }
 }

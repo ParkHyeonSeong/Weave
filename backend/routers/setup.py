@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Request, Response, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .schema import setup as setup_schema
@@ -14,6 +14,6 @@ async def check_status(session: AsyncSession = Depends(db.session)):
 
 
 @router.post("/initialize", summary="초기 설정")
-async def initialize(request: Request, body: setup_schema.SetupInitialize,
+async def initialize(request: Request, response: Response, body: setup_schema.SetupInitialize,
                      session: AsyncSession = Depends(db.session)):
-    return await setup_controller.initialize(body, request, session)
+    return await setup_controller.initialize(body, request, response, session)

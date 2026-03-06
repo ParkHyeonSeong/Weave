@@ -18,3 +18,9 @@ JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "24"))
 # App
 DEBUG = os.getenv("DEBUG", "true").lower() == "true"
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+
+# Cookie
+COOKIE_NAME = "weave_token"
+COOKIE_SECURE = not DEBUG
+COOKIE_SAMESITE = "lax"
+COOKIE_HTTPONLY = True
