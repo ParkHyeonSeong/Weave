@@ -218,9 +218,9 @@
 
   &__Input {
     display: flex;
-    align-items: center;
+    align-items: flex-end;
     gap: $space-2;
-    padding: $space-3;
+    padding: $space-2 $space-3;
     border-top: 1px solid $color-border;
     flex-shrink: 0;
     position: relative;
@@ -261,8 +261,9 @@
   }
 
   &__InputField {
+    display: block;
     width: 100%;
-    padding: $space-2 $space-3;
+    padding: 5px $space-3;
     border: none;
     font-size: $font-size-sm;
     color: $color-text;
@@ -270,7 +271,7 @@
     outline: none;
     resize: none;
     max-height: 120px;
-    line-height: 1.5;
+    line-height: 20px;
     font-family: inherit;
     overflow-y: auto;
 

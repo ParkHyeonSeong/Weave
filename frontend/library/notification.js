@@ -7,13 +7,18 @@ export function requestNotificationPermission() {
   }
 }
 
-export function showNotification(senderName, content) {
+export function showNotification(senderName, content, message) {
   if ('Notification' in window && Notification.permission === 'granted') {
     // 탭이 포커스되어 있으면 알림 안 보냄
     if (document.hasFocus()) return;
 
+    const displayContent = content
+      || (message?.task_ref ? 'Shared a task' : null)
+      || (message?.doc_ref ? 'Shared a document' : null)
+      || '';
+
     const notification = new Notification('Weave', {
-      body: `${senderName}: ${content}`,
+      body: `${senderName}: ${displayContent}`,
       icon: '/icons/weave_square.svg',
       tag: `weave-chat-${Date.now()}`,
     });

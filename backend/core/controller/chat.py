@@ -6,6 +6,8 @@ from core.model import chat_member as member_model
 from core.model import chat_message as message_model
 from core.model import user as user_model
 from core.model import task as task_model
+from core.model import canvas_page as canvas_page_model
+from core.model import task_issue as issue_model
 
 
 async def create_room(body, request: Request, db: AsyncSession):
@@ -96,6 +98,20 @@ async def search_tasks(keyword: str, mode: str, request: Request, db: AsyncSessi
     my_only = mode == 'my'
     tasks = await task_model.search_for_chat(user_id, keyword, my_only, db)
     return {'status': True, 'tasks': tasks}
+
+
+async def search_docs(keyword: str, request: Request, db: AsyncSession):
+    """채팅용 Canvas 문서 검색"""
+    user_id = request.state.payload.get('user_id')
+    docs = await canvas_page_model.search_for_chat(user_id, keyword, db)
+    return {'status': True, 'docs': docs}
+
+
+async def search_issues(keyword: str, request: Request, db: AsyncSession):
+    """채팅용 Issue 검색"""
+    user_id = request.state.payload.get('user_id')
+    issues = await issue_model.search_for_chat(user_id, keyword, db)
+    return {'status': True, 'issues': issues}
 
 
 async def get_users(db: AsyncSession):

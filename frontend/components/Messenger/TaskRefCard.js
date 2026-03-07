@@ -21,7 +21,7 @@ export default function TaskRefCard({ taskRef, removable, onRemove }) {
   // 태스크 클릭 -> 해당 branch 상세로 이동
   const handleClick = () => {
     if (removable || !taskRef.branch_id) return;
-    router.push(`/branch/${taskRef.branch_id}?task=${taskRef.task_id}`);
+    router.push(`/branch/${taskRef.branch_id}/task/${taskRef.task_id}`);
   };
 
   return (

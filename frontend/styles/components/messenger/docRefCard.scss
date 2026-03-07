@@ -1,0 +1,70 @@
+@use '../../variables' as *;
+
+.DocRefCard {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: $space-2 $space-3;
+  background: $color-surface;
+  border: 1px solid $color-border;
+  border-radius: $radius-md;
+  font-size: $font-size-xs;
+  transition: border-color $transition-fast;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+
+  &--clickable {
+    cursor: pointer;
+
+    &:hover {
+      border-color: $color-primary;
+    }
+  }
+
+  &__Header {
+    display: flex;
+    align-items: center;
+    gap: $space-1;
+    min-width: 0;
+  }
+
+  &__Icon {
+    color: $color-primary;
+    flex-shrink: 0;
+  }
+
+  &__Title {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-text;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__Remove {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: $radius-sm;
+    color: $color-text-tertiary;
+    flex-shrink: 0;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: $color-surface-hover;
+      color: $color-text;
+    }
+  }
+
+  &__Canvas {
+    font-size: 10px;
+    color: $color-text-tertiary;
+  }
+}

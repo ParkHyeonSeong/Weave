@@ -34,7 +34,12 @@ async def find_rooms_by_user(user_id: int, db: AsyncSession):
                 WHERE cm.room_id = cr.room_id
                   AND cm.created_at > COALESCE(crm.last_read_at, '1970-01-01')
                   AND cm.sender_id != :user_id) AS unread_count,
-               (SELECT cm2.content FROM chat_message cm2
+               (SELECT COALESCE(NULLIF(TRIM(cm2.content), ''),
+                    CASE WHEN cm2.task_id IS NOT NULL THEN 'Shared a task'
+                         WHEN cm2.canvas_page_id IS NOT NULL THEN 'Shared a document'
+                         WHEN cm2.issue_id IS NOT NULL THEN 'Shared an issue'
+                         ELSE NULL END)
+                FROM chat_message cm2
                 WHERE cm2.room_id = cr.room_id
                 ORDER BY cm2.created_at DESC LIMIT 1) AS last_message,
                (SELECT cm3.created_at FROM chat_message cm3

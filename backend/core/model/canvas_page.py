@@ -46,6 +46,18 @@ async def find_by_id(page_id: int, db: AsyncSession):
     return d
 
 
+async def find_by_id_simple(page_id: int, db: AsyncSession):
+    """페이지 간단 조회 (채팅 doc_ref 용)"""
+    result = await db.execute(text("""
+        SELECT p.page_id, p.canvas_id, p.title, c.canvas_name
+        FROM canvas_page p
+        INNER JOIN canvas c ON p.canvas_id = c.canvas_id
+        WHERE p.page_id = :page_id AND p.is_archived = FALSE
+    """), {'page_id': page_id})
+    row = result.fetchone()
+    return dict(row._mapping) if row else None
+
+
 async def find_tree(canvas_id: int, db: AsyncSession):
     """Canvas 내 전체 페이지 트리 (content 제외, 가볍게)"""
     result = await db.execute(text("""
@@ -112,6 +124,24 @@ async def save_yjs_state(page_id: int, yjs_state: bytes,
             WHERE page_id = :page_id
         """), {'page_id': page_id, 'yjs_state': yjs_state})
     await db.commit()
+
+
+async def search_for_chat(user_id: int, keyword: str, db: AsyncSession):
+    """채팅용 캔버스 페이지 검색 (유저가 접근 가능한 캔버스만)"""
+    result = await db.execute(text("""
+        SELECT p.page_id, p.canvas_id, p.title,
+               c.canvas_name, p.updated_at
+        FROM canvas_page p
+        INNER JOIN canvas c ON p.canvas_id = c.canvas_id
+        INNER JOIN canvas_member cm ON c.canvas_id = cm.canvas_id
+        WHERE cm.user_id = :user_id
+          AND p.is_archived = FALSE
+          AND p.title ILIKE :keyword
+        ORDER BY p.updated_at DESC
+        LIMIT 10
+    """), {'user_id': user_id, 'keyword': f'%{keyword}%'})
+    rows = result.fetchall()
+    return [dict(row._mapping) for row in rows]
 
 
 async def get_next_position(canvas_id: int, parent_page_id: int, db: AsyncSession) -> int:

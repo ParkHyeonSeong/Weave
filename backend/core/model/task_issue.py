@@ -64,6 +64,49 @@ async def delete_issue(issue_id: int, db: AsyncSession):
     await db.commit()
 
 
+async def find_by_id_simple(issue_id: int, db: AsyncSession):
+    """이슈 간단 조회 (채팅 issue_ref 용)"""
+    result = await db.execute(text("""
+        SELECT i.issue_id, i.task_id, i.title, i.status,
+               t.branch_id, t.display_number,
+               b.key AS branch_key
+        FROM task_issue i
+        INNER JOIN task t ON i.task_id = t.task_id
+        INNER JOIN branch b ON t.branch_id = b.branch_id
+        WHERE i.issue_id = :issue_id
+    """), {'issue_id': issue_id})
+    row = result.fetchone()
+    if not row:
+        return None
+    d = dict(row._mapping)
+    d['display_id'] = f"{d['branch_key']}-{d['display_number']}"
+    return d
+
+
+async def search_for_chat(user_id: int, keyword: str, db: AsyncSession):
+    """채팅용 이슈 검색 (유저가 속한 branch의 이슈만)"""
+    result = await db.execute(text("""
+        SELECT i.issue_id, i.task_id, i.title, i.status,
+               t.display_number, t.title AS task_title,
+               t.branch_id, b.key AS branch_key
+        FROM task_issue i
+        INNER JOIN task t ON i.task_id = t.task_id
+        INNER JOIN branch b ON t.branch_id = b.branch_id
+        INNER JOIN branch_member bm ON b.branch_id = bm.branch_id
+        WHERE bm.user_id = :user_id
+          AND i.title ILIKE :keyword
+        ORDER BY i.created_at DESC
+        LIMIT 10
+    """), {'user_id': user_id, 'keyword': f'%{keyword}%'})
+    rows = result.fetchall()
+    results = []
+    for row in rows:
+        d = dict(row._mapping)
+        d['display_id'] = f"{d['branch_key']}-{d['display_number']}"
+        results.append(d)
+    return results
+
+
 async def get_task_id(issue_id: int, db: AsyncSession):
     """이슈의 task_id 조회"""
     result = await db.execute(text("""

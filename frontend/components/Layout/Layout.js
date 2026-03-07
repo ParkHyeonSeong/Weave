@@ -213,9 +213,15 @@ export default function Layout({ children }) {
 
               if (!isViewingRoom) {
                 // Chrome 알림
+                const notiContent = data.message.content
+                  || (data.message.task_ref ? 'Shared a task' : null)
+                  || (data.message.doc_ref ? 'Shared a document' : null)
+                  || (data.message.issue_ref ? 'Shared an issue' : null)
+                  || '';
                 showNotification(
                   data.message.sender_name || 'New Message',
-                  data.message.content
+                  notiContent,
+                  data.message
                 );
 
                 // 헤더 알림 누적
@@ -225,7 +231,7 @@ export default function Layout({ children }) {
                     id: data.message.message_id,
                     roomId: data.room_id,
                     senderName: data.message.sender_name,
-                    content: data.message.content,
+                    content: notiContent,
                     createdAt: data.message.created_at,
                     read: false,
                   }, ...prev].slice(0, 50);

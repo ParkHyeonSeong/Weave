@@ -29,6 +29,22 @@ async def search_tasks(request: Request,
     return await chat_controller.search_tasks(q, mode, request, session)
 
 
+@router.get("/doc-search", summary="채팅용 문서 검색",
+            dependencies=[Depends(require_login)])
+async def search_docs(request: Request,
+                      q: str = Query('', max_length=100),
+                      session: AsyncSession = Depends(db.session)):
+    return await chat_controller.search_docs(q, request, session)
+
+
+@router.get("/issue-search", summary="채팅용 이슈 검색",
+            dependencies=[Depends(require_login)])
+async def search_issues(request: Request,
+                        q: str = Query('', max_length=100),
+                        session: AsyncSession = Depends(db.session)):
+    return await chat_controller.search_issues(q, request, session)
+
+
 @router.get("/users", summary="전체 사용자 목록", dependencies=[Depends(require_login)])
 async def list_users(session: AsyncSession = Depends(db.session)):
     return await chat_controller.get_users(session)

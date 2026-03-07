@@ -4,6 +4,10 @@ import { axios } from '@/library/_axios';
 import { formatMessageTime } from '@/library/formatTime';
 import TaskSearchPopup from './TaskSearchPopup';
 import TaskRefCard from './TaskRefCard';
+import DocSearchPopup from './DocSearchPopup';
+import DocRefCard from './DocRefCard';
+import IssueSearchPopup from './IssueSearchPopup';
+import IssueRefCard from './IssueRefCard';
 
 export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, headerLeft }) {
   const [messages, setMessages] = useState([]);
@@ -14,12 +18,15 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState('');
   const [attachedTask, setAttachedTask] = useState(null);
-  const [slashCommand, setSlashCommand] = useState(null); // { mode: 'my'|'all', keyword: '' }
+  const [attachedDoc, setAttachedDoc] = useState(null);
+  const [attachedIssue, setAttachedIssue] = useState(null);
+  const [slashCommand, setSlashCommand] = useState(null); // { type: 'task'|'doc'|'issue', ... }
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashMenuIdx, setSlashMenuIdx] = useState(0);
   const messagesEndRef = useRef(null);
   const editInputRef = useRef(null);
   const textareaRef = useRef(null);
+  const justSelectedRef = useRef(false);
 
   let myUserId = 0;
   try {
@@ -106,27 +113,41 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
   const handleSend = () => {
     if (isCodeMode) return; // 코드블록이 닫히지 않으면 전송 차단
     const content = input.trim();
-    if (!content && !attachedTask) return;
+    if (!content && !attachedTask && !attachedDoc && !attachedIssue) return;
 
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       const payload = { action: 'send_message', room_id: roomId, content };
       if (attachedTask) payload.task_id = attachedTask.task_id;
+      if (attachedDoc) payload.canvas_page_id = attachedDoc.page_id;
+      if (attachedIssue) payload.issue_id = attachedIssue.issue_id;
       wsRef.current.send(JSON.stringify(payload));
     }
     setInput('');
     setAttachedTask(null);
+    setAttachedDoc(null);
+    setAttachedIssue(null);
     setSlashCommand(null);
   };
 
-  const SLASH_COMMANDS = ['/t', '/ta'];
+  const SLASH_COMMANDS = [
+    { cmd: '/t', desc: 'Search my tasks' },
+    { cmd: '/ta', desc: 'Search all tasks' },
+    { cmd: '/d', desc: 'Search documents' },
+    { cmd: '/i', desc: 'Search issues' },
+  ];
+
+  // 입력값에 따라 슬래시 메뉴 필터링
+  const filteredSlashCommands = SLASH_COMMANDS.filter(
+    (c) => c.cmd.startsWith(input) || input === '/'
+  );
 
   const handleKeyDown = (e) => {
     if (e.nativeEvent.isComposing) return;
     // 슬래시 메뉴 키보드 네비게이션
-    if (showSlashMenu) {
+    if (showSlashMenu && filteredSlashCommands.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setSlashMenuIdx((prev) => Math.min(prev + 1, SLASH_COMMANDS.length - 1));
+        setSlashMenuIdx((prev) => Math.min(prev + 1, filteredSlashCommands.length - 1));
         return;
       }
       if (e.key === 'ArrowUp') {
@@ -136,7 +157,7 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
       }
       if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault();
-        handleSlashMenuSelect(SLASH_COMMANDS[slashMenuIdx]);
+        handleSlashMenuSelect(filteredSlashCommands[slashMenuIdx].cmd);
         return;
       }
       if (e.key === 'Escape') {
@@ -144,9 +165,18 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
         return;
       }
     }
+    // 팝업에서 선택 직후 Enter 중복 방지 (한글 IME 이중 keydown)
+    if (justSelectedRef.current && e.key === 'Enter') {
+      e.preventDefault();
+      justSelectedRef.current = false;
+      return;
+    }
     // 슬래시 커맨드 팝업 활성화 시 키보드 이벤트 위임 (TaskSearchPopup에서 처리)
     if (slashCommand && ['ArrowDown', 'ArrowUp', 'Escape'].includes(e.key)) return;
-    if (slashCommand && e.key === 'Enter' && !e.shiftKey) return;
+    if (slashCommand && e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      return;
+    }
     if (e.key === 'Enter') {
       if (isCodeMode || slashCommand) {
         // 코드모드 또는 검색중: Enter는 줄바꿈 또는 무시
@@ -173,16 +203,23 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
       return;
     }
 
-    // /ta 또는 /t 로 시작하는지 감지 (/ta를 먼저 체크)
+    // 슬래시 커맨드 감지 (/ta를 /t보다 먼저 체크)
     if (val.match(/^\/ta\s/)) {
-      setSlashCommand({ mode: 'all', keyword: val.slice(4) });
+      setSlashCommand({ type: 'task', mode: 'all', keyword: val.slice(4) });
       setShowSlashMenu(false);
     } else if (val.match(/^\/t\s/)) {
-      setSlashCommand({ mode: 'my', keyword: val.slice(3) });
+      setSlashCommand({ type: 'task', mode: 'my', keyword: val.slice(3) });
       setShowSlashMenu(false);
-    } else if (val.match(/^\/t$/) || val.match(/^\/ta?$/)) {
-      // /t 또는 /ta 타이핑 중 (아직 스페이스 안 침)
+    } else if (val.match(/^\/d\s/)) {
+      setSlashCommand({ type: 'doc', keyword: val.slice(3) });
+      setShowSlashMenu(false);
+    } else if (val.match(/^\/i\s/)) {
+      setSlashCommand({ type: 'issue', keyword: val.slice(3) });
+      setShowSlashMenu(false);
+    } else if (val.match(/^\/[tdia]?$/) || val.match(/^\/ta?$/)) {
+      // 커맨드 타이핑 중 (아직 스페이스 안 침)
       setShowSlashMenu(true);
+      setSlashMenuIdx(0);
       if (slashCommand) setSlashCommand(null);
     } else {
       if (slashCommand) setSlashCommand(null);
@@ -195,15 +232,34 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
     setInput(cmd + ' ');
     setShowSlashMenu(false);
     if (cmd === '/t') {
-      setSlashCommand({ mode: 'my', keyword: '' });
+      setSlashCommand({ type: 'task', mode: 'my', keyword: '' });
     } else if (cmd === '/ta') {
-      setSlashCommand({ mode: 'all', keyword: '' });
+      setSlashCommand({ type: 'task', mode: 'all', keyword: '' });
+    } else if (cmd === '/d') {
+      setSlashCommand({ type: 'doc', keyword: '' });
+    } else if (cmd === '/i') {
+      setSlashCommand({ type: 'issue', keyword: '' });
     }
     textareaRef.current?.focus();
   };
 
+  // IME 조합을 강제 종료하고 input을 비우는 헬퍼
+  const clearInputWithIME = () => {
+    if (textareaRef.current) {
+      textareaRef.current.blur();
+      textareaRef.current.value = '';
+    }
+    setInput('');
+    setSlashCommand(null);
+    setTimeout(() => {
+      justSelectedRef.current = false;
+      textareaRef.current?.focus();
+    }, 50);
+  };
+
   // 태스크 선택 시
   const handleTaskSelect = (task) => {
+    justSelectedRef.current = true;
     setAttachedTask({
       task_id: task.task_id,
       branch_id: task.branch_id,
@@ -213,9 +269,33 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
       priority: task.priority,
       assignees: task.assignees || [],
     });
-    setInput('');
-    setSlashCommand(null);
-    textareaRef.current?.focus();
+    clearInputWithIME();
+  };
+
+  // 문서 선택 시
+  const handleDocSelect = (doc) => {
+    justSelectedRef.current = true;
+    setAttachedDoc({
+      page_id: doc.page_id,
+      canvas_id: doc.canvas_id,
+      title: doc.title,
+      canvas_name: doc.canvas_name,
+    });
+    clearInputWithIME();
+  };
+
+  // 이슈 선택 시
+  const handleIssueSelect = (issue) => {
+    justSelectedRef.current = true;
+    setAttachedIssue({
+      issue_id: issue.issue_id,
+      task_id: issue.task_id,
+      branch_id: issue.branch_id,
+      display_id: issue.display_id,
+      title: issue.title,
+      status: issue.status,
+    });
+    clearInputWithIME();
   };
 
   // 채팅방 이름 변경
@@ -353,12 +433,22 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
                 msg.sender_id === myUserId ? 'MessengerChatRoom__Msg--mine' : ''
               }`}
             >
-              {msg.sender_id !== myUserId && (
+              {msg.sender_id !== myUserId && (idx === 0 || messages[idx - 1].sender_id !== msg.sender_id) && (
                 <span className="MessengerChatRoom__MsgSender">{msg.sender_name}</span>
               )}
               {msg.task_ref && (
                 <div className="MessengerChatRoom__MsgTaskRef">
                   <TaskRefCard taskRef={msg.task_ref} />
+                </div>
+              )}
+              {msg.doc_ref && (
+                <div className="MessengerChatRoom__MsgTaskRef">
+                  <DocRefCard docRef={msg.doc_ref} />
+                </div>
+              )}
+              {msg.issue_ref && (
+                <div className="MessengerChatRoom__MsgTaskRef">
+                  <IssueRefCard issueRef={msg.issue_ref} />
                 </div>
               )}
               <div className="MessengerChatRoom__MsgRow">
@@ -393,34 +483,43 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
       </div>
 
       <div className="MessengerChatRoom__Input">
-        {showSlashMenu && (
+        {showSlashMenu && filteredSlashCommands.length > 0 && (
           <div className="SlashMenu">
             <div className="SlashMenu__Header">Commands</div>
             <ul className="SlashMenu__List">
-              <li
-                className={`SlashMenu__Item ${slashMenuIdx === 0 ? 'SlashMenu__Item--active' : ''}`}
-                onClick={() => handleSlashMenuSelect('/t')}
-                onMouseEnter={() => setSlashMenuIdx(0)}
-              >
-                <span className="SlashMenu__Cmd">/t</span>
-                <span className="SlashMenu__Desc">Search my tasks</span>
-              </li>
-              <li
-                className={`SlashMenu__Item ${slashMenuIdx === 1 ? 'SlashMenu__Item--active' : ''}`}
-                onClick={() => handleSlashMenuSelect('/ta')}
-                onMouseEnter={() => setSlashMenuIdx(1)}
-              >
-                <span className="SlashMenu__Cmd">/ta</span>
-                <span className="SlashMenu__Desc">Search all tasks</span>
-              </li>
+              {filteredSlashCommands.map((c, idx) => (
+                <li
+                  key={c.cmd}
+                  className={`SlashMenu__Item ${slashMenuIdx === idx ? 'SlashMenu__Item--active' : ''}`}
+                  onClick={() => handleSlashMenuSelect(c.cmd)}
+                  onMouseEnter={() => setSlashMenuIdx(idx)}
+                >
+                  <span className="SlashMenu__Cmd">{c.cmd}</span>
+                  <span className="SlashMenu__Desc">{c.desc}</span>
+                </li>
+              ))}
             </ul>
           </div>
         )}
-        {slashCommand && (
+        {slashCommand?.type === 'task' && (
           <TaskSearchPopup
             keyword={slashCommand.keyword}
             mode={slashCommand.mode}
             onSelect={handleTaskSelect}
+            onClose={() => setSlashCommand(null)}
+          />
+        )}
+        {slashCommand?.type === 'doc' && (
+          <DocSearchPopup
+            keyword={slashCommand.keyword}
+            onSelect={handleDocSelect}
+            onClose={() => setSlashCommand(null)}
+          />
+        )}
+        {slashCommand?.type === 'issue' && (
+          <IssueSearchPopup
+            keyword={slashCommand.keyword}
+            onSelect={handleIssueSelect}
             onClose={() => setSlashCommand(null)}
           />
         )}
@@ -430,6 +529,24 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
               taskRef={attachedTask}
               removable
               onRemove={() => setAttachedTask(null)}
+            />
+          </div>
+        )}
+        {attachedDoc && (
+          <div className="MessengerChatRoom__AttachedTask">
+            <DocRefCard
+              docRef={attachedDoc}
+              removable
+              onRemove={() => setAttachedDoc(null)}
+            />
+          </div>
+        )}
+        {attachedIssue && (
+          <div className="MessengerChatRoom__AttachedTask">
+            <IssueRefCard
+              issueRef={attachedIssue}
+              removable
+              onRemove={() => setAttachedIssue(null)}
             />
           </div>
         )}

@@ -9,6 +9,8 @@ from library.ws_manager import manager
 from core.model import chat_message as message_model
 from core.model import chat_member as member_model
 from core.model import task as task_model
+from core.model import canvas_page as canvas_page_model
+from core.model import task_issue as issue_model
 import db_engine as db
 
 router = APIRouter()
@@ -54,8 +56,10 @@ async def websocket_chat(ws: WebSocket):
                 room_id = data.get('room_id')
                 content = data.get('content', '').strip()
                 task_id = data.get('task_id')
-                # content 또는 task_id 중 하나는 있어야 함
-                if not room_id or (not content and not task_id):
+                canvas_page_id = data.get('canvas_page_id')
+                issue_id = data.get('issue_id')
+                # content 또는 첨부 중 하나는 있어야 함
+                if not room_id or (not content and not task_id and not canvas_page_id and not issue_id):
                     continue
 
                 # DB 세션 생성 (WebSocket은 Depends 사용 불가)
@@ -66,7 +70,9 @@ async def websocket_chat(ws: WebSocket):
 
                     # 메시지 저장
                     msg = await message_model.create(
-                        room_id, user_id, content, session, task_id=task_id
+                        room_id, user_id, content, session,
+                        task_id=task_id, canvas_page_id=canvas_page_id,
+                        issue_id=issue_id
                     )
 
                     # task_ref 정보 조회
@@ -84,6 +90,32 @@ async def websocket_chat(ws: WebSocket):
                                 'assignees': task.get('assignees', []),
                             }
 
+                    # doc_ref 정보 조회
+                    doc_ref = None
+                    if canvas_page_id:
+                        doc = await canvas_page_model.find_by_id_simple(canvas_page_id, session)
+                        if doc:
+                            doc_ref = {
+                                'page_id': doc['page_id'],
+                                'canvas_id': doc['canvas_id'],
+                                'title': doc['title'],
+                                'canvas_name': doc['canvas_name'],
+                            }
+
+                    # issue_ref 정보 조회
+                    issue_ref = None
+                    if issue_id:
+                        issue = await issue_model.find_by_id_simple(issue_id, session)
+                        if issue:
+                            issue_ref = {
+                                'issue_id': issue['issue_id'],
+                                'task_id': issue['task_id'],
+                                'branch_id': issue['branch_id'],
+                                'display_id': issue['display_id'],
+                                'title': issue['title'],
+                                'status': issue['status'],
+                            }
+
                     # room 멤버에게 broadcast
                     await manager.broadcast_to_room(room_id, {
                         'type': 'new_message',
@@ -96,6 +128,8 @@ async def websocket_chat(ws: WebSocket):
                             'content': msg['content'],
                             'created_at': msg['created_at'],
                             'task_ref': task_ref,
+                            'doc_ref': doc_ref,
+                            'issue_ref': issue_ref,
                         },
                     }, session)
 
