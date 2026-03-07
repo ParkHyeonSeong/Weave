@@ -9,7 +9,7 @@ import DocRefCard from './DocRefCard';
 import IssueSearchPopup from './IssueSearchPopup';
 import IssueRefCard from './IssueRefCard';
 
-export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, headerLeft }) {
+export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, headerLeft, headerRight }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [roomName, setRoomName] = useState('Chat');
@@ -421,6 +421,7 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
             )}
           </div>
         )}
+        {headerRight && <div className="MessengerChatRoom__HeaderRight">{headerRight}</div>}
       </div>
 
       <div className="MessengerChatRoom__Messages">

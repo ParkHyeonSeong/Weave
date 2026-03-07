@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { MessageSquare, Users, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { MessageSquare, Users, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
 import MessengerChatList from './MessengerChatList';
 import MessengerUserList from './MessengerUserList';
 import MessengerChatRoom from './MessengerChatRoom';
@@ -118,6 +118,15 @@ export default function Messenger({ wsRef, activeRoomRef, panelWidth }) {
                   title={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
                 >
                   {sidebarCollapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
+                </button>
+              }
+              headerRight={
+                <button
+                  className="MessengerChatRoom__CloseBtn"
+                  onClick={handleBack}
+                  title="Close chat"
+                >
+                  <X size={14} />
                 </button>
               }
             />

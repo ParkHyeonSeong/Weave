@@ -34,6 +34,27 @@
     }
   }
 
+  &__HeaderRight {
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  &__CloseBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: $radius-md;
+    color: $color-text-tertiary;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+      color: $color-text;
+    }
+  }
+
   &__BackBtn {
     display: flex;
     align-items: center;
