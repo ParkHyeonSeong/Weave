@@ -133,7 +133,7 @@ export default function Layout({ children }) {
         e.preventDefault();
         setIsSidebarCollapsed((prev) => !prev);
       }
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'B') {
+      if ((e.metaKey || e.ctrlKey) && e.key === '.') {
         e.preventDefault();
         setIsMessengerCollapsed((prev) => !prev);
       }

@@ -29,7 +29,7 @@ export default function Footer({
           onClick={onToggleMessenger}
         >
           <PanelRight size={14} />
-          <span className="Footer__Tooltip Footer__Tooltip--right">Messenger <kbd>{mod}⇧B</kbd></span>
+          <span className="Footer__Tooltip Footer__Tooltip--right">Messenger <kbd>{mod}.</kbd></span>
         </button>
       </div>
     </footer>

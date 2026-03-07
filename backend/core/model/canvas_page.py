@@ -30,9 +30,11 @@ async def find_by_id(page_id: int, db: AsyncSession):
                p.content, p.position, p.type, p.is_archived,
                p.created_by, p.updated_by, p.created_at, p.updated_at,
                p.yjs_state, p.yjs_updated_at,
-               u.username AS created_by_name
+               u.username AS created_by_name,
+               u2.username AS updated_by_name
         FROM canvas_page p
         LEFT JOIN "user" u ON p.created_by = u.user_id
+        LEFT JOIN "user" u2 ON p.updated_by = u2.user_id
         WHERE p.page_id = :page_id AND p.is_archived = FALSE
     """), {'page_id': page_id})
     row = result.fetchone()

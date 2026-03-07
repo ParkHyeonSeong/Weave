@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import dynamic from 'next/dynamic';
-import { Pencil, X, Wifi, WifiOff, Loader } from 'lucide-react';
+import { Pencil, X, Wifi, WifiOff, Loader, RefreshCw } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import useCollabProvider from '@/library/useCollabProvider';
 import PresenceBar from './PresenceBar';
@@ -162,6 +162,43 @@ export default function CanvasPageView() {
     fetchPage();
   }, [canvasId, pageId, fetchPage]);
 
+  // 탭 포커스 복귀 시 업데이트 감지
+  const [updateToast, setUpdateToast] = useState(null);
+
+  useEffect(() => {
+    if (!canvasId || !pageId || !page) return;
+    const checkForUpdates = async () => {
+      if (isEditing) return;
+      try {
+        const res = await axios.get(`/canvases/${canvasId}/pages/${pageId}`);
+        if (res.data.status) {
+          const remote = res.data.page;
+          const remoteTime = new Date(remote.updated_at).getTime();
+          const localTime = new Date(page.updated_at).getTime();
+          if (remoteTime > localTime && remote.updated_by !== user?.user_id) {
+            setUpdateToast({
+              name: remote.updated_by_name || remote.created_by_name || 'Someone',
+              reload: () => {
+                setPage(remote);
+                setEditTitle(remote.title);
+                setUpdateToast(null);
+              },
+            });
+          }
+        }
+      } catch {}
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') checkForUpdates();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', checkForUpdates);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', checkForUpdates);
+    };
+  }, [canvasId, pageId, page?.updated_at, isEditing]);
+
   // 키보드 단축키: e → Edit, Cmd+S → Save & Close
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -254,7 +291,7 @@ export default function CanvasPageView() {
         {!isEditing && page.updated_at && (
           <span className="CanvasPageView__Meta">
             Last updated {new Date(page.updated_at).toLocaleDateString()}
-            {page.created_by_name && ` by ${page.created_by_name}`}
+            {(page.updated_by_name || page.created_by_name) && ` by ${page.updated_by_name || page.created_by_name}`}
           </span>
         )}
       </div>
@@ -282,6 +319,18 @@ export default function CanvasPageView() {
           />
         )}
       </div>
+      {updateToast && (
+        <div className="CanvasPageView__Toast">
+          <span>This page was updated by {updateToast.name}</span>
+          <button className="CanvasPageView__ToastBtn" onClick={updateToast.reload}>
+            <RefreshCw size={13} />
+            Refresh
+          </button>
+          <button className="CanvasPageView__ToastClose" onClick={() => setUpdateToast(null)}>
+            <X size={14} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
