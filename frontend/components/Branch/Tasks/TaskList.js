@@ -197,7 +197,7 @@ export default function TaskList({ branchId, branchKey, taskTypes, onSelectTask 
     setActiveType(null);
     setDragOverContainerId(null);
 
-    if (!over) return;
+    if (!over || active.id === over.id) return;
 
     if (String(active.id).startsWith('sprint-')) {
       // 스프린트 순서 변경
@@ -245,23 +245,84 @@ export default function TaskList({ branchId, branchKey, taskTypes, onSelectTask 
         afterTaskId = overTaskId;
       }
 
-      // 낙관적 업데이트: 이동할 태스크들을 원래 위치에서 제거하고 대상에 삽입
       const movingIdSet = new Set(movingIds);
       const movingTasks = movingIds.map((id) => findTask(id)).filter(Boolean);
 
-      // 스프린트에서 제거
+      // 소스 컨테이너 판별
+      const sourceContainer = getContainerId(draggedTaskId);
+
+      // 같은 컨테이너 내 단일 태스크 재정렬 → arrayMove 사용
+      const isSameContainer =
+        afterTaskId !== null &&
+        movingIds.length === 1 &&
+        sourceContainer === (targetSprintId !== null ? `sprint-${targetSprintId}` : 'backlog');
+
+      if (isSameContainer) {
+        if (sourceContainer === 'backlog') {
+          const oldIdx = backlogTasks.findIndex((t) => t.task_id === draggedTaskId);
+          const newIdx = backlogTasks.findIndex((t) => t.task_id === afterTaskId);
+          if (oldIdx === -1 || newIdx === -1 || oldIdx === newIdx) return;
+          const reordered = arrayMove(backlogTasks, oldIdx, newIdx);
+          setBacklogTasks(reordered);
+
+          // afterTaskId = 새 위치 바로 앞 태스크 (서버에 전달)
+          const finalIdx = reordered.findIndex((t) => t.task_id === draggedTaskId);
+          const serverAfter = finalIdx > 0 ? reordered[finalIdx - 1].task_id : null;
+
+          try {
+            await axios.post(`/branches/${branchId}/tasks/reorder`, {
+              task_ids: movingIds,
+              sprint_id: null,
+              after_task_id: serverAfter,
+            });
+          } catch {
+            fetchData();
+          }
+        } else {
+          const sprintId = Number(sourceContainer.replace('sprint-', ''));
+          const newSprints = sprints.map((s) => {
+            if (s.sprint_id !== sprintId) return s;
+            const tasks = [...(s.tasks || [])];
+            const oldIdx = tasks.findIndex((t) => t.task_id === draggedTaskId);
+            const newIdx = tasks.findIndex((t) => t.task_id === afterTaskId);
+            if (oldIdx === -1 || newIdx === -1 || oldIdx === newIdx) return s;
+            return { ...s, tasks: arrayMove(tasks, oldIdx, newIdx) };
+          });
+          setSprints(newSprints);
+
+          const sprint = newSprints.find((s) => s.sprint_id === sprintId);
+          const reordered = sprint?.tasks || [];
+          const finalIdx = reordered.findIndex((t) => t.task_id === draggedTaskId);
+          const serverAfter = finalIdx > 0 ? reordered[finalIdx - 1].task_id : null;
+
+          try {
+            await axios.post(`/branches/${branchId}/tasks/reorder`, {
+              task_ids: movingIds,
+              sprint_id: sprintId,
+              after_task_id: serverAfter,
+            });
+          } catch {
+            fetchData();
+          }
+        }
+        return;
+      }
+
+      // 크로스 컨테이너 이동 또는 다중 태스크 이동
       const newSprints = sprints.map((s) => ({
         ...s,
         tasks: (s.tasks || []).filter((t) => !movingIdSet.has(t.task_id)),
       }));
       let newBacklog = backlogTasks.filter((t) => !movingIdSet.has(t.task_id));
 
-      // 대상에 삽입
       if (targetSprintId === null) {
-        // 백로그
         if (afterTaskId !== null) {
           const idx = newBacklog.findIndex((t) => t.task_id === afterTaskId);
-          newBacklog.splice(idx + 1, 0, ...movingTasks);
+          if (idx !== -1) {
+            newBacklog.splice(idx + 1, 0, ...movingTasks);
+          } else {
+            newBacklog = [...movingTasks, ...newBacklog];
+          }
         } else {
           newBacklog = [...movingTasks, ...newBacklog];
         }
@@ -271,7 +332,11 @@ export default function TaskList({ branchId, branchKey, taskTypes, onSelectTask 
           const tasks = newSprints[sprintIdx].tasks;
           if (afterTaskId !== null) {
             const idx = tasks.findIndex((t) => t.task_id === afterTaskId);
-            tasks.splice(idx + 1, 0, ...movingTasks);
+            if (idx !== -1) {
+              tasks.splice(idx + 1, 0, ...movingTasks);
+            } else {
+              tasks.unshift(...movingTasks);
+            }
           } else {
             tasks.unshift(...movingTasks);
           }
