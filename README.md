@@ -1,154 +1,132 @@
-# Weave
+<p align="center">
+  <img src="frontend/public/icons/weave_square.svg" alt="Weave" width="80" />
+</p>
 
-In-house project management platform to replace Jira and Confluence.
+<h1 align="center">Weave</h1>
 
-## Prerequisites
+<p align="center">
+  Open-source project management platform — a self-hostable alternative to Jira + Confluence.
+</p>
 
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Docker Engine 24+ with Compose V2)
+<p align="center">
+  <a href="#features">Features</a> · <a href="#quick-start">Quick Start</a> · <a href="#tech-stack">Tech Stack</a> · <a href="#contributing">Contributing</a>
+</p>
+
+---
+
+## Why Weave?
+
+Most teams use Jira for tasks and Confluence for docs — two separate tools, two separate contexts. Weave combines project management, documentation, and team chat into a single, self-hosted platform that you fully own.
+
+- **No per-seat pricing.** Host it yourself, invite your whole team.
+- **All-in-one.** Tasks, docs, and chat in one place — no more context switching.
+- **Simple to deploy.** One `make up-build` and you're running.
+
+## Features
+
+### 📋 Task Management
+Organize work with a flexible task system inspired by Linear.
+
+- **Kanban Board** — drag-and-drop cards across status columns
+- **Sprints** — plan iterations, activate, and track completion
+- **Epics & Timeline** — visualize long-term plans across weeks, months, or quarters
+- **Custom Task Types** — define your own task types per project
+- **Labels & Priorities** — categorize and prioritize with visual tags
+- **Issue Threads** — discuss specific tasks with threaded comments
+- **My Tasks** — personal dashboard with filters across all projects
+
+### 📝 Canvas (Documentation)
+A rich knowledge base built on TipTap, replacing Confluence.
+
+- **Rich Text Editor** — headings, tables, code blocks with syntax highlighting, math (KaTeX), callouts
+- **Page Hierarchy** — nested documents with drag-and-drop reordering
+- **Image Support** — paste, drag-and-drop, or upload images directly
+- **Task References** — link tasks inline with live preview popups
+
+### 💬 Messenger (Real-time Chat)
+Built-in team communication via WebSocket.
+
+- **Direct & Group Messages** — 1:1 or group conversations
+- **Task References in Chat** — search and link tasks with `/` commands
+- **Read Receipts** — see who's read your messages
+- **Persistent History** — full message history with pagination
+
+### 🔧 Administration
+- **Setup Wizard** — guided initial configuration (workspace name, registration policy, admin account)
+- **User Management** — approve/reject registrations, assign roles
+- **Registration Policies** — public or invite-only signup
+
+### ⚡ Productivity
+- **Command Palette** — `⌘K` to quickly navigate or create resources
+- **Resizable Panels** — sidebar and messenger widths persist across sessions
+- **Browser Notifications** — stay updated even when the tab is in the background
+- **Browse & Discover** — find and join public projects and canvases
 
 ## Quick Start
 
+### Prerequisites
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Docker Engine 24+ with Compose V2)
+
+### Setup
+
 ```bash
-# 1. Create environment file
+# 1. Clone the repository
+git clone https://github.com/your-org/Weave.git
+cd Weave
+
+# 2. Create environment file
 cp .env.example .env
 
-# 2. Build and start all services
+# 3. Build and start (migrations run automatically)
 make up-build
-
-# 3. Run database migration
-docker compose exec backend alembic upgrade head
-
-# 4. View logs
-make logs
 ```
 
-Services will be available at (ports configurable in `.env`):
+That's it. Open [http://localhost:3000](http://localhost:3000) and follow the setup wizard.
 
-| Service    | URL                                   |
-|------------|---------------------------------------|
-| Frontend   | http://localhost:{FRONTEND_PORT}       |
-| Backend    | http://localhost:{BACKEND_PORT}        |
-| API Docs   | http://localhost:{BACKEND_PORT}/docs   |
-| PostgreSQL | localhost:{DB_PORT}                    |
-
-## Common Commands
+### Useful Commands
 
 ```bash
-make help           # Show all available commands
 make up             # Start all services
-make up-build       # Build and start all services
 make down           # Stop all services
-make restart        # Restart all services
 make logs           # Tail all logs
 make logs-backend   # Tail backend logs only
-make logs-frontend  # Tail frontend logs only
 make db-shell       # Open PostgreSQL shell
-make clean          # Stop and remove all data (volumes)
-make clean-all      # Stop and remove all data + images
+make clean          # Stop and remove all data
+make help           # Show all available commands
 ```
 
-## Project Structure
+### Services
 
-```
-Weave/
-├── backend/                  # FastAPI backend (Python 3.13)
-│   ├── main.py               # App entry point, CORS, JWT middleware
-│   ├── config.py             # Environment config (DB, JWT)
-│   ├── db_engine.py          # Async SQLAlchemy engine + session
-│   ├── routers/
-│   │   ├── auth.py           # /auth/login, /auth/register, /auth/health
-│   │   └── schema/
-│   │       └── auth.py       # Pydantic request schemas
-│   ├── core/
-│   │   ├── controller/
-│   │   │   └── auth.py       # Auth business logic (bcrypt, JWT)
-│   │   └── model/
-│   │       └── user.py       # User CRUD (raw SQL via text())
-│   ├── library/
-│   │   └── validator.py      # JWT validation, require_login
-│   ├── migrations/
-│   │   ├── env.py            # Alembic async environment
-│   │   └── versions/
-│   │       └── 001_create_user_table.py
-│   ├── alembic.ini
-│   ├── Dockerfile
-│   └── pyproject.toml
-├── frontend/                 # Next.js 16 frontend (React 19)
-│   ├── pages/
-│   │   ├── _app.js           # Global layout, route guard, SCSS imports
-│   │   ├── index.js
-│   │   └── auth/
-│   │       └── login.js      # Login/Register page
-│   ├── components/
-│   │   ├── Auth/
-│   │   │   └── Login.js      # Login/Register form component
-│   │   └── modal/
-│   │       └── Alert.js      # Alert modal
-│   ├── library/
-│   │   └── _axios/
-│   │       └── index.js      # Axios instance + Bearer interceptor
-│   ├── styles/
-│   │   ├── _variables.scss   # Design tokens (Linear light mode)
-│   │   ├── globals.scss      # Global reset
-│   │   └── components/
-│   │       ├── auth/
-│   │       │   └── login.scss
-│   │       └── modal/
-│   │           └── alert.scss
-│   ├── Dockerfile
-│   └── package.json
-├── docker-compose.yml
-├── Makefile
-├── .env.example
-└── README.md
-```
+| Service    | Default URL                  |
+|------------|------------------------------|
+| Frontend   | http://localhost:3000         |
+| Backend    | http://localhost:8000         |
+| API Docs   | http://localhost:8000/docs    |
+| PostgreSQL | localhost:5432               |
+
+> Ports are configurable via `.env`.
 
 ## Tech Stack
 
-- **Frontend:** Next.js 16 (Turbopack), React 19, SCSS, Axios
-- **Backend:** Python 3.13, FastAPI, SQLAlchemy (async), Alembic
-- **Database:** PostgreSQL 17
-- **Auth:** JWT (PyJWT) + bcrypt
-- **Containerization:** Docker Compose
+| Layer        | Technology                                         |
+|--------------|----------------------------------------------------|
+| Frontend     | Next.js 16, React 19, SCSS, TipTap, dnd-kit        |
+| Backend      | Python 3.13, FastAPI, SQLAlchemy (async), Alembic   |
+| Database     | PostgreSQL 17                                       |
+| Auth         | JWT (httpOnly cookie) + bcrypt                      |
+| Real-time    | WebSocket                                           |
+| Infra        | Docker Compose, Nginx (production)                  |
 
-## Architecture
+## Contributing
 
-### Backend 3-Layer Pattern
+Contributions are welcome! Whether it's bug reports, feature requests, or pull requests — all input is appreciated.
 
-```
-Router (routers/) → Controller (core/controller/) → Model (core/model/)
-```
+1. Fork the repository
+2. Create your branch (`git checkout -b feat/amazing-feature`)
+3. Commit your changes
+4. Push and open a Pull Request
 
-- **Router**: HTTP endpoint, request validation (Pydantic schema)
-- **Controller**: Business logic, JWT token generation
-- **Model**: Database queries via raw SQL + `text()`
+## License
 
-### Auth Flow
-
-```
-POST /auth/register → Email duplicate check → bcrypt hash → INSERT → JWT
-POST /auth/login    → Email lookup → bcrypt verify → JWT
-```
-
-JWT payload: `{ user_id, email, username, exp }`
-Token stored in `sessionStorage` on frontend.
-
-### Frontend Route Guard
-
-`_app.js` checks `sessionStorage` for `x_token`:
-- No token + private page → redirect to `/auth/login`
-- Has token + auth page → redirect to `/`
-- Axios interceptor detects `NEED_LOGIN` → fires `auth:expired` event → auto logout
-
-## Database Migration
-
-```bash
-# Run migrations
-docker compose exec backend alembic upgrade head
-
-# Create new migration
-docker compose exec backend alembic revision --autogenerate -m "description"
-
-# Check current version
-docker compose exec backend alembic current
-```
+[MIT](LICENSE) © Weave Contributors
