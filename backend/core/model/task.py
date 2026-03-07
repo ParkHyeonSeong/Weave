@@ -183,7 +183,8 @@ async def find_for_board(branch_id: int, sprint_id, db: AsyncSession):
         where_sprint = "AND t.sprint_id = :sprint_id"
         params['sprint_id'] = sprint_id
     else:
-        where_sprint = ""
+        # sprint_id 미지정 시 모든 active sprint의 task 조회
+        where_sprint = "AND t.sprint_id IN (SELECT sprint_id FROM sprint WHERE branch_id = :branch_id AND status = 'active')"
 
     result = await db.execute(text(f"""
         SELECT t.task_id, t.display_number, t.title,

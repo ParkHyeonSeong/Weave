@@ -12,7 +12,8 @@ const COLUMNS = [
 
 export default function BoardView({ branchId, branchKey, taskTypes, onSelectTask }) {
   const [columns, setColumns] = useState({ todo: [], in_progress: [], done: [] });
-  const [activeSprint, setActiveSprint] = useState(null);
+  const [activeSprints, setActiveSprints] = useState([]);
+  const [selectedSprintId, setSelectedSprintId] = useState(null); // null = All
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -21,25 +22,25 @@ export default function BoardView({ branchId, branchKey, taskTypes, onSelectTask
   const [selectedUserIds, setSelectedUserIds] = useState(new Set());
 
   useEffect(() => {
-    fetchActiveSprint();
+    fetchActiveSprints();
     fetchMembers();
   }, [branchId]);
 
   // task:updated 이벤트
   useEffect(() => {
-    const handleRefresh = () => fetchActiveSprint();
+    const handleRefresh = () => fetchActiveSprints();
     window.addEventListener('task:updated', handleRefresh);
     return () => window.removeEventListener('task:updated', handleRefresh);
   }, [branchId]);
 
-  const fetchActiveSprint = async () => {
+  const fetchActiveSprints = async () => {
     try {
       const res = await axios.get(`/branches/${branchId}/sprints`);
       if (res.data.status) {
-        const active = res.data.sprints.find((s) => s.status === 'active');
-        setActiveSprint(active || null);
-        if (active) {
-          fetchBoard(active.sprint_id);
+        const actives = res.data.sprints.filter((s) => s.status === 'active');
+        setActiveSprints(actives);
+        if (actives.length > 0) {
+          fetchBoard(selectedSprintId);
         } else {
           setColumns({ todo: [], in_progress: [], done: [] });
           setLoading(false);
@@ -59,9 +60,8 @@ export default function BoardView({ branchId, branchKey, taskTypes, onSelectTask
 
   const fetchBoard = async (sprintId) => {
     try {
-      const res = await axios.get(`/branches/${branchId}/tasks/board`, {
-        params: { sprint_id: sprintId },
-      });
+      const params = sprintId ? { sprint_id: sprintId } : {};
+      const res = await axios.get(`/branches/${branchId}/tasks/board`, { params });
       if (res.data.status) {
         setColumns(res.data.columns);
       }
@@ -69,10 +69,15 @@ export default function BoardView({ branchId, branchKey, taskTypes, onSelectTask
     setLoading(false);
   };
 
+  const handleSprintTabClick = (sprintId) => {
+    setSelectedSprintId(sprintId);
+    fetchBoard(sprintId);
+  };
+
   const handleStatusChange = async (taskId, newStatus) => {
     try {
       await axios.patch(`/branches/${branchId}/tasks/${taskId}`, { status: newStatus });
-      if (activeSprint) fetchBoard(activeSprint.sprint_id);
+      fetchBoard(selectedSprintId);
     } catch {}
   };
 
@@ -97,19 +102,10 @@ export default function BoardView({ branchId, branchKey, taskTypes, onSelectTask
     return true;
   });
 
-  // 남은 일수 계산
-  const getRemainingDays = () => {
-    if (!activeSprint?.end_date) return null;
-    const end = new Date(activeSprint.end_date);
-    const now = new Date();
-    const diff = Math.ceil((end - now) / (1000 * 60 * 60 * 24));
-    return diff;
-  };
-
   if (loading) return null;
 
   // active sprint 없는 경우
-  if (!activeSprint) {
+  if (activeSprints.length === 0) {
     return (
       <div className="BoardView">
         <div className="BoardView__Empty">
@@ -123,19 +119,46 @@ export default function BoardView({ branchId, branchKey, taskTypes, onSelectTask
     );
   }
 
-  const remainingDays = getRemainingDays();
+  // 선택된 sprint의 남은 일수
+  const selectedSprint = selectedSprintId
+    ? activeSprints.find((s) => s.sprint_id === selectedSprintId)
+    : null;
+
+  const getRemainingDays = (sprint) => {
+    if (!sprint?.end_date) return null;
+    const end = new Date(sprint.end_date);
+    const now = new Date();
+    return Math.ceil((end - now) / (1000 * 60 * 60 * 24));
+  };
 
   return (
     <div className="BoardView">
-      {/* Sprint 정보 + 필터 */}
+      {/* Sprint 탭 + 필터 */}
       <div className="BoardView__Header">
-        <div className="BoardView__SprintInfo">
-          <span className="BoardView__SprintName">{activeSprint.sprint_name}</span>
-          {remainingDays !== null && (
-            <span className={`BoardView__SprintDays ${remainingDays < 0 ? 'BoardView__SprintDays--overdue' : ''}`}>
-              {remainingDays < 0 ? `${Math.abs(remainingDays)}d overdue` : `${remainingDays}d remaining`}
-            </span>
-          )}
+        <div className="BoardView__SprintTabs">
+          <button
+            className={`BoardView__SprintTab ${selectedSprintId === null ? 'BoardView__SprintTab--active' : ''}`}
+            onClick={() => handleSprintTabClick(null)}
+          >
+            All
+          </button>
+          {activeSprints.map((sprint) => {
+            const days = getRemainingDays(sprint);
+            return (
+              <button
+                key={sprint.sprint_id}
+                className={`BoardView__SprintTab ${selectedSprintId === sprint.sprint_id ? 'BoardView__SprintTab--active' : ''}`}
+                onClick={() => handleSprintTabClick(sprint.sprint_id)}
+              >
+                {sprint.sprint_name}
+                {days !== null && (
+                  <span className={`BoardView__SprintDays ${days < 0 ? 'BoardView__SprintDays--overdue' : ''}`}>
+                    {days < 0 ? `${Math.abs(days)}d overdue` : `${days}d`}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
         <TaskFilterBar
           members={members}

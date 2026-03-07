@@ -48,12 +48,6 @@ async def update(sprint_id: int, body, branch_id: int, request: Request, db: Asy
 
     fields = body.model_dump(exclude_none=True)
 
-    # active 스프린트 1개 제한
-    if fields.get('status') == 'active':
-        existing_active = await sprint_model.find_active(branch_id, db)
-        if existing_active and existing_active != sprint_id:
-            return {'status': False, 'message': 'ACTIVE_SPRINT_EXISTS'}
-
     await sprint_model.update(sprint_id, fields, db)
     return {'status': True}
 
@@ -84,11 +78,6 @@ async def start(sprint_id: int, branch_id: int, request: Request, db: AsyncSessi
 
     if sprint['status'] != 'future':
         return {'status': False, 'message': 'SPRINT_NOT_FUTURE'}
-
-    # active 스프린트 1개 제한
-    existing_active = await sprint_model.find_active(branch_id, db)
-    if existing_active:
-        return {'status': False, 'message': 'ACTIVE_SPRINT_EXISTS'}
 
     fields = {'status': 'active'}
     if not sprint['start_date']:

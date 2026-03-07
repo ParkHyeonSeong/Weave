@@ -51,14 +51,16 @@ async def find_by_branch(branch_id: int, db: AsyncSession):
     return [dict(row._mapping) for row in rows]
 
 
-async def find_active(branch_id: int, db: AsyncSession):
-    """Branch의 active Sprint 조회"""
+async def find_active_sprints(branch_id: int, db: AsyncSession):
+    """Branch의 active Sprint 목록 조회"""
     result = await db.execute(text("""
-        SELECT sprint_id FROM sprint
+        SELECT sprint_id, sprint_name, start_date, end_date
+        FROM sprint
         WHERE branch_id = :branch_id AND status = 'active'
+        ORDER BY sort_order, created_at
     """), {'branch_id': branch_id})
-    row = result.fetchone()
-    return row[0] if row else None
+    rows = result.fetchall()
+    return [dict(row._mapping) for row in rows]
 
 
 async def update(sprint_id: int, fields: dict, db: AsyncSession):

@@ -32,29 +32,47 @@
     margin-bottom: $space-4;
   }
 
-  &__SprintInfo {
+  &__SprintTabs {
     display: flex;
     align-items: center;
-    gap: $space-2;
+    gap: $space-1;
     flex-shrink: 0;
   }
 
-  &__SprintName {
+  &__SprintTab {
+    display: flex;
+    align-items: center;
+    gap: $space-1;
+    padding: 6px $space-3;
+    border-radius: $radius-md;
     font-size: $font-size-sm;
-    font-weight: $font-weight-semibold;
-    color: $color-text;
+    font-weight: $font-weight-medium;
+    color: $color-text-secondary;
+    cursor: pointer;
+    transition: all $transition-fast;
+    background: none;
+    border: none;
+    white-space: nowrap;
+
+    &:hover {
+      background: $color-surface;
+      color: $color-text;
+    }
+
+    &--active {
+      background: $color-surface;
+      color: $color-text;
+      font-weight: $font-weight-semibold;
+    }
   }
 
   &__SprintDays {
-    font-size: $font-size-xs;
+    font-size: 11px;
     color: $color-text-tertiary;
-    background: $color-surface;
-    padding: 2px 8px;
-    border-radius: $radius-sm;
+    font-weight: 400;
 
     &--overdue {
       color: $color-error;
-      background: $color-error-bg;
     }
   }
 

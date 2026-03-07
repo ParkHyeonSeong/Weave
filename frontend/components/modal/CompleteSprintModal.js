@@ -42,8 +42,8 @@ export default function CompleteSprintModal({ branchId, sprint, sprints, onClose
     }
   };
 
-  // future sprint 목록 (이동 대상)
-  const futureSprints = sprints || [];
+  // 이동 대상 sprint 목록 (active + future)
+  const targetSprints = sprints || [];
 
   return (
     <div className="SprintModal__Backdrop" onClick={onClose}>
@@ -86,9 +86,9 @@ export default function CompleteSprintModal({ branchId, sprint, sprints, onClose
                 onChange={(e) => setMoveTo(e.target.value)}
               >
                 <option value="backlog">Backlog</option>
-                {futureSprints.map((s) => (
+                {targetSprints.map((s) => (
                   <option key={s.sprint_id} value={String(s.sprint_id)}>
-                    {s.sprint_name}
+                    {s.sprint_name}{s.status === 'active' ? ' (active)' : ''}
                   </option>
                 ))}
               </select>

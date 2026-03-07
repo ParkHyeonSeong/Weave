@@ -110,7 +110,6 @@ export default function TaskListSprint({
         window.dispatchEvent(new Event('task:updated'));
       } else {
         const messages = {
-          'ACTIVE_SPRINT_EXISTS': 'There is already an active sprint.',
           'SPRINT_NOT_FUTURE': 'Only future sprints can be started.',
         };
         setStartError(messages[res.data.message] || res.data.message);

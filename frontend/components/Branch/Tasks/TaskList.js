@@ -392,7 +392,7 @@ export default function TaskList({ branchId, branchKey, taskTypes, onSelectTask 
         <CompleteSprintModal
           branchId={branchId}
           sprint={completeSprint}
-          sprints={sprints.filter((s) => s.sprint_id !== completeSprint.sprint_id && s.status === 'future')}
+          sprints={sprints.filter((s) => s.sprint_id !== completeSprint.sprint_id && (s.status === 'future' || s.status === 'active'))}
           onClose={() => setCompleteSprint(null)}
         />
       )}
