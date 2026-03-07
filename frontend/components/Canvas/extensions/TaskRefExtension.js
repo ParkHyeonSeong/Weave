@@ -28,6 +28,7 @@ const TaskRefNode = Node.create({
   },
 
   renderHTML({ node, HTMLAttributes }) {
+    const statusMap = { todo: 'Todo', in_progress: 'In Progress', done: 'Done' };
     return [
       'span',
       mergeAttributes(HTMLAttributes, {
@@ -41,6 +42,7 @@ const TaskRefNode = Node.create({
         class: 'task-ref',
       }),
       `${node.attrs.displayId} ${node.attrs.title}`,
+      ['span', { class: `ref-chip__badge ref-chip__badge--${node.attrs.status}`, 'data-ref-badge': 'true' }, statusMap[node.attrs.status] || node.attrs.status],
     ];
   },
 

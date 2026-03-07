@@ -3,12 +3,12 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import { Extension } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
-import Image from '@tiptap/extension-image';
+import { ResizableImage } from './extensions/ResizableImageExtension';
 import Placeholder from '@tiptap/extension-placeholder';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import { Table } from '@tiptap/extension-table';
 import { TableRow } from '@tiptap/extension-table-row';
-import { TableCell } from '@tiptap/extension-table-cell';
+import { TableCellWithBgColor } from './extensions/TableCellExtension';
 import { TableHeader } from '@tiptap/extension-table-header';
 import Underline from '@tiptap/extension-underline';
 import TextAlign from '@tiptap/extension-text-align';
@@ -98,18 +98,18 @@ function CollabEditorInner({
         openOnClick: false,
         HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' },
       }),
-      Image,
+      ResizableImage,
       Placeholder.configure({
         placeholder: 'Start writing...',
       }),
       CodeBlockLowlight.configure({ lowlight }),
       Table.configure({ resizable: true }),
       TableRow,
-      TableCell,
+      TableCellWithBgColor,
       TableHeader,
       Underline,
       TextAlign.configure({
-        types: ['heading', 'paragraph'],
+        types: ['heading', 'paragraph', 'image'],
       }),
       Highlight.configure({
         multicolor: true,

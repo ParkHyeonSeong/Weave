@@ -8,7 +8,8 @@ import {
   AlignLeft, AlignCenter, AlignRight,
   ChevronDown, Highlighter, Palette,
   Info, AlertTriangle, CheckCircle2, XCircle,
-  Type,
+  Type, PaintBucket,
+  AlignStartVertical, AlignCenterVertical, AlignEndVertical,
 } from 'lucide-react';
 
 // 프리셋 컬러 팔레트
@@ -25,6 +26,11 @@ const HIGHLIGHT_COLORS = [
   { label: 'Pink', color: '#FBCFE8' },
   { label: 'Orange', color: '#FED7AA' },
   { label: 'Purple', color: '#DDD6FE' },
+];
+
+const CELL_BG_COLORS = [
+  '#FEF08A', '#BBF7D0', '#BFDBFE', '#FBCFE8',
+  '#FED7AA', '#DDD6FE', '#E0E7FF', '#F1F5F9',
 ];
 
 const CODE_LANGUAGES = [
@@ -347,6 +353,50 @@ export default function CanvasEditorToolbar({ editor }) {
             </div>
           )}
         </DropdownWrapper>
+      )}
+      {editor.extensionManager.extensions.some(e => e.name === 'table') && (
+        <DropdownWrapper isOpen={openDropdown === 'cellBg'} onClose={closeDropdown}>
+          <Btn onClick={() => toggleDropdown('cellBg')} title="Cell Background">
+            <PaintBucket size={16} />
+          </Btn>
+          {openDropdown === 'cellBg' && (
+            <div className="CanvasEditorToolbar__DropdownMenu CanvasEditorToolbar__ColorMenu" style={{ minWidth: 160 }}>
+              <span className="CanvasEditorToolbar__ColorLabel">Cell background</span>
+              <div className="CanvasEditorToolbar__ColorGrid">
+                {CELL_BG_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    className="CanvasEditorToolbar__ColorSwatch"
+                    style={{ backgroundColor: c }}
+                    onClick={() => { editor.chain().focus().setCellAttribute('backgroundColor', c).run(); closeDropdown(); }}
+                  />
+                ))}
+              </div>
+              <button
+                className="CanvasEditorToolbar__ColorReset"
+                onClick={() => { editor.chain().focus().setCellAttribute('backgroundColor', null).run(); closeDropdown(); }}
+              >
+                Remove color
+              </button>
+            </div>
+          )}
+        </DropdownWrapper>
+      )}
+      {editor.extensionManager.extensions.some(e => e.name === 'table') && (
+        <>
+          <Btn onClick={() => editor.chain().focus().setCellAttribute('verticalAlign', 'top').run()}
+            title="Align Top">
+            <AlignStartVertical size={16} />
+          </Btn>
+          <Btn onClick={() => editor.chain().focus().setCellAttribute('verticalAlign', 'middle').run()}
+            title="Align Middle">
+            <AlignCenterVertical size={16} />
+          </Btn>
+          <Btn onClick={() => editor.chain().focus().setCellAttribute('verticalAlign', 'bottom').run()}
+            title="Align Bottom">
+            <AlignEndVertical size={16} />
+          </Btn>
+        </>
       )}
       {editor.extensionManager.extensions.some(e => e.name === 'mathematics') && (
         <Btn onClick={() => editor.chain().focus().insertContent({ type: 'inlineMath', attrs: { latex: 'E=mc^2' } }).run()} title="Math Equation">

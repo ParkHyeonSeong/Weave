@@ -82,14 +82,68 @@
         border-radius: $radius-lg;
       }
 
+      // 리사이즈 가능한 이미지
+      .ResizableImage {
+        display: inline-block;
+        line-height: 0;
+
+        &__Wrap {
+          position: relative;
+          display: inline-block;
+          max-width: 100%;
+          border: 2px solid transparent;
+          border-radius: $radius-lg;
+          transition: border-color 0.15s;
+
+          &--selected {
+            border-color: $color-primary;
+          }
+
+          &--resizing {
+            user-select: none;
+          }
+
+          img {
+            border-radius: $radius-lg;
+          }
+        }
+
+        &__Handle {
+          position: absolute;
+          background: $color-primary;
+          border: 2px solid white;
+          border-radius: 50%;
+          width: 12px;
+          height: 12px;
+          z-index: 10;
+
+          &--right {
+            top: 50%;
+            right: -6px;
+            transform: translateY(-50%);
+            cursor: ew-resize;
+          }
+
+          &--bottomRight {
+            bottom: -6px;
+            right: -6px;
+            cursor: nwse-resize;
+          }
+        }
+      }
+
       table {
         border-collapse: collapse;
         width: 100%;
+        table-layout: fixed;
 
         th, td {
           border: 1px solid $color-border;
           padding: 8px $space-3;
           text-align: left;
+          vertical-align: top;
+          overflow-wrap: break-word;
+          word-break: break-word;
           position: relative;
         }
         th {
