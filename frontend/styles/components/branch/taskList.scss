@@ -46,6 +46,11 @@
     margin-bottom: $space-4;
     border: 1px solid $color-border;
     border-radius: $radius-xl;
+
+    &--dragOver {
+      border-color: $color-primary;
+      box-shadow: 0 0 0 1px $color-primary;
+    }
   }
 
   &__SprintHeader {
@@ -61,6 +66,29 @@
     &:hover {
       background: #F6F7F9;
     }
+  }
+
+  &__DragHandle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: $color-text-tertiary;
+    cursor: grab;
+    opacity: 0;
+    transition: opacity $transition-fast;
+    flex-shrink: 0;
+
+    &:hover {
+      color: $color-text-secondary;
+    }
+
+    &:active {
+      cursor: grabbing;
+    }
+  }
+
+  &__SprintHeader:hover &__DragHandle {
+    opacity: 1;
   }
 
   &__SprintLeft {
@@ -193,6 +221,67 @@
     color: $color-text-tertiary;
   }
 
+  &__InlineTypeWrap {
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  &__InlineTypeBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: $radius-sm;
+    cursor: pointer;
+    transition: background $transition-fast;
+    background: none;
+    border: none;
+
+    &:hover {
+      background: $color-bg;
+    }
+  }
+
+  &__InlineTypeDropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    min-width: 140px;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+    box-shadow: $shadow-md;
+    z-index: 100;
+    padding: $space-1 0;
+    animation: customSelectFadeIn 120ms ease;
+  }
+
+  &__InlineTypeOption {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    width: 100%;
+    padding: 6px $space-3;
+    font-size: $font-size-sm;
+    color: $color-text;
+    cursor: pointer;
+    transition: background $transition-fast;
+    background: none;
+    border: none;
+    text-align: left;
+
+    &:hover {
+      background: $color-surface;
+    }
+
+    &--selected {
+      background: $color-primary-subtle;
+      color: $color-primary;
+      font-weight: $font-weight-medium;
+    }
+  }
+
   &__InlineInput {
     flex: 1;
     padding: 6px 0;
@@ -205,6 +294,33 @@
     &::placeholder {
       color: $color-text-tertiary;
     }
+  }
+
+  // -- 드래그 오버레이 --
+  &__DragOverlay {
+    position: relative;
+    background: $color-bg;
+    border: 1px solid $color-primary;
+    border-radius: $radius-md;
+    box-shadow: $shadow-lg;
+    opacity: 0.95;
+  }
+
+  &__DragBadge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 10px;
+    background: $color-primary;
+    color: $color-text-inverse;
+    font-size: 11px;
+    font-weight: $font-weight-bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   &__InlineBtn {
@@ -335,6 +451,7 @@
   border-bottom: 1px solid $color-border;
   cursor: pointer;
   transition: background $transition-fast;
+  user-select: none;
 
   &:last-child {
     border-bottom: none;
@@ -342,6 +459,41 @@
 
   &:hover {
     background: $color-surface;
+  }
+
+  &--selected {
+    background: $color-primary-subtle;
+
+    &:hover {
+      background: $color-primary-subtle;
+    }
+  }
+
+  &--dragging {
+    opacity: 0.3;
+  }
+
+  &__DragHandle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: $color-text-tertiary;
+    cursor: grab;
+    opacity: 0;
+    transition: opacity $transition-fast;
+    flex-shrink: 0;
+
+    &:hover {
+      color: $color-text-secondary;
+    }
+
+    &:active {
+      cursor: grabbing;
+    }
+  }
+
+  &:hover &__DragHandle {
+    opacity: 1;
   }
 
   &__TypeIcon {

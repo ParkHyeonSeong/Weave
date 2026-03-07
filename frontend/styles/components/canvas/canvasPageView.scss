@@ -8,14 +8,48 @@
   &__TopBar {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: space-between;
     gap: $space-3;
     margin-bottom: $space-6;
   }
 
-  &__Error {
+  &__StatusGroup {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+  }
+
+  &__Status {
+    display: flex;
+    align-items: center;
+    color: $color-text-tertiary;
+
+    &--connected { color: $color-success; }
+    &--connecting { color: #D97706; }
+    &--disconnected { color: $color-error; }
+  }
+
+  &__StatusSpin {
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  &__SaveStatus {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+  }
+
+  &__Loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    color: $color-text-tertiary;
     font-size: $font-size-sm;
-    color: $color-error;
   }
 
   &__Actions {
@@ -40,27 +74,23 @@
       color: $color-text;
     }
 
-    &--primary {
-      background: $color-primary;
-      color: white;
-
-      &:hover {
-        opacity: 0.9;
-        background: $color-primary;
-        color: white;
-      }
-
-      &:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-      }
-    }
-
     &--secondary {
       &:hover {
         background: $color-surface;
       }
     }
+  }
+
+  &__Kbd {
+    font-size: 10px;
+    font-family: inherit;
+    color: $color-text-tertiary;
+    background: $color-surface;
+    border: 1px solid $color-border;
+    border-radius: $radius-sm;
+    padding: 1px 5px;
+    margin-left: $space-1;
+    line-height: 1.4;
   }
 
   &__TitleArea {
@@ -117,7 +147,13 @@
     h2 { font-size: 1.3em; }
     h3 { font-size: 1.1em; }
 
-    p { margin: 0.5em 0; }
+    p {
+      margin: 0.5em 0;
+
+      &:empty::before {
+        content: '\00a0';
+      }
+    }
 
     ul, ol {
       padding-left: 1.5em;

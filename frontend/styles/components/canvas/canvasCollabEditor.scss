@@ -1,0 +1,68 @@
+@use '../../variables' as *;
+
+// Presence Bar
+.PresenceBar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+
+  &__Avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: $font-weight-bold;
+    color: white;
+    flex-shrink: 0;
+
+    // 겹침 효과
+    & + & {
+      margin-left: -6px;
+    }
+  }
+
+  &__Count {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+    margin-left: $space-2;
+    white-space: nowrap;
+  }
+}
+
+// Collaboration cursor
+.collaboration-cursor__caret {
+  position: relative;
+  border-left: 2.5px solid;
+  border-right: none;
+  margin-left: -1px;
+  margin-right: -1px;
+  pointer-events: none;
+  word-break: normal;
+}
+
+.collaboration-cursor__avatar {
+  position: absolute;
+  top: -14px;
+  left: 4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: $font-weight-bold;
+  color: white;
+  line-height: 1;
+  pointer-events: none;
+  user-select: none;
+}
+
+// 기존 label 숨김 (yCursorPlugin 기본 생성 시)
+.collaboration-cursor__label {
+  display: none;
+}

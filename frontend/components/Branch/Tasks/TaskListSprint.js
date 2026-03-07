@@ -1,15 +1,66 @@
-import { useState } from 'react';
-import { ChevronRight, ChevronDown, Plus, Settings, Play, CheckCircle } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { ChevronRight, ChevronDown, Plus, Settings, Play, CheckCircle, GripVertical } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import { useSortable } from '@dnd-kit/sortable';
+import { useDroppable } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import TaskListRow from './TaskListRow';
+import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 
-export default function TaskListSprint({ sprint, branchKey, branchId, taskTypes, epics, members, sprints, onEditTask, onEditSprint, onCompleteSprint, isBacklog }) {
+export default function TaskListSprint({
+  sprint, branchKey, branchId, taskTypes, epics, members, sprints,
+  onEditTask, onEditSprint, onCompleteSprint, isBacklog,
+  selectedTaskIds, dragOverContainerId,
+}) {
   const [collapsed, setCollapsed] = useState(false);
   const [inlineTitle, setInlineTitle] = useState('');
+  const [inlineType, setInlineType] = useState('task');
   const [showInline, setShowInline] = useState(false);
   const [creating, setCreating] = useState(false);
   const [startError, setStartError] = useState('');
+  const [showTypeDropdown, setShowTypeDropdown] = useState(false);
+  const typeDropdownRef = useRef(null);
   const tasks = sprint.tasks || [];
+
+  const containerId = isBacklog ? 'backlog' : `sprint-${sprint.sprint_id}`;
+  const isDragOver = dragOverContainerId === containerId;
+
+  // Sprint 자체의 sortable (백로그 제외)
+  const {
+    attributes: sprintAttributes,
+    listeners: sprintListeners,
+    setNodeRef: setSprintNodeRef,
+    transform: sprintTransform,
+    transition: sprintTransition,
+    isDragging: isSprintDragging,
+  } = useSortable({
+    id: containerId,
+    disabled: isBacklog,
+  });
+
+  const sprintStyle = {
+    transform: CSS.Transform.toString(sprintTransform),
+    transition: sprintTransition,
+    opacity: isSprintDragging ? 0.4 : 1,
+  };
+
+  // Sprint body의 droppable (태스크 드롭 영역)
+  const { setNodeRef: setDroppableRef } = useDroppable({
+    id: containerId,
+  });
+
+  // 타입 드롭다운 외부 클릭 닫기
+  useEffect(() => {
+    if (!showTypeDropdown) return;
+    const handleClick = (e) => {
+      if (typeDropdownRef.current && !typeDropdownRef.current.contains(e.target)) {
+        setShowTypeDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showTypeDropdown]);
 
   const getStatusLabel = (status) => {
     switch (status) {
@@ -38,6 +89,7 @@ export default function TaskListSprint({ sprint, branchKey, branchId, taskTypes,
       const res = await axios.post(`/branches/${branchId}/tasks`, {
         title: inlineTitle.trim(),
         sprint_id: isBacklog ? null : (sprint.sprint_id || null),
+        task_type: inlineType,
       });
       if (res.data.status) {
         setInlineTitle('');
@@ -77,11 +129,29 @@ export default function TaskListSprint({ sprint, branchKey, branchId, taskTypes,
     }
   };
 
+  const currentTypeConfig = (taskTypes || []).find((t) => t.type_key === inlineType);
+  const taskIds = tasks.map((t) => String(t.task_id));
+
   return (
-    <div className="TaskList__Sprint">
+    <div
+      className={`TaskList__Sprint ${isDragOver ? 'TaskList__Sprint--dragOver' : ''}`}
+      ref={setSprintNodeRef}
+      style={sprintStyle}
+    >
       {/* Sprint 헤더 */}
       <div className="TaskList__SprintHeader" onClick={() => setCollapsed(!collapsed)}>
         <div className="TaskList__SprintLeft">
+          {/* 드래그 핸들 (백로그 제외) */}
+          {!isBacklog && (
+            <span
+              className="TaskList__DragHandle"
+              {...sprintAttributes}
+              {...sprintListeners}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <GripVertical size={14} />
+            </span>
+          )}
           {collapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
           <span className="TaskList__SprintName">{sprint.sprint_name}</span>
           {!isBacklog && sprint.status && (
@@ -93,7 +163,6 @@ export default function TaskListSprint({ sprint, branchKey, branchId, taskTypes,
           {startError && <span className="TaskList__SprintError">{startError}</span>}
         </div>
         <div className="TaskList__SprintRight" onClick={(e) => e.stopPropagation()}>
-          {/* Start / Complete 버튼 */}
           {!isBacklog && sprint.status === 'future' && (
             <button className="TaskList__SprintStartBtn" onClick={handleStartSprint}>
               <Play size={12} />
@@ -123,26 +192,58 @@ export default function TaskListSprint({ sprint, branchKey, branchId, taskTypes,
 
       {/* Task 목록 */}
       {!collapsed && (
-        <div className="TaskList__SprintBody">
-          {tasks.length === 0 && !showInline && (
-            <div className="TaskList__Empty">No tasks</div>
-          )}
-          {tasks.map((task) => (
-            <TaskListRow
-              key={task.task_id}
-              task={task}
-              branchId={branchId}
-              taskTypes={taskTypes}
-              epics={epics}
-              members={members}
-              onClick={() => onEditTask(task)}
-            />
-          ))}
+        <div className="TaskList__SprintBody" ref={setDroppableRef}>
+          <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
+            {tasks.length === 0 && !showInline && (
+              <div className="TaskList__Empty">No tasks</div>
+            )}
+            {tasks.map((task) => (
+              <TaskListRow
+                key={task.task_id}
+                task={task}
+                branchId={branchId}
+                taskTypes={taskTypes}
+                epics={epics}
+                members={members}
+                onClick={(e) => onEditTask(task, e)}
+                isSelected={selectedTaskIds && selectedTaskIds.has(task.task_id)}
+              />
+            ))}
+          </SortableContext>
 
           {/* 인라인 생성 */}
           {showInline && (
             <form className="TaskList__InlineCreate" onSubmit={handleInlineCreate}>
-              <Plus size={14} className="TaskList__InlineIcon" />
+              {/* 타입 선택 아이콘 */}
+              <div className="TaskList__InlineTypeWrap" ref={typeDropdownRef}>
+                <button
+                  type="button"
+                  className="TaskList__InlineTypeBtn"
+                  onClick={() => setShowTypeDropdown((prev) => !prev)}
+                  title={currentTypeConfig?.type_name || 'Task'}
+                >
+                  <TaskTypeIcon
+                    name={currentTypeConfig?.icon || 'CheckSquare'}
+                    size={14}
+                    color={currentTypeConfig?.color || '#5E6AD2'}
+                  />
+                </button>
+                {showTypeDropdown && (
+                  <div className="TaskList__InlineTypeDropdown">
+                    {(taskTypes || []).map((tt) => (
+                      <button
+                        key={tt.type_key}
+                        type="button"
+                        className={`TaskList__InlineTypeOption ${inlineType === tt.type_key ? 'TaskList__InlineTypeOption--selected' : ''}`}
+                        onClick={() => { setInlineType(tt.type_key); setShowTypeDropdown(false); }}
+                      >
+                        <TaskTypeIcon name={tt.icon} size={14} color={tt.color} />
+                        <span>{tt.type_name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <input
                 className="TaskList__InlineInput"
                 type="text"
@@ -157,7 +258,7 @@ export default function TaskListSprint({ sprint, branchKey, branchId, taskTypes,
             </form>
           )}
 
-          {/* 만들기 버튼 (인라인이 안 보일 때) */}
+          {/* 만들기 버튼 */}
           {!showInline && (
             <button
               className="TaskList__InlineBtn"

@@ -29,13 +29,19 @@ async def find_by_id(page_id: int, db: AsyncSession):
         SELECT p.page_id, p.canvas_id, p.parent_page_id, p.title,
                p.content, p.position, p.type, p.is_archived,
                p.created_by, p.updated_by, p.created_at, p.updated_at,
+               p.yjs_state, p.yjs_updated_at,
                u.username AS created_by_name
         FROM canvas_page p
         LEFT JOIN "user" u ON p.created_by = u.user_id
         WHERE p.page_id = :page_id AND p.is_archived = FALSE
     """), {'page_id': page_id})
     row = result.fetchone()
-    return dict(row._mapping) if row else None
+    if not row:
+        return None
+    d = dict(row._mapping)
+    # yjs_state는 바이너리라 JSON 직렬화 불가 → boolean 플래그로 변환
+    d['yjs_state'] = bool(d.get('yjs_state'))
+    return d
 
 
 async def find_tree(canvas_id: int, db: AsyncSession):
@@ -75,6 +81,34 @@ async def archive(page_id: int, db: AsyncSession):
         UPDATE canvas_page SET is_archived = TRUE, updated_at = NOW()
         WHERE page_id IN (SELECT page_id FROM descendants)
     """), {'page_id': page_id})
+    await db.commit()
+
+
+async def get_yjs_state(page_id: int, db: AsyncSession) -> bytes | None:
+    """페이지의 Yjs 바이너리 상태 조회"""
+    result = await db.execute(text("""
+        SELECT yjs_state FROM canvas_page WHERE page_id = :page_id
+    """), {'page_id': page_id})
+    row = result.fetchone()
+    return row[0] if row else None
+
+
+async def save_yjs_state(page_id: int, yjs_state: bytes,
+                         html_content: str | None, db: AsyncSession):
+    """Yjs document state 저장. html_content가 제공되면 content도 갱신."""
+    if html_content is not None:
+        await db.execute(text("""
+            UPDATE canvas_page
+            SET yjs_state = :yjs_state, content = :content,
+                yjs_updated_at = NOW(), updated_at = NOW()
+            WHERE page_id = :page_id
+        """), {'page_id': page_id, 'yjs_state': yjs_state, 'content': html_content})
+    else:
+        await db.execute(text("""
+            UPDATE canvas_page
+            SET yjs_state = :yjs_state, yjs_updated_at = NOW(), updated_at = NOW()
+            WHERE page_id = :page_id
+        """), {'page_id': page_id, 'yjs_state': yjs_state})
     await db.commit()
 
 

@@ -127,6 +127,16 @@ async def complete(sprint_id: int, body, branch_id: int, request: Request, db: A
     return {'status': True, 'moved_count': moved}
 
 
+async def reorder(body, branch_id: int, request: Request, db: AsyncSession):
+    """Sprint 순서 변경"""
+    user_id = request.state.payload.get('user_id')
+    if not await member_model.is_member(branch_id, user_id, db):
+        return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+
+    await sprint_model.reorder(branch_id, body.sprint_ids, db)
+    return {'status': True}
+
+
 async def get_task_counts(sprint_id: int, branch_id: int, request: Request, db: AsyncSession):
     """Sprint 내 완료/미완료 task 수 조회"""
     user_id = request.state.payload.get('user_id')

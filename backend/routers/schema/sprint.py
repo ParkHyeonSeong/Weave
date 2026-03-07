@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from datetime import date
 from pydantic import BaseModel, field_validator
 
@@ -27,3 +27,7 @@ class SprintUpdate(BaseModel):
 
 class SprintComplete(BaseModel):
     move_to: str = 'backlog'  # 'backlog' 또는 sprint_id 문자열
+
+
+class SprintReorder(BaseModel):
+    sprint_ids: List[int]

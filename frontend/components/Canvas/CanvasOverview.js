@@ -1,14 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import dynamic from 'next/dynamic';
-import { Pencil, Save, X } from 'lucide-react';
+import { Pencil, X, Wifi, WifiOff, Loader } from 'lucide-react';
 import { axios } from '@/library/_axios';
-import katex from 'katex';
-import { common, createLowlight } from 'lowlight';
-import { toHtml } from 'hast-util-to-html';
+import useCollabProvider from '@/library/useCollabProvider';
+import PresenceBar from './PresenceBar';
 
-const lowlight = createLowlight(common);
-const CanvasEditor = dynamic(() => import('./CanvasEditor'), { ssr: false });
+const CanvasCollabEditor = dynamic(() => import('./CanvasCollabEditor'), { ssr: false });
 
 export default function CanvasOverview() {
   const router = useRouter();
@@ -16,10 +14,18 @@ export default function CanvasOverview() {
   const [canvas, setCanvas] = useState(null);
   const [overview, setOverview] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [editContent, setEditContent] = useState('');
-  const [editTitle, setEditTitle] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [user, setUser] = useState(null);
+  const [saveStatus, setSaveStatus] = useState('saved');
+  const htmlRef = useRef('');
+  const contentTimerRef = useRef(null);
   const contentRef = useRef(null);
+
+  useEffect(() => {
+    try {
+      const profile = JSON.parse(sessionStorage.getItem('profile') || '{}');
+      if (profile.user_id) setUser(profile);
+    } catch {}
+  }, []);
 
   const fetchCanvas = async () => {
     try {
@@ -35,12 +41,9 @@ export default function CanvasOverview() {
       if (res.data.status) {
         const ov = res.data.pages.find((p) => p.type === 'overview');
         if (ov) {
-          // overview의 상세 내용 가져오기
           const detail = await axios.get(`/canvases/${canvasId}/pages/${ov.page_id}`);
           if (detail.data.status) {
             setOverview(detail.data.page);
-            setEditTitle(detail.data.page.title);
-            setEditContent(detail.data.page.content || '');
           }
         }
       }
@@ -53,38 +56,18 @@ export default function CanvasOverview() {
     fetchOverview();
   }, [canvasId, fetchOverview]);
 
-  // 읽기 모드에서 KaTeX 수식 렌더링
-  useEffect(() => {
-    if (isEditing || !contentRef.current) return;
-    const mathNodes = contentRef.current.querySelectorAll('[data-type="block-math"], [data-type="inline-math"]');
-    mathNodes.forEach((el) => {
-      const latex = el.getAttribute('data-latex');
-      if (latex && !el.querySelector('.katex')) {
-        const isBlock = el.getAttribute('data-type') === 'block-math';
-        try {
-          katex.render(latex, el, { throwOnError: false, displayMode: isBlock });
-        } catch {}
-      }
-    });
-  }, [isEditing, overview?.content]);
+  // Edit 모드일 때만 WebSocket 연결
+  const { ydoc, provider, status, connectedUsers } = useCollabProvider(
+    isEditing && canvasId ? Number(canvasId) : null,
+    isEditing && overview?.page_id ? overview.page_id : null,
+    isEditing ? user : null
+  );
 
-  // 읽기 모드에서 코드 블록 구문 강조
   useEffect(() => {
-    if (isEditing || !contentRef.current) return;
-    const codeBlocks = contentRef.current.querySelectorAll('pre code');
-    codeBlocks.forEach((el) => {
-      if (el.dataset.highlighted) return;
-      const lang = (el.className.match(/language-(\w+)/) || [])[1];
-      const code = el.textContent || '';
-      try {
-        const tree = lang && lowlight.registered(lang)
-          ? lowlight.highlight(lang, code)
-          : lowlight.highlightAuto(code);
-        el.innerHTML = toHtml(tree);
-        el.dataset.highlighted = 'true';
-      } catch {}
-    });
-  }, [isEditing, overview?.content]);
+    if (!isEditing) return;
+    if (status === 'disconnected') setSaveStatus('offline');
+    else if (status === 'connected') setSaveStatus('saved');
+  }, [status, isEditing]);
 
   // 읽기 모드에서 태스크 레퍼런스 클릭 핸들러
   useEffect(() => {
@@ -105,28 +88,42 @@ export default function CanvasOverview() {
     return () => handlers.forEach(({ el, handler }) => el.removeEventListener('click', handler));
   }, [isEditing, overview?.content, router]);
 
-  const handleSave = async () => {
-    if (!overview) return;
-    setSaving(true);
-    try {
-      const body = {};
-      if (editTitle !== overview.title) body.title = editTitle;
-      if (editContent !== (overview.content || '')) body.content = editContent;
-
-      if (Object.keys(body).length > 0) {
-        await axios.patch(`/canvases/${canvasId}/pages/${overview.page_id}`, body);
-        await fetchOverview();
+  const handleHtmlChange = (html) => {
+    htmlRef.current = html;
+    if (contentTimerRef.current) clearTimeout(contentTimerRef.current);
+    contentTimerRef.current = setTimeout(async () => {
+      if (!overview) return;
+      setSaveStatus('saving');
+      try {
+        await axios.patch(`/canvases/${canvasId}/pages/${overview.page_id}`, {
+          content: htmlRef.current,
+        });
+        setSaveStatus('saved');
+      } catch {
+        setSaveStatus('offline');
       }
-      setIsEditing(false);
-    } catch {}
-    setSaving(false);
+    }, 5000);
   };
 
-  const handleCancel = () => {
-    setEditTitle(overview.title);
-    setEditContent(overview.content || '');
+  const handleCloseEdit = async () => {
+    if (htmlRef.current) {
+      try {
+        await axios.patch(`/canvases/${canvasId}/pages/${overview.page_id}`, {
+          content: htmlRef.current,
+        });
+      } catch {}
+    }
+    if (contentTimerRef.current) clearTimeout(contentTimerRef.current);
+    htmlRef.current = '';
     setIsEditing(false);
+    fetchOverview();
   };
+
+  useEffect(() => {
+    return () => {
+      if (contentTimerRef.current) clearTimeout(contentTimerRef.current);
+    };
+  }, []);
 
   if (!canvas) return null;
 
@@ -145,55 +142,64 @@ export default function CanvasOverview() {
         )}
       </div>
 
-      {/* Overview 편집/보기 */}
       {overview && (
         <div className="CanvasOverview__Overview">
           <div className="CanvasOverview__OverviewTopBar">
             {isEditing ? (
               <>
-                <button
-                  className="CanvasOverview__OverviewBtn CanvasOverview__OverviewBtn--secondary"
-                  onClick={handleCancel}
-                >
-                  <X size={15} /> Cancel
-                </button>
-                <button
-                  className="CanvasOverview__OverviewBtn CanvasOverview__OverviewBtn--primary"
-                  onClick={handleSave}
-                  disabled={saving}
-                >
-                  <Save size={15} /> {saving ? 'Saving...' : 'Save'}
-                </button>
+                <div className="CanvasOverview__StatusGroup">
+                  <span className={`CanvasOverview__Status CanvasOverview__Status--${status}`}>
+                    {status === 'connected' ? <Wifi size={14} /> :
+                     status === 'connecting' ? <Loader size={14} className="CanvasOverview__StatusSpin" /> :
+                     <WifiOff size={14} />}
+                  </span>
+                  <span className="CanvasOverview__SaveStatus">
+                    {saveStatus === 'saved' ? 'Saved' : saveStatus === 'saving' ? 'Saving...' : 'Offline'}
+                  </span>
+                </div>
+                <div className="CanvasOverview__OverviewActions">
+                  <PresenceBar users={connectedUsers} currentUserId={user?.user_id} />
+                  <button className="CanvasOverview__OverviewBtn" onClick={handleCloseEdit}>
+                    <X size={15} />
+                    Close
+                  </button>
+                </div>
               </>
             ) : (
-              <button
-                className="CanvasOverview__OverviewBtn"
-                onClick={() => setIsEditing(true)}
-              >
-                <Pencil size={15} /> Edit
-              </button>
+              <>
+                <div />
+                <button className="CanvasOverview__OverviewBtn" onClick={() => setIsEditing(true)}>
+                  <Pencil size={15} />
+                  Edit
+                </button>
+              </>
             )}
           </div>
 
-          {isEditing ? (
-            <>
-              <input
-                className="CanvasOverview__OverviewTitleInput"
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                placeholder="Overview title..."
+          <div className="CanvasOverview__OverviewBody">
+            {isEditing ? (
+              ydoc && provider ? (
+                <CanvasCollabEditor
+                  ydoc={ydoc}
+                  provider={provider}
+                  canvasId={Number(canvasId)}
+                  initialContent={overview.content || ''}
+                  hasExistingYjsState={!!overview.yjs_state}
+                  onHtmlChange={handleHtmlChange}
+                />
+              ) : (
+                <div className="CanvasOverview__Loading">Connecting...</div>
+              )
+            ) : (
+              <div
+                ref={contentRef}
+                className="CanvasOverview__OverviewContent"
+                dangerouslySetInnerHTML={{
+                  __html: overview.content || '<p>No content yet. Click Edit to start writing.</p>',
+                }}
               />
-              <CanvasEditor content={editContent} onChange={setEditContent} />
-            </>
-          ) : (
-            <div
-              ref={contentRef}
-              className="CanvasOverview__OverviewContent ProseMirror"
-              dangerouslySetInnerHTML={{
-                __html: overview.content || '<p>No content yet. Click Edit to start writing.</p>',
-              }}
-            />
-          )}
+            )}
+          </div>
         </div>
       )}
     </div>

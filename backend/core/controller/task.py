@@ -118,6 +118,16 @@ async def update(task_id: int, body, branch_id: int, request: Request, db: Async
     return {'status': True}
 
 
+async def reorder(body, branch_id: int, request: Request, db: AsyncSession):
+    """Task 이동 + 순서 변경"""
+    user_id = request.state.payload.get('user_id')
+    if not await member_model.is_member(branch_id, user_id, db):
+        return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+
+    await task_model.reorder(branch_id, body.task_ids, body.sprint_id, body.after_task_id, db)
+    return {'status': True}
+
+
 async def delete(task_id: int, branch_id: int, request: Request, db: AsyncSession):
     """Task 삭제"""
     user_id = request.state.payload.get('user_id')

@@ -30,6 +30,12 @@ async def get_board(branch_id: int, request: Request,
     return await task_controller.get_board(branch_id, sprint_id, request, session)
 
 
+@router.post("/reorder", summary="Task 순서 변경/이동", dependencies=[Depends(require_login)])
+async def reorder_tasks(branch_id: int, body: task_schema.TaskReorder,
+                        request: Request, session: AsyncSession = Depends(db.session)):
+    return await task_controller.reorder(body, branch_id, request, session)
+
+
 @router.get("/{task_id}", summary="Task 상세", dependencies=[Depends(require_login)])
 async def get_task(branch_id: int, task_id: int, request: Request,
                    session: AsyncSession = Depends(db.session)):

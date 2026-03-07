@@ -1,5 +1,6 @@
 import logging
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,6 +8,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from library import validator
+from library.ws_collab_manager import collab_manager
 from routers import auth as auth_router
 from routers import setup as setup_router
 from routers import branch as branch_router
@@ -23,6 +25,7 @@ from routers import canvas as canvas_router
 from routers import canvas_page as canvas_page_router
 from routers import task_issue as task_issue_router
 from routers import my_tasks as my_tasks_router
+from routers import ws_canvas as ws_canvas_router
 
 # -- Logging ---------------------------------------------------------------
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -33,6 +36,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger("weave")
 
+# -- Lifespan ---------------------------------------------------------------
+@asynccontextmanager
+async def lifespan(app):
+    yield
+    # Graceful shutdown: 활성 collaboration room 영속화
+    logger.info("Persisting active collaboration rooms...")
+    await collab_manager.persist_all()
+
+
 # -- App -------------------------------------------------------------------
 app = FastAPI(
     title="Weave API",
@@ -40,6 +52,7 @@ app = FastAPI(
     version="0.1.0",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 DEBUG = os.getenv("DEBUG", "false").lower() == "true"
@@ -87,6 +100,7 @@ app.include_router(setup_router.router, prefix="/setup", tags=["setup"])
 app.include_router(branch_router.router, prefix="/branches", tags=["branches"])
 app.include_router(chat_router.router, prefix="/chat", tags=["chat"])
 app.include_router(ws_chat_router.router, tags=["websocket"])
+app.include_router(ws_canvas_router.router, tags=["websocket"])
 app.include_router(admin_router.router, prefix="/admin", tags=["admin"])
 app.include_router(sprint_router.router, prefix="/branches/{branch_id}/sprints", tags=["sprints"])
 app.include_router(label_router.router, prefix="/branches/{branch_id}/labels", tags=["labels"])

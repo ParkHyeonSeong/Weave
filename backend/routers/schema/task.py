@@ -65,3 +65,9 @@ class TaskUpdate(BaseModel):
         if v is not None and v not in ('low', 'medium', 'high', 'urgent'):
             raise ValueError('priority must be "low", "medium", "high", or "urgent"')
         return v
+
+
+class TaskReorder(BaseModel):
+    task_ids: List[int]
+    sprint_id: Optional[int] = None  # null = backlog
+    after_task_id: Optional[int] = None  # null = 맨 위에 삽입

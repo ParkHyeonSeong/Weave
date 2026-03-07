@@ -1,10 +1,21 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { axios } from '@/library/_axios';
 import { Plus } from 'lucide-react';
+import {
+  DndContext,
+  DragOverlay,
+  closestCorners,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import TaskListSprint from './TaskListSprint';
 import SprintModal from '@/components/modal/SprintModal';
 import CompleteSprintModal from '@/components/modal/CompleteSprintModal';
 import TaskFilterBar from '../TaskFilterBar';
+import TaskListRow from './TaskListRow';
 
 export default function TaskList({ branchId, branchKey, taskTypes, onSelectTask }) {
   const [sprints, setSprints] = useState([]);
@@ -21,12 +32,22 @@ export default function TaskList({ branchId, branchKey, taskTypes, onSelectTask 
   const [sprintModal, setSprintModal] = useState({ open: false, sprint: null });
   const [completeSprint, setCompleteSprint] = useState(null);
 
+  // DnD 상태
+  const [activeId, setActiveId] = useState(null);
+  const [activeType, setActiveType] = useState(null); // 'sprint' | 'task'
+  const [selectedTaskIds, setSelectedTaskIds] = useState(new Set());
+  const [dragOverContainerId, setDragOverContainerId] = useState(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor),
+  );
+
   useEffect(() => {
     fetchData();
     fetchOptions();
   }, [branchId]);
 
-  // task:updated 이벤트로 목록 갱신
   useEffect(() => {
     const handleRefresh = () => fetchData();
     window.addEventListener('task:updated', handleRefresh);
@@ -34,7 +55,6 @@ export default function TaskList({ branchId, branchKey, taskTypes, onSelectTask 
   }, [branchId]);
 
   const fetchOptions = async () => {
-    // 각각 독립적으로 fetch (하나 실패해도 나머지 영향 없음)
     try {
       const epicRes = await axios.get(`/branches/${branchId}/epics`);
       if (epicRes.data.status) setEpics(epicRes.data.epics);
@@ -47,11 +67,9 @@ export default function TaskList({ branchId, branchKey, taskTypes, onSelectTask 
 
   const fetchData = async () => {
     try {
-      // Sprint 목록
       const sprintRes = await axios.get(`/branches/${branchId}/sprints`);
       const sprintList = sprintRes.data.status ? sprintRes.data.sprints : [];
 
-      // 각 Sprint의 Task + Backlog
       const sprintsWithTasks = await Promise.all(
         sprintList.map(async (sprint) => {
           const taskRes = await axios.get(`/branches/${branchId}/tasks`, {
@@ -64,7 +82,6 @@ export default function TaskList({ branchId, branchKey, taskTypes, onSelectTask 
         })
       );
 
-      // Backlog (sprint_id = null)
       const backlogRes = await axios.get(`/branches/${branchId}/tasks`);
       const backlog = backlogRes.data.status ? backlogRes.data.tasks : [];
 
@@ -77,7 +94,7 @@ export default function TaskList({ branchId, branchKey, taskTypes, onSelectTask 
     }
   };
 
-  // 필터 토글
+  // 필터
   const handleToggleUser = (userId) => {
     setSelectedUserIds((prev) => {
       const next = new Set(prev);
@@ -87,7 +104,6 @@ export default function TaskList({ branchId, branchKey, taskTypes, onSelectTask 
     });
   };
 
-  // 클라이언트 사이드 필터링
   const filterTasks = (tasks) => tasks.filter((t) => {
     if (searchQuery && !t.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     if (selectedUserIds.size > 0) {
@@ -98,7 +114,190 @@ export default function TaskList({ branchId, branchKey, taskTypes, onSelectTask 
     return true;
   });
 
+  // 태스크 선택 핸들러
+  const handleTaskClick = useCallback((task, e) => {
+    if (e.metaKey || e.ctrlKey) {
+      // Cmd/Ctrl+Click: 다중 선택 토글
+      setSelectedTaskIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(task.task_id)) next.delete(task.task_id);
+        else next.add(task.task_id);
+        return next;
+      });
+    } else {
+      // 일반 클릭: 선택 초기화 + 패널 열기
+      setSelectedTaskIds(new Set([task.task_id]));
+      onSelectTask(task);
+    }
+  }, [onSelectTask]);
+
+  // 모든 태스크의 컨테이너 매핑 (task_id → containerId)
+  const getContainerId = (taskId) => {
+    for (const sprint of sprints) {
+      if ((sprint.tasks || []).some((t) => t.task_id === taskId)) {
+        return `sprint-${sprint.sprint_id}`;
+      }
+    }
+    if (backlogTasks.some((t) => t.task_id === taskId)) {
+      return 'backlog';
+    }
+    return null;
+  };
+
+  // 활성 태스크 데이터 찾기
+  const findTask = (taskId) => {
+    for (const sprint of sprints) {
+      const found = (sprint.tasks || []).find((t) => t.task_id === taskId);
+      if (found) return found;
+    }
+    return backlogTasks.find((t) => t.task_id === taskId);
+  };
+
+  // DnD 핸들러
+  const handleDragStart = (event) => {
+    const { active } = event;
+    const id = active.id;
+
+    if (String(id).startsWith('sprint-')) {
+      setActiveType('sprint');
+      setActiveId(id);
+    } else {
+      setActiveType('task');
+      setActiveId(id);
+      // 드래그 시작한 태스크가 선택 목록에 없으면 단일 선택으로 전환
+      const taskId = Number(id);
+      if (!selectedTaskIds.has(taskId)) {
+        setSelectedTaskIds(new Set([taskId]));
+      }
+    }
+  };
+
+  const handleDragOver = (event) => {
+    const { over } = event;
+    if (!over || activeType !== 'task') {
+      setDragOverContainerId(null);
+      return;
+    }
+
+    // over가 컨테이너인지 태스크인지 판별
+    const overId = String(over.id);
+    if (overId.startsWith('sprint-') || overId === 'backlog') {
+      setDragOverContainerId(overId);
+    } else {
+      // over가 태스크 → 해당 태스크의 컨테이너 표시
+      setDragOverContainerId(getContainerId(Number(overId)));
+    }
+  };
+
+  const handleDragEnd = async (event) => {
+    const { active, over } = event;
+    setActiveId(null);
+    setActiveType(null);
+    setDragOverContainerId(null);
+
+    if (!over) return;
+
+    if (String(active.id).startsWith('sprint-')) {
+      // 스프린트 순서 변경
+      const oldIndex = sprints.findIndex((s) => `sprint-${s.sprint_id}` === active.id);
+      const newIndex = sprints.findIndex((s) => `sprint-${s.sprint_id}` === over.id);
+      if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return;
+
+      const reordered = arrayMove(sprints, oldIndex, newIndex);
+      setSprints(reordered);
+
+      try {
+        await axios.post(`/branches/${branchId}/sprints/reorder`, {
+          sprint_ids: reordered.map((s) => s.sprint_id),
+        });
+      } catch {
+        fetchData(); // 실패 시 원복
+      }
+    } else {
+      // 태스크 이동/순서 변경
+      const draggedTaskId = Number(active.id);
+      const movingIds = selectedTaskIds.has(draggedTaskId)
+        ? [...selectedTaskIds]
+        : [draggedTaskId];
+
+      // 대상 컨테이너와 위치 결정
+      const overId = String(over.id);
+      let targetSprintId = null;
+      let afterTaskId = null;
+
+      if (overId === 'backlog') {
+        targetSprintId = null;
+        afterTaskId = null;
+      } else if (overId.startsWith('sprint-')) {
+        targetSprintId = Number(overId.replace('sprint-', ''));
+        afterTaskId = null;
+      } else {
+        // over가 태스크
+        const overTaskId = Number(overId);
+        const overContainer = getContainerId(overTaskId);
+        if (overContainer === 'backlog') {
+          targetSprintId = null;
+        } else if (overContainer) {
+          targetSprintId = Number(overContainer.replace('sprint-', ''));
+        }
+        afterTaskId = overTaskId;
+      }
+
+      // 낙관적 업데이트: 이동할 태스크들을 원래 위치에서 제거하고 대상에 삽입
+      const movingIdSet = new Set(movingIds);
+      const movingTasks = movingIds.map((id) => findTask(id)).filter(Boolean);
+
+      // 스프린트에서 제거
+      const newSprints = sprints.map((s) => ({
+        ...s,
+        tasks: (s.tasks || []).filter((t) => !movingIdSet.has(t.task_id)),
+      }));
+      let newBacklog = backlogTasks.filter((t) => !movingIdSet.has(t.task_id));
+
+      // 대상에 삽입
+      if (targetSprintId === null) {
+        // 백로그
+        if (afterTaskId !== null) {
+          const idx = newBacklog.findIndex((t) => t.task_id === afterTaskId);
+          newBacklog.splice(idx + 1, 0, ...movingTasks);
+        } else {
+          newBacklog = [...movingTasks, ...newBacklog];
+        }
+      } else {
+        const sprintIdx = newSprints.findIndex((s) => s.sprint_id === targetSprintId);
+        if (sprintIdx !== -1) {
+          const tasks = newSprints[sprintIdx].tasks;
+          if (afterTaskId !== null) {
+            const idx = tasks.findIndex((t) => t.task_id === afterTaskId);
+            tasks.splice(idx + 1, 0, ...movingTasks);
+          } else {
+            tasks.unshift(...movingTasks);
+          }
+        }
+      }
+
+      setSprints(newSprints);
+      setBacklogTasks(newBacklog);
+
+      try {
+        await axios.post(`/branches/${branchId}/tasks/reorder`, {
+          task_ids: movingIds,
+          sprint_id: targetSprintId,
+          after_task_id: afterTaskId,
+        });
+      } catch {
+        fetchData();
+      }
+    }
+  };
+
+  // 드래그 중 프리뷰 데이터
+  const activeTask = activeId && activeType === 'task' ? findTask(Number(activeId)) : null;
+  const dragCount = activeType === 'task' ? Math.max(selectedTaskIds.size, 1) : 0;
+
   if (loading) return null;
+
+  const sprintIds = sprints.map((s) => `sprint-${s.sprint_id}`);
 
   return (
     <div className="TaskList">
@@ -117,34 +316,67 @@ export default function TaskList({ branchId, branchKey, taskTypes, onSelectTask 
         </button>
       </div>
 
-      {/* Sprint 섹션들 */}
-      {sprints.map((sprint) => (
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCorners}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+      >
+        {/* Sprint 섹션들 (sortable) */}
+        <SortableContext items={sprintIds} strategy={verticalListSortingStrategy}>
+          {sprints.map((sprint) => (
+            <TaskListSprint
+              key={sprint.sprint_id}
+              sprint={{ ...sprint, tasks: filterTasks(sprint.tasks) }}
+              branchId={branchId}
+              branchKey={branchKey}
+              taskTypes={taskTypes}
+              epics={epics}
+              members={members}
+              sprints={sprints}
+              onEditTask={handleTaskClick}
+              onEditSprint={() => setSprintModal({ open: true, sprint })}
+              onCompleteSprint={(s) => setCompleteSprint(s)}
+              selectedTaskIds={selectedTaskIds}
+              dragOverContainerId={dragOverContainerId}
+            />
+          ))}
+        </SortableContext>
+
+        {/* Backlog 섹션 (sortable 아님, droppable만) */}
         <TaskListSprint
-          key={sprint.sprint_id}
-          sprint={{ ...sprint, tasks: filterTasks(sprint.tasks) }}
+          sprint={{ sprint_name: 'Backlog', status: 'backlog', tasks: filterTasks(backlogTasks) }}
           branchId={branchId}
           branchKey={branchKey}
           taskTypes={taskTypes}
           epics={epics}
           members={members}
-          sprints={sprints}
-          onEditTask={onSelectTask}
-          onEditSprint={() => setSprintModal({ open: true, sprint })}
-          onCompleteSprint={(s) => setCompleteSprint(s)}
+          onEditTask={handleTaskClick}
+          isBacklog
+          selectedTaskIds={selectedTaskIds}
+          dragOverContainerId={dragOverContainerId}
         />
-      ))}
 
-      {/* Backlog 섹션 */}
-      <TaskListSprint
-        sprint={{ sprint_name: 'Backlog', status: 'backlog', tasks: filterTasks(backlogTasks) }}
-        branchId={branchId}
-        branchKey={branchKey}
-        taskTypes={taskTypes}
-        epics={epics}
-        members={members}
-        onEditTask={onSelectTask}
-        isBacklog
-      />
+        {/* 드래그 오버레이 */}
+        <DragOverlay dropAnimation={null}>
+          {activeTask && (
+            <div className="TaskList__DragOverlay">
+              <TaskListRow
+                task={activeTask}
+                branchId={branchId}
+                taskTypes={taskTypes}
+                epics={epics}
+                members={members}
+                isOverlay
+              />
+              {dragCount > 1 && (
+                <div className="TaskList__DragBadge">{dragCount}</div>
+              )}
+            </div>
+          )}
+        </DragOverlay>
+      </DndContext>
 
       {/* Sprint 모달 */}
       {sprintModal.open && (

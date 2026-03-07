@@ -151,6 +151,7 @@
   padding: $space-3;
   cursor: grab;
   transition: all $transition-fast;
+  user-select: none;
 
   &:active {
     cursor: grabbing;

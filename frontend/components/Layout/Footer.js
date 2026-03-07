@@ -1,5 +1,8 @@
 import { PanelLeft, PanelRight } from 'lucide-react';
 
+const isMac = typeof navigator !== 'undefined' && /Mac/.test(navigator.userAgent);
+const mod = isMac ? '⌘' : 'Ctrl+';
+
 export default function Footer({
   isSidebarCollapsed,
   isMessengerCollapsed,
@@ -12,9 +15,9 @@ export default function Footer({
         <button
           className={`Footer__Toggle ${!isSidebarCollapsed ? 'Footer__Toggle--active' : ''}`}
           onClick={onToggleSidebar}
-          title="Toggle Sidebar"
         >
           <PanelLeft size={14} />
+          <span className="Footer__Tooltip">Sidebar <kbd>{mod}B</kbd></span>
         </button>
       </div>
 
@@ -24,9 +27,9 @@ export default function Footer({
         <button
           className={`Footer__Toggle ${!isMessengerCollapsed ? 'Footer__Toggle--active' : ''}`}
           onClick={onToggleMessenger}
-          title="Toggle Messenger"
         >
           <PanelRight size={14} />
+          <span className="Footer__Tooltip Footer__Tooltip--right">Messenger <kbd>{mod}⇧B</kbd></span>
         </button>
       </div>
     </footer>

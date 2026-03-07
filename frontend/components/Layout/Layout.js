@@ -122,12 +122,20 @@ export default function Layout({ children }) {
     document.addEventListener('mouseup', handleMouseUp);
   }, [messengerWidth]);
 
-  // 글로벌 Cmd+K 단축키
+  // 글로벌 단축키
   useEffect(() => {
     const handleKeyDown = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         setShowPalette((prev) => !prev);
+      }
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === 'b') {
+        e.preventDefault();
+        setIsSidebarCollapsed((prev) => !prev);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'B') {
+        e.preventDefault();
+        setIsMessengerCollapsed((prev) => !prev);
       }
     };
     document.addEventListener('keydown', handleKeyDown);

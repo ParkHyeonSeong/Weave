@@ -76,6 +76,16 @@ async def update(sprint_id: int, fields: dict, db: AsyncSession):
     await db.commit()
 
 
+async def reorder(branch_id: int, sprint_ids: list, db: AsyncSession):
+    """Sprint 순서 일괄 변경"""
+    for idx, sid in enumerate(sprint_ids):
+        await db.execute(text("""
+            UPDATE sprint SET sort_order = :sort_order
+            WHERE sprint_id = :sprint_id AND branch_id = :branch_id
+        """), {'sort_order': idx, 'sprint_id': sid, 'branch_id': branch_id})
+    await db.commit()
+
+
 async def delete(sprint_id: int, db: AsyncSession):
     """Sprint 삭제 (task들은 sprint_id = NULL로)"""
     await db.execute(text("""

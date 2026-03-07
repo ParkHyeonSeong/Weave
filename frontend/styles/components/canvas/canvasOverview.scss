@@ -43,9 +43,55 @@
 
   &__OverviewTopBar {
     display: flex;
-    justify-content: flex-end;
+    align-items: center;
+    justify-content: space-between;
     gap: $space-2;
     margin-bottom: $space-4;
+  }
+
+  &__StatusGroup {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+  }
+
+  &__Status {
+    display: flex;
+    align-items: center;
+    color: $color-text-tertiary;
+
+    &--connected { color: $color-success; }
+    &--connecting { color: #D97706; }
+    &--disconnected { color: $color-error; }
+  }
+
+  &__StatusSpin {
+    animation: canvasOverviewSpin 1s linear infinite;
+  }
+
+  @keyframes canvasOverviewSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  &__SaveStatus {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+  }
+
+  &__OverviewActions {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+  }
+
+  &__Loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100px;
+    color: $color-text-tertiary;
+    font-size: $font-size-sm;
   }
 
   &__OverviewBtn {

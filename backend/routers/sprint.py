@@ -46,6 +46,12 @@ async def complete_sprint(branch_id: int, sprint_id: int,
     return await sprint_controller.complete(sprint_id, body, branch_id, request, session)
 
 
+@router.post("/reorder", summary="Sprint 순서 변경", dependencies=[Depends(require_login)])
+async def reorder_sprints(branch_id: int, body: sprint_schema.SprintReorder,
+                          request: Request, session: AsyncSession = Depends(db.session)):
+    return await sprint_controller.reorder(body, branch_id, request, session)
+
+
 @router.get("/{sprint_id}/task-counts", summary="Sprint task 수", dependencies=[Depends(require_login)])
 async def sprint_task_counts(branch_id: int, sprint_id: int, request: Request,
                              session: AsyncSession = Depends(db.session)):

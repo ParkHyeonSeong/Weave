@@ -317,6 +317,57 @@ async def delete(task_id: int, db: AsyncSession):
     await db.commit()
 
 
+async def reorder(branch_id: int, task_ids: list, sprint_id, after_task_id, db: AsyncSession):
+    """태스크 이동 + 순서 변경 (다중 지원)
+    - task_ids: 이동할 태스크 ID 목록
+    - sprint_id: 대상 스프린트 (None = backlog)
+    - after_task_id: 이 태스크 뒤에 삽입 (None = 맨 위)
+    """
+    # 1. 대상 컨테이너의 현재 태스크 순서 조회 (이동할 태스크 제외)
+    if sprint_id is not None:
+        where = "t.sprint_id = :sprint_id"
+        params = {'branch_id': branch_id, 'sprint_id': sprint_id}
+    else:
+        where = "t.sprint_id IS NULL"
+        params = {'branch_id': branch_id}
+
+    result = await db.execute(text(f"""
+        SELECT task_id FROM task t
+        WHERE t.branch_id = :branch_id AND {where}
+        ORDER BY t.sort_order, t.created_at
+    """), params)
+    existing_ids = [row[0] for row in result.fetchall()]
+
+    # 기존 목록에서 이동할 태스크 제거
+    task_id_set = set(task_ids)
+    filtered = [tid for tid in existing_ids if tid not in task_id_set]
+
+    # 2. after_task_id 위치 찾기
+    if after_task_id is not None and after_task_id in filtered:
+        insert_idx = filtered.index(after_task_id) + 1
+    else:
+        insert_idx = 0
+
+    # 3. 새 순서 조합
+    new_order = filtered[:insert_idx] + list(task_ids) + filtered[insert_idx:]
+
+    # 4. sort_order 일괄 업데이트
+    for idx, tid in enumerate(new_order):
+        await db.execute(text("""
+            UPDATE task SET sort_order = :sort_order, updated_at = NOW()
+            WHERE task_id = :task_id
+        """), {'sort_order': idx, 'task_id': tid})
+
+    # 5. 이동할 태스크의 sprint_id 변경
+    for tid in task_ids:
+        await db.execute(text("""
+            UPDATE task SET sprint_id = :sprint_id
+            WHERE task_id = :task_id AND branch_id = :branch_id
+        """), {'sprint_id': sprint_id, 'task_id': tid, 'branch_id': branch_id})
+
+    await db.commit()
+
+
 async def move_incomplete(from_sprint_id: int, to_sprint_id, db: AsyncSession) -> int:
     """미완료 task를 다른 sprint로 이동 (to_sprint_id=None이면 backlog)"""
     result = await db.execute(text("""

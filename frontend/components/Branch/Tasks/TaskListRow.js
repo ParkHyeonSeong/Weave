@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { User } from 'lucide-react';
+import { User, GripVertical } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import CustomSelect from '@/components/common/CustomSelect';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 
@@ -17,10 +19,28 @@ const statusOptions = [
   { value: 'done', label: 'Done', color: '#16A34A' },
 ];
 
-export default function TaskListRow({ task, branchId, taskTypes, epics, members, onClick }) {
+export default function TaskListRow({ task, branchId, taskTypes, epics, members, onClick, isSelected, isOverlay }) {
   const typeConfig = (taskTypes || []).find((t) => t.type_key === task.task_type);
   const [assigneeOpen, setAssigneeOpen] = useState(false);
   const assigneeRef = useRef(null);
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: String(task.task_id),
+    disabled: isOverlay,
+  });
+
+  const style = isOverlay ? {} : {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.3 : 1,
+  };
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
@@ -29,7 +49,6 @@ export default function TaskListRow({ task, branchId, taskTypes, epics, members,
     });
   };
 
-  // 담당자 드롭다운 외부 클릭 닫기
   useEffect(() => {
     if (!assigneeOpen) return;
     const handleClick = (e) => {
@@ -41,7 +60,6 @@ export default function TaskListRow({ task, branchId, taskTypes, epics, members,
     return () => document.removeEventListener('mousedown', handleClick);
   }, [assigneeOpen]);
 
-  // 인라인 필드 변경 공통
   const handleFieldChange = async (field, value) => {
     try {
       await axios.patch(`/branches/${branchId}/tasks/${task.task_id}`, { [field]: value });
@@ -49,7 +67,6 @@ export default function TaskListRow({ task, branchId, taskTypes, epics, members,
     } catch {}
   };
 
-  // 에픽 옵션 (None 포함)
   const epicOptions = [
     { value: '', label: 'None', color: '#9CA3AF' },
     ...(epics || []).map((e) => ({
@@ -59,12 +76,26 @@ export default function TaskListRow({ task, branchId, taskTypes, epics, members,
     })),
   ];
 
-  // 담당자 목록
   const memberList = members || [];
   const hasEpic = !!task.epic_id;
 
   return (
-    <div className="TaskListRow" onClick={onClick}>
+    <div
+      className={`TaskListRow ${isSelected ? 'TaskListRow--selected' : ''} ${isDragging ? 'TaskListRow--dragging' : ''}`}
+      ref={setNodeRef}
+      style={style}
+      onClick={onClick}
+    >
+      {/* 드래그 핸들 */}
+      <span
+        className="TaskListRow__DragHandle"
+        {...attributes}
+        {...listeners}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <GripVertical size={14} />
+      </span>
+
       {/* 타입 아이콘 */}
       <span className="TaskListRow__TypeIcon">
         <TaskTypeIcon
@@ -93,7 +124,7 @@ export default function TaskListRow({ task, branchId, taskTypes, epics, members,
         ))}
       </div>
 
-      {/* 에픽 (인라인 변경) - 미설정시 hover에만 표시 */}
+      {/* 에픽 */}
       <div className={`TaskListRow__Cell TaskListRow__Cell--epic ${hasEpic ? '' : 'TaskListRow__Cell--hoverOnly'}`} onClick={(e) => e.stopPropagation()}>
         <CustomSelect
           value={hasEpic ? String(task.epic_id) : ''}
@@ -106,7 +137,7 @@ export default function TaskListRow({ task, branchId, taskTypes, epics, members,
         />
       </div>
 
-      {/* 상태 (인라인 변경) */}
+      {/* 상태 */}
       <div className="TaskListRow__Cell TaskListRow__Cell--status" onClick={(e) => e.stopPropagation()}>
         <CustomSelect
           value={task.status}
@@ -125,7 +156,7 @@ export default function TaskListRow({ task, branchId, taskTypes, epics, members,
         </span>
       </span>
 
-      {/* 우선순위 (인라인 변경) */}
+      {/* 우선순위 */}
       <div className="TaskListRow__Cell TaskListRow__Cell--priority" onClick={(e) => e.stopPropagation()}>
         <CustomSelect
           value={task.priority || 'low'}
@@ -137,7 +168,7 @@ export default function TaskListRow({ task, branchId, taskTypes, epics, members,
         />
       </div>
 
-      {/* 담당자 (메인 아바타 + 서브 카운트 + 드롭다운) */}
+      {/* 담당자 */}
       <div
         className="TaskListRow__AssigneeWrap"
         ref={assigneeRef}
