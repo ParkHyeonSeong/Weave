@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { axios } from '@/library/_axios';
 import Layout from '@/components/Layout/Layout';
+import ErrorBoundary from '@/components/Layout/ErrorBoundary';
+import Toast from '@/components/Layout/Toast';
 import "@/styles/globals.scss";
 import "@/styles/fonts.css";
 import "@/styles/components/auth/login.scss";
@@ -57,6 +59,7 @@ import "@/styles/components/branch/taskIssueSection.scss";
 import "@/styles/components/branch/taskIssueDetail.scss";
 import "@/styles/components/modal/createIssue.scss";
 import "@/styles/components/myTasks/myTasks.scss";
+import "@/styles/components/layout/toast.scss";
 
 const publicPaths = ['/auth/login', '/setup'];
 const noLayoutPaths = ['/auth/login', '/setup', '/admin'];
@@ -141,7 +144,12 @@ export default function App({ Component, pageProps }) {
 
   const needsLayout = !noLayoutPaths.some(p => router.pathname.startsWith(p));
 
-  return needsLayout
-    ? <Layout><Component {...pageProps} /></Layout>
-    : <Component {...pageProps} />;
+  return (
+    <ErrorBoundary>
+      {needsLayout
+        ? <Layout><Component {...pageProps} /></Layout>
+        : <Component {...pageProps} />}
+      <Toast />
+    </ErrorBoundary>
+  );
 }

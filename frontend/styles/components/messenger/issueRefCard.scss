@@ -18,7 +18,7 @@
     cursor: pointer;
 
     &:hover {
-      border-color: #8B5CF6;
+      border-color: $color-ref-issue;
     }
   }
 
@@ -30,7 +30,7 @@
   }
 
   &__Icon {
-    color: #8B5CF6;
+    color: $color-ref-issue;
     flex-shrink: 0;
   }
 
@@ -48,7 +48,7 @@
     line-height: 16px;
     flex-shrink: 0;
 
-    &--open { background: #DBEAFE; color: #1E40AF; }
+    &--open { background: $color-status-in-progress-bg; color: $color-status-in-progress; }
     &--closed { background: $color-surface-hover; color: $color-text-secondary; }
   }
 

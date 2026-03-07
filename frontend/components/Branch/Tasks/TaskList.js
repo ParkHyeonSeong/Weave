@@ -297,7 +297,7 @@ export default function TaskList({ branchId, branchKey, taskTypes, onSelectTask 
   const activeTask = activeId && activeType === 'task' ? findTask(Number(activeId)) : null;
   const dragCount = activeType === 'task' ? Math.max(selectedTaskIds.size, 1) : 0;
 
-  if (loading) return null;
+  if (loading) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200, color: '#6B7280', fontSize: 14 }}>Loading...</div>;
 
   const sprintIds = sprints.map((s) => `sprint-${s.sprint_id}`);
 

@@ -9,7 +9,7 @@ $color-primary-subtle: rgba(94, 106, 210, 0.08);
 
 $color-text: #1C1C1C;
 $color-text-secondary: #6B7280;
-$color-text-tertiary: #9CA3AF;
+$color-text-tertiary: #6B7280;
 $color-text-inverse: #FFFFFF;
 
 $color-border: #E5E5E5;
@@ -23,6 +23,22 @@ $color-error: #DC2626;
 $color-error-bg: #FEF2F2;
 $color-success: #16A34A;
 $color-success-bg: #F0FDF4;
+$color-warning: #D97706;
+
+// -- Semantic: Code ---------------------------------------------------------
+$color-code-bg: #F1F3F5;
+$color-code-text: #EB5757;
+$color-code-block-bg: #F6F8FA;
+
+// -- Semantic: References ---------------------------------------------------
+$color-ref-doc: #C2410C;
+$color-ref-doc-bg: #FFF7ED;
+$color-ref-issue: #8B5CF6;
+$color-ref-issue-bg: #F5F3FF;
+
+// -- Semantic: Status -------------------------------------------------------
+$color-status-in-progress: #1E40AF;
+$color-status-in-progress-bg: #DBEAFE;
 
 // -- Typography -----------------------------------------------------------
 $font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;

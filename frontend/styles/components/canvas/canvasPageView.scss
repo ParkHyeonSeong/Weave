@@ -44,7 +44,7 @@
     color: $color-text-tertiary;
 
     &--connected { color: $color-success; }
-    &--connecting { color: #D97706; }
+    &--connecting { color: $color-warning; }
     &--disconnected { color: $color-error; }
   }
 
@@ -244,16 +244,16 @@
     }
 
     code {
-      background: #F1F3F5;
+      background: $color-code-bg;
       padding: 2px 6px;
       border-radius: $radius-sm;
       font-size: 0.85em;
       font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
-      color: #EB5757;
+      color: $color-code-text;
     }
 
     pre {
-      background: #F6F8FA;
+      background: $color-code-block-bg;
       border: 1px solid $color-border;
       border-radius: $radius-lg;
       padding: $space-4;
@@ -406,8 +406,8 @@
       border-radius: $radius-md;
       font-size: $font-size-xs;
       font-weight: $font-weight-medium;
-      background: #FFF7ED;
-      color: #C2410C;
+      background: $color-ref-doc-bg;
+      color: $color-ref-doc;
       border: 1px solid transparent;
       cursor: pointer;
       vertical-align: baseline;
@@ -425,7 +425,7 @@
         -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z'/%3E%3Cpath d='M14 2v4a2 2 0 0 0 2 2h4'/%3E%3Cpath d='M10 13H8'/%3E%3Cpath d='M16 17H8'/%3E%3Cpath d='M16 13h-2'/%3E%3C/svg%3E") no-repeat center / contain;
       }
 
-      &:hover { border-color: #C2410C; }
+      &:hover { border-color: $color-ref-doc; }
     }
 
     // 이슈 레퍼런스 인라인 칩
@@ -437,8 +437,8 @@
       border-radius: $radius-md;
       font-size: $font-size-xs;
       font-weight: $font-weight-medium;
-      background: #F5F3FF;
-      color: #8B5CF6;
+      background: $color-ref-issue-bg;
+      color: $color-ref-issue;
       border: 1px solid transparent;
       cursor: pointer;
       vertical-align: baseline;
@@ -456,7 +456,7 @@
         -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Ccircle cx='12' cy='12' r='1'/%3E%3C/svg%3E") no-repeat center / contain;
       }
 
-      &:hover { border-color: #8B5CF6; }
+      &:hover { border-color: $color-ref-issue; }
     }
 
     // Ref 상태 뱃지 (Confluence 스타일)
@@ -472,9 +472,9 @@
       white-space: nowrap;
 
       &--todo { background: rgba(0, 0, 0, 0.06); color: $color-text-secondary; }
-      &--in_progress { background: #DBEAFE; color: #1E40AF; }
+      &--in_progress { background: $color-status-in-progress-bg; color: $color-status-in-progress; }
       &--done { background: $color-success-bg; color: $color-success; }
-      &--open { background: #DBEAFE; color: #1E40AF; }
+      &--open { background: $color-status-in-progress-bg; color: $color-status-in-progress; }
       &--closed { background: rgba(0, 0, 0, 0.06); color: $color-text-secondary; }
     }
 
@@ -491,7 +491,7 @@
       }
       &[data-callout="warning"] {
         background: #FFFBEB;
-        border-left-color: #D97706;
+        border-left-color: $color-warning;
       }
       &[data-callout="success"] {
         background: $color-success-bg;

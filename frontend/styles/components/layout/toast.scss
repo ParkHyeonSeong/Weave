@@ -1,0 +1,69 @@
+@use '../../variables' as *;
+
+.Toast__Container {
+  position: fixed;
+  bottom: $space-6;
+  right: $space-6;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: $space-2;
+}
+
+.Toast {
+  display: flex;
+  align-items: center;
+  gap: $space-2;
+  padding: $space-3 $space-4;
+  border-radius: $radius-lg;
+  background: $color-bg;
+  border: 1px solid $color-border;
+  box-shadow: $shadow-lg;
+  font-size: $font-size-sm;
+  color: $color-text;
+  min-width: 280px;
+  max-width: 400px;
+  animation: toastSlideIn 0.2s ease-out;
+
+  &--success .Toast__Icon { color: $color-success; }
+  &--error .Toast__Icon { color: $color-error; }
+  &--warning .Toast__Icon { color: $color-warning; }
+  &--info .Toast__Icon { color: $color-primary; }
+
+  &__Icon {
+    flex-shrink: 0;
+    display: flex;
+  }
+
+  &__Message {
+    flex: 1;
+    line-height: 1.4;
+  }
+
+  &__Close {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: $radius-sm;
+    color: $color-text-tertiary;
+
+    &:hover {
+      background: $color-surface;
+      color: $color-text;
+    }
+  }
+}
+
+@keyframes toastSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

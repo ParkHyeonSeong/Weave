@@ -96,7 +96,7 @@
     flex-shrink: 0;
 
     &--todo { background: $color-surface-hover; color: $color-text-secondary; }
-    &--in_progress { background: #DBEAFE; color: #1E40AF; }
+    &--in_progress { background: $color-status-in-progress-bg; color: $color-status-in-progress; }
     &--done { background: $color-success-bg; color: $color-success; }
   }
 

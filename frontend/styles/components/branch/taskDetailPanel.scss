@@ -474,16 +474,16 @@
       }
 
       code {
-        background: #F1F3F5;
+        background: $color-code-bg;
         padding: 2px 5px;
         border-radius: $radius-sm;
         font-size: 0.85em;
         font-family: 'SFMono-Regular', Consolas, monospace;
-        color: #EB5757;
+        color: $color-code-text;
       }
 
       pre {
-        background: #F6F8FA;
+        background: $color-code-block-bg;
         border: 1px solid $color-border;
         border-radius: $radius-md;
         padding: $space-3;
@@ -562,7 +562,7 @@
         white-space: nowrap;
 
         &--todo { background: rgba(0, 0, 0, 0.06); color: $color-text-secondary; }
-        &--in_progress { background: #DBEAFE; color: #1E40AF; }
+        &--in_progress { background: $color-status-in-progress-bg; color: $color-status-in-progress; }
         &--done { background: $color-success-bg; color: $color-success; }
       }
 
@@ -572,7 +572,7 @@
         margin: 0.5em 0;
         border-left: 3px solid;
         &[data-callout="info"] { background: #EFF6FF; border-left-color: #2563EB; }
-        &[data-callout="warning"] { background: #FFFBEB; border-left-color: #D97706; }
+        &[data-callout="warning"] { background: #FFFBEB; border-left-color: $color-warning; }
         &[data-callout="success"] { background: $color-success-bg; border-left-color: $color-success; }
         &[data-callout="error"] { background: $color-error-bg; border-left-color: $color-error; }
         p { margin: 0; }
@@ -607,16 +607,16 @@
   }
 
   code {
-    background: #F1F3F5;
+    background: $color-code-bg;
     padding: 2px 5px;
     border-radius: $radius-sm;
     font-size: 0.85em;
     font-family: 'SFMono-Regular', Consolas, monospace;
-    color: #EB5757;
+    color: $color-code-text;
   }
 
   pre {
-    background: #F6F8FA;
+    background: $color-code-block-bg;
     border: 1px solid $color-border;
     border-radius: $radius-md;
     padding: $space-3;
@@ -683,7 +683,7 @@
     white-space: nowrap;
 
     &--todo { background: rgba(0, 0, 0, 0.06); color: $color-text-secondary; }
-    &--in_progress { background: #DBEAFE; color: #1E40AF; }
+    &--in_progress { background: $color-status-in-progress-bg; color: $color-status-in-progress; }
     &--done { background: $color-success-bg; color: $color-success; }
   }
 
@@ -693,7 +693,7 @@
     margin: 0.5em 0;
     border-left: 3px solid;
     &[data-callout="info"] { background: #EFF6FF; border-left-color: #2563EB; }
-    &[data-callout="warning"] { background: #FFFBEB; border-left-color: #D97706; }
+    &[data-callout="warning"] { background: #FFFBEB; border-left-color: $color-warning; }
     &[data-callout="success"] { background: $color-success-bg; border-left-color: $color-success; }
     &[data-callout="error"] { background: $color-error-bg; border-left-color: $color-error; }
     p { margin: 0; }
