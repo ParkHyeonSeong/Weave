@@ -26,6 +26,17 @@ export default function CanvasPageView() {
   const htmlRef = useRef('');
   const contentRef = useRef(null);
   const contentTimerRef = useRef(null);
+  const stickyRef = useRef(null);
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  // 스크롤 감지 → 헤더 border 표시
+  useEffect(() => {
+    const scrollParent = stickyRef.current?.closest('.Layout__Content');
+    if (!scrollParent) return;
+    const handleScroll = () => setIsScrolled(scrollParent.scrollTop > 10);
+    scrollParent.addEventListener('scroll', handleScroll, { passive: true });
+    return () => scrollParent.removeEventListener('scroll', handleScroll);
+  }, [page]);
 
   // sessionStorage에서 유저 정보 로드
   useEffect(() => {
@@ -110,7 +121,46 @@ export default function CanvasPageView() {
       const handler = () => {
         const branchId = el.getAttribute('data-branch-id');
         const taskId = el.getAttribute('data-task-id');
-        if (branchId && taskId) router.push(`/branch/${branchId}?task=${taskId}`);
+        if (branchId && taskId) router.push(`/branch/${branchId}/task/${taskId}`);
+      };
+      el.addEventListener('click', handler);
+      handlers.push({ el, handler });
+    });
+    return () => handlers.forEach(({ el, handler }) => el.removeEventListener('click', handler));
+  }, [isEditing, page?.content, router]);
+
+  // 읽기 모드에서 문서 레퍼런스 클릭 핸들러
+  useEffect(() => {
+    if (isEditing || !contentRef.current) return;
+    const docNodes = contentRef.current.querySelectorAll('[data-doc-ref]');
+    const handlers = [];
+    docNodes.forEach((el) => {
+      el.classList.add('doc-ref');
+      el.style.cursor = 'pointer';
+      const handler = () => {
+        const cId = el.getAttribute('data-canvas-id');
+        const pId = el.getAttribute('data-page-id');
+        if (cId && pId) router.push(`/canvas/${cId}/${pId}`);
+      };
+      el.addEventListener('click', handler);
+      handlers.push({ el, handler });
+    });
+    return () => handlers.forEach(({ el, handler }) => el.removeEventListener('click', handler));
+  }, [isEditing, page?.content, router]);
+
+  // 읽기 모드에서 이슈 레퍼런스 클릭 핸들러
+  useEffect(() => {
+    if (isEditing || !contentRef.current) return;
+    const issueNodes = contentRef.current.querySelectorAll('[data-issue-ref]');
+    const handlers = [];
+    issueNodes.forEach((el) => {
+      el.classList.add('issue-ref', `issue-ref--${el.getAttribute('data-status') || 'open'}`);
+      el.style.cursor = 'pointer';
+      const handler = () => {
+        const branchId = el.getAttribute('data-branch-id');
+        const taskId = el.getAttribute('data-task-id');
+        const issueId = el.getAttribute('data-issue-id');
+        if (branchId && taskId && issueId) router.push(`/branch/${branchId}/task/${taskId}/issue/${issueId}`);
       };
       el.addEventListener('click', handler);
       handlers.push({ el, handler });
@@ -234,6 +284,7 @@ export default function CanvasPageView() {
 
   return (
     <div className="CanvasPageView">
+      <div ref={stickyRef} className={`CanvasPageView__StickyHeader ${isScrolled ? 'CanvasPageView__StickyHeader--scrolled' : ''}`}>
       <div className="CanvasPageView__TopBar">
         {isEditing ? (
           <>
@@ -294,6 +345,7 @@ export default function CanvasPageView() {
             {(page.updated_by_name || page.created_by_name) && ` by ${page.updated_by_name || page.created_by_name}`}
           </span>
         )}
+      </div>
       </div>
 
       {/* 내용 */}

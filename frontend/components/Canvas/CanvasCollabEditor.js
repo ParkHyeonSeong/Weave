@@ -22,6 +22,8 @@ import { ySyncPlugin, yCursorPlugin, yUndoPlugin } from 'y-prosemirror';
 import { common, createLowlight } from 'lowlight';
 import CalloutExtension from './extensions/CalloutExtension';
 import TaskRefNode from './extensions/TaskRefExtension';
+import DocRefNode from './extensions/DocRefExtension';
+import IssueRefNode from './extensions/IssueRefExtension';
 import { createImageUploadPlugin } from './extensions/ImageUploadPlugin';
 import CanvasEditorToolbar from './CanvasEditorToolbar';
 
@@ -119,6 +121,8 @@ function CollabEditorInner({
       }),
       CalloutExtension,
       TaskRefNode,
+      DocRefNode,
+      IssueRefNode,
       Mathematics.configure({
         katexOptions: { throwOnError: false },
       }),
