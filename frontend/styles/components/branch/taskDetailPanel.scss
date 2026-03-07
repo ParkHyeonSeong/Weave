@@ -423,9 +423,10 @@
 
 // -- Task Description Editor --
 .TaskDescEditor {
+  position: relative;
   border: 1px solid $color-border;
   border-radius: $radius-lg;
-  overflow: hidden;
+  overflow: visible;
 
   .CanvasEditorToolbar {
     border-radius: 0;

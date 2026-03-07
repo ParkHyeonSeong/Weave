@@ -81,8 +81,11 @@ export default function CanvasEditorToolbar({ editor }) {
     }
   };
 
-  const addTable = () => {
-    editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+  const [tableSize, setTableSize] = useState({ rows: 0, cols: 0 });
+
+  const addTable = (rows, cols) => {
+    editor.chain().focus().insertTable({ rows, cols, withHeaderRow: true }).run();
+    closeDropdown();
   };
 
   const Btn = ({ onClick, active, children, title, className = '' }) => (
@@ -99,7 +102,7 @@ export default function CanvasEditorToolbar({ editor }) {
   const Sep = () => <div className="CanvasEditorToolbar__Sep" />;
 
   return (
-    <div className="CanvasEditorToolbar">
+    <div className="CanvasEditorToolbar" onMouseDown={(e) => e.preventDefault()}>
       {/* 헤딩 드롭다운 */}
       <DropdownWrapper
         isOpen={openDropdown === 'heading'}
@@ -314,15 +317,42 @@ export default function CanvasEditorToolbar({ editor }) {
       <Btn onClick={addLink} active={editor.isActive('link')} title="Link">
         <LinkIcon size={16} />
       </Btn>
-      <Btn onClick={addImage} title="Image">
-        <ImageIcon size={16} />
-      </Btn>
-      <Btn onClick={addTable} title="Table">
-        <TableIcon size={16} />
-      </Btn>
-      <Btn onClick={() => editor.chain().focus().insertContent({ type: 'inlineMath', attrs: { latex: 'E=mc^2' } }).run()} title="Math Equation">
-        <Sigma size={16} />
-      </Btn>
+      {editor.extensionManager.extensions.some(e => e.name === 'image') && (
+        <Btn onClick={addImage} title="Image">
+          <ImageIcon size={16} />
+        </Btn>
+      )}
+      {editor.extensionManager.extensions.some(e => e.name === 'table') && (
+        <DropdownWrapper isOpen={openDropdown === 'table'} onClose={() => { closeDropdown(); setTableSize({ rows: 0, cols: 0 }); }}>
+          <Btn onClick={() => toggleDropdown('table')} title="Table">
+            <TableIcon size={16} />
+          </Btn>
+          {openDropdown === 'table' && (
+            <div className="CanvasEditorToolbar__DropdownMenu CanvasEditorToolbar__TableMenu">
+              <div className="CanvasEditorToolbar__TableGrid">
+                {Array.from({ length: 8 }, (_, r) =>
+                  Array.from({ length: 8 }, (_, c) => (
+                    <div
+                      key={`${r}-${c}`}
+                      className={`CanvasEditorToolbar__TableCell ${r < tableSize.rows && c < tableSize.cols ? 'CanvasEditorToolbar__TableCell--active' : ''}`}
+                      onMouseEnter={() => setTableSize({ rows: r + 1, cols: c + 1 })}
+                      onClick={() => addTable(r + 1, c + 1)}
+                    />
+                  ))
+                )}
+              </div>
+              <div className="CanvasEditorToolbar__TableLabel">
+                {tableSize.rows > 0 ? `${tableSize.rows} × ${tableSize.cols}` : 'Select size'}
+              </div>
+            </div>
+          )}
+        </DropdownWrapper>
+      )}
+      {editor.extensionManager.extensions.some(e => e.name === 'mathematics') && (
+        <Btn onClick={() => editor.chain().focus().insertContent({ type: 'inlineMath', attrs: { latex: 'E=mc^2' } }).run()} title="Math Equation">
+          <Sigma size={16} />
+        </Btn>
+      )}
 
       <Sep />
 

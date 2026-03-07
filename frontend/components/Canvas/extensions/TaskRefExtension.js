@@ -189,14 +189,15 @@ const TaskRefNode = Node.create({
 
             // 커서 위치에서 팝업 좌표 계산
             const coords = editorView.coordsAtPos(editorView.state.selection.from);
-            const editorRect = editorView.dom.closest('.CanvasEditor').getBoundingClientRect();
+            const editorContainer = editorView.dom.closest('.CanvasEditor') || editorView.dom.closest('.TaskDescEditor') || editorView.dom.parentElement;
+            const editorRect = editorContainer.getBoundingClientRect();
 
             popup = document.createElement('div');
             popup.style.position = 'absolute';
             popup.style.left = `${coords.left - editorRect.left}px`;
             popup.style.top = `${coords.bottom - editorRect.top + 4}px`;
             popup.style.zIndex = '200';
-            editorView.dom.closest('.CanvasEditor').appendChild(popup);
+            editorContainer.appendChild(popup);
 
             renderer = new ReactRenderer(TaskRefPopup, {
               editor,

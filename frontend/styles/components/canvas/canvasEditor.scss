@@ -422,6 +422,43 @@
     }
   }
 
+  // 테이블 그리드 피커
+  &__TableMenu {
+    min-width: auto;
+    padding: $space-3;
+  }
+
+  &__TableGrid {
+    display: grid;
+    grid-template-columns: repeat(8, 20px);
+    gap: 3px;
+  }
+
+  &__TableCell {
+    width: 20px;
+    height: 20px;
+    border: 1px solid $color-border;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: all $transition-fast;
+
+    &--active {
+      background: $color-primary-subtle;
+      border-color: $color-primary;
+    }
+
+    &:hover {
+      border-color: $color-primary;
+    }
+  }
+
+  &__TableLabel {
+    margin-top: $space-2;
+    text-align: center;
+    font-size: $font-size-xs;
+    color: $color-text-secondary;
+  }
+
   // 코드 블록 언어 메뉴
   &__CodeMenu {
     max-height: 280px;
