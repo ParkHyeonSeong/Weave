@@ -93,6 +93,16 @@ async def get_board(branch_id: int, sprint_id, request: Request, db: AsyncSessio
     return {'status': True, 'columns': columns}
 
 
+async def get_archive(branch_id: int, request: Request, db: AsyncSession):
+    """완료된 Task 목록 (Archive 탭)"""
+    user_id = request.state.payload.get('user_id')
+    if not await member_model.is_member(branch_id, user_id, db):
+        return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+
+    tasks = await task_model.find_archived(branch_id, db)
+    return {'status': True, 'tasks': tasks}
+
+
 async def update(task_id: int, body, branch_id: int, request: Request, db: AsyncSession):
     """Task 수정"""
     user_id = request.state.payload.get('user_id')

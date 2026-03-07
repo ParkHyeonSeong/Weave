@@ -8,6 +8,16 @@ import { CSS } from '@dnd-kit/utilities';
 import TaskListRow from './TaskListRow';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 
+function formatSprintDate(start, end) {
+  const fmt = (d) => {
+    if (!d) return '';
+    return new Date(d).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+  };
+  if (start && end) return `${fmt(start)} – ${fmt(end)}`;
+  if (start) return `${fmt(start)} –`;
+  return `– ${fmt(end)}`;
+}
+
 export default function TaskListSprint({
   sprint, branchKey, branchId, taskTypes, epics, members, sprints,
   onEditTask, onEditSprint, onCompleteSprint, isBacklog,
@@ -158,6 +168,11 @@ export default function TaskListSprint({
               {getStatusLabel(sprint.status)}
             </span>
           )}
+          {!isBacklog && (sprint.start_date || sprint.end_date) && (
+            <span className="TaskList__SprintDate">
+              {formatSprintDate(sprint.start_date, sprint.end_date)}
+            </span>
+          )}
           <span className="TaskList__SprintCount">{tasks.length}</span>
           {startError && <span className="TaskList__SprintError">{startError}</span>}
         </div>
@@ -179,13 +194,6 @@ export default function TaskListSprint({
               <Settings size={14} />
             </button>
           )}
-          <button
-            className="TaskList__SprintAction"
-            onClick={() => { setShowInline(true); setCollapsed(false); }}
-            title="Task 추가"
-          >
-            <Plus size={14} />
-          </button>
         </div>
       </div>
 

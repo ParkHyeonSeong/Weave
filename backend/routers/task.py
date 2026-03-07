@@ -23,6 +23,12 @@ async def list_tasks(branch_id: int, request: Request,
     return await task_controller.get_list(branch_id, sprint_id, request, session)
 
 
+@router.get("/archive", summary="Archive (완료된 Task)", dependencies=[Depends(require_login)])
+async def get_archive(branch_id: int, request: Request,
+                      session: AsyncSession = Depends(db.session)):
+    return await task_controller.get_archive(branch_id, request, session)
+
+
 @router.get("/board", summary="Board 탭 데이터", dependencies=[Depends(require_login)])
 async def get_board(branch_id: int, request: Request,
                     sprint_id: Optional[int] = Query(None),

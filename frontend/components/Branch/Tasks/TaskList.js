@@ -68,7 +68,9 @@ export default function TaskList({ branchId, branchKey, taskTypes, onSelectTask 
   const fetchData = async () => {
     try {
       const sprintRes = await axios.get(`/branches/${branchId}/sprints`);
-      const sprintList = sprintRes.data.status ? sprintRes.data.sprints : [];
+      const sprintList = sprintRes.data.status
+        ? sprintRes.data.sprints.filter((s) => s.status !== 'closed')
+        : [];
 
       const sprintsWithTasks = await Promise.all(
         sprintList.map(async (sprint) => {

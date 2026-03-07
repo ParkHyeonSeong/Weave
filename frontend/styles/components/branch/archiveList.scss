@@ -1,0 +1,138 @@
+@use '../../variables' as *;
+
+.ArchiveList {
+  // -- Empty state --
+  &__Empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: $space-10;
+    color: $color-text-tertiary;
+    text-align: center;
+    gap: $space-3;
+  }
+
+  &__EmptyTitle {
+    font-size: $font-size-md;
+    font-weight: $font-weight-semibold;
+    color: $color-text-secondary;
+  }
+
+  &__EmptyDesc {
+    font-size: $font-size-sm;
+    color: $color-text-tertiary;
+  }
+
+  // -- 상단 필터 + 카운트 --
+  &__Actions {
+    display: flex;
+    align-items: center;
+    gap: $space-3;
+    margin-bottom: $space-5;
+  }
+
+  &__Count {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+    white-space: nowrap;
+    margin-left: auto;
+  }
+
+  // -- 테이블 --
+  &__Table {
+    border: 1px solid $color-border;
+    border-radius: $radius-xl;
+    overflow: hidden;
+  }
+
+  &__Row {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: $space-2 $space-3;
+    border-bottom: 1px solid $color-border;
+    cursor: pointer;
+    transition: background $transition-fast;
+
+    &:last-child {
+      border-bottom: none;
+    }
+
+    &:hover {
+      background: $color-surface;
+    }
+  }
+
+  &__TypeIcon {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+  }
+
+  &__Id {
+    font-size: 11px;
+    font-weight: $font-weight-medium;
+    color: $color-text-tertiary;
+    flex-shrink: 0;
+    min-width: 56px;
+  }
+
+  &__Title {
+    font-size: $font-size-sm;
+    color: $color-text;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__Labels {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  &__Label {
+    font-size: 10px;
+    font-weight: $font-weight-medium;
+    padding: 1px 6px;
+    border-radius: $radius-sm;
+    white-space: nowrap;
+  }
+
+  &__Sprint {
+    font-size: 11px;
+    color: $color-text-tertiary;
+    background: $color-surface;
+    border: 1px solid $color-border;
+    padding: 0 6px;
+    border-radius: $radius-sm;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  &__Date {
+    font-size: 11px;
+    color: $color-text-tertiary;
+    white-space: nowrap;
+    flex-shrink: 0;
+    min-width: 70px;
+    text-align: right;
+  }
+
+  &__Assignee {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: $color-primary;
+    color: $color-text-inverse;
+    font-size: 10px;
+    font-weight: $font-weight-bold;
+    flex-shrink: 0;
+  }
+}

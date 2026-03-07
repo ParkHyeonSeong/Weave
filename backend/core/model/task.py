@@ -105,9 +105,13 @@ async def find_by_branch(branch_id: int, sprint_id, db: AsyncSession):
     """Branch의 Task 목록 (Tasks 탭용, sprint_id 필터 가능)"""
     if sprint_id is not None:
         where_sprint = "AND t.sprint_id = :sprint_id"
+        # active sprint이면 done 포함, 아니면 done 제외
+        done_filter = ("AND (t.status != 'done' OR "
+                       "(SELECT status FROM sprint WHERE sprint_id = :sprint_id) = 'active')")
         params = {'branch_id': branch_id, 'sprint_id': sprint_id}
     else:
         where_sprint = "AND t.sprint_id IS NULL"
+        done_filter = "AND t.status != 'done'"
         params = {'branch_id': branch_id}
 
     result = await db.execute(text(f"""
@@ -121,7 +125,7 @@ async def find_by_branch(branch_id: int, sprint_id, db: AsyncSession):
         INNER JOIN branch b ON t.branch_id = b.branch_id
         LEFT JOIN epic e ON t.epic_id = e.epic_id
         WHERE t.branch_id = :branch_id AND t.parent_task_id IS NULL
-              {where_sprint}
+              {where_sprint} {done_filter}
         ORDER BY t.sort_order, t.created_at
     """), params)
     rows = result.fetchall()
@@ -214,6 +218,79 @@ async def find_for_board(branch_id: int, sprint_id, db: AsyncSession):
             FROM task_label tl
             INNER JOIN label l ON tl.label_id = l.label_id
             WHERE tl.task_id IN ({placeholders})
+        """))
+        label_map = {}
+        for lr in labels_result.fetchall():
+            ld = dict(lr._mapping)
+            label_map.setdefault(ld['task_id'], []).append({
+                'label_id': ld['label_id'],
+                'label_name': ld['label_name'],
+                'color': ld['color'],
+            })
+
+        # 담당자 일괄 조회
+        assignees_result = await db.execute(text(f"""
+            SELECT ta.task_id, ta.user_id, u.username, ta.role
+            FROM task_assignee ta
+            INNER JOIN "user" u ON ta.user_id = u.user_id
+            WHERE ta.task_id IN ({placeholders})
+            ORDER BY ta.role, u.username
+        """))
+        assignee_map = {}
+        for ar in assignees_result.fetchall():
+            ad = dict(ar._mapping)
+            assignee_map.setdefault(ad['task_id'], []).append({
+                'user_id': ad['user_id'],
+                'username': ad['username'],
+                'role': ad['role'],
+            })
+
+        for task in tasks:
+            task['labels'] = label_map.get(task['task_id'], [])
+            task['assignees'] = assignee_map.get(task['task_id'], [])
+
+    return tasks
+
+
+async def find_archived(branch_id: int, db: AsyncSession):
+    """Branch의 완료된(done) Task 목록 (Archive 탭용)"""
+    params = {'branch_id': branch_id}
+
+    result = await db.execute(text("""
+        SELECT t.task_id, t.display_number, t.title,
+               t.task_type, t.status, t.priority,
+               t.epic_id, t.sprint_id, t.parent_task_id,
+               t.start_date, t.due_date, t.sort_order,
+               t.created_at, t.updated_at,
+               b.key AS branch_key,
+               e.epic_name, e.color AS epic_color,
+               s.sprint_name
+        FROM task t
+        INNER JOIN branch b ON t.branch_id = b.branch_id
+        LEFT JOIN epic e ON t.epic_id = e.epic_id
+        LEFT JOIN sprint s ON t.sprint_id = s.sprint_id
+        WHERE t.branch_id = :branch_id AND t.parent_task_id IS NULL
+              AND t.status = 'done'
+        ORDER BY t.updated_at DESC NULLS LAST, t.created_at DESC
+    """), params)
+    rows = result.fetchall()
+    tasks = []
+    for row in rows:
+        task = dict(row._mapping)
+        task['display_id'] = f"{task['branch_key']}-{task['display_number']}"
+        tasks.append(task)
+
+    if tasks:
+        task_ids = [t['task_id'] for t in tasks]
+        placeholders = ', '.join(str(tid) for tid in task_ids)
+
+        # 라벨 일괄 조회
+        labels_result = await db.execute(text(f"""
+            SELECT tl.task_id, l.label_id, l.label_name, l.color
+            FROM task_label tl
+            INNER JOIN label l ON tl.label_id = l.label_id
+            WHERE tl.task_id IN ({placeholders})
+            ORDER BY l.label_name
         """))
         label_map = {}
         for lr in labels_result.fetchall():

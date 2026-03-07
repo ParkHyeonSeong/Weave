@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { axios } from '@/library/_axios';
-import { Zap, ListTodo, Columns3, Settings } from 'lucide-react';
+import { Zap, ListTodo, Columns3, Archive, Settings } from 'lucide-react';
 import TaskList from './Tasks/TaskList';
 import BoardView from './Board/BoardView';
 import EpicTimeline from './Epics/EpicTimeline';
+import ArchiveList from './Archive/ArchiveList';
 import TaskDetailPanel from './Tasks/TaskDetailPanel';
 import EpicDetailPanel from './Epics/EpicDetailPanel';
 import BranchSettings from './Settings/BranchSettings';
@@ -13,6 +14,7 @@ const TABS = [
   { key: 'epics', label: 'Epics', icon: Zap },
   { key: 'tasks', label: 'Tasks', icon: ListTodo },
   { key: 'board', label: 'Board', icon: Columns3 },
+  { key: 'archive', label: 'Archive', icon: Archive },
   { key: 'settings', label: 'Settings', icon: Settings },
 ];
 
@@ -20,7 +22,11 @@ export default function BranchDetail() {
   const router = useRouter();
   const { id } = router.query;
   const [branch, setBranch] = useState(null);
-  const [activeTab, setActiveTab] = useState('tasks');
+  const validTabs = TABS.map((t) => t.key);
+  const queryTab = router.query.tab;
+  const [activeTab, setActiveTab] = useState(
+    validTabs.includes(queryTab) ? queryTab : 'tasks'
+  );
   const [loading, setLoading] = useState(true);
 
   // Task type 설정
@@ -36,13 +42,20 @@ export default function BranchDetail() {
     fetchTaskTypes();
   }, [id]);
 
+  // URL query tab 동기화
+  useEffect(() => {
+    if (queryTab && validTabs.includes(queryTab) && queryTab !== activeTab) {
+      setActiveTab(queryTab);
+    }
+  }, [queryTab]);
+
   // 쿼리 파라미터로 태스크 상세 패널 열기 (채팅 카드 클릭 등)
   useEffect(() => {
     const taskId = router.query.task;
     if (taskId && branch) {
-      setActiveTab('tasks');
+      handleTabChange('tasks');
       setSelectedTask({ task_id: Number(taskId) });
-      router.replace(`/branch/${id}`, undefined, { shallow: true });
+      router.replace(`/branch/${id}?tab=tasks`, undefined, { shallow: true });
     }
   }, [router.query.task, branch]);
 
@@ -72,6 +85,11 @@ export default function BranchDetail() {
       const res = await axios.get(`/branches/${id}/task-types`);
       if (res.data.status) setTaskTypes(res.data.task_types);
     } catch {}
+  };
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    router.replace(`/branch/${id}?tab=${tab}`, undefined, { shallow: true });
   };
 
   const handleSelectEpic = (epic) => {
@@ -107,7 +125,7 @@ export default function BranchDetail() {
             <button
               key={key}
               className={`BranchDetail__Tab ${activeTab === key ? 'BranchDetail__Tab--active' : ''}`}
-              onClick={() => setActiveTab(key)}
+              onClick={() => handleTabChange(key)}
             >
               <Icon size={15} />
               {label}
@@ -133,6 +151,14 @@ export default function BranchDetail() {
           )}
           {activeTab === 'board' && (
             <BoardView
+              branchId={branch.branch_id}
+              branchKey={branch.key}
+              taskTypes={taskTypes}
+              onSelectTask={handleSelectTask}
+            />
+          )}
+          {activeTab === 'archive' && (
+            <ArchiveList
               branchId={branch.branch_id}
               branchKey={branch.key}
               taskTypes={taskTypes}

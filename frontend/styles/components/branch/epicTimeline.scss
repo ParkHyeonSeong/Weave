@@ -77,8 +77,7 @@
   &__Container {
     border: 1px solid $color-border;
     border-radius: $radius-xl;
-    overflow-x: auto;
-    overflow-y: hidden;
+    overflow: visible;
   }
 
   // -- 월 헤더 --
@@ -120,7 +119,8 @@
     display: flex;
     border-bottom: 1px solid $color-border;
     background: $color-surface;
-    min-height: 28px;
+    position: relative;
+    z-index: 5;
   }
 
   &__SprintRowLabel {
@@ -137,12 +137,10 @@
   &__SprintRowTimeline {
     flex: 1;
     position: relative;
-    height: 28px;
   }
 
   &__SprintLabel {
     position: absolute;
-    top: 4px;
     height: 20px;
     background: $color-primary-subtle;
     border: 1px solid rgba($color-primary, 0.2);
@@ -150,16 +148,36 @@
     display: flex;
     align-items: center;
     padding: 0 $space-2;
-    overflow: hidden;
+    overflow: visible;
+    cursor: pointer;
+    transition: border-color $transition-fast;
+
+    &:hover {
+      border-color: $color-primary;
+    }
+
+    &:hover > .EpicTimeline__SprintTooltip {
+      opacity: 1;
+      visibility: visible;
+    }
 
     &--active {
       background: rgba(#2563EB, 0.1);
       border-color: rgba(#2563EB, 0.3);
+
+      &:hover {
+        border-color: #2563EB;
+      }
     }
 
     &--closed {
       background: $color-surface;
       border-color: $color-border;
+      opacity: 0.6;
+
+      &:hover {
+        opacity: 1;
+      }
     }
   }
 
@@ -170,6 +188,90 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  &__SprintTooltip {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: $color-text;
+    color: $color-text-inverse;
+    font-size: 11px;
+    line-height: 1.4;
+    padding: 4px 8px;
+    border-radius: $radius-sm;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity $transition-fast;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  &__SprintPopover {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    min-width: 220px;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+    box-shadow: $shadow-lg;
+    padding: $space-3;
+    z-index: 20;
+    cursor: default;
+  }
+
+  &__SprintPopoverName {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-semibold;
+    color: $color-text;
+    margin-bottom: $space-2;
+  }
+
+  &__SprintPopoverMeta {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    margin-bottom: $space-2;
+  }
+
+  &__SprintPopoverStatus {
+    font-size: 10px;
+    font-weight: $font-weight-medium;
+    padding: 1px 6px;
+    border-radius: $radius-sm;
+
+    &--future {
+      background: $color-surface;
+      color: $color-text-secondary;
+    }
+    &--active {
+      background: #EFF6FF;
+      color: #2563EB;
+    }
+    &--closed {
+      background: $color-surface;
+      color: $color-text-tertiary;
+    }
+  }
+
+  &__SprintPopoverDate {
+    font-size: 11px;
+    color: $color-text-tertiary;
+  }
+
+  &__SprintPopoverGoal {
+    font-size: $font-size-xs;
+    color: $color-text-secondary;
+    line-height: 1.4;
+    margin-bottom: $space-1;
+  }
+
+  &__SprintPopoverTasks {
+    font-size: 11px;
+    color: $color-text-tertiary;
   }
 
   // -- 본문 --
