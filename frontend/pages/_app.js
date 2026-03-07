@@ -57,7 +57,7 @@ import "@/styles/components/canvas/canvasSettings.scss";
 import "@/styles/components/branch/taskFullPage.scss";
 import "@/styles/components/branch/taskIssueSection.scss";
 import "@/styles/components/branch/taskIssueDetail.scss";
-import "@/styles/components/modal/createIssue.scss";
+import "@/styles/components/branch/createIssuePage.scss";
 import "@/styles/components/myTasks/myTasks.scss";
 import "@/styles/components/layout/toast.scss";
 

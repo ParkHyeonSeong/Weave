@@ -514,14 +514,32 @@
     min-width: 60px;
   }
 
-  &__Title {
+  &__TitleWrap {
     flex: 1;
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    min-width: 0;
+  }
+
+  &__Title {
     font-size: $font-size-sm;
     color: $color-text;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     min-width: 0;
+  }
+
+  &__Issues {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 11px;
+    font-weight: $font-weight-medium;
+    color: #16A34A;
+    flex-shrink: 0;
+    white-space: nowrap;
   }
 
   &__Labels {

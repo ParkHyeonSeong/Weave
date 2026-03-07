@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { User, GripVertical } from 'lucide-react';
+import { User, GripVertical, MessageCircle } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -108,8 +108,16 @@ export default function TaskListRow({ task, branchId, taskTypes, epics, members,
       {/* Display ID */}
       <span className="TaskListRow__Id">{task.display_id}</span>
 
-      {/* 제목 */}
-      <span className="TaskListRow__Title">{task.title}</span>
+      {/* 제목 + 이슈 카운트 */}
+      <div className="TaskListRow__TitleWrap">
+        <span className="TaskListRow__Title">{task.title}</span>
+        {task.issue_count > 0 && (
+          <span className="TaskListRow__Issues">
+            +{task.issue_count}
+            <MessageCircle size={12} />
+          </span>
+        )}
+      </div>
 
       {/* 라벨 */}
       <div className="TaskListRow__Labels">

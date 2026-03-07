@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
-import { ArrowLeft, CircleDot, MoreHorizontal, Pencil, Trash2, Check, X, XCircle, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, CircleDot, MoreHorizontal, Pencil, Trash2, XCircle, CheckCircle2 } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import { ensureHtml } from '@/library/ensureHtml';
+import IssueEditor from './IssueEditor';
+import ConfirmModal from '@/components/modal/ConfirmModal';
 
 export default function TaskIssueDetail() {
   const router = useRouter();
@@ -10,21 +13,26 @@ export default function TaskIssueDetail() {
   const [issue, setIssue] = useState(null);
   const [comments, setComments] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [newComment, setNewComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   // 제목/본문 편집
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState('');
   const [editingBody, setEditingBody] = useState(false);
-  const [bodyValue, setBodyValue] = useState('');
 
   // 댓글 편집
   const [editingCommentId, setEditingCommentId] = useState(null);
-  const [editCommentValue, setEditCommentValue] = useState('');
 
   // 메뉴
   const [openMenuId, setOpenMenuId] = useState(null);
+
+  // 삭제 확인
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // 에디터 refs
+  const bodyEditorRef = useRef(null);
+  const commentEditorRef = useRef(null);
+  const newCommentRef = useRef(null);
 
   const myProfile = typeof window !== 'undefined'
     ? JSON.parse(sessionStorage.getItem('profile') || '{}')
@@ -81,7 +89,9 @@ export default function TaskIssueDetail() {
 
   // 본문 저장
   const saveBody = async () => {
-    const val = bodyValue.trim() || null;
+    const html = bodyEditorRef.current?.getHTML() || '';
+    const isEmpty = bodyEditorRef.current?.isEmpty();
+    const val = isEmpty ? null : html;
     if (val === (issue.body || null)) {
       setEditingBody(false);
       return;
@@ -98,16 +108,17 @@ export default function TaskIssueDetail() {
   };
 
   // 댓글 추가
-  const handleAddComment = async (e) => {
-    e.preventDefault();
-    if (!newComment.trim() || submitting) return;
+  const handleAddComment = async () => {
+    const html = newCommentRef.current?.getHTML() || '';
+    const isEmpty = newCommentRef.current?.isEmpty();
+    if (isEmpty || submitting) return;
     setSubmitting(true);
     try {
       const res = await axios.post(`/branches/${branchId}/tasks/${taskId}/issues/${issueId}/comments`, {
-        content: newComment.trim(),
+        content: html,
       });
       if (res.data.status) {
-        setNewComment('');
+        newCommentRef.current?.clearContent();
         fetchIssue();
       }
     } catch {}
@@ -116,16 +127,18 @@ export default function TaskIssueDetail() {
 
   // 댓글 수정
   const saveComment = async (commentId) => {
-    if (!editCommentValue.trim()) return;
+    const html = commentEditorRef.current?.getHTML() || '';
+    const isEmpty = commentEditorRef.current?.isEmpty();
+    if (isEmpty) return;
     try {
       const res = await axios.patch(
         `/branches/${branchId}/tasks/${taskId}/issues/${issueId}/comments/${commentId}`,
-        { content: editCommentValue.trim() }
+        { content: html }
       );
       if (res.data.status) {
         setComments((prev) =>
           prev.map((c) => c.comment_id === commentId
-            ? { ...c, content: editCommentValue.trim(), updated_at: new Date().toISOString() }
+            ? { ...c, content: html, updated_at: new Date().toISOString() }
             : c
           )
         );
@@ -148,6 +161,7 @@ export default function TaskIssueDetail() {
 
   // 이슈 삭제
   const deleteIssue = async () => {
+    setShowDeleteConfirm(false);
     try {
       const res = await axios.delete(`/branches/${branchId}/tasks/${taskId}/issues/${issueId}`);
       if (res.data.status) {
@@ -260,29 +274,32 @@ export default function TaskIssueDetail() {
                   id="issue-body"
                   openMenuId={openMenuId}
                   setOpenMenuId={setOpenMenuId}
-                  onEdit={() => { setBodyValue(issue.body || ''); setEditingBody(true); }}
-                  onDelete={deleteIssue}
+                  onEdit={() => setEditingBody(true)}
+                  onDelete={() => setShowDeleteConfirm(true)}
                   deleteLabel="Delete issue"
                 />
               )}
             </div>
             {editingBody ? (
               <div className="IssueDetail__CardEditBody">
-                <textarea
-                  className="IssueDetail__CardTextarea"
-                  value={bodyValue}
-                  onChange={(e) => setBodyValue(e.target.value)}
-                  rows={6}
-                  autoFocus
+                <IssueEditor
+                  ref={bodyEditorRef}
+                  content={issue.body || ''}
+                  placeholder="Describe the issue..."
+                  minHeight={150}
                 />
                 <div className="IssueDetail__CardEditActions">
-                  <button className="IssueDetail__SaveBtn" onClick={saveBody}>Update comment</button>
+                  <button className="IssueDetail__SaveBtn" onClick={saveBody}>Update</button>
                   <button className="IssueDetail__CancelBtn" onClick={() => setEditingBody(false)}>Cancel</button>
                 </div>
               </div>
             ) : (
               <div className={`IssueDetail__CardBody ${!issue.body ? 'IssueDetail__CardBody--empty' : ''}`}>
-                {issue.body || (isAuthor ? 'No description provided yet.' : 'No description provided.')}
+                {issue.body ? (
+                  <div className="TaskDescReadonly" dangerouslySetInnerHTML={{ __html: ensureHtml(issue.body) }} />
+                ) : (
+                  isAuthor ? 'No description provided yet.' : 'No description provided.'
+                )}
               </div>
             )}
           </div>
@@ -312,7 +329,7 @@ export default function TaskIssueDetail() {
                       id={`comment-${comment.comment_id}`}
                       openMenuId={openMenuId}
                       setOpenMenuId={setOpenMenuId}
-                      onEdit={() => { setEditingCommentId(comment.comment_id); setEditCommentValue(comment.content); }}
+                      onEdit={() => setEditingCommentId(comment.comment_id)}
                       onDelete={() => deleteComment(comment.comment_id)}
                       deleteLabel="Delete"
                     />
@@ -320,20 +337,21 @@ export default function TaskIssueDetail() {
                 </div>
                 {isEditingThis ? (
                   <div className="IssueDetail__CardEditBody">
-                    <textarea
-                      className="IssueDetail__CardTextarea"
-                      value={editCommentValue}
-                      onChange={(e) => setEditCommentValue(e.target.value)}
-                      rows={4}
-                      autoFocus
+                    <IssueEditor
+                      ref={commentEditorRef}
+                      content={comment.content}
+                      placeholder="Edit comment..."
+                      minHeight={100}
                     />
                     <div className="IssueDetail__CardEditActions">
-                      <button className="IssueDetail__SaveBtn" onClick={() => saveComment(comment.comment_id)}>Update comment</button>
+                      <button className="IssueDetail__SaveBtn" onClick={() => saveComment(comment.comment_id)}>Update</button>
                       <button className="IssueDetail__CancelBtn" onClick={() => setEditingCommentId(null)}>Cancel</button>
                     </div>
                   </div>
                 ) : (
-                  <div className="IssueDetail__CardBody">{comment.content}</div>
+                  <div className="IssueDetail__CardBody">
+                    <div className="TaskDescReadonly" dangerouslySetInnerHTML={{ __html: ensureHtml(comment.content) }} />
+                  </div>
                 )}
               </div>
             </div>
@@ -346,13 +364,11 @@ export default function TaskIssueDetail() {
         <div className="IssueDetail__Avatar IssueDetail__Avatar--sm" title={myProfile.username}>
           {getInitial(myProfile.username)}
         </div>
-        <form className="IssueDetail__ReplyForm" onSubmit={handleAddComment}>
-          <textarea
-            className="IssueDetail__ReplyInput"
+        <div className="IssueDetail__ReplyForm">
+          <IssueEditor
+            ref={newCommentRef}
             placeholder="Leave a comment..."
-            value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
-            rows={4}
+            minHeight={100}
           />
           <div className="IssueDetail__ReplyActions">
             <button
@@ -364,15 +380,26 @@ export default function TaskIssueDetail() {
               {issue.status === 'open' ? 'Close issue' : 'Reopen issue'}
             </button>
             <button
-              type="submit"
+              type="button"
               className="IssueDetail__ReplySubmit"
-              disabled={!newComment.trim() || submitting}
+              onClick={handleAddComment}
+              disabled={submitting}
             >
               {submitting ? 'Commenting...' : 'Comment'}
             </button>
           </div>
-        </form>
+        </div>
       </div>
+
+      <ConfirmModal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={deleteIssue}
+        title="Delete Issue"
+        message={`"${issue.title}" 을(를) 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`}
+        confirmLabel="Delete"
+        variant="danger"
+      />
     </div>
   );
 }

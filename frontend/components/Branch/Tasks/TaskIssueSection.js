@@ -2,12 +2,10 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { Plus, MessageCircle, CircleDot, CheckCircle2 } from 'lucide-react';
 import { axios } from '@/library/_axios';
-import CreateIssue from '@/components/modal/CreateIssue';
 
 export default function TaskIssueSection({ branchId, taskId, expanded = false }) {
   const router = useRouter();
   const [issues, setIssues] = useState([]);
-  const [showCreate, setShowCreate] = useState(false);
 
   const fetchIssues = async () => {
     if (!branchId || !taskId) return;
@@ -60,7 +58,7 @@ export default function TaskIssueSection({ branchId, taskId, expanded = false })
             </span>
           )}
         </span>
-        <button className="TaskIssueSection__AddBtn" onClick={() => setShowCreate(true)}>
+        <button className="TaskIssueSection__AddBtn" onClick={() => router.push(`/branch/${branchId}/task/${taskId}/issue/new`)}>
           <Plus size={14} />
           {expanded && <span>New issue</span>}
         </button>
@@ -108,13 +106,6 @@ export default function TaskIssueSection({ branchId, taskId, expanded = false })
         </button>
       )}
 
-      {showCreate && (
-        <CreateIssue
-          branchId={branchId}
-          taskId={taskId}
-          onClose={() => setShowCreate(false)}
-        />
-      )}
     </div>
   );
 }

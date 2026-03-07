@@ -1,0 +1,116 @@
+@use '../../variables' as *;
+
+.CreateIssuePage {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: $space-6;
+  display: flex;
+  flex-direction: column;
+  gap: $space-5;
+
+  &__Header {
+    display: flex;
+    align-items: center;
+  }
+
+  &__BackBtn {
+    display: flex;
+    align-items: center;
+    gap: $space-1;
+    font-size: $font-size-sm;
+    color: $color-text-secondary;
+    padding: $space-1 $space-2;
+    border-radius: $radius-md;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+      color: $color-text;
+    }
+  }
+
+  &__Title {
+    font-size: 28px;
+    font-weight: $font-weight-bold;
+    color: $color-text;
+  }
+
+  &__Field {
+    display: flex;
+    flex-direction: column;
+    gap: $space-2;
+  }
+
+  &__Label {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-semibold;
+    color: $color-text;
+  }
+
+  &__Input {
+    width: 100%;
+    padding: $space-2 $space-3;
+    font-size: 16px;
+    font-weight: $font-weight-medium;
+    color: $color-text;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    outline: none;
+    background: $color-bg;
+    transition: border-color $transition-fast;
+
+    &:focus {
+      border-color: $color-border-focus;
+      box-shadow: $shadow-focus;
+    }
+
+    &::placeholder {
+      color: $color-text-tertiary;
+    }
+  }
+
+  &__Error {
+    font-size: $font-size-sm;
+    color: $color-error;
+  }
+
+  &__Footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: $space-2;
+  }
+
+  &__CancelBtn {
+    padding: $space-2 $space-4;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-text-secondary;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+      color: $color-text;
+    }
+  }
+
+  &__SubmitBtn {
+    padding: $space-2 $space-4;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-text-inverse;
+    background: $color-primary;
+    border-radius: $radius-md;
+    transition: background $transition-fast;
+
+    &:hover:not(:disabled) {
+      background: $color-primary-hover;
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+}

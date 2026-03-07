@@ -278,7 +278,6 @@
     font-size: $font-size-sm;
     color: $color-text;
     line-height: 1.7;
-    white-space: pre-wrap;
     min-height: 48px;
 
     &--empty {
@@ -292,26 +291,9 @@
     display: flex;
     flex-direction: column;
     gap: $space-2;
-  }
 
-  &__CardTextarea {
-    width: 100%;
-    padding: $space-2 $space-3;
-    font-size: $font-size-sm;
-    color: $color-text;
-    line-height: 1.7;
-    border: 1px solid $color-border;
-    border-radius: $radius-md;
-    outline: none;
-    background: $color-bg;
-    resize: vertical;
-    min-height: 100px;
-    font-family: inherit;
-    transition: border-color $transition-fast;
-
-    &:focus {
-      border-color: $color-border-focus;
-      box-shadow: $shadow-focus;
+    .TaskDescEditor {
+      border-radius: $radius-md;
     }
   }
 
@@ -415,33 +397,12 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: $space-3;
-    border: 1px solid $color-border;
-    border-radius: $radius-lg;
-    overflow: hidden;
-    transition: border-color $transition-fast;
+    gap: 0;
 
-    &:focus-within {
-      border-color: $color-border-focus;
-      box-shadow: $shadow-focus;
-    }
-  }
-
-  &__ReplyInput {
-    width: 100%;
-    padding: $space-3;
-    font-size: $font-size-sm;
-    color: $color-text;
-    line-height: 1.6;
-    border: none;
-    outline: none;
-    background: $color-bg;
-    resize: vertical;
-    min-height: 100px;
-    font-family: inherit;
-
-    &::placeholder {
-      color: $color-text-tertiary;
+    .TaskDescEditor {
+      border-bottom-left-radius: 0;
+      border-bottom-right-radius: 0;
+      border-bottom: none;
     }
   }
 
