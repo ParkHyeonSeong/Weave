@@ -17,6 +17,7 @@ Thumbs.db
 
 # AI
 CLAUDE.md
+.claude/
 
 # Python
 __pycache__/
