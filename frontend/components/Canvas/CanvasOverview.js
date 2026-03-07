@@ -69,13 +69,13 @@ export default function CanvasOverview() {
     else if (status === 'connected') setSaveStatus('saved');
   }, [status, isEditing]);
 
-  // 읽기 모드에서 태스크 레퍼런스 클릭 핸들러
+  // 읽기 모드에서 레퍼런스 클릭 핸들러 (task, doc, issue)
   useEffect(() => {
     if (isEditing || !contentRef.current) return;
-    const taskNodes = contentRef.current.querySelectorAll('[data-task-ref]');
     const handlers = [];
-    taskNodes.forEach((el) => {
-      el.classList.add('task-ref', `task-ref--${el.getAttribute('data-status') || 'todo'}`);
+
+    contentRef.current.querySelectorAll('[data-task-ref]').forEach((el) => {
+      el.classList.add('task-ref');
       el.style.cursor = 'pointer';
       const handler = () => {
         const branchId = el.getAttribute('data-branch-id');
@@ -85,15 +85,8 @@ export default function CanvasOverview() {
       el.addEventListener('click', handler);
       handlers.push({ el, handler });
     });
-    return () => handlers.forEach(({ el, handler }) => el.removeEventListener('click', handler));
-  }, [isEditing, overview?.content, router]);
 
-  // 읽기 모드에서 문서 레퍼런스 클릭 핸들러
-  useEffect(() => {
-    if (isEditing || !contentRef.current) return;
-    const docNodes = contentRef.current.querySelectorAll('[data-doc-ref]');
-    const handlers = [];
-    docNodes.forEach((el) => {
+    contentRef.current.querySelectorAll('[data-doc-ref]').forEach((el) => {
       el.classList.add('doc-ref');
       el.style.cursor = 'pointer';
       const handler = () => {
@@ -104,16 +97,9 @@ export default function CanvasOverview() {
       el.addEventListener('click', handler);
       handlers.push({ el, handler });
     });
-    return () => handlers.forEach(({ el, handler }) => el.removeEventListener('click', handler));
-  }, [isEditing, overview?.content, router]);
 
-  // 읽기 모드에서 이슈 레퍼런스 클릭 핸들러
-  useEffect(() => {
-    if (isEditing || !contentRef.current) return;
-    const issueNodes = contentRef.current.querySelectorAll('[data-issue-ref]');
-    const handlers = [];
-    issueNodes.forEach((el) => {
-      el.classList.add('issue-ref', `issue-ref--${el.getAttribute('data-status') || 'open'}`);
+    contentRef.current.querySelectorAll('[data-issue-ref]').forEach((el) => {
+      el.classList.add('issue-ref');
       el.style.cursor = 'pointer';
       const handler = () => {
         const branchId = el.getAttribute('data-branch-id');
@@ -124,8 +110,68 @@ export default function CanvasOverview() {
       el.addEventListener('click', handler);
       handlers.push({ el, handler });
     });
+
     return () => handlers.forEach(({ el, handler }) => el.removeEventListener('click', handler));
   }, [isEditing, overview?.content, router]);
+
+  // 읽기 모드에서 ref 상태 배치 갱신 + 뱃지 주입
+  useEffect(() => {
+    if (isEditing || !contentRef.current) return;
+
+    const taskIds = new Set();
+    const issueIds = new Set();
+
+    contentRef.current.querySelectorAll('[data-task-ref]').forEach((el) => {
+      const id = el.getAttribute('data-task-id');
+      if (id) taskIds.add(Number(id));
+    });
+    contentRef.current.querySelectorAll('[data-issue-ref]').forEach((el) => {
+      const id = el.getAttribute('data-issue-id');
+      if (id) issueIds.add(Number(id));
+    });
+
+    const taskStatusMap = { todo: 'Todo', in_progress: 'In Progress', done: 'Done' };
+    const issueStatusMap = { open: 'Open', closed: 'Closed' };
+
+    const injectBadge = (el, status, labelMap) => {
+      el.querySelector('[data-ref-badge]')?.remove();
+      const badge = document.createElement('span');
+      badge.className = `ref-chip__badge ref-chip__badge--${status}`;
+      badge.textContent = labelMap[status] || status;
+      badge.setAttribute('data-ref-badge', 'true');
+      el.appendChild(badge);
+    };
+
+    contentRef.current.querySelectorAll('[data-task-ref]').forEach((el) => {
+      const status = el.getAttribute('data-status') || 'todo';
+      injectBadge(el, status, taskStatusMap);
+    });
+    contentRef.current.querySelectorAll('[data-issue-ref]').forEach((el) => {
+      const status = el.getAttribute('data-status') || 'open';
+      injectBadge(el, status, issueStatusMap);
+    });
+
+    if (taskIds.size === 0 && issueIds.size === 0) return;
+
+    axios.post('/ref-status', {
+      task_ids: [...taskIds],
+      issue_ids: [...issueIds],
+    }).then((res) => {
+      if (!res.data.status || !contentRef.current) return;
+      const { tasks, issues } = res.data;
+
+      contentRef.current.querySelectorAll('[data-task-ref]').forEach((el) => {
+        const id = el.getAttribute('data-task-id');
+        const info = tasks[id];
+        if (info) injectBadge(el, info.status, taskStatusMap);
+      });
+      contentRef.current.querySelectorAll('[data-issue-ref]').forEach((el) => {
+        const id = el.getAttribute('data-issue-id');
+        const info = issues[id];
+        if (info) injectBadge(el, info.status, issueStatusMap);
+      });
+    }).catch(() => {});
+  }, [isEditing, overview?.content]);
 
   const handleHtmlChange = (html) => {
     htmlRef.current = html;

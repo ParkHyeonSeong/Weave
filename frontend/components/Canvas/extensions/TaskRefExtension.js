@@ -47,10 +47,19 @@ const TaskRefNode = Node.create({
   addNodeView() {
     return ({ node }) => {
       const dom = document.createElement('span');
-      dom.className = `task-ref task-ref--${node.attrs.status}`;
+      dom.className = 'task-ref';
       dom.contentEditable = 'false';
-      dom.textContent = `${node.attrs.displayId} ${node.attrs.title}`;
       dom.title = `${node.attrs.displayId} - ${node.attrs.title}`;
+
+      dom.appendChild(document.createTextNode(`${node.attrs.displayId} ${node.attrs.title}`));
+
+      const statusMap = { todo: 'Todo', in_progress: 'In Progress', done: 'Done' };
+      const badge = document.createElement('span');
+      badge.className = `ref-chip__badge ref-chip__badge--${node.attrs.status}`;
+      badge.textContent = statusMap[node.attrs.status] || node.attrs.status;
+      badge.setAttribute('data-ref-badge', 'true');
+      dom.appendChild(badge);
+
       return { dom };
     };
   },

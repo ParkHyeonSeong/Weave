@@ -79,6 +79,11 @@ async def start(sprint_id: int, branch_id: int, request: Request, db: AsyncSessi
     if sprint['status'] != 'future':
         return {'status': False, 'message': 'SPRINT_NOT_FUTURE'}
 
+    # 태스크가 없으면 시작 불가
+    counts = await task_model.count_by_sprint_status(sprint_id, db)
+    if counts['done_count'] + counts['incomplete_count'] == 0:
+        return {'status': False, 'message': 'SPRINT_EMPTY'}
+
     fields = {'status': 'active'}
     if not sprint['start_date']:
         fields['start_date'] = date.today()

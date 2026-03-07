@@ -31,6 +31,7 @@ import "@/styles/components/branch/branchDetail.scss";
 import "@/styles/components/branch/taskList.scss";
 import "@/styles/components/modal/taskModal.scss";
 import "@/styles/components/modal/sprintModal.scss";
+import "@/styles/components/modal/confirmModal.scss";
 import "@/styles/components/branch/boardView.scss";
 import "@/styles/components/branch/archiveList.scss";
 import "@/styles/components/branch/epicTimeline.scss";

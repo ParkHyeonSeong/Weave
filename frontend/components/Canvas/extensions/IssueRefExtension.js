@@ -46,10 +46,18 @@ const IssueRefNode = Node.create({
   addNodeView() {
     return ({ node }) => {
       const dom = document.createElement('span');
-      dom.className = `issue-ref issue-ref--${node.attrs.status}`;
+      dom.className = 'issue-ref';
       dom.contentEditable = 'false';
-      dom.textContent = `${node.attrs.displayId} ${node.attrs.title}`;
       dom.title = `${node.attrs.displayId} - ${node.attrs.title}`;
+
+      dom.appendChild(document.createTextNode(`${node.attrs.displayId} ${node.attrs.title}`));
+
+      const badge = document.createElement('span');
+      badge.className = `ref-chip__badge ref-chip__badge--${node.attrs.status}`;
+      badge.textContent = node.attrs.status === 'open' ? 'Open' : 'Closed';
+      badge.setAttribute('data-ref-badge', 'true');
+      dom.appendChild(badge);
+
       return { dom };
     };
   },

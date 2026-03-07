@@ -107,6 +107,16 @@ async def search_for_chat(user_id: int, keyword: str, db: AsyncSession):
     return results
 
 
+async def batch_statuses(issue_ids: list[int], db: AsyncSession) -> dict:
+    """Ref 상태 배치 조회 (issue_id → status)"""
+    if not issue_ids:
+        return {}
+    result = await db.execute(text(
+        "SELECT issue_id, status FROM task_issue WHERE issue_id = ANY(:ids)"
+    ), {'ids': issue_ids})
+    return {str(r.issue_id): {'status': r.status} for r in result.fetchall()}
+
+
 async def get_task_id(issue_id: int, db: AsyncSession):
     """이슈의 task_id 조회"""
     result = await db.execute(text("""

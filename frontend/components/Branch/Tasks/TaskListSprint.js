@@ -7,6 +7,7 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities';
 import TaskListRow from './TaskListRow';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
+import ConfirmModal from '@/components/modal/ConfirmModal';
 
 function formatSprintDate(start, end) {
   const fmt = (d) => {
@@ -30,6 +31,7 @@ export default function TaskListSprint({
   const [creating, setCreating] = useState(false);
   const [startError, setStartError] = useState('');
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
+  const [showStartConfirm, setShowStartConfirm] = useState(false);
   const typeDropdownRef = useRef(null);
   const tasks = sprint.tasks || [];
 
@@ -113,6 +115,7 @@ export default function TaskListSprint({
   };
 
   const handleStartSprint = async () => {
+    setShowStartConfirm(false);
     setStartError('');
     try {
       const res = await axios.post(`/branches/${branchId}/sprints/${sprint.sprint_id}/start`);
@@ -121,6 +124,7 @@ export default function TaskListSprint({
       } else {
         const messages = {
           'SPRINT_NOT_FUTURE': 'Only future sprints can be started.',
+          'SPRINT_EMPTY': 'Cannot start a sprint with no tasks.',
         };
         setStartError(messages[res.data.message] || res.data.message);
         setTimeout(() => setStartError(''), 3000);
@@ -178,7 +182,7 @@ export default function TaskListSprint({
         </div>
         <div className="TaskList__SprintRight" onClick={(e) => e.stopPropagation()}>
           {!isBacklog && sprint.status === 'future' && (
-            <button className="TaskList__SprintStartBtn" onClick={handleStartSprint}>
+            <button className="TaskList__SprintStartBtn" onClick={() => setShowStartConfirm(true)}>
               <Play size={12} />
               Start Sprint
             </button>
@@ -277,6 +281,14 @@ export default function TaskListSprint({
           )}
         </div>
       )}
+      <ConfirmModal
+        isOpen={showStartConfirm}
+        onClose={() => setShowStartConfirm(false)}
+        onConfirm={handleStartSprint}
+        title="Start Sprint"
+        message={`"${sprint.sprint_name}" 을(를) 시작하시겠습니까? 현재 ${tasks.length}개의 태스크가 있습니다.`}
+        confirmLabel="Start"
+      />
     </div>
   );
 }

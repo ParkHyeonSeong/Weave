@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import { Extension } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
@@ -26,6 +26,7 @@ import DocRefNode from './extensions/DocRefExtension';
 import IssueRefNode from './extensions/IssueRefExtension';
 import { createImageUploadPlugin } from './extensions/ImageUploadPlugin';
 import CanvasEditorToolbar from './CanvasEditorToolbar';
+import { axios } from '@/library/_axios';
 
 const lowlight = createLowlight(common);
 const MAX_PLAIN_TEXT_LENGTH = 60000;
@@ -150,6 +151,61 @@ function CollabEditorInner({
       editor.commands.setContent(initialContent);
     }
   }, [editor, initialContent, hasExistingYjsState, ydoc]);
+
+  // 에디터 마운트 시 ref 상태 배치 갱신 (DOM 뱃지만 업데이트, Yjs 속성 미변경)
+  const refreshedRef = useRef(false);
+  useEffect(() => {
+    if (!editor || refreshedRef.current) return;
+    refreshedRef.current = true;
+
+    // Yjs sync 후 DOM이 준비되기를 기다린 뒤 배치 갱신
+    const timer = setTimeout(() => {
+      const taskIds = new Set();
+      const issueIds = new Set();
+
+      editor.state.doc.descendants((node) => {
+        if (node.type.name === 'taskRef' && node.attrs.taskId) taskIds.add(node.attrs.taskId);
+        if (node.type.name === 'issueRef' && node.attrs.issueId) issueIds.add(node.attrs.issueId);
+      });
+
+      if (taskIds.size === 0 && issueIds.size === 0) return;
+
+      axios.post('/ref-status', {
+        task_ids: [...taskIds],
+        issue_ids: [...issueIds],
+      }).then((res) => {
+        if (!res.data.status) return;
+        const { tasks, issues } = res.data;
+        const taskStatusMap = { todo: 'Todo', in_progress: 'In Progress', done: 'Done' };
+        const issueStatusMap = { open: 'Open', closed: 'Closed' };
+
+        editor.state.doc.descendants((node, nodePos) => {
+          if (node.type.name === 'taskRef') {
+            const info = tasks[String(node.attrs.taskId)];
+            if (!info) return;
+            const dom = editor.view.nodeDOM(nodePos);
+            const badge = dom?.querySelector('[data-ref-badge]');
+            if (badge) {
+              badge.className = `ref-chip__badge ref-chip__badge--${info.status}`;
+              badge.textContent = taskStatusMap[info.status] || info.status;
+            }
+          }
+          if (node.type.name === 'issueRef') {
+            const info = issues[String(node.attrs.issueId)];
+            if (!info) return;
+            const dom = editor.view.nodeDOM(nodePos);
+            const badge = dom?.querySelector('[data-ref-badge]');
+            if (badge) {
+              badge.className = `ref-chip__badge ref-chip__badge--${info.status}`;
+              badge.textContent = issueStatusMap[info.status] || info.status;
+            }
+          }
+        });
+      }).catch(() => {});
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [editor]);
 
   if (!editor) return null;
 

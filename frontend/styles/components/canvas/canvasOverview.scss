@@ -244,18 +244,6 @@
       &:hover {
         border-color: $color-primary;
       }
-
-      &--done {
-        background: $color-success-bg;
-        color: $color-success;
-        &:hover { border-color: $color-success; }
-      }
-
-      &--in_progress {
-        background: #DBEAFE;
-        color: #1E40AF;
-        &:hover { border-color: #1E40AF; }
-      }
     }
 
     // 문서 레퍼런스 인라인 칩
@@ -318,18 +306,25 @@
       }
 
       &:hover { border-color: #8B5CF6; }
+    }
 
-      &--open {
-        background: #DBEAFE;
-        color: #1E40AF;
-        &:hover { border-color: #1E40AF; }
-      }
+    // Ref 상태 뱃지 (Confluence 스타일)
+    .ref-chip__badge {
+      display: inline-flex;
+      align-items: center;
+      margin-left: 4px;
+      padding: 0 5px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: $font-weight-medium;
+      line-height: 1.5;
+      white-space: nowrap;
 
-      &--closed {
-        background: $color-surface-hover;
-        color: $color-text-secondary;
-        &:hover { border-color: $color-text-secondary; }
-      }
+      &--todo { background: rgba(0, 0, 0, 0.06); color: $color-text-secondary; }
+      &--in_progress { background: #DBEAFE; color: #1E40AF; }
+      &--done { background: $color-success-bg; color: $color-success; }
+      &--open { background: #DBEAFE; color: #1E40AF; }
+      &--closed { background: rgba(0, 0, 0, 0.06); color: $color-text-secondary; }
     }
   }
 }

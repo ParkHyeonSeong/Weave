@@ -619,6 +619,16 @@ async def set_labels(task_id: int, label_ids: list, db: AsyncSession):
     await db.commit()
 
 
+async def batch_statuses(task_ids: list[int], db: AsyncSession) -> dict:
+    """Ref 상태 배치 조회 (task_id → status)"""
+    if not task_ids:
+        return {}
+    result = await db.execute(text(
+        "SELECT task_id, status FROM task WHERE task_id = ANY(:ids)"
+    ), {'ids': task_ids})
+    return {str(r.task_id): {'status': r.status} for r in result.fetchall()}
+
+
 async def set_assignees(task_id: int, main_user_id, sub_user_ids: list, db: AsyncSession):
     """Task 담당자 전체 교체 (메인 1명 + 서브 N명)"""
     await db.execute(text("""
