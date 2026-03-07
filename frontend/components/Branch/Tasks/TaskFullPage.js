@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { ArrowLeft, Trash2, ChevronDown } from 'lucide-react';
 import { axios } from '@/library/_axios';
@@ -6,6 +6,8 @@ import CustomSelect from '@/components/common/CustomSelect';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import useTaskDetail from '@/hooks/useTaskDetail';
 import TaskIssueSection from './TaskIssueSection';
+import TaskDescriptionEditor from './TaskDescriptionEditor';
+import ConfirmModal from '@/components/modal/ConfirmModal';
 
 export default function TaskFullPage() {
   const router = useRouter();
@@ -25,7 +27,9 @@ export default function TaskFullPage() {
 
   // 설명 편집
   const [editingDesc, setEditingDesc] = useState(false);
-  const [descValue, setDescValue] = useState('');
+
+  // 삭제 확인
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     if (!branchId) return;
@@ -49,15 +53,15 @@ export default function TaskFullPage() {
     setEditingTitle(false);
   };
 
-  const saveDesc = () => {
-    const val = descValue.trim() || null;
-    if (val !== (task.description || null)) {
-      updateField('description', val);
+  const saveDesc = useCallback((html) => {
+    if (html !== (task?.description || null)) {
+      updateField('description', html);
     }
     setEditingDesc(false);
-  };
+  }, [task?.description, updateField]);
 
   const onDelete = async () => {
+    setShowDeleteConfirm(false);
     const ok = await handleDelete();
     if (ok) router.push(`/branch/${branchId}`);
   };
@@ -86,7 +90,7 @@ export default function TaskFullPage() {
           />
           <span className="TaskFullPage__DisplayId">{displayId}</span>
         </div>
-        <button className="TaskFullPage__DeleteBtn" onClick={onDelete}>
+        <button className="TaskFullPage__DeleteBtn" onClick={() => setShowDeleteConfirm(true)}>
           <Trash2 size={14} />
           Delete
         </button>
@@ -134,21 +138,20 @@ export default function TaskFullPage() {
           <div className="TaskFullPage__Section">
             <div className="TaskFullPage__SectionLabel">Description</div>
             {editingDesc ? (
-              <textarea
-                className="TaskFullPage__DescInput"
-                value={descValue}
-                onChange={(e) => setDescValue(e.target.value)}
-                onBlur={saveDesc}
-                onKeyDown={(e) => { if (e.key === 'Escape') setEditingDesc(false); }}
-                autoFocus
-                rows={6}
+              <TaskDescriptionEditor
+                content={task.description}
+                onSave={saveDesc}
               />
             ) : (
               <div
                 className={`TaskFullPage__DescText ${!task.description ? 'TaskFullPage__DescText--empty' : ''}`}
-                onClick={() => { setDescValue(task.description || ''); setEditingDesc(true); }}
+                onClick={() => setEditingDesc(true)}
               >
-                {task.description || 'Add description...'}
+                {task.description ? (
+                  <div className="TaskDescReadonly" dangerouslySetInnerHTML={{ __html: task.description }} />
+                ) : (
+                  'Add description...'
+                )}
               </div>
             )}
           </div>
@@ -291,6 +294,16 @@ export default function TaskFullPage() {
           </div>
         </div>
       </div>
+
+      <ConfirmModal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={onDelete}
+        title="Delete Task"
+        message={`"${displayId} - ${task.title}" 을(를) 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`}
+        confirmLabel="Delete"
+        variant="danger"
+      />
     </div>
   );
 }

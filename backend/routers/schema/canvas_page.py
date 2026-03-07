@@ -30,6 +30,7 @@ class CanvasPageUpdate(BaseModel):
     content: Optional[str] = None
     parent_page_id: Optional[int] = None
     position: Optional[int] = None
+    wide_mode: Optional[bool] = None
 
     @field_validator('content')
     @classmethod

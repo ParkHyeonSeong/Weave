@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import dynamic from 'next/dynamic';
-import { Pencil, X, Wifi, WifiOff, Loader, RefreshCw } from 'lucide-react';
+import { Pencil, X, Wifi, WifiOff, Loader, RefreshCw, Maximize2, Minimize2 } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import useCollabProvider from '@/library/useCollabProvider';
 import PresenceBar from './PresenceBar';
@@ -260,6 +260,17 @@ export default function CanvasPageView() {
     fetchPage();
   }, [canvasId, pageId, fetchPage]);
 
+  // 너비 모드 토글
+  const toggleWideMode = async () => {
+    const newMode = !page.wide_mode;
+    setPage((prev) => ({ ...prev, wide_mode: newMode }));
+    try {
+      await axios.patch(`/canvases/${canvasId}/pages/${pageId}`, { wide_mode: newMode });
+    } catch {
+      setPage((prev) => ({ ...prev, wide_mode: !newMode }));
+    }
+  };
+
   // 탭 포커스 복귀 시 업데이트 감지
   const [updateToast, setUpdateToast] = useState(null);
 
@@ -331,7 +342,7 @@ export default function CanvasPageView() {
   if (!page) return null;
 
   return (
-    <div className="CanvasPageView">
+    <div className={`CanvasPageView${page?.wide_mode ? ' CanvasPageView--wide' : ''}`}>
       <div ref={stickyRef} className={`CanvasPageView__StickyHeader ${isScrolled ? 'CanvasPageView__StickyHeader--scrolled' : ''}`}>
       <div className="CanvasPageView__TopBar">
         {isEditing ? (
@@ -349,6 +360,13 @@ export default function CanvasPageView() {
             <div className="CanvasPageView__Actions">
               <PresenceBar users={connectedUsers} currentUserId={user?.user_id} />
               <button
+                className="CanvasPageView__ActionBtn"
+                onClick={toggleWideMode}
+                title={page.wide_mode ? '기본 너비' : '넓게 보기'}
+              >
+                {page.wide_mode ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+              </button>
+              <button
                 className="CanvasPageView__ActionBtn CanvasPageView__ActionBtn--secondary"
                 onClick={handleCloseEdit}
               >
@@ -362,6 +380,13 @@ export default function CanvasPageView() {
           <>
             <div />
             <div className="CanvasPageView__Actions">
+              <button
+                className="CanvasPageView__ActionBtn"
+                onClick={toggleWideMode}
+                title={page.wide_mode ? '기본 너비' : '넓게 보기'}
+              >
+                {page.wide_mode ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+              </button>
               <button
                 className="CanvasPageView__ActionBtn"
                 onClick={() => setIsEditing(true)}

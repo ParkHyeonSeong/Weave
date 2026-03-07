@@ -27,7 +27,7 @@ async def find_by_id(page_id: int, db: AsyncSession):
     """페이지 상세 조회 (content 포함)"""
     result = await db.execute(text("""
         SELECT p.page_id, p.canvas_id, p.parent_page_id, p.title,
-               p.content, p.position, p.type, p.is_archived,
+               p.content, p.position, p.type, p.is_archived, p.wide_mode,
                p.created_by, p.updated_by, p.created_at, p.updated_at,
                p.yjs_state, p.yjs_updated_at,
                u.username AS created_by_name,

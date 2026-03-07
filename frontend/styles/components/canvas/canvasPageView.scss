@@ -5,6 +5,10 @@
   max-width: 800px;
   margin: 0 auto;
 
+  &--wide {
+    max-width: 100%;
+  }
+
   &__StickyHeader {
     position: sticky;
     top: 0;
