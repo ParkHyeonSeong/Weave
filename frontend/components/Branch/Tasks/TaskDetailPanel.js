@@ -1,10 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { X, Maximize2, Trash2, ChevronDown } from 'lucide-react';
 import CustomSelect from '@/components/common/CustomSelect';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import useTaskDetail from '@/hooks/useTaskDetail';
 import TaskIssueSection from './TaskIssueSection';
+import TaskDescriptionEditor from './TaskDescriptionEditor';
+import ConfirmModal from '@/components/modal/ConfirmModal';
 
 export default function TaskDetailPanel({ branchId, branchKey, taskTypes, taskSummary, onClose }) {
   const router = useRouter();
@@ -20,7 +22,9 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes, taskSu
 
   // 설명 편집
   const [editingDesc, setEditingDesc] = useState(false);
-  const [descValue, setDescValue] = useState('');
+
+  // 삭제 확인
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // 제목 저장
   const saveTitle = () => {
@@ -31,16 +35,16 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes, taskSu
   };
 
   // 설명 저장
-  const saveDesc = () => {
-    const val = descValue.trim() || null;
-    if (val !== (task.description || null)) {
-      updateField('description', val);
+  const saveDesc = useCallback((html) => {
+    if (html !== (task?.description || null)) {
+      updateField('description', html);
     }
     setEditingDesc(false);
-  };
+  }, [task?.description, updateField]);
 
   // 삭제
   const onDelete = async () => {
+    setShowDeleteConfirm(false);
     const ok = await handleDelete();
     if (ok) onClose();
   };
@@ -127,21 +131,20 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes, taskSu
         <div className="TaskDetailPanel__Section">
           <div className="TaskDetailPanel__SectionLabel">Description</div>
           {editingDesc ? (
-            <textarea
-              className="TaskDetailPanel__DescInput"
-              value={descValue}
-              onChange={(e) => setDescValue(e.target.value)}
-              onBlur={saveDesc}
-              onKeyDown={(e) => { if (e.key === 'Escape') setEditingDesc(false); }}
-              autoFocus
-              rows={4}
+            <TaskDescriptionEditor
+              content={task.description}
+              onSave={saveDesc}
             />
           ) : (
             <div
               className={`TaskDetailPanel__DescText ${!task.description ? 'TaskDetailPanel__DescText--empty' : ''}`}
-              onClick={() => { setDescValue(task.description || ''); setEditingDesc(true); }}
+              onClick={() => setEditingDesc(true)}
             >
-              {task.description || 'Add description...'}
+              {task.description ? (
+                <div className="TaskDescReadonly" dangerouslySetInnerHTML={{ __html: task.description }} />
+              ) : (
+                'Add description...'
+              )}
             </div>
           )}
         </div>
@@ -299,11 +302,21 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes, taskSu
         <div className="TaskDetailPanel__Divider" />
 
         {/* 삭제 */}
-        <button className="TaskDetailPanel__DeleteBtn" onClick={onDelete}>
+        <button className="TaskDetailPanel__DeleteBtn" onClick={() => setShowDeleteConfirm(true)}>
           <Trash2 size={14} />
           Delete task
         </button>
       </div>
+
+      <ConfirmModal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={onDelete}
+        title="Delete Task"
+        message={`"${displayId} - ${task.title}" 을(를) 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`}
+        confirmLabel="Delete"
+        variant="danger"
+      />
     </div>
   );
 }

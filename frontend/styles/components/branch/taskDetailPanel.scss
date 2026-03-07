@@ -201,6 +201,7 @@
     font-family: inherit;
   }
 
+
   // -- 필드 행 --
   &__Fields {
     display: flex;
@@ -417,5 +418,223 @@
       color: $color-error;
       background: $color-error-bg;
     }
+  }
+}
+
+// -- Task Description Editor --
+.TaskDescEditor {
+  border: 1px solid $color-border;
+  border-radius: $radius-lg;
+  overflow: hidden;
+
+  .CanvasEditorToolbar {
+    border-radius: 0;
+  }
+
+  &__Content {
+    padding: $space-3;
+    min-height: 120px;
+    max-height: 400px;
+    overflow-y: auto;
+    font-size: $font-size-sm;
+    line-height: 1.6;
+    color: $color-text;
+
+    .tiptap {
+      outline: none;
+
+      > * + * {
+        margin-top: 0.4em;
+      }
+
+      h1, h2, h3 {
+        margin: 0.8em 0 0.3em;
+        font-weight: $font-weight-bold;
+        color: $color-text;
+      }
+      h1 { font-size: 1.4em; }
+      h2 { font-size: 1.2em; }
+      h3 { font-size: 1.05em; }
+
+      p.is-editor-empty:first-child::before {
+        color: $color-text-tertiary;
+        content: attr(data-placeholder);
+        float: left;
+        height: 0;
+        pointer-events: none;
+      }
+
+      ul, ol { padding-left: 1.5em; }
+
+      blockquote {
+        border-left: 3px solid $color-border;
+        padding-left: $space-3;
+        color: $color-text-secondary;
+      }
+
+      code {
+        background: #F1F3F5;
+        padding: 2px 5px;
+        border-radius: $radius-sm;
+        font-size: 0.85em;
+        font-family: 'SFMono-Regular', Consolas, monospace;
+        color: #EB5757;
+      }
+
+      pre {
+        background: #F6F8FA;
+        border: 1px solid $color-border;
+        border-radius: $radius-md;
+        padding: $space-3;
+        overflow-x: auto;
+        code { background: none; padding: 0; color: inherit; font-size: $font-size-sm; }
+      }
+
+      a { color: $color-primary; cursor: pointer; }
+
+      hr {
+        border: none;
+        border-top: 1px solid $color-border;
+        margin: 1em 0;
+      }
+
+      mark { border-radius: 2px; padding: 1px 2px; }
+      u { text-decoration: underline; }
+
+      ul[data-type="taskList"] {
+        list-style: none;
+        padding-left: 0;
+        li[data-type="taskItem"] {
+          display: flex;
+          align-items: flex-start;
+          gap: $space-2;
+          margin: 3px 0;
+          > label {
+            flex-shrink: 0;
+            margin-top: 2px;
+            input[type="checkbox"] { width: 15px; height: 15px; accent-color: $color-primary; cursor: pointer; }
+          }
+          > div { flex: 1; }
+          &[data-checked="true"] > div { text-decoration: line-through; color: $color-text-tertiary; }
+        }
+      }
+
+      .task-ref {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        padding: 1px 6px;
+        border-radius: $radius-md;
+        font-size: 11px;
+        font-weight: $font-weight-medium;
+        background: $color-primary-subtle;
+        color: $color-primary;
+        border: 1px solid transparent;
+        cursor: pointer;
+        vertical-align: baseline;
+        line-height: 1.5;
+        white-space: nowrap;
+
+        &:hover { border-color: $color-primary; }
+      }
+
+      .callout {
+        border-radius: $radius-md;
+        padding: $space-3;
+        margin: 0.5em 0;
+        border-left: 3px solid;
+        &[data-callout="info"] { background: #EFF6FF; border-left-color: #2563EB; }
+        &[data-callout="warning"] { background: #FFFBEB; border-left-color: #D97706; }
+        &[data-callout="success"] { background: $color-success-bg; border-left-color: $color-success; }
+        &[data-callout="error"] { background: $color-error-bg; border-left-color: $color-error; }
+        p { margin: 0; }
+      }
+    }
+  }
+}
+
+// -- Task Description Readonly View --
+.TaskDescReadonly {
+  font-size: $font-size-sm;
+  line-height: 1.6;
+  color: $color-text;
+
+  > * + * { margin-top: 0.4em; }
+
+  h1, h2, h3 {
+    margin: 0.6em 0 0.2em;
+    font-weight: $font-weight-bold;
+    color: $color-text;
+  }
+  h1 { font-size: 1.4em; }
+  h2 { font-size: 1.2em; }
+  h3 { font-size: 1.05em; }
+
+  ul, ol { padding-left: 1.5em; }
+
+  blockquote {
+    border-left: 3px solid $color-border;
+    padding-left: $space-3;
+    color: $color-text-secondary;
+  }
+
+  code {
+    background: #F1F3F5;
+    padding: 2px 5px;
+    border-radius: $radius-sm;
+    font-size: 0.85em;
+    font-family: 'SFMono-Regular', Consolas, monospace;
+    color: #EB5757;
+  }
+
+  pre {
+    background: #F6F8FA;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    padding: $space-3;
+    overflow-x: auto;
+    code { background: none; padding: 0; color: inherit; font-size: $font-size-sm; }
+  }
+
+  a { color: $color-primary; }
+  hr { border: none; border-top: 1px solid $color-border; margin: 1em 0; }
+  mark { border-radius: 2px; padding: 1px 2px; }
+  u { text-decoration: underline; }
+
+  ul[data-type="taskList"] {
+    list-style: none;
+    padding-left: 0;
+    li[data-type="taskItem"] {
+      display: flex;
+      align-items: flex-start;
+      gap: $space-2;
+      margin: 3px 0;
+      &[data-checked="true"] { text-decoration: line-through; color: $color-text-tertiary; }
+    }
+  }
+
+  .task-ref {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 6px;
+    border-radius: $radius-md;
+    font-size: 11px;
+    font-weight: $font-weight-medium;
+    background: $color-primary-subtle;
+    color: $color-primary;
+    white-space: nowrap;
+  }
+
+  .callout {
+    border-radius: $radius-md;
+    padding: $space-3;
+    margin: 0.5em 0;
+    border-left: 3px solid;
+    &[data-callout="info"] { background: #EFF6FF; border-left-color: #2563EB; }
+    &[data-callout="warning"] { background: #FFFBEB; border-left-color: #D97706; }
+    &[data-callout="success"] { background: $color-success-bg; border-left-color: $color-success; }
+    &[data-callout="error"] { background: $color-error-bg; border-left-color: $color-error; }
+    p { margin: 0; }
   }
 }
