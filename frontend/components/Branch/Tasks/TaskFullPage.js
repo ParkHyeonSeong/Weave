@@ -14,10 +14,10 @@ export default function TaskFullPage() {
   const { id: branchId, taskId } = router.query;
 
   const [branch, setBranch] = useState(null);
-  const [taskTypes, setTaskTypes] = useState([]);
 
   const {
     task, loading, sprints, epics, members, labels,
+    workflowStatuses, taskTypes, customFields,
     updateField, updateAssignees, toggleLabel, handleDelete, handleSelectChange,
   } = useTaskDetail(branchId, taskId);
 
@@ -35,12 +35,8 @@ export default function TaskFullPage() {
     if (!branchId) return;
     const fetchBranch = async () => {
       try {
-        const [branchRes, typeRes] = await Promise.all([
-          axios.get(`/branches/${branchId}`),
-          axios.get(`/branches/${branchId}/task-types`),
-        ]);
+        const branchRes = await axios.get(`/branches/${branchId}`);
         if (branchRes.data.status) setBranch(branchRes.data.branch);
-        if (typeRes.data.status) setTaskTypes(typeRes.data.task_types);
       } catch {}
     };
     fetchBranch();
@@ -125,11 +121,14 @@ export default function TaskFullPage() {
           <div className="TaskFullPage__StatusWrap">
             <CustomSelect
               value={task.status}
-              options={[
-                { value: 'todo', label: 'To Do', color: '#9CA3AF' },
-                { value: 'in_progress', label: 'In Progress', color: '#2563EB' },
-                { value: 'done', label: 'Done', color: '#16A34A' },
-              ]}
+              options={workflowStatuses.length > 0
+                ? workflowStatuses.map((ws) => ({ value: ws.key, label: ws.label, color: ws.color }))
+                : [
+                  { value: 'todo', label: 'To Do', color: '#9CA3AF' },
+                  { value: 'in_progress', label: 'In Progress', color: '#2563EB' },
+                  { value: 'done', label: 'Done', color: '#16A34A' },
+                ]
+              }
               onChange={(val) => updateField('status', val)}
             />
           </div>
@@ -291,6 +290,21 @@ export default function TaskFullPage() {
                 onChange={(e) => updateField('due_date', e.target.value || null)}
               />
             </FieldRow>
+
+            {/* 커스텀 필드 */}
+            {customFields.map((cf) => (
+              <FieldRow key={cf.custom_field_id} label={cf.field_name}>
+                <CustomFieldInput
+                  field={cf}
+                  value={(task.custom_fields || {})[cf.custom_field_id]}
+                  onChange={(val) => {
+                    const updated = { ...(task.custom_fields || {}), [cf.custom_field_id]: val };
+                    updateField('custom_fields', updated);
+                  }}
+                  className="TaskFullPage__DateInput"
+                />
+              </FieldRow>
+            ))}
           </div>
         </div>
       </div>
@@ -315,6 +329,31 @@ function FieldRow({ label, children, align }) {
       <div className="TaskFullPage__RowValue">{children}</div>
     </div>
   );
+}
+
+function CustomFieldInput({ field, value, onChange, className = '' }) {
+  const inputClass = className || 'TaskFullPage__DateInput';
+  switch (field.field_type) {
+    case 'text':
+      return <input className={inputClass} type="text" value={value || ''} onChange={(e) => onChange(e.target.value || null)} placeholder={field.field_name} />;
+    case 'number':
+      return <input className={inputClass} type="number" value={value ?? ''} onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)} />;
+    case 'date':
+      return <input className={inputClass} type="date" value={value || ''} onChange={(e) => onChange(e.target.value || null)} />;
+    case 'checkbox':
+      return <input type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked)} />;
+    case 'select':
+      return (
+        <select className={inputClass} value={value || ''} onChange={(e) => onChange(e.target.value || null)}>
+          <option value="">Select...</option>
+          {(field.field_options || []).map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+        </select>
+      );
+    case 'url':
+      return <input className={inputClass} type="url" value={value || ''} onChange={(e) => onChange(e.target.value || null)} placeholder="https://..." />;
+    default:
+      return <input className={inputClass} type="text" value={value || ''} onChange={(e) => onChange(e.target.value || null)} />;
+  }
 }
 
 function SubAssigneeDropdown({ members, selectedIds, onChange }) {

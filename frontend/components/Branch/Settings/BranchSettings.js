@@ -1,13 +1,15 @@
 import { useState } from 'react';
-import { Settings, Users, Layers } from 'lucide-react';
+import { Settings, Users, Layers, GitBranch } from 'lucide-react';
 import SettingsGeneral from './SettingsGeneral';
 import SettingsMembers from './SettingsMembers';
 import SettingsTaskTypes from './SettingsTaskTypes';
+import SettingsWorkflow from './SettingsWorkflow';
 
 const SUB_TABS = [
   { key: 'general', label: 'General', icon: Settings },
   { key: 'members', label: 'Members', icon: Users },
   { key: 'task_types', label: 'Task Types', icon: Layers },
+  { key: 'workflow', label: 'Workflow', icon: GitBranch },
 ];
 
 export default function BranchSettings({ branchId, branch, myRole, onBranchUpdated }) {
@@ -45,6 +47,9 @@ export default function BranchSettings({ branchId, branch, myRole, onBranchUpdat
         )}
         {activeSubTab === 'task_types' && (
           <SettingsTaskTypes branchId={branchId} isAdmin={isAdmin} />
+        )}
+        {activeSubTab === 'workflow' && (
+          <SettingsWorkflow branchId={branchId} isAdmin={isAdmin} />
         )}
       </div>
     </div>

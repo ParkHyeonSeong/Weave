@@ -8,12 +8,16 @@ import TaskIssueSection from './TaskIssueSection';
 import TaskDescriptionEditor from './TaskDescriptionEditor';
 import ConfirmModal from '@/components/modal/ConfirmModal';
 
-export default function TaskDetailPanel({ branchId, branchKey, taskTypes, taskSummary, onClose }) {
+export default function TaskDetailPanel({ branchId, branchKey, taskTypes: externalTaskTypes, workflowStatuses: externalStatuses, taskSummary, onClose }) {
   const router = useRouter();
   const {
     task, loading, sprints, epics, members, labels,
+    workflowStatuses: hookStatuses, taskTypes: hookTaskTypes, customFields,
     updateField, updateAssignees, toggleLabel, handleDelete, handleSelectChange,
   } = useTaskDetail(branchId, taskSummary?.task_id);
+
+  const workflowStatuses = (externalStatuses && externalStatuses.length > 0) ? externalStatuses : hookStatuses;
+  const taskTypes = (externalTaskTypes && externalTaskTypes.length > 0) ? externalTaskTypes : hookTaskTypes;
 
   // 제목 편집
   const [editingTitle, setEditingTitle] = useState(false);
@@ -118,11 +122,14 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes, taskSu
         <div className="TaskDetailPanel__StatusWrap">
           <CustomSelect
             value={task.status}
-            options={[
-              { value: 'todo', label: 'To Do', color: '#9CA3AF' },
-              { value: 'in_progress', label: 'In Progress', color: '#2563EB' },
-              { value: 'done', label: 'Done', color: '#16A34A' },
-            ]}
+            options={workflowStatuses.length > 0
+              ? workflowStatuses.map((ws) => ({ value: ws.key, label: ws.label, color: ws.color }))
+              : [
+                { value: 'todo', label: 'To Do', color: '#9CA3AF' },
+                { value: 'in_progress', label: 'In Progress', color: '#2563EB' },
+                { value: 'done', label: 'Done', color: '#16A34A' },
+              ]
+            }
             onChange={(val) => updateField('status', val)}
           />
         </div>
@@ -294,6 +301,30 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes, taskSu
           </div>
         </div>
 
+        {/* 커스텀 필드 */}
+        {customFields.length > 0 && (
+          <>
+            <div className="TaskDetailPanel__Divider" />
+            <div className="TaskDetailPanel__Section">
+              <div className="TaskDetailPanel__SectionLabel">Custom Fields</div>
+              <div className="TaskDetailPanel__Fields">
+                {customFields.map((cf) => (
+                  <DetailRow key={cf.custom_field_id} label={cf.field_name}>
+                    <CustomFieldInput
+                      field={cf}
+                      value={(task.custom_fields || {})[cf.custom_field_id]}
+                      onChange={(val) => {
+                        const updated = { ...(task.custom_fields || {}), [cf.custom_field_id]: val };
+                        updateField('custom_fields', updated);
+                      }}
+                    />
+                  </DetailRow>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+
         <div className="TaskDetailPanel__Divider" />
 
         {/* 이슈 섹션 */}
@@ -328,6 +359,79 @@ function DetailRow({ label, children, align }) {
       <div className="TaskDetailPanel__RowValue">{children}</div>
     </div>
   );
+}
+
+function CustomFieldInput({ field, value, onChange }) {
+  switch (field.field_type) {
+    case 'text':
+      return (
+        <input
+          className="TaskDetailPanel__DateInput"
+          type="text"
+          value={value || ''}
+          onChange={(e) => onChange(e.target.value || null)}
+          placeholder={field.field_name}
+        />
+      );
+    case 'number':
+      return (
+        <input
+          className="TaskDetailPanel__DateInput"
+          type="number"
+          value={value ?? ''}
+          onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
+        />
+      );
+    case 'date':
+      return (
+        <input
+          className="TaskDetailPanel__DateInput"
+          type="date"
+          value={value || ''}
+          onChange={(e) => onChange(e.target.value || null)}
+        />
+      );
+    case 'checkbox':
+      return (
+        <input
+          type="checkbox"
+          checked={!!value}
+          onChange={(e) => onChange(e.target.checked)}
+        />
+      );
+    case 'select':
+      return (
+        <select
+          className="TaskDetailPanel__DateInput"
+          value={value || ''}
+          onChange={(e) => onChange(e.target.value || null)}
+        >
+          <option value="">Select...</option>
+          {(field.field_options || []).map((opt) => (
+            <option key={opt} value={opt}>{opt}</option>
+          ))}
+        </select>
+      );
+    case 'url':
+      return (
+        <input
+          className="TaskDetailPanel__DateInput"
+          type="url"
+          value={value || ''}
+          onChange={(e) => onChange(e.target.value || null)}
+          placeholder="https://..."
+        />
+      );
+    default:
+      return (
+        <input
+          className="TaskDetailPanel__DateInput"
+          type="text"
+          value={value || ''}
+          onChange={(e) => onChange(e.target.value || null)}
+        />
+      );
+  }
 }
 
 function SubAssigneeDropdown({ members, selectedIds, onChange }) {

@@ -10,6 +10,9 @@ export default function useTaskDetail(branchId, taskId) {
   const [epics, setEpics] = useState([]);
   const [members, setMembers] = useState([]);
   const [labels, setLabels] = useState([]);
+  const [workflowStatuses, setWorkflowStatuses] = useState([]);
+  const [taskTypes, setTaskTypes] = useState([]);
+  const [customFields, setCustomFields] = useState([]);
 
   const fetchTask = useCallback(async () => {
     if (!branchId || !taskId) return;
@@ -26,23 +29,48 @@ export default function useTaskDetail(branchId, taskId) {
   const fetchOptions = useCallback(async () => {
     if (!branchId) return;
     try {
-      const [sprintRes, epicRes, memberRes, labelRes] = await Promise.all([
+      const [sprintRes, epicRes, memberRes, labelRes, wsRes, typeRes] = await Promise.all([
         axios.get(`/branches/${branchId}/sprints`),
         axios.get(`/branches/${branchId}/epics`),
         axios.get(`/branches/${branchId}/members`),
         axios.get(`/branches/${branchId}/labels`),
+        axios.get(`/branches/${branchId}/workflow-statuses`),
+        axios.get(`/branches/${branchId}/task-types`),
       ]);
       if (sprintRes.data.status) setSprints(sprintRes.data.sprints);
       if (epicRes.data.status) setEpics(epicRes.data.epics);
       if (memberRes.data.status) setMembers(memberRes.data.members);
       if (labelRes.data.status) setLabels(labelRes.data.labels);
+      if (wsRes.data.status) setWorkflowStatuses(wsRes.data.statuses);
+      if (typeRes.data.status) setTaskTypes(typeRes.data.task_types);
     } catch {}
   }, [branchId]);
+
+  // task type에 따라 custom fields 가져오기
+  const fetchCustomFields = useCallback(async () => {
+    if (!branchId || !task?.task_type || taskTypes.length === 0) return;
+    const typeConfig = taskTypes.find((t) => t.type_key === task.task_type);
+    if (!typeConfig) {
+      setCustomFields([]);
+      return;
+    }
+    try {
+      const cfRes = await axios.get(`/branches/${branchId}/task-types/${typeConfig.type_id}/custom-fields`);
+      if (cfRes.data.status) setCustomFields(cfRes.data.fields);
+    } catch {
+      setCustomFields([]);
+    }
+  }, [branchId, task?.task_type, taskTypes]);
 
   useEffect(() => {
     fetchTask();
     fetchOptions();
   }, [fetchTask, fetchOptions]);
+
+  // task와 taskTypes가 로드된 후 custom fields 가져오기
+  useEffect(() => {
+    fetchCustomFields();
+  }, [fetchCustomFields]);
 
   // 필드 업데이트 (자동 저장 + 재조회)
   const updateField = async (field, value) => {
@@ -113,6 +141,9 @@ export default function useTaskDetail(branchId, taskId) {
     epics,
     members,
     labels,
+    workflowStatuses,
+    taskTypes,
+    customFields,
     fetchTask,
     updateField,
     updateAssignees,

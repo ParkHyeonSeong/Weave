@@ -24,15 +24,18 @@ async def next_display_number(branch_id: int, db: AsyncSession) -> int:
 async def create(branch_id: int, display_number: int, title: str,
                  description: str, task_type: str, status: str, priority: str,
                  epic_id, sprint_id, parent_task_id,
-                 start_date, due_date, created_by: int, db: AsyncSession) -> int:
+                 start_date, due_date, created_by: int, db: AsyncSession,
+                 custom_fields: dict = None) -> int:
     """Task 생성"""
+    import json
+    cf_json = json.dumps(custom_fields) if custom_fields else '{}'
     result = await db.execute(text("""
         INSERT INTO task (branch_id, display_number, title, description,
                           task_type, status, priority, epic_id, sprint_id,
-                          parent_task_id, start_date, due_date, created_by)
+                          parent_task_id, start_date, due_date, created_by, custom_fields)
         VALUES (:branch_id, :display_number, :title, :description,
                 :task_type, :status, :priority, :epic_id, :sprint_id,
-                :parent_task_id, :start_date, :due_date, :created_by)
+                :parent_task_id, :start_date, :due_date, :created_by, :custom_fields)
         RETURNING task_id
     """), {
         'branch_id': branch_id,
@@ -48,6 +51,7 @@ async def create(branch_id: int, display_number: int, title: str,
         'start_date': start_date,
         'due_date': due_date,
         'created_by': created_by,
+        'custom_fields': cf_json,
     })
     await db.commit()
     return result.scalar_one()
@@ -61,6 +65,7 @@ async def find_by_id(task_id: int, db: AsyncSession):
                t.epic_id, t.sprint_id, t.parent_task_id,
                t.start_date, t.due_date, t.sort_order,
                t.created_by, t.created_at, t.updated_at,
+               t.custom_fields,
                b.key AS branch_key,
                e.epic_name,
                s.sprint_name,
@@ -106,12 +111,17 @@ async def find_by_branch(branch_id: int, sprint_id, db: AsyncSession):
     if sprint_id is not None:
         where_sprint = "AND t.sprint_id = :sprint_id"
         # active sprint이면 done 포함, 아니면 done 제외
-        done_filter = ("AND (t.status != 'done' OR "
-                       "(SELECT status FROM sprint WHERE sprint_id = :sprint_id) = 'active')")
+        done_filter = ("AND (NOT EXISTS ("
+                       "  SELECT 1 FROM workflow_status ws"
+                       "  WHERE ws.branch_id = t.branch_id AND ws.key = t.status AND ws.category = 'done'"
+                       ") OR (SELECT status FROM sprint WHERE sprint_id = :sprint_id) = 'active')")
         params = {'branch_id': branch_id, 'sprint_id': sprint_id}
     else:
         where_sprint = "AND t.sprint_id IS NULL"
-        done_filter = "AND t.status != 'done'"
+        done_filter = ("AND NOT EXISTS ("
+                       "  SELECT 1 FROM workflow_status ws"
+                       "  WHERE ws.branch_id = t.branch_id AND ws.key = t.status AND ws.category = 'done'"
+                       ")")
         params = {'branch_id': branch_id}
 
     result = await db.execute(text(f"""
@@ -194,7 +204,7 @@ async def find_for_board(branch_id: int, sprint_id, db: AsyncSession):
     result = await db.execute(text(f"""
         SELECT t.task_id, t.display_number, t.title,
                t.task_type, t.status, t.priority,
-               t.sort_order,
+               t.sort_order, t.custom_fields,
                b.key AS branch_key
         FROM task t
         INNER JOIN branch b ON t.branch_id = b.branch_id
@@ -271,7 +281,10 @@ async def find_archived(branch_id: int, db: AsyncSession):
         LEFT JOIN epic e ON t.epic_id = e.epic_id
         LEFT JOIN sprint s ON t.sprint_id = s.sprint_id
         WHERE t.branch_id = :branch_id AND t.parent_task_id IS NULL
-              AND t.status = 'done'
+              AND EXISTS (
+                  SELECT 1 FROM workflow_status ws
+                  WHERE ws.branch_id = t.branch_id AND ws.key = t.status AND ws.category = 'done'
+              )
         ORDER BY t.updated_at DESC NULLS LAST, t.created_at DESC
     """), params)
     rows = result.fetchall()
@@ -372,9 +385,13 @@ async def find_subtasks(parent_task_id: int, db: AsyncSession):
 
 async def update(task_id: int, fields: dict, db: AsyncSession):
     """Task 수정 (동적 필드)"""
+    import json
     allowed = {'title', 'description', 'task_type', 'status', 'priority',
-               'epic_id', 'sprint_id', 'start_date', 'due_date', 'sort_order'}
+               'epic_id', 'sprint_id', 'start_date', 'due_date', 'sort_order',
+               'custom_fields'}
     updates = {k: v for k, v in fields.items() if k in allowed}
+    if 'custom_fields' in updates and isinstance(updates['custom_fields'], dict):
+        updates['custom_fields'] = json.dumps(updates['custom_fields'])
     if not updates:
         return
 
@@ -450,21 +467,26 @@ async def reorder(branch_id: int, task_ids: list, sprint_id, after_task_id, db: 
 async def move_incomplete(from_sprint_id: int, to_sprint_id, db: AsyncSession) -> int:
     """미완료 task를 다른 sprint로 이동 (to_sprint_id=None이면 backlog)"""
     result = await db.execute(text("""
-        UPDATE task SET sprint_id = :to_sprint_id, updated_at = NOW()
-        WHERE sprint_id = :from_sprint_id AND status != 'done'
+        UPDATE task t SET sprint_id = :to_sprint_id, updated_at = NOW()
+        WHERE t.sprint_id = :from_sprint_id
+          AND NOT EXISTS (
+              SELECT 1 FROM workflow_status ws
+              WHERE ws.branch_id = t.branch_id AND ws.key = t.status AND ws.category = 'done'
+          )
     """), {'from_sprint_id': from_sprint_id, 'to_sprint_id': to_sprint_id})
     await db.commit()
     return result.rowcount
 
 
 async def count_by_sprint_status(sprint_id: int, db: AsyncSession):
-    """Sprint 내 완료/미완료 task 수"""
+    """Sprint 내 완료/미완료 task 수 (workflow_status category 기반)"""
     result = await db.execute(text("""
         SELECT
-            COUNT(*) FILTER (WHERE status = 'done') AS done_count,
-            COUNT(*) FILTER (WHERE status != 'done') AS incomplete_count
-        FROM task
-        WHERE sprint_id = :sprint_id
+            COUNT(*) FILTER (WHERE COALESCE(ws.category, 'done') = 'done') AS done_count,
+            COUNT(*) FILTER (WHERE COALESCE(ws.category, 'done') != 'done') AS incomplete_count
+        FROM task t
+        LEFT JOIN workflow_status ws ON t.branch_id = ws.branch_id AND t.status = ws.key
+        WHERE t.sprint_id = :sprint_id
     """), {'sprint_id': sprint_id})
     row = result.fetchone()
     return {'done_count': row[0], 'incomplete_count': row[1]}

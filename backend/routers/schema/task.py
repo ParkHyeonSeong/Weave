@@ -21,15 +21,10 @@ class TaskCreate(BaseModel):
     label_ids: Optional[List[int]] = None
     start_date: Optional[date] = None
     due_date: Optional[date] = None
+    custom_fields: Optional[dict] = None
 
     # task_type 검증은 controller에서 branch의 task_type_config로 동적 검증
-
-    @field_validator('status')
-    @classmethod
-    def validate_status(cls, v):
-        if v not in ('todo', 'in_progress', 'done'):
-            raise ValueError('status must be "todo", "in_progress", or "done"')
-        return v
+    # status 검증은 controller에서 branch의 workflow_status로 동적 검증
 
     @field_validator('priority')
     @classmethod
@@ -51,13 +46,7 @@ class TaskUpdate(BaseModel):
     label_ids: Optional[List[int]] = None
     start_date: Optional[date] = None
     due_date: Optional[date] = None
-
-    @field_validator('status')
-    @classmethod
-    def validate_status(cls, v):
-        if v is not None and v not in ('todo', 'in_progress', 'done'):
-            raise ValueError('status must be "todo", "in_progress", or "done"')
-        return v
+    custom_fields: Optional[dict] = None
 
     @field_validator('priority')
     @classmethod

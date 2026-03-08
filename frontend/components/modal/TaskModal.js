@@ -31,6 +31,9 @@ export default function TaskModal({ branchId, branchKey, task, defaultSprintId, 
   const [members, setMembers] = useState([]);
   const [labels, setLabels] = useState([]);
   const [taskTypes, setTaskTypes] = useState([]);
+  const [workflowStatuses, setWorkflowStatuses] = useState([]);
+  const [customFieldDefs, setCustomFieldDefs] = useState([]);
+  const [customFieldValues, setCustomFieldValues] = useState(task?.custom_fields || {});
 
   useEffect(() => {
     fetchOptions();
@@ -41,20 +44,41 @@ export default function TaskModal({ branchId, branchKey, task, defaultSprintId, 
 
   const fetchOptions = async () => {
     try {
-      const [sprintRes, epicRes, memberRes, labelRes, typeRes] = await Promise.all([
+      const [sprintRes, epicRes, memberRes, labelRes, typeRes, wsRes] = await Promise.all([
         axios.get(`/branches/${branchId}/sprints`),
         axios.get(`/branches/${branchId}/epics`),
         axios.get(`/branches/${branchId}/members`),
         axios.get(`/branches/${branchId}/labels`),
         axios.get(`/branches/${branchId}/task-types`),
+        axios.get(`/branches/${branchId}/workflow-statuses`),
       ]);
       if (sprintRes.data.status) setSprints(sprintRes.data.sprints);
       if (epicRes.data.status) setEpics(epicRes.data.epics);
       if (memberRes.data.status) setMembers(memberRes.data.members);
       if (labelRes.data.status) setLabels(labelRes.data.labels);
       if (typeRes.data.status) setTaskTypes(typeRes.data.task_types);
+      if (wsRes.data.status) setWorkflowStatuses(wsRes.data.statuses);
     } catch {}
   };
+
+  // task type이 변경될 때 custom fields 가져오기
+  useEffect(() => {
+    if (taskTypes.length === 0) return;
+    const typeConfig = taskTypes.find((t) => t.type_key === taskType);
+    if (!typeConfig) {
+      setCustomFieldDefs([]);
+      return;
+    }
+    const fetchCustomFields = async () => {
+      try {
+        const cfRes = await axios.get(`/branches/${branchId}/task-types/${typeConfig.type_id}/custom-fields`);
+        if (cfRes.data.status) setCustomFieldDefs(cfRes.data.fields);
+      } catch {
+        setCustomFieldDefs([]);
+      }
+    };
+    fetchCustomFields();
+  }, [branchId, taskType, taskTypes]);
 
   const fetchTaskLabels = async () => {
     if (!task?.labels) return;
@@ -91,6 +115,7 @@ export default function TaskModal({ branchId, branchKey, task, defaultSprintId, 
         label_ids: labelIds.length > 0 ? labelIds : null,
         start_date: startDate || null,
         due_date: dueDate || null,
+        custom_fields: Object.keys(customFieldValues).length > 0 ? customFieldValues : null,
       };
 
       let res;
@@ -170,9 +195,17 @@ export default function TaskModal({ branchId, branchKey, task, defaultSprintId, 
             <div className="TaskModal__Field TaskModal__Field--small">
               <label className="TaskModal__Label">Status</label>
               <select className="TaskModal__Select" value={status} onChange={(e) => setStatus(e.target.value)}>
-                <option value="todo">To Do</option>
-                <option value="in_progress">In Progress</option>
-                <option value="done">Done</option>
+                {workflowStatuses.length > 0 ? (
+                  workflowStatuses.map((ws) => (
+                    <option key={ws.key} value={ws.key}>{ws.label}</option>
+                  ))
+                ) : (
+                  <>
+                    <option value="todo">To Do</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="done">Done</option>
+                  </>
+                )}
               </select>
             </div>
             <div className="TaskModal__Field TaskModal__Field--small">
@@ -283,6 +316,49 @@ export default function TaskModal({ branchId, branchKey, task, defaultSprintId, 
               />
             </div>
           </div>
+
+          {/* 커스텀 필드 */}
+          {customFieldDefs.length > 0 && (
+            <div className="TaskModal__CustomFields">
+              {customFieldDefs.map((cf) => (
+                <div key={cf.custom_field_id} className="TaskModal__Field TaskModal__Field--half">
+                  <label className="TaskModal__Label">
+                    {cf.field_name}
+                    {cf.is_required && <span style={{ color: '#DC2626' }}> *</span>}
+                  </label>
+                  {cf.field_type === 'checkbox' ? (
+                    <input
+                      type="checkbox"
+                      checked={!!customFieldValues[cf.custom_field_id]}
+                      onChange={(e) => setCustomFieldValues((prev) => ({ ...prev, [cf.custom_field_id]: e.target.checked }))}
+                    />
+                  ) : cf.field_type === 'select' ? (
+                    <select
+                      className="TaskModal__Select"
+                      value={customFieldValues[cf.custom_field_id] || ''}
+                      onChange={(e) => setCustomFieldValues((prev) => ({ ...prev, [cf.custom_field_id]: e.target.value || null }))}
+                    >
+                      <option value="">Select...</option>
+                      {(cf.field_options || []).map((opt) => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      className="TaskModal__Input"
+                      type={cf.field_type === 'number' ? 'number' : cf.field_type === 'date' ? 'date' : cf.field_type === 'url' ? 'url' : 'text'}
+                      value={customFieldValues[cf.custom_field_id] || ''}
+                      onChange={(e) => setCustomFieldValues((prev) => ({
+                        ...prev,
+                        [cf.custom_field_id]: cf.field_type === 'number' ? (e.target.value ? Number(e.target.value) : null) : (e.target.value || null),
+                      }))}
+                      placeholder={cf.field_name}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
 
           {error && <div className="TaskModal__Error">{error}</div>}
         </div>

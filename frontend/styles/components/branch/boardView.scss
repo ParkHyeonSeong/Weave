@@ -78,10 +78,11 @@
 
   // -- 칸반 컬럼 컨테이너 --
   &__Columns {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    display: flex;
     gap: $space-4;
     min-height: 400px;
+    overflow-x: auto;
+    padding-bottom: $space-2;
   }
 }
 
@@ -89,6 +90,8 @@
 .BoardColumn {
   display: flex;
   flex-direction: column;
+  flex: 1 0 260px;
+  min-width: 260px;
   background: $color-surface;
   border-radius: $radius-xl;
   overflow: hidden;

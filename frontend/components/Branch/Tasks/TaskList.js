@@ -17,7 +17,7 @@ import CompleteSprintModal from '@/components/modal/CompleteSprintModal';
 import TaskFilterBar from '../TaskFilterBar';
 import TaskListRow from './TaskListRow';
 
-export default function TaskList({ branchId, branchKey, taskTypes, onSelectTask }) {
+export default function TaskList({ branchId, branchKey, taskTypes, workflowStatuses, onSelectTask }) {
   const [sprints, setSprints] = useState([]);
   const [backlogTasks, setBacklogTasks] = useState([]);
   const [epics, setEpics] = useState([]);
@@ -399,6 +399,7 @@ export default function TaskList({ branchId, branchKey, taskTypes, onSelectTask 
               branchId={branchId}
               branchKey={branchKey}
               taskTypes={taskTypes}
+              workflowStatuses={workflowStatuses}
               epics={epics}
               members={members}
               sprints={sprints}
@@ -417,6 +418,7 @@ export default function TaskList({ branchId, branchKey, taskTypes, onSelectTask 
           branchId={branchId}
           branchKey={branchKey}
           taskTypes={taskTypes}
+          workflowStatuses={workflowStatuses}
           epics={epics}
           members={members}
           onEditTask={handleTaskClick}
@@ -433,6 +435,7 @@ export default function TaskList({ branchId, branchKey, taskTypes, onSelectTask 
                 task={activeTask}
                 branchId={branchId}
                 taskTypes={taskTypes}
+                workflowStatuses={workflowStatuses}
                 epics={epics}
                 members={members}
                 isOverlay

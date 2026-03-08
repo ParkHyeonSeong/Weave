@@ -5,10 +5,9 @@ import { axios } from '@/library/_axios';
 import CustomSelect from '@/components/common/CustomSelect';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 
-const statusOptions = [
+const DEFAULT_STATUS_OPTIONS = [
   { value: 'todo', label: 'To Do', color: '#9CA3AF' },
   { value: 'in_progress', label: 'In Progress', color: '#2563EB' },
-  { value: 'in_review', label: 'In Review', color: '#F59E0B' },
   { value: 'done', label: 'Done', color: '#16A34A' },
 ];
 
@@ -83,7 +82,7 @@ export default function MyTasksView() {
           onChange={(e) => updateFilter('status', e.target.value)}
         >
           <option value="">All Status</option>
-          {statusOptions.map((o) => (
+          {DEFAULT_STATUS_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
         </select>
@@ -214,7 +213,7 @@ function MyTasksRow({ task, onRefresh }) {
       <div className="MyTasksRow__Cell" onClick={(e) => e.stopPropagation()}>
         <CustomSelect
           value={task.status}
-          options={statusOptions}
+          options={DEFAULT_STATUS_OPTIONS}
           onChange={(val) => handleFieldChange('status', val)}
           size="sm"
           hideArrow

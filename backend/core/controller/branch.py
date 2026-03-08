@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.model import branch as branch_model
 from core.model import branch_member as member_model
 from core.model import task_type_config as type_model
+from core.model import workflow_status as ws_model
 
 
 async def create(body, request: Request, db: AsyncSession):
@@ -35,6 +36,9 @@ async def create(body, request: Request, db: AsyncSession):
 
     # 기본 task type 시딩
     await type_model.seed_defaults(branch_id, db)
+
+    # 기본 workflow status 시딩
+    await ws_model.seed_defaults(branch_id, db)
 
     return {
         'status': True,

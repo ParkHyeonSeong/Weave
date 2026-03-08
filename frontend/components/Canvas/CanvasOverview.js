@@ -130,7 +130,7 @@ export default function CanvasOverview() {
       if (id) issueIds.add(Number(id));
     });
 
-    const taskStatusMap = { todo: 'Todo', in_progress: 'In Progress', done: 'Done' };
+    const taskStatusMap = { todo: 'Todo', in_progress: 'In Progress', done: 'Done', in_review: 'In Review', testing: 'Testing', blocked: 'Blocked' };
     const issueStatusMap = { open: 'Open', closed: 'Closed' };
 
     const injectBadge = (el, status, labelMap) => {

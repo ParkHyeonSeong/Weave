@@ -31,6 +31,7 @@ export default function BranchDetail() {
 
   // Task type 설정
   const [taskTypes, setTaskTypes] = useState([]);
+  const [workflowStatuses, setWorkflowStatuses] = useState([]);
 
   // 오른쪽 패널
   const [selectedTask, setSelectedTask] = useState(null);
@@ -40,6 +41,14 @@ export default function BranchDetail() {
     if (!id) return;
     fetchBranch();
     fetchTaskTypes();
+    fetchWorkflowStatuses();
+  }, [id]);
+
+  // workflow:updated 이벤트 수신
+  useEffect(() => {
+    const handler = () => fetchWorkflowStatuses();
+    window.addEventListener('workflow:updated', handler);
+    return () => window.removeEventListener('workflow:updated', handler);
   }, [id]);
 
   // URL query tab 동기화
@@ -84,6 +93,13 @@ export default function BranchDetail() {
     try {
       const res = await axios.get(`/branches/${id}/task-types`);
       if (res.data.status) setTaskTypes(res.data.task_types);
+    } catch {}
+  };
+
+  const fetchWorkflowStatuses = async () => {
+    try {
+      const res = await axios.get(`/branches/${id}/workflow-statuses`);
+      if (res.data.status) setWorkflowStatuses(res.data.statuses);
     } catch {}
   };
 
@@ -140,6 +156,7 @@ export default function BranchDetail() {
               branchId={branch.branch_id}
               branchKey={branch.key}
               taskTypes={taskTypes}
+              workflowStatuses={workflowStatuses}
               onSelectTask={handleSelectTask}
             />
           )}
@@ -154,6 +171,7 @@ export default function BranchDetail() {
               branchId={branch.branch_id}
               branchKey={branch.key}
               taskTypes={taskTypes}
+              workflowStatuses={workflowStatuses}
               onSelectTask={handleSelectTask}
             />
           )}
@@ -162,6 +180,7 @@ export default function BranchDetail() {
               branchId={branch.branch_id}
               branchKey={branch.key}
               taskTypes={taskTypes}
+              workflowStatuses={workflowStatuses}
               onSelectTask={handleSelectTask}
             />
           )}
@@ -182,6 +201,7 @@ export default function BranchDetail() {
           branchId={branch.branch_id}
           branchKey={branch.key}
           taskTypes={taskTypes}
+          workflowStatuses={workflowStatuses}
           taskSummary={selectedTask}
           onClose={() => setSelectedTask(null)}
         />
@@ -191,6 +211,7 @@ export default function BranchDetail() {
       {selectedEpic && (
         <EpicDetailPanel
           branchId={branch.branch_id}
+          workflowStatuses={workflowStatuses}
           epicSummary={selectedEpic}
           onClose={() => setSelectedEpic(null)}
         />

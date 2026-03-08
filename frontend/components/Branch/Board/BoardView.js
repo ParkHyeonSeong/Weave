@@ -4,14 +4,8 @@ import { LayoutGrid } from 'lucide-react';
 import BoardColumn from './BoardColumn';
 import TaskFilterBar from '../TaskFilterBar';
 
-const COLUMNS = [
-  { key: 'todo', label: 'To Do' },
-  { key: 'in_progress', label: 'In Progress' },
-  { key: 'done', label: 'Done' },
-];
-
-export default function BoardView({ branchId, branchKey, taskTypes, onSelectTask }) {
-  const [columns, setColumns] = useState({ todo: [], in_progress: [], done: [] });
+export default function BoardView({ branchId, branchKey, taskTypes, workflowStatuses, onSelectTask }) {
+  const [columns, setColumns] = useState({});
   const [activeSprints, setActiveSprints] = useState([]);
   const [selectedSprintId, setSelectedSprintId] = useState(null); // null = All
   const [members, setMembers] = useState([]);
@@ -42,7 +36,7 @@ export default function BoardView({ branchId, branchKey, taskTypes, onSelectTask
         if (actives.length > 0) {
           fetchBoard(selectedSprintId);
         } else {
-          setColumns({ todo: [], in_progress: [], done: [] });
+          setColumns({});
           setLoading(false);
         }
       }
@@ -171,12 +165,13 @@ export default function BoardView({ branchId, branchKey, taskTypes, onSelectTask
 
       {/* 칸반 컬럼 */}
       <div className="BoardView__Columns">
-        {COLUMNS.map(({ key, label }) => (
+        {(workflowStatuses || []).map((ws) => (
           <BoardColumn
-            key={key}
-            status={key}
-            label={label}
-            tasks={filterTasks(columns[key] || [])}
+            key={ws.key}
+            status={ws.key}
+            label={ws.label}
+            color={ws.color}
+            tasks={filterTasks(columns[ws.key] || [])}
             taskTypes={taskTypes}
             onCardClick={(task) => onSelectTask(task)}
             onStatusChange={handleStatusChange}

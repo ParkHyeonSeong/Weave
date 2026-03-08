@@ -4,7 +4,7 @@ import { Archive } from 'lucide-react';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import TaskFilterBar from '../TaskFilterBar';
 
-export default function ArchiveList({ branchId, branchKey, taskTypes, onSelectTask }) {
+export default function ArchiveList({ branchId, branchKey, taskTypes, workflowStatuses, onSelectTask }) {
   const [tasks, setTasks] = useState([]);
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);

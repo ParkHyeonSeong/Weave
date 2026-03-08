@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.model import task as task_model
 from core.model import branch_member as member_model
 from core.model import task_type_config as type_model
+from core.model import workflow_status as ws_model
 from core.model import recent_view
 
 
@@ -17,6 +18,11 @@ async def create(body, branch_id: int, request: Request, db: AsyncSession):
     valid_type = await type_model.find_by_key(branch_id, body.task_type, db)
     if not valid_type:
         return {'status': False, 'message': 'INVALID_TASK_TYPE'}
+
+    # status 동적 검증 (workflow_status)
+    valid_status = await ws_model.find_by_key(branch_id, body.status, db)
+    if not valid_status:
+        return {'status': False, 'message': 'INVALID_STATUS'}
 
     # display_number 발급
     display_number = await task_model.next_display_number(branch_id, db)
@@ -36,6 +42,7 @@ async def create(body, branch_id: int, request: Request, db: AsyncSession):
         due_date=body.due_date,
         created_by=user_id,
         db=db,
+        custom_fields=body.custom_fields,
     )
 
     # 라벨 할당
@@ -87,14 +94,19 @@ async def get_board(branch_id: int, sprint_id, request: Request, db: AsyncSessio
 
     tasks = await task_model.find_for_board(branch_id, sprint_id, db)
 
-    # 상태별 그룹핑
-    columns = {'todo': [], 'in_progress': [], 'done': []}
+    # workflow_status 기반 동적 컬럼
+    statuses = await ws_model.find_by_branch(branch_id, db)
+    columns = {s['key']: [] for s in statuses}
     for task in tasks:
-        status = task['status']
-        if status in columns:
-            columns[status].append(task)
+        key = task['status']
+        if key in columns:
+            columns[key].append(task)
+        else:
+            # 매칭되지 않는 status는 첫번째 컬럼에 배치
+            first_key = statuses[0]['key'] if statuses else 'todo'
+            columns.setdefault(first_key, []).append(task)
 
-    return {'status': True, 'columns': columns}
+    return {'status': True, 'columns': columns, 'statuses': statuses}
 
 
 async def get_archive(branch_id: int, request: Request, db: AsyncSession):
@@ -118,6 +130,13 @@ async def update(task_id: int, body, branch_id: int, request: Request, db: Async
         return {'status': False, 'message': 'TASK_NOT_FOUND'}
 
     fields = body.model_dump(exclude_unset=True, exclude={'label_ids', 'assignees'})
+
+    # status 동적 검증
+    if 'status' in fields and fields['status'] is not None:
+        valid_status = await ws_model.find_by_key(branch_id, fields['status'], db)
+        if not valid_status:
+            return {'status': False, 'message': 'INVALID_STATUS'}
+
     if fields:
         await task_model.update(task_id, fields, db)
 

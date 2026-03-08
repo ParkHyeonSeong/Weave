@@ -20,7 +20,7 @@ function formatSprintDate(start, end) {
 }
 
 export default function TaskListSprint({
-  sprint, branchKey, branchId, taskTypes, epics, members, sprints,
+  sprint, branchKey, branchId, taskTypes, workflowStatuses, epics, members, sprints,
   onEditTask, onEditSprint, onCompleteSprint, isBacklog,
   selectedTaskIds, dragOverContainerId,
 }) {
@@ -214,6 +214,7 @@ export default function TaskListSprint({
                 task={task}
                 branchId={branchId}
                 taskTypes={taskTypes}
+                workflowStatuses={workflowStatuses}
                 epics={epics}
                 members={members}
                 onClick={(e) => onEditTask(task, e)}

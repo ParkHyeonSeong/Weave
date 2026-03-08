@@ -4,7 +4,7 @@ import { X, Trash2 } from 'lucide-react';
 import CustomSelect from '@/components/common/CustomSelect';
 const COLORS = ['#5E6AD2', '#2563EB', '#DC2626', '#16A34A', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4'];
 
-export default function EpicDetailPanel({ branchId, epicSummary, onClose }) {
+export default function EpicDetailPanel({ branchId, workflowStatuses = [], epicSummary, onClose }) {
   const [epic, setEpic] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -126,11 +126,14 @@ export default function EpicDetailPanel({ branchId, epicSummary, onClose }) {
         <div className="TaskDetailPanel__StatusWrap">
           <CustomSelect
             value={epic.status}
-            options={[
-              { value: 'todo', label: 'To Do', color: '#9CA3AF' },
-              { value: 'in_progress', label: 'In Progress', color: '#2563EB' },
-              { value: 'done', label: 'Done', color: '#16A34A' },
-            ]}
+            options={workflowStatuses.length > 0
+              ? workflowStatuses.map((ws) => ({ value: ws.key, label: ws.label, color: ws.color }))
+              : [
+                { value: 'todo', label: 'To Do', color: '#9CA3AF' },
+                { value: 'in_progress', label: 'In Progress', color: '#2563EB' },
+                { value: 'done', label: 'Done', color: '#16A34A' },
+              ]
+            }
             onChange={(val) => updateField('status', val)}
           />
         </div>

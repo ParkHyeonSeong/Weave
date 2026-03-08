@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { axios } from '@/library/_axios';
 
@@ -15,6 +15,17 @@ export default function EpicModal({ branchId, epic, onClose }) {
   const [dueDate, setDueDate] = useState(epic?.due_date || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [workflowStatuses, setWorkflowStatuses] = useState([]);
+
+  useEffect(() => {
+    const fetchStatuses = async () => {
+      try {
+        const res = await axios.get(`/branches/${branchId}/workflow-statuses`);
+        if (res.data.status) setWorkflowStatuses(res.data.statuses);
+      } catch {}
+    };
+    fetchStatuses();
+  }, [branchId]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -110,9 +121,17 @@ export default function EpicModal({ branchId, epic, onClose }) {
             <div className="EpicModal__Field EpicModal__Field--half">
               <label className="EpicModal__Label">Status</label>
               <select className="EpicModal__Select" value={status} onChange={(e) => setStatus(e.target.value)}>
-                <option value="todo">To Do</option>
-                <option value="in_progress">In Progress</option>
-                <option value="done">Done</option>
+                {workflowStatuses.length > 0 ? (
+                  workflowStatuses.map((ws) => (
+                    <option key={ws.key} value={ws.key}>{ws.label}</option>
+                  ))
+                ) : (
+                  <>
+                    <option value="todo">To Do</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="done">Done</option>
+                  </>
+                )}
               </select>
             </div>
             <div className="EpicModal__Field EpicModal__Field--half">

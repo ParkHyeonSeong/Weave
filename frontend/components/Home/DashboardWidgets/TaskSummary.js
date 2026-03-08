@@ -17,11 +17,15 @@ export default function TaskSummary() {
       const res = await axios.get('/my-tasks');
       if (res.data.status) {
         const tasks = res.data.tasks;
-        setCounts({
-          todo: tasks.filter(t => t.status === 'todo').length,
-          in_progress: tasks.filter(t => t.status === 'in_progress').length,
-          done: tasks.filter(t => t.status === 'done').length,
+        // category 기반 집계: task에 status_category가 있으면 사용, 없으면 status 기반 fallback
+        const catCounts = { todo: 0, in_progress: 0, done: 0 };
+        tasks.forEach((t) => {
+          const cat = t.status_category || t.status;
+          if (cat === 'done') catCounts.done++;
+          else if (cat === 'in_progress') catCounts.in_progress++;
+          else catCounts.todo++;
         });
+        setCounts(catCounts);
       }
     } catch {
       // silently fail
