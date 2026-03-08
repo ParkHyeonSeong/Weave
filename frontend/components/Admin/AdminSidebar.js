@@ -1,5 +1,5 @@
 import { useRouter } from 'next/router';
-import { ArrowLeft, Users } from 'lucide-react';
+import { ArrowLeft, Users, Blocks } from 'lucide-react';
 
 export default function AdminSidebar() {
   const router = useRouter();
@@ -21,6 +21,13 @@ export default function AdminSidebar() {
           >
             <Users size={16} className="AdminSidebar__MenuIcon" />
             Members
+          </button>
+          <button
+            className={`AdminSidebar__MenuItem ${router.pathname === '/admin/integrations' ? 'AdminSidebar__MenuItem--active' : ''}`}
+            onClick={() => router.push('/admin/integrations')}
+          >
+            <Blocks size={16} className="AdminSidebar__MenuIcon" />
+            Integrations
           </button>
         </nav>
       </div>

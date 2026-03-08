@@ -38,6 +38,12 @@
     color: $color-text;
   }
 
+  &__Description {
+    font-size: $font-size-sm;
+    color: $color-text-tertiary;
+    margin: -$space-3 0 $space-5 0;
+  }
+
   &__AddBtn {
     display: inline-flex;
     align-items: center;
