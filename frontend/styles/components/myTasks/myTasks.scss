@@ -187,23 +187,21 @@
   }
 
   &__Status {
+    display: inline-block;
     font-size: $font-size-xs;
     font-weight: $font-weight-medium;
     white-space: nowrap;
+    padding: 2px 8px;
+    border-radius: $radius-sm;
 
     &--todo {
-      background: $color-surface;
+      background: rgba(156, 163, 175, 0.15);
       color: $color-text-secondary;
     }
 
     &--in_progress {
       background: #EFF6FF;
       color: #2563EB;
-    }
-
-    &--in_review {
-      background: #FFFBEB;
-      color: $color-warning;
     }
 
     &--done {
