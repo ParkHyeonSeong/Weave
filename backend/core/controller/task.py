@@ -6,6 +6,8 @@ from core.model import branch_member as member_model
 from core.model import task_type_config as type_model
 from core.model import workflow_status as ws_model
 from core.model import recent_view
+from library import notification_service
+from library.mention_parser import extract_mention_user_ids
 
 
 async def create(body, branch_id: int, request: Request, db: AsyncSession):
@@ -52,6 +54,18 @@ async def create(body, branch_id: int, request: Request, db: AsyncSession):
     # 담당자 할당
     if body.assignees:
         await task_model.set_assignees(task_id, body.assignees.main, body.assignees.sub or [], db)
+
+    # description 멘션 알림
+    mentioned = extract_mention_user_ids(body.description)
+    if mentioned:
+        username = request.state.payload.get('username', '')
+        prefix = f'{body.task_type.upper()}-{display_number}'
+        link = f'/branch/{branch_id}/task/{task_id}'
+        await notification_service.notify_bulk(
+            mentioned, 'mention', user_id,
+            f'{username}님이 {prefix} {body.title}에서 회원님을 멘션했습니다',
+            link, 'task', task_id, db,
+        )
 
     return {'status': True, 'task_id': task_id, 'display_number': display_number}
 
@@ -140,13 +154,52 @@ async def update(task_id: int, body, branch_id: int, request: Request, db: Async
     if fields:
         await task_model.update(task_id, fields, db)
 
+    # description 멘션 알림 (새로 추가된 멘션만)
+    if 'description' in fields and fields['description']:
+        old_mentions = set(extract_mention_user_ids(task.get('description') or ''))
+        new_mentions = set(extract_mention_user_ids(fields['description']))
+        added_mentions = new_mentions - old_mentions
+        if added_mentions:
+            username = request.state.payload.get('username', '')
+            display_id = task.get('display_id', '')
+            link = f'/branch/{branch_id}/task/{task_id}'
+            await notification_service.notify_bulk(
+                list(added_mentions), 'mention', user_id,
+                f'{username}님이 {display_id} {task.get("title", "")}에서 회원님을 멘션했습니다',
+                link, 'task', task_id, db,
+            )
+
     # 라벨 업데이트
     if body.label_ids is not None:
         await task_model.set_labels(task_id, body.label_ids, db)
 
-    # 담당자 업데이트
+    # 담당자 업데이트 + 알림
     if body.assignees is not None:
+        # 이전 담당자 목록
+        old_assignee_ids = set()
+        for a in (task.get('assignees') or []):
+            old_assignee_ids.add(a['user_id'])
+
         await task_model.set_assignees(task_id, body.assignees.main, body.assignees.sub or [], db)
+
+        # 새로 추가된 담당자에게 알림
+        new_assignee_ids = set()
+        if body.assignees.main:
+            new_assignee_ids.add(body.assignees.main)
+        for sub_id in (body.assignees.sub or []):
+            new_assignee_ids.add(sub_id)
+
+        added = new_assignee_ids - old_assignee_ids
+        if added:
+            display_id = task.get('display_id', '')
+            title = task.get('title', '')
+            username = request.state.payload.get('username', '')
+            link = f'/branch/{branch_id}/task/{task_id}'
+            await notification_service.notify_bulk(
+                list(added), 'task_assigned', user_id,
+                f'{username}님이 {display_id} {title}에 회원님을 담당자로 지정했습니다',
+                link, 'task', task_id, db,
+            )
 
     return {'status': True}
 

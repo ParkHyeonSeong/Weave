@@ -827,3 +827,87 @@
     color: $color-text-tertiary;
   }
 }
+
+// @멘션 인라인 노드
+.mention {
+  color: $color-primary;
+  background: rgba($color-primary, 0.1);
+  padding: 1px 4px;
+  border-radius: 3px;
+  cursor: default;
+  font-weight: $font-weight-medium;
+  white-space: nowrap;
+}
+
+// @멘션 검색 팝업
+.MentionPopup {
+  width: 280px;
+  background: $color-bg;
+  border: 1px solid $color-border;
+  border-radius: $radius-lg;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+
+  &__Header {
+    display: flex;
+    align-items: center;
+    gap: $space-1;
+    padding: $space-2 $space-3;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-semibold;
+    color: $color-text-tertiary;
+    border-bottom: 1px solid $color-border;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+
+  &__List {
+    max-height: 240px;
+    overflow-y: auto;
+    list-style: none;
+    margin: 0;
+    padding: $space-1 0;
+  }
+
+  &__Item {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: $space-2 $space-3;
+    cursor: pointer;
+    transition: background $transition-fast;
+
+    &:hover,
+    &--active {
+      background: $color-surface;
+    }
+  }
+
+  &__ItemIcon {
+    color: $color-primary;
+    flex-shrink: 0;
+  }
+
+  &__ItemName {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-text;
+  }
+
+  &__ItemEmail {
+    font-size: 10px;
+    color: $color-text-tertiary;
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__Empty {
+    padding: $space-3;
+    text-align: center;
+    font-size: $font-size-sm;
+    color: $color-text-tertiary;
+  }
+}

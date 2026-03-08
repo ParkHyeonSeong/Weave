@@ -1,0 +1,80 @@
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+
+async def create(user_id: int, ntype: str, actor_id: int, title: str,
+                 link: str, entity_type: str, entity_id: int, db: AsyncSession) -> int:
+    """알림 생성, notification_id 반환"""
+    result = await db.execute(text("""
+        INSERT INTO notification (user_id, type, actor_id, title, link, entity_type, entity_id)
+        VALUES (:user_id, :type, :actor_id, :title, :link, :entity_type, :entity_id)
+        RETURNING notification_id
+    """), {
+        'user_id': user_id, 'type': ntype, 'actor_id': actor_id,
+        'title': title, 'link': link,
+        'entity_type': entity_type, 'entity_id': entity_id,
+    })
+    await db.commit()
+    return result.scalar_one()
+
+
+async def create_bulk(notifications: list[dict], db: AsyncSession):
+    """여러 알림 일괄 생성"""
+    if not notifications:
+        return
+    for n in notifications:
+        await db.execute(text("""
+            INSERT INTO notification (user_id, type, actor_id, title, link, entity_type, entity_id)
+            VALUES (:user_id, :type, :actor_id, :title, :link, :entity_type, :entity_id)
+        """), n)
+    await db.commit()
+
+
+async def find_by_user(user_id: int, limit: int = 30, offset: int = 0, db: AsyncSession = None):
+    """사용자 알림 목록 (최신순)"""
+    result = await db.execute(text("""
+        SELECT n.notification_id, n.type, n.actor_id, n.title, n.link,
+               n.entity_type, n.entity_id, n.is_read, n.created_at,
+               u.username AS actor_name
+        FROM notification n
+        LEFT JOIN "user" u ON n.actor_id = u.user_id
+        WHERE n.user_id = :user_id
+        ORDER BY n.created_at DESC
+        LIMIT :limit OFFSET :offset
+    """), {'user_id': user_id, 'limit': limit, 'offset': offset})
+    return [dict(r._mapping) for r in result.fetchall()]
+
+
+async def count_unread(user_id: int, db: AsyncSession) -> int:
+    """읽지 않은 알림 수"""
+    result = await db.execute(text("""
+        SELECT COUNT(*) FROM notification
+        WHERE user_id = :user_id AND is_read = false
+    """), {'user_id': user_id})
+    return result.scalar_one()
+
+
+async def mark_read(notification_id: int, user_id: int, db: AsyncSession):
+    """단일 알림 읽음 처리"""
+    await db.execute(text("""
+        UPDATE notification SET is_read = true
+        WHERE notification_id = :nid AND user_id = :uid
+    """), {'nid': notification_id, 'uid': user_id})
+    await db.commit()
+
+
+async def mark_all_read(user_id: int, db: AsyncSession):
+    """전체 읽음 처리"""
+    await db.execute(text("""
+        UPDATE notification SET is_read = true
+        WHERE user_id = :user_id AND is_read = false
+    """), {'user_id': user_id})
+    await db.commit()
+
+
+async def delete_all(user_id: int, db: AsyncSession):
+    """전체 삭제"""
+    await db.execute(text("""
+        DELETE FROM notification WHERE user_id = :user_id
+    """), {'user_id': user_id})
+    await db.commit()

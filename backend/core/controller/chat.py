@@ -58,18 +58,23 @@ async def get_messages(room_id: int, request: Request, db: AsyncSession,
     if not await member_model.is_member(room_id, user_id, db):
         return {'status': False, 'message': 'NOT_A_MEMBER'}
 
+    # 방 정보 + 멤버 목록 (읽음 처리용)
+    room = await room_model.find_by_id(room_id, db)
+    members = await member_model.find_by_room(room_id, db)
+
+    # 본인의 last_read_at 추출 (읽음 갱신 전)
+    my_last_read_at = None
+    others = []
+    for m in members:
+        if m['user_id'] == user_id:
+            my_last_read_at = m.get('last_read_at')
+        else:
+            others.append({'user_id': m['user_id'], 'username': m['username'], 'last_read_at': m.get('last_read_at')})
+
     messages = await message_model.find_by_room(room_id, limit, offset, db)
 
     # 읽음 시간 갱신
     await member_model.update_last_read(room_id, user_id, db)
-
-    # 방 정보 + 멤버 목록 (읽음 처리용)
-    room = await room_model.find_by_id(room_id, db)
-    members = await member_model.find_by_room(room_id, db)
-    others = [
-        {'user_id': m['user_id'], 'username': m['username'], 'last_read_at': m.get('last_read_at')}
-        for m in members if m['user_id'] != user_id
-    ]
 
     return {
         'status': True,
@@ -77,6 +82,7 @@ async def get_messages(room_id: int, request: Request, db: AsyncSession,
         'room_type': room['room_type'] if room else None,
         'room_name': room['room_name'] if room else None,
         'members': others,
+        'my_last_read_at': str(my_last_read_at) if my_last_read_at else None,
     }
 
 
@@ -117,4 +123,21 @@ async def search_issues(keyword: str, request: Request, db: AsyncSession):
 async def get_users(db: AsyncSession):
     """전체 사용자 목록"""
     users = await user_model.find_all(db)
+    return {'status': True, 'users': users}
+
+
+async def search_mentions(query: str, request: Request, db: AsyncSession,
+                           room_id: int = None, branch_id: int = None):
+    """@멘션 사용자 검색 (채팅방/브랜치 범위 또는 전체)"""
+    user_id = request.state.payload.get('user_id')
+
+    if room_id:
+        from core.model import chat_member as chat_member_model
+        users = await chat_member_model.search_room_members(room_id, query, user_id, 10, db)
+    elif branch_id:
+        from core.model import branch_member as branch_member_model
+        users = await branch_member_model.search_members(branch_id, query, user_id, 10, db)
+    else:
+        users = await user_model.search_active(query, user_id, 10, db)
+
     return {'status': True, 'users': users}

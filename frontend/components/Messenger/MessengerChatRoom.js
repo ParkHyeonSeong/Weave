@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Fragment } from 'react';
 import { ArrowLeft, Send, Pencil, Check, X } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import { formatMessageTime } from '@/library/formatTime';
@@ -8,6 +8,7 @@ import DocSearchPopup from './DocSearchPopup';
 import DocRefCard from './DocRefCard';
 import IssueSearchPopup from './IssueSearchPopup';
 import IssueRefCard from './IssueRefCard';
+import MentionSearchPopup from './MentionSearchPopup';
 
 export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, headerLeft, headerRight }) {
   const [messages, setMessages] = useState([]);
@@ -23,10 +24,16 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
   const [slashCommand, setSlashCommand] = useState(null); // { type: 'task'|'doc'|'issue', ... }
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashMenuIdx, setSlashMenuIdx] = useState(0);
+  const [mentionCommand, setMentionCommand] = useState(null); // { keyword: '' }
+  const [mentionedUserIds, setMentionedUserIds] = useState([]);
+  const [myLastReadAt, setMyLastReadAt] = useState(null);
+  const [showUnreadDivider, setShowUnreadDivider] = useState(true);
   const messagesEndRef = useRef(null);
+  const unreadDividerRef = useRef(null);
   const editInputRef = useRef(null);
   const textareaRef = useRef(null);
   const justSelectedRef = useRef(false);
+  const isInitialLoadRef = useRef(true);
 
   let myUserId = 0;
   try {
@@ -41,8 +48,12 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
         const res = await axios.get(`/chat/${roomId}/messages`);
         if (res.data.status) {
           // 최신순 -> 시간순으로 뒤집기
-          setMessages(res.data.messages.reverse());
+          const msgs = res.data.messages.reverse();
+          setMessages(msgs);
           setRoomType(res.data.room_type || 'dm');
+          setMyLastReadAt(res.data.my_last_read_at || null);
+          setShowUnreadDivider(true);
+          isInitialLoadRef.current = true;
           // 멤버 목록 저장 (읽음 처리용)
           if (res.data.members) setMembers(res.data.members);
           // DM: 상대방 이름, Group: room_name
@@ -59,6 +70,7 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
     // 읽음 처리
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ action: 'mark_read', room_id: roomId }));
+      window.dispatchEvent(new CustomEvent('chat:unread_changed'));
     }
   }, [roomId]);
 
@@ -75,6 +87,7 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
         // 읽음 처리
         if (wsRef.current?.readyState === WebSocket.OPEN) {
           wsRef.current.send(JSON.stringify({ action: 'mark_read', room_id: roomId }));
+          window.dispatchEvent(new CustomEvent('chat:unread_changed'));
         }
       }
       // 상대방이 읽음 처리했을 때 해당 멤버의 last_read_at 갱신
@@ -90,9 +103,20 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
     return () => window.removeEventListener('chat:ws_message', handleWsMessage);
   }, [roomId, myUserId]);
 
-  // 스크롤 하단 유지
+  // 스크롤: 초기 로드 시 unread 구분선으로, 이후 새 메시지는 최하단으로
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (isInitialLoadRef.current) {
+      isInitialLoadRef.current = false;
+      if (unreadDividerRef.current) {
+        unreadDividerRef.current.scrollIntoView({ behavior: 'instant', block: 'center' });
+      } else {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
+      }
+      // 초기 스크롤 후 divider 제거 (읽음 처리 완료)
+      setTimeout(() => setShowUnreadDivider(false), 1500);
+    } else {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
 
   // textarea 높이 자동 조절
@@ -120,6 +144,7 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
       if (attachedTask) payload.task_id = attachedTask.task_id;
       if (attachedDoc) payload.canvas_page_id = attachedDoc.page_id;
       if (attachedIssue) payload.issue_id = attachedIssue.issue_id;
+      if (mentionedUserIds.length > 0) payload.mentioned_user_ids = mentionedUserIds;
       wsRef.current.send(JSON.stringify(payload));
     }
     setInput('');
@@ -127,6 +152,7 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
     setAttachedDoc(null);
     setAttachedIssue(null);
     setSlashCommand(null);
+    setMentionedUserIds([]);
   };
 
   const SLASH_COMMANDS = [
@@ -169,6 +195,12 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
     if (justSelectedRef.current && e.key === 'Enter') {
       e.preventDefault();
       justSelectedRef.current = false;
+      return;
+    }
+    // @멘션 팝업 활성화 시 키보드 이벤트 위임
+    if (mentionCommand && ['ArrowDown', 'ArrowUp', 'Escape'].includes(e.key)) return;
+    if (mentionCommand && e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
       return;
     }
     // 슬래시 커맨드 팝업 활성화 시 키보드 이벤트 위임 (TaskSearchPopup에서 처리)
@@ -224,6 +256,19 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
     } else {
       if (slashCommand) setSlashCommand(null);
       if (showSlashMenu) setShowSlashMenu(false);
+    }
+
+    // @멘션 감지: 커서 위치 기준으로 @ 뒤의 키워드 추출
+    const textarea = textareaRef.current;
+    if (textarea) {
+      const cursorPos = textarea.selectionStart;
+      const textBeforeCursor = val.slice(0, cursorPos);
+      const mentionMatch = textBeforeCursor.match(/(^|[\s])@(\S*)$/);
+      if (mentionMatch && !slashCommand) {
+        setMentionCommand({ keyword: mentionMatch[2] });
+      } else {
+        if (mentionCommand) setMentionCommand(null);
+      }
     }
   };
 
@@ -299,6 +344,30 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
       status: issue.status,
     });
     clearInputWithIME();
+  };
+
+  // @멘션 사용자 선택 시
+  const handleMentionSelect = (user) => {
+    justSelectedRef.current = true;
+    const textarea = textareaRef.current;
+    const cursorPos = textarea?.selectionStart || input.length;
+    const textBeforeCursor = input.slice(0, cursorPos);
+    const mentionMatch = textBeforeCursor.match(/(^|[\s])@(\S*)$/);
+    if (mentionMatch) {
+      const matchStart = textBeforeCursor.lastIndexOf('@' + mentionMatch[2]);
+      const before = input.slice(0, matchStart);
+      const after = input.slice(cursorPos);
+      const newInput = `${before}@${user.username} ${after}`;
+      setInput(newInput);
+      setMentionedUserIds((prev) =>
+        prev.includes(user.user_id) ? prev : [...prev, user.user_id]
+      );
+    }
+    setMentionCommand(null);
+    setTimeout(() => {
+      justSelectedRef.current = false;
+      textarea?.focus();
+    }, 50);
   };
 
   // 채팅방 이름 변경
@@ -428,15 +497,39 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
       </div>
 
       <div className="MessengerChatRoom__Messages">
-        {messages.map((msg, idx) => {
-          const showTime = shouldShowTime(idx);
-          return (
-            <div
-              key={msg.message_id}
-              className={`MessengerChatRoom__Msg ${
-                msg.sender_id === myUserId ? 'MessengerChatRoom__Msg--mine' : ''
-              }`}
-            >
+        {(() => {
+          // 첫 번째 미읽 메시지 인덱스 계산
+          let firstUnreadIdx = -1;
+          if (myLastReadAt) {
+            let effectiveReadTime = new Date(myLastReadAt);
+            // 사용자가 보낸 메시지 = 방에 있었다는 증거 → 그 시점까지 다 읽음
+            for (const m of messages) {
+              if (m.sender_id === myUserId) {
+                const sentTime = new Date(m.created_at);
+                if (sentTime > effectiveReadTime) effectiveReadTime = sentTime;
+              }
+            }
+            firstUnreadIdx = messages.findIndex(
+              (m) => m.sender_id !== myUserId && new Date(m.created_at) > effectiveReadTime
+            );
+          } else if (messages.length > 0 && messages.some((m) => m.sender_id !== myUserId)) {
+            // last_read_at이 null이면 모두 미읽
+            firstUnreadIdx = messages.findIndex((m) => m.sender_id !== myUserId);
+          }
+          return messages.map((msg, idx) => {
+            const showTime = shouldShowTime(idx);
+            return (
+              <Fragment key={msg.message_id}>
+                {showUnreadDivider && idx === firstUnreadIdx && (
+                  <div className="MessengerChatRoom__UnreadDivider" ref={unreadDividerRef}>
+                    <span>New messages</span>
+                  </div>
+                )}
+                <div
+                  className={`MessengerChatRoom__Msg ${
+                    msg.sender_id === myUserId ? 'MessengerChatRoom__Msg--mine' : ''
+                  }`}
+                >
               {msg.sender_id !== myUserId && (idx === 0 || messages[idx - 1].sender_id !== msg.sender_id) && (
                 <span className="MessengerChatRoom__MsgSender">{msg.sender_name}</span>
               )}
@@ -456,19 +549,22 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
                 </div>
               )}
               <div className="MessengerChatRoom__MsgRow">
-                {msg.sender_id === myUserId && showTime && (
-                  <div className="MessengerChatRoom__MsgMeta">
-                    {(() => {
-                      const unread = getUnreadCount(msg);
-                      return unread > 0 ? (
+                {msg.sender_id === myUserId && (() => {
+                  const unread = getUnreadCount(msg);
+                  if (!unread && !showTime) return null;
+                  return (
+                    <div className="MessengerChatRoom__MsgMeta">
+                      {unread > 0 && (
                         <span className="MessengerChatRoom__MsgUnread">{unread}</span>
-                      ) : null;
-                    })()}
-                    <span className="MessengerChatRoom__MsgTime">
-                      {formatMessageTime(msg.created_at)}
-                    </span>
-                  </div>
-                )}
+                      )}
+                      {showTime && (
+                        <span className="MessengerChatRoom__MsgTime">
+                          {formatMessageTime(msg.created_at)}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
                 {msg.content ? (
                   <div className="MessengerChatRoom__MsgBubble">
                     {renderContent(msg.content)}
@@ -480,9 +576,11 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
                   </span>
                 )}
               </div>
-            </div>
-          );
-        })}
+              </div>
+            </Fragment>
+            );
+          });
+        })()}
         <div ref={messagesEndRef} />
       </div>
 
@@ -504,6 +602,14 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
               ))}
             </ul>
           </div>
+        )}
+        {mentionCommand && (
+          <MentionSearchPopup
+            keyword={mentionCommand.keyword}
+            roomId={roomId}
+            onSelect={handleMentionSelect}
+            onClose={() => setMentionCommand(null)}
+          />
         )}
         {slashCommand?.type === 'task' && (
           <TaskSearchPopup

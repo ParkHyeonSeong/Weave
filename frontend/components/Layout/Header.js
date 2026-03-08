@@ -1,10 +1,19 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/router';
-import { Search, Bell, CircleHelp, Settings, Shield } from 'lucide-react';
+import { Search, Bell, CircleHelp, Settings, Shield, AtSign, UserPlus, AlertCircle, MessageSquare, CheckCircle2 } from 'lucide-react';
 import { formatMessageTime } from '@/library/formatTime';
 import { getBaseURL } from '@/library/_axios';
 
-export default function Header({ onSearchClick, notifications = [], onClearNotifications, onReadNotification, onNotiClick }) {
+const NOTI_ICONS = {
+  mention: AtSign,
+  chat_mention: AtSign,
+  task_assigned: UserPlus,
+  issue_created: AlertCircle,
+  issue_comment: MessageSquare,
+  task_status_changed: CheckCircle2,
+};
+
+export default function Header({ onSearchClick, notifications = [], unreadCount = 0, chatUnreadCount = 0, onChatClick, onClearNotifications, onMarkAllRead, onReadNotification, onNotiClick }) {
   const router = useRouter();
   const [workspaceName, setWorkspaceName] = useState('');
   const [username, setUsername] = useState('');
@@ -14,8 +23,6 @@ export default function Header({ onSearchClick, notifications = [], onClearNotif
   const [showNotiMenu, setShowNotiMenu] = useState(false);
   const settingsRef = useRef(null);
   const notiRef = useRef(null);
-
-  const unreadCount = notifications.filter((n) => !n.read).length;
 
   useEffect(() => {
     try {
@@ -65,13 +72,16 @@ export default function Header({ onSearchClick, notifications = [], onClearNotif
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showSettingsMenu, showNotiMenu]);
 
-  // 알림 클릭 시 읽음 처리 + 해당 채팅방으로 이동
+  // 알림 클릭 시 읽음 처리 + 해당 페이지로 이동
   const handleNotiClick = (noti) => {
-    if (!noti.read && onReadNotification) {
-      onReadNotification(noti.id);
+    if (!noti.is_read && onReadNotification) {
+      onReadNotification(noti.notification_id);
     }
     if (onNotiClick) {
-      onNotiClick(noti.roomId);
+      onNotiClick(noti);
+    }
+    if (noti.link) {
+      router.push(noti.link);
     }
     setShowNotiMenu(false);
   };
@@ -100,6 +110,18 @@ export default function Header({ onSearchClick, notifications = [], onClearNotif
       </div>
 
       <div className="Header__Right">
+        <button
+          className="Header__IconBtn"
+          title="Messenger"
+          onClick={onChatClick}
+        >
+          <MessageSquare size={18} />
+          {chatUnreadCount > 0 && (
+            <span className="Header__NotiBadge">
+              {chatUnreadCount > 999 ? '999+' : chatUnreadCount}
+            </span>
+          )}
+        </button>
         <div className="Header__NotiWrap" ref={notiRef}>
           <button
             className="Header__IconBtn"
@@ -109,7 +131,7 @@ export default function Header({ onSearchClick, notifications = [], onClearNotif
             <Bell size={18} />
             {unreadCount > 0 && (
               <span className="Header__NotiBadge">
-                {unreadCount > 9 ? '9+' : unreadCount}
+                {unreadCount > 999 ? '999+' : unreadCount}
               </span>
             )}
           </button>
@@ -117,29 +139,44 @@ export default function Header({ onSearchClick, notifications = [], onClearNotif
             <div className="Header__NotiMenu">
               <div className="Header__NotiHeader">
                 <span className="Header__NotiTitle">Notifications</span>
-                {notifications.length > 0 && (
-                  <button className="Header__NotiClear" onClick={onClearNotifications}>
-                    Clear all
-                  </button>
-                )}
+                <div className="Header__NotiActions">
+                  {unreadCount > 0 && (
+                    <button className="Header__NotiMarkAll" onClick={onMarkAllRead}>
+                      Mark all read
+                    </button>
+                  )}
+                  {notifications.length > 0 && (
+                    <button className="Header__NotiClear" onClick={onClearNotifications}>
+                      Clear all
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="Header__NotiList">
                 {notifications.length === 0 ? (
                   <div className="Header__NotiEmpty">No notifications</div>
                 ) : (
-                  notifications.map((noti) => (
-                    <button
-                      key={noti.id}
-                      className={`Header__NotiItem ${!noti.read ? 'Header__NotiItem--unread' : ''}`}
-                      onClick={() => handleNotiClick(noti)}
-                    >
-                      <div className="Header__NotiItemTop">
-                        <span className="Header__NotiSender">{noti.senderName}</span>
-                        <span className="Header__NotiTime">{formatMessageTime(noti.createdAt)}</span>
-                      </div>
-                      <span className="Header__NotiContent">{noti.content}</span>
-                    </button>
-                  ))
+                  notifications.map((noti) => {
+                    const Icon = NOTI_ICONS[noti.type] || Bell;
+                    return (
+                      <button
+                        key={noti.notification_id}
+                        className={`Header__NotiItem ${!noti.is_read ? 'Header__NotiItem--unread' : ''}`}
+                        onClick={() => handleNotiClick(noti)}
+                      >
+                        <div className="Header__NotiIcon">
+                          <Icon size={14} />
+                        </div>
+                        <div className="Header__NotiBody">
+                          <div className="Header__NotiItemTop">
+                            <span className="Header__NotiSender">{noti.actor_name || 'System'}</span>
+                            <span className="Header__NotiTime">{formatMessageTime(noti.created_at)}</span>
+                          </div>
+                          <span className="Header__NotiContent">{noti.title}</span>
+                        </div>
+                      </button>
+                    );
+                  })
                 )}
               </div>
             </div>

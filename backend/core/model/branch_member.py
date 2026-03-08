@@ -71,6 +71,23 @@ async def count_admins(branch_id: int, db: AsyncSession) -> int:
     return result.scalar_one()
 
 
+async def search_members(branch_id: int, query: str, exclude_user_id: int,
+                          limit: int = 10, db: AsyncSession = None):
+    """Branch 멤버 중 username 검색 (본인 제외)"""
+    result = await db.execute(text("""
+        SELECT u.user_id, u.username, u.email
+        FROM branch_member bm
+        INNER JOIN "user" u ON bm.user_id = u.user_id
+        WHERE bm.branch_id = :branch_id
+          AND u.user_id != :exclude_user_id
+          AND u.username ILIKE :q
+        ORDER BY u.username
+        LIMIT :limit
+    """), {'branch_id': branch_id, 'exclude_user_id': exclude_user_id,
+           'q': f'%{query}%', 'limit': limit})
+    return [dict(r._mapping) for r in result.fetchall()]
+
+
 async def search_non_members(branch_id: int, query: str, db: AsyncSession):
     """초대 가능한 사용자 검색 (아직 멤버가 아닌 active 유저)"""
     result = await db.execute(text("""

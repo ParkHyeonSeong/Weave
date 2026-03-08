@@ -31,6 +31,7 @@ from routers import ai as ai_router
 from routers import recent_view as recent_view_router
 from routers import workflow_status as workflow_status_router
 from routers import custom_field as custom_field_router
+from routers import notification as notification_router
 
 # -- Logging ---------------------------------------------------------------
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -122,6 +123,7 @@ app.include_router(ai_router.router, prefix="/ai", tags=["ai"])
 app.include_router(recent_view_router.router, prefix="/recent-views", tags=["recent-views"])
 app.include_router(workflow_status_router.router, prefix="/branches/{branch_id}/workflow-statuses", tags=["workflow-statuses"])
 app.include_router(custom_field_router.router, prefix="/branches/{branch_id}/task-types/{type_id}/custom-fields", tags=["custom-fields"])
+app.include_router(notification_router.router, prefix="/notifications", tags=["notifications"])
 
 # -- Static files (업로드 파일 서빙) -----------------------------------------
 uploads_dir = os.path.join(os.path.dirname(__file__), 'uploads')

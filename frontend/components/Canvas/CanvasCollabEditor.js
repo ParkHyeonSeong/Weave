@@ -22,6 +22,7 @@ import { ySyncPlugin, yCursorPlugin, yUndoPlugin } from 'y-prosemirror';
 import { common, createLowlight } from 'lowlight';
 import CalloutExtension from './extensions/CalloutExtension';
 import TaskRefNode from './extensions/TaskRefExtension';
+import MentionNode from './extensions/MentionExtension';
 import DocRefNode from './extensions/DocRefExtension';
 import IssueRefNode from './extensions/IssueRefExtension';
 import { createImageUploadPlugin } from './extensions/ImageUploadPlugin';
@@ -122,6 +123,7 @@ function CollabEditorInner({
       }),
       CalloutExtension,
       TaskRefNode,
+      MentionNode,
       DocRefNode,
       IssueRefNode,
       Mathematics.configure({

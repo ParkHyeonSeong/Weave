@@ -35,6 +35,23 @@ async def is_member(room_id: int, user_id: int, db: AsyncSession) -> bool:
     return result.fetchone() is not None
 
 
+async def search_room_members(room_id: int, query: str, exclude_user_id: int,
+                               limit: int = 10, db: AsyncSession = None):
+    """채팅방 멤버 중 username 검색 (본인 제외)"""
+    result = await db.execute(text("""
+        SELECT u.user_id, u.username, u.email
+        FROM chat_room_member crm
+        INNER JOIN "user" u ON crm.user_id = u.user_id
+        WHERE crm.room_id = :room_id
+          AND u.user_id != :exclude_user_id
+          AND u.username ILIKE :q
+        ORDER BY u.username
+        LIMIT :limit
+    """), {'room_id': room_id, 'exclude_user_id': exclude_user_id,
+           'q': f'%{query}%', 'limit': limit})
+    return [dict(r._mapping) for r in result.fetchall()]
+
+
 async def update_last_read(room_id: int, user_id: int, db: AsyncSession):
     """마지막 읽은 시간 갱신"""
     await db.execute(text("""

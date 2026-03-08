@@ -6,7 +6,8 @@ import Messenger from '@/components/Messenger/Messenger';
 import CreateBranch from '@/components/modal/CreateBranch';
 import CreateCanvas from '@/components/modal/CreateCanvas';
 import CommandPalette from '@/components/modal/CommandPalette';
-import { requestNotificationPermission, showNotification } from '@/library/notification';
+import { requestNotificationPermission, showNotification, playNotificationSound } from '@/library/notification';
+import { showToast } from './Toast';
 
 const MESSENGER_MIN_WIDTH = 280;
 const MESSENGER_DEFAULT_WIDTH = 320;
@@ -27,6 +28,8 @@ export default function Layout({ children }) {
     } catch { return true; }
   });
   const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
   const [messengerWidth, setMessengerWidth] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('messenger_width');
@@ -163,6 +166,41 @@ export default function Layout({ children }) {
     return () => window.removeEventListener('layout:create-canvas', handleCreate);
   }, []);
 
+  // 영구 알림 + 채팅 unread 로드
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const { axios } = await import('@/library/_axios');
+        const [listRes, countRes, chatRes] = await Promise.all([
+          axios.get('/notifications?limit=30'),
+          axios.get('/notifications/unread-count'),
+          axios.get('/chat'),
+        ]);
+        if (listRes.data.status) setNotifications(listRes.data.notifications);
+        if (countRes.data.status) setUnreadCount(countRes.data.count);
+        if (chatRes.data.status) {
+          const total = (chatRes.data.rooms || []).reduce((sum, r) => sum + (r.unread_count || 0), 0);
+          setChatUnreadCount(total);
+        }
+      } catch {}
+    };
+    fetchNotifications();
+
+    // 채팅 unread count 갱신 이벤트
+    const handleChatUnread = () => {
+      import('@/library/_axios').then(({ axios }) => {
+        axios.get('/chat').then((res) => {
+          if (res.data.status) {
+            const total = (res.data.rooms || []).reduce((sum, r) => sum + (r.unread_count || 0), 0);
+            setChatUnreadCount(total);
+          }
+        }).catch(() => {});
+      });
+    };
+    window.addEventListener('chat:unread_changed', handleChatUnread);
+    return () => window.removeEventListener('chat:unread_changed', handleChatUnread);
+  }, []);
+
   // WebSocket 연결 관리
   useEffect(() => {
     let profile = {};
@@ -202,6 +240,18 @@ export default function Layout({ children }) {
           // 컴포넌트에 전달용 커스텀 이벤트
           window.dispatchEvent(new CustomEvent('chat:ws_message', { detail: data }));
 
+          if (data.type === 'notification') {
+            // 영구 알림 실시간 수신
+            setNotifications((prev) => {
+              if (prev.some((n) => n.notification_id === data.notification.notification_id)) return prev;
+              return [data.notification, ...prev].slice(0, 50);
+            });
+            setUnreadCount(data.unread_count);
+            showNotification('Weave', data.notification.title);
+            showToast(data.notification.title, 'info');
+            playNotificationSound();
+          }
+
           if (data.type === 'new_message') {
             // 채팅 목록 갱신용
             window.dispatchEvent(new CustomEvent('chat:new_message', { detail: data }));
@@ -212,6 +262,7 @@ export default function Layout({ children }) {
               const isViewingRoom = activeRoomRef.current === data.room_id;
 
               if (!isViewingRoom) {
+                setChatUnreadCount((prev) => prev + 1);
                 // Chrome 알림
                 const notiContent = data.message.content
                   || (data.message.task_ref ? 'Shared a task' : null)
@@ -223,19 +274,8 @@ export default function Layout({ children }) {
                   notiContent,
                   data.message
                 );
-
-                // 헤더 알림 누적
-                setNotifications((prev) => {
-                  if (prev.some((n) => n.id === data.message.message_id)) return prev;
-                  return [{
-                    id: data.message.message_id,
-                    roomId: data.room_id,
-                    senderName: data.message.sender_name,
-                    content: notiContent,
-                    createdAt: data.message.created_at,
-                    read: false,
-                  }, ...prev].slice(0, 50);
-                });
+                showToast(`${data.message.sender_name || 'Someone'}: ${notiContent}`, 'info');
+                playNotificationSound();
               }
             }
           }
@@ -268,14 +308,42 @@ export default function Layout({ children }) {
       <Header
         onSearchClick={() => setShowPalette(true)}
         notifications={notifications}
-        onClearNotifications={() => setNotifications([])}
-        onReadNotification={(id) => setNotifications((prev) =>
-          prev.map((n) => n.id === id ? { ...n, read: true } : n)
-        )}
-        onNotiClick={(roomId) => {
-          // 메신저 열기 + 해당 채팅방으로 이동
-          setIsMessengerCollapsed(false);
-          window.dispatchEvent(new CustomEvent('chat:open_room', { detail: roomId }));
+        unreadCount={unreadCount}
+        chatUnreadCount={chatUnreadCount}
+        onChatClick={() => setIsMessengerCollapsed((prev) => !prev)}
+        onClearNotifications={async () => {
+          try {
+            const { axios } = await import('@/library/_axios');
+            await axios.delete('/notifications');
+            setNotifications([]);
+            setUnreadCount(0);
+          } catch {}
+        }}
+        onMarkAllRead={async () => {
+          try {
+            const { axios } = await import('@/library/_axios');
+            await axios.patch('/notifications/read-all');
+            setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+            setUnreadCount(0);
+          } catch {}
+        }}
+        onReadNotification={async (notificationId) => {
+          try {
+            const { axios } = await import('@/library/_axios');
+            await axios.patch(`/notifications/${notificationId}/read`);
+            setNotifications((prev) =>
+              prev.map((n) => n.notification_id === notificationId ? { ...n, is_read: true } : n)
+            );
+            setUnreadCount((prev) => Math.max(0, prev - 1));
+          } catch {}
+        }}
+        onNotiClick={(noti) => {
+          if (noti.link) {
+            // link가 있으면 해당 페이지로 이동 (router.push는 Header에서 처리)
+          } else if (noti.entity_type === 'chat_room') {
+            setIsMessengerCollapsed(false);
+            window.dispatchEvent(new CustomEvent('chat:open_room', { detail: noti.entity_id }));
+          }
         }}
       />
       <div className="Layout__Body">

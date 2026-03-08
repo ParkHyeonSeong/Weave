@@ -173,6 +173,15 @@ async def update_comment(comment_id: int, content: str, db: AsyncSession):
     await db.commit()
 
 
+async def find_commenter_ids(issue_id: int, db: AsyncSession) -> list[int]:
+    """이슈의 고유 코멘터 user_id 목록"""
+    result = await db.execute(text("""
+        SELECT DISTINCT author_id FROM task_issue_comment
+        WHERE issue_id = :issue_id
+    """), {'issue_id': issue_id})
+    return [r[0] for r in result.fetchall()]
+
+
 async def delete_comment(comment_id: int, db: AsyncSession):
     """댓글 삭제"""
     await db.execute(text("""

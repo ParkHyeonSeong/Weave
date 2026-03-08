@@ -25,7 +25,7 @@ export default function Toast() {
     const handler = (e) => {
       const { message, type, id } = e.detail;
       setToasts((prev) => [...prev, { id, message, type }]);
-      setTimeout(() => removeToast(id), 3000);
+      setTimeout(() => removeToast(id), 5000);
     };
     window.addEventListener('toast', handler);
     return () => window.removeEventListener('toast', handler);

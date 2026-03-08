@@ -107,6 +107,21 @@ async def update_password(user_id: int, password_hash: bytes, db: AsyncSession):
     await db.commit()
 
 
+async def search_active(query: str, exclude_user_id: int, limit: int = 10,
+                         db: AsyncSession = None):
+    """active 사용자 중 username 검색 (본인 제외)"""
+    result = await db.execute(text("""
+        SELECT user_id, username, email
+        FROM "user"
+        WHERE status = 'active'
+          AND user_id != :exclude_user_id
+          AND username ILIKE :q
+        ORDER BY username
+        LIMIT :limit
+    """), {'exclude_user_id': exclude_user_id, 'q': f'%{query}%', 'limit': limit})
+    return [dict(r._mapping) for r in result.fetchall()]
+
+
 async def update_avatar(user_id: int, avatar_url: str, db: AsyncSession):
     """아바타 URL 변경"""
     await db.execute(text("""

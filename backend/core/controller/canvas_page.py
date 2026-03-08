@@ -4,6 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.model import canvas_page as page_model
 from core.model import canvas_member as member_model
 from core.model import recent_view
+from library import notification_service
+from library.mention_parser import extract_mention_user_ids
 
 
 async def create(canvas_id: int, body, request: Request, db: AsyncSession):
@@ -70,6 +72,22 @@ async def update(canvas_id: int, page_id: int, body, request: Request, db: Async
         return {'status': True}
 
     await page_model.update(page_id, fields, user_id, db)
+
+    # content 멘션 알림 (새로 추가된 멘션만)
+    if 'content' in fields and fields['content']:
+        old_mentions = set(extract_mention_user_ids(page.get('content') or ''))
+        new_mentions = set(extract_mention_user_ids(fields['content']))
+        added_mentions = new_mentions - old_mentions
+        if added_mentions:
+            username = request.state.payload.get('username', '')
+            page_title = page.get('title', '')
+            link = f'/canvas/{canvas_id}/page/{page_id}'
+            await notification_service.notify_bulk(
+                list(added_mentions), 'mention', user_id,
+                f'{username}님이 문서 "{page_title}"에서 회원님을 멘션했습니다',
+                link, 'doc', page_id, db,
+            )
+
     return {'status': True}
 
 

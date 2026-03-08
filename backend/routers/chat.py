@@ -45,6 +45,17 @@ async def search_issues(request: Request,
     return await chat_controller.search_issues(q, request, session)
 
 
+@router.get("/mention-search", summary="@멘션 사용자 검색",
+            dependencies=[Depends(require_login)])
+async def mention_search(request: Request,
+                         q: str = Query('', max_length=100),
+                         room_id: int = Query(None),
+                         branch_id: int = Query(None),
+                         session: AsyncSession = Depends(db.session)):
+    return await chat_controller.search_mentions(q, request, session,
+                                                  room_id=room_id, branch_id=branch_id)
+
+
 @router.get("/users", summary="전체 사용자 목록", dependencies=[Depends(require_login)])
 async def list_users(session: AsyncSession = Depends(db.session)):
     return await chat_controller.get_users(session)

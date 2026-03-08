@@ -21,6 +21,7 @@ import Mathematics from '@tiptap/extension-mathematics';
 import { common, createLowlight } from 'lowlight';
 import CalloutExtension from './extensions/CalloutExtension';
 import TaskRefNode from './extensions/TaskRefExtension';
+import MentionNode from './extensions/MentionExtension';
 import { createImageUploadPlugin } from './extensions/ImageUploadPlugin';
 import CanvasEditorToolbar from './CanvasEditorToolbar';
 
@@ -73,6 +74,7 @@ export default function CanvasEditor({ content, onChange, canvasId }) {
     }),
     CalloutExtension,
     TaskRefNode,
+    MentionNode,
     Mathematics.configure({
       katexOptions: { throwOnError: false },
     }),

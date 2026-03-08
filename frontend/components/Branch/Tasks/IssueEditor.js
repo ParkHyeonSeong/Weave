@@ -11,6 +11,7 @@ import TaskItem from '@tiptap/extension-task-item';
 import { common, createLowlight } from 'lowlight';
 import CalloutExtension from '@/components/Canvas/extensions/CalloutExtension';
 import TaskRefNode from '@/components/Canvas/extensions/TaskRefExtension';
+import MentionNode from '@/components/Canvas/extensions/MentionExtension';
 import CanvasEditorToolbar from '@/components/Canvas/CanvasEditorToolbar';
 
 const lowlight = createLowlight(common);
@@ -29,6 +30,7 @@ const makeExtensions = (placeholder) => [
   TaskItem.configure({ nested: true }),
   CalloutExtension,
   TaskRefNode,
+  MentionNode,
 ];
 
 const IssueEditor = forwardRef(({ content, placeholder, minHeight = 150 }, ref) => {

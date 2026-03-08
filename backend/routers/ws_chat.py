@@ -11,6 +11,7 @@ from core.model import chat_member as member_model
 from core.model import task as task_model
 from core.model import canvas_page as canvas_page_model
 from core.model import task_issue as issue_model
+from library import notification_service
 import db_engine as db
 
 router = APIRouter()
@@ -115,6 +116,20 @@ async def websocket_chat(ws: WebSocket):
                                 'title': issue['title'],
                                 'status': issue['status'],
                             }
+
+                    # @멘션 알림 처리
+                    mentioned_user_ids = data.get('mentioned_user_ids', [])
+                    if mentioned_user_ids:
+                        await notification_service.notify_bulk(
+                            mentioned_user_ids,
+                            'chat_mention',
+                            user_id,
+                            f'{username}님이 채팅에서 회원님을 멘션했습니다',
+                            None,
+                            'chat_room',
+                            room_id,
+                            session,
+                        )
 
                     # room 멤버에게 broadcast
                     await manager.broadcast_to_room(room_id, {

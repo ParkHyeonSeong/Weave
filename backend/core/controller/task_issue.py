@@ -4,6 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.model import task_issue as issue_model
 from core.model import branch_member as member_model
 from core.model import task as task_model
+from library import notification_service
+from library.mention_parser import extract_mention_user_ids
 
 
 async def _check_member(branch_id: int, request: Request, db: AsyncSession):
@@ -35,6 +37,32 @@ async def create_issue(body, branch_id: int, task_id: int, request: Request, db:
         return task_err
 
     issue_id = await issue_model.create_issue(task_id, body.title, body.body, user_id, db)
+
+    # 태스크 담당자에게 이슈 생성 알림
+    task = await task_model.find_by_id(task_id, db)
+    if task:
+        assignee_ids = [a['user_id'] for a in (task.get('assignees') or [])]
+        if assignee_ids:
+            display_id = task.get('display_id', '')
+            username = request.state.payload.get('username', '')
+            link = f'/branch/{branch_id}/task/{task_id}/issue/{issue_id}'
+            await notification_service.notify_bulk(
+                assignee_ids, 'issue_created', user_id,
+                f'{username}님이 {display_id}에 이슈 "{body.title}"를 생성했습니다',
+                link, 'issue', issue_id, db,
+            )
+
+    # 이슈 body 멘션 알림
+    mentioned = extract_mention_user_ids(body.body)
+    if mentioned:
+        username = request.state.payload.get('username', '')
+        link = f'/branch/{branch_id}/task/{task_id}/issue/{issue_id}'
+        await notification_service.notify_bulk(
+            mentioned, 'mention', user_id,
+            f'{username}님이 이슈 "{body.title}"에서 회원님을 멘션했습니다',
+            link, 'issue', issue_id, db,
+        )
+
     return {'status': True, 'issue_id': issue_id}
 
 
@@ -93,6 +121,20 @@ async def update_issue(body, branch_id: int, task_id: int, issue_id: int, reques
     if fields:
         await issue_model.update_issue(issue_id, fields, db)
 
+    # body 멘션 알림 (새로 추가된 멘션만)
+    if 'body' in fields and fields['body']:
+        old_mentions = set(extract_mention_user_ids(issue.get('body') or ''))
+        new_mentions = set(extract_mention_user_ids(fields['body']))
+        added_mentions = new_mentions - old_mentions
+        if added_mentions:
+            username = request.state.payload.get('username', '')
+            link = f'/branch/{branch_id}/task/{task_id}/issue/{issue_id}'
+            await notification_service.notify_bulk(
+                list(added_mentions), 'mention', user_id,
+                f'{username}님이 이슈 "{issue.get("title", "")}"에서 회원님을 멘션했습니다',
+                link, 'issue', issue_id, db,
+            )
+
     return {'status': True}
 
 
@@ -134,6 +176,36 @@ async def create_comment(body, branch_id: int, task_id: int, issue_id: int, requ
         return {'status': False, 'message': 'ISSUE_NOT_FOUND'}
 
     comment_id = await issue_model.create_comment(issue_id, user_id, body.content, db)
+
+    # 이슈 작성자 + 기존 코멘터에게 알림 (중복 제거, 본인 제외)
+    recipients = set()
+    recipients.add(issue['created_by'])
+    commenter_ids = await issue_model.find_commenter_ids(issue_id, db)
+    recipients.update(commenter_ids)
+    recipients.discard(user_id)
+
+    if recipients:
+        username = request.state.payload.get('username', '')
+        issue_title = issue.get('title', '')
+        link = f'/branch/{branch_id}/task/{task_id}/issue/{issue_id}'
+        await notification_service.notify_bulk(
+            list(recipients), 'issue_comment', user_id,
+            f'{username}님이 "{issue_title}"에 댓글을 남겼습니다',
+            link, 'issue', issue_id, db,
+        )
+
+    # 댓글 content 멘션 알림 (issue_comment 알림과 별도로)
+    mentioned = extract_mention_user_ids(body.content)
+    if mentioned:
+        username = request.state.payload.get('username', '')
+        issue_title = issue.get('title', '')
+        link = f'/branch/{branch_id}/task/{task_id}/issue/{issue_id}'
+        await notification_service.notify_bulk(
+            mentioned, 'mention', user_id,
+            f'{username}님이 "{issue_title}" 댓글에서 회원님을 멘션했습니다',
+            link, 'issue', issue_id, db,
+        )
+
     return {'status': True, 'comment_id': comment_id}
 
 
