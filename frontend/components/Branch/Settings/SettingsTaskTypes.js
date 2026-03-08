@@ -63,6 +63,7 @@ export default function SettingsTaskTypes({ branchId, isAdmin }) {
         fetchTypes();
         setSelectedType({ ...selectedType, type_name: editName.trim(), icon: editIcon, color: editColor });
         setDirty(false);
+        window.dispatchEvent(new Event('tasktype:updated'));
       }
     } catch {}
   };
@@ -84,6 +85,7 @@ export default function SettingsTaskTypes({ branchId, isAdmin }) {
         setNewName('');
         setNewIcon('CheckSquare');
         setNewColor('#5E6AD2');
+        window.dispatchEvent(new Event('tasktype:updated'));
       }
     } catch {}
   };
@@ -95,6 +97,7 @@ export default function SettingsTaskTypes({ branchId, isAdmin }) {
       if (res.data.status) {
         fetchTypes();
         if (selectedType?.type_id === typeId) setSelectedType(null);
+        window.dispatchEvent(new Event('tasktype:updated'));
       }
     } catch {}
   };

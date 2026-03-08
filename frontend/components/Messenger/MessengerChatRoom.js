@@ -268,6 +268,9 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
       status: task.status,
       priority: task.priority,
       assignees: task.assignees || [],
+      status_label: task.status_label,
+      status_color: task.status_color,
+      status_category: task.status_category,
     });
     clearInputWithIME();
   };

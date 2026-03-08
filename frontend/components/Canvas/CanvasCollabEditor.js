@@ -176,7 +176,6 @@ function CollabEditorInner({
       }).then((res) => {
         if (!res.data.status) return;
         const { tasks, issues } = res.data;
-        const taskStatusMap = { todo: 'Todo', in_progress: 'In Progress', done: 'Done' };
         const issueStatusMap = { open: 'Open', closed: 'Closed' };
 
         editor.state.doc.descendants((node, nodePos) => {
@@ -186,8 +185,13 @@ function CollabEditorInner({
             const dom = editor.view.nodeDOM(nodePos);
             const badge = dom?.querySelector('[data-ref-badge]');
             if (badge) {
-              badge.className = `ref-chip__badge ref-chip__badge--${info.status}`;
-              badge.textContent = taskStatusMap[info.status] || info.status;
+              const cat = info.status_category || info.status;
+              badge.className = `ref-chip__badge ref-chip__badge--${cat}`;
+              badge.textContent = info.status_label || info.status;
+              if (info.status_color) {
+                badge.style.backgroundColor = `${info.status_color}20`;
+                badge.style.color = info.status_color;
+              }
             }
           }
           if (node.type.name === 'issueRef') {

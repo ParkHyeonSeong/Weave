@@ -5,6 +5,9 @@ import TaskRefPopup from './TaskRefPopup';
 
 const taskRefPluginKey = new PluginKey('taskRefSuggestion');
 
+// snake_case key를 Title Case로 변환 (fallback용)
+const formatStatusKey = (key) => key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
 // 태스크 레퍼런스 인라인 노드
 const TaskRefNode = Node.create({
   name: 'taskRef',
@@ -20,6 +23,9 @@ const TaskRefNode = Node.create({
       title: { default: '' },
       status: { default: 'todo' },
       priority: { default: 'medium' },
+      statusLabel: { default: null },
+      statusColor: { default: null },
+      statusCategory: { default: null },
     };
   },
 
@@ -28,7 +34,8 @@ const TaskRefNode = Node.create({
   },
 
   renderHTML({ node, HTMLAttributes }) {
-    const statusMap = { todo: 'Todo', in_progress: 'In Progress', done: 'Done' };
+    const label = node.attrs.statusLabel || formatStatusKey(node.attrs.status);
+    const category = node.attrs.statusCategory || node.attrs.status;
     return [
       'span',
       mergeAttributes(HTMLAttributes, {
@@ -39,10 +46,17 @@ const TaskRefNode = Node.create({
         'data-title': node.attrs.title,
         'data-status': node.attrs.status,
         'data-priority': node.attrs.priority,
+        'data-status-label': node.attrs.statusLabel || '',
+        'data-status-color': node.attrs.statusColor || '',
+        'data-status-category': node.attrs.statusCategory || '',
         class: 'task-ref',
       }),
       `${node.attrs.displayId} ${node.attrs.title}`,
-      ['span', { class: `ref-chip__badge ref-chip__badge--${node.attrs.status}`, 'data-ref-badge': 'true' }, statusMap[node.attrs.status] || node.attrs.status],
+      ['span', {
+        class: `ref-chip__badge ref-chip__badge--${category}`,
+        'data-ref-badge': 'true',
+        ...(node.attrs.statusColor ? { style: `background-color: ${node.attrs.statusColor}20; color: ${node.attrs.statusColor}` } : {}),
+      }, label],
     ];
   },
 
@@ -55,10 +69,15 @@ const TaskRefNode = Node.create({
 
       dom.appendChild(document.createTextNode(`${node.attrs.displayId} ${node.attrs.title}`));
 
-      const statusMap = { todo: 'Todo', in_progress: 'In Progress', done: 'Done' };
+      const label = node.attrs.statusLabel || formatStatusKey(node.attrs.status);
+      const category = node.attrs.statusCategory || node.attrs.status;
       const badge = document.createElement('span');
-      badge.className = `ref-chip__badge ref-chip__badge--${node.attrs.status}`;
-      badge.textContent = statusMap[node.attrs.status] || node.attrs.status;
+      badge.className = `ref-chip__badge ref-chip__badge--${category}`;
+      badge.textContent = label;
+      if (node.attrs.statusColor) {
+        badge.style.backgroundColor = `${node.attrs.statusColor}20`;
+        badge.style.color = node.attrs.statusColor;
+      }
       badge.setAttribute('data-ref-badge', 'true');
       dom.appendChild(badge);
 
@@ -220,6 +239,9 @@ const TaskRefNode = Node.create({
                       title: task.title,
                       status: task.status,
                       priority: task.priority,
+                      statusLabel: task.status_label || null,
+                      statusColor: task.status_color || null,
+                      statusCategory: task.status_category || null,
                     }),
                   );
                   tr.setMeta(taskRefPluginKey, { active: false, mode: null, keyword: '', from: 0 });

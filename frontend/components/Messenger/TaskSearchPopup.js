@@ -2,11 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Search, ListTodo } from 'lucide-react';
 import { axios } from '@/library/_axios';
 
-const STATUS_LABELS = {
-  todo: 'To Do',
-  in_progress: 'In Progress',
-  done: 'Done',
-};
+const formatStatusKey = (key) => key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
 export default function TaskSearchPopup({ keyword, mode, onSelect, onClose }) {
   const [tasks, setTasks] = useState([]);
@@ -75,8 +71,11 @@ export default function TaskSearchPopup({ keyword, mode, onSelect, onClose }) {
             <ListTodo size={12} className="TaskSearchPopup__ItemIcon" />
             <span className="TaskSearchPopup__ItemId">{task.display_id}</span>
             <span className="TaskSearchPopup__ItemTitle">{task.title}</span>
-            <span className={`TaskSearchPopup__ItemStatus TaskSearchPopup__ItemStatus--${task.status}`}>
-              {STATUS_LABELS[task.status] || task.status}
+            <span
+              className={`TaskSearchPopup__ItemStatus TaskSearchPopup__ItemStatus--${task.status_category || task.status}`}
+              style={task.status_color ? { backgroundColor: `${task.status_color}20`, color: task.status_color } : undefined}
+            >
+              {task.status_label || formatStatusKey(task.status)}
             </span>
             {(() => {
               const main = (task.assignees || []).find((a) => a.role === 'main');

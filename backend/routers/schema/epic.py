@@ -1,6 +1,6 @@
 from typing import Optional
 from datetime import date
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 
 
 class EpicCreate(BaseModel):
@@ -11,13 +11,6 @@ class EpicCreate(BaseModel):
     start_date: Optional[date] = None
     due_date: Optional[date] = None
 
-    @field_validator('status')
-    @classmethod
-    def validate_status(cls, v):
-        if v not in ('todo', 'in_progress', 'done'):
-            raise ValueError('status must be "todo", "in_progress", or "done"')
-        return v
-
 
 class EpicUpdate(BaseModel):
     epic_name: Optional[str] = None
@@ -26,10 +19,3 @@ class EpicUpdate(BaseModel):
     color: Optional[str] = None
     start_date: Optional[date] = None
     due_date: Optional[date] = None
-
-    @field_validator('status')
-    @classmethod
-    def validate_status(cls, v):
-        if v is not None and v not in ('todo', 'in_progress', 'done'):
-            raise ValueError('status must be "todo", "in_progress", or "done"')
-        return v

@@ -130,7 +130,6 @@ export default function CanvasOverview() {
       if (id) issueIds.add(Number(id));
     });
 
-    const taskStatusMap = { todo: 'Todo', in_progress: 'In Progress', done: 'Done', in_review: 'In Review', testing: 'Testing', blocked: 'Blocked' };
     const issueStatusMap = { open: 'Open', closed: 'Closed' };
 
     const injectBadge = (el, status, labelMap) => {
@@ -144,7 +143,19 @@ export default function CanvasOverview() {
 
     contentRef.current.querySelectorAll('[data-task-ref]').forEach((el) => {
       const status = el.getAttribute('data-status') || 'todo';
-      injectBadge(el, status, taskStatusMap);
+      const statusLabel = el.getAttribute('data-status-label');
+      const statusColor = el.getAttribute('data-status-color');
+      const category = el.getAttribute('data-status-category') || status;
+      el.querySelector('[data-ref-badge]')?.remove();
+      const badge = document.createElement('span');
+      badge.className = `ref-chip__badge ref-chip__badge--${category}`;
+      badge.textContent = statusLabel || status;
+      if (statusColor) {
+        badge.style.backgroundColor = `${statusColor}20`;
+        badge.style.color = statusColor;
+      }
+      badge.setAttribute('data-ref-badge', 'true');
+      el.appendChild(badge);
     });
     contentRef.current.querySelectorAll('[data-issue-ref]').forEach((el) => {
       const status = el.getAttribute('data-status') || 'open';
@@ -163,7 +174,19 @@ export default function CanvasOverview() {
       contentRef.current.querySelectorAll('[data-task-ref]').forEach((el) => {
         const id = el.getAttribute('data-task-id');
         const info = tasks[id];
-        if (info) injectBadge(el, info.status, taskStatusMap);
+        if (info) {
+          el.querySelector('[data-ref-badge]')?.remove();
+          const cat = info.status_category || info.status;
+          const b = document.createElement('span');
+          b.className = `ref-chip__badge ref-chip__badge--${cat}`;
+          b.textContent = info.status_label || info.status;
+          if (info.status_color) {
+            b.style.backgroundColor = `${info.status_color}20`;
+            b.style.color = info.status_color;
+          }
+          b.setAttribute('data-ref-badge', 'true');
+          el.appendChild(b);
+        }
       });
       contentRef.current.querySelectorAll('[data-issue-ref]').forEach((el) => {
         const id = el.getAttribute('data-issue-id');

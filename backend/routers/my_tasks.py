@@ -14,11 +14,12 @@ router = APIRouter()
 async def get_my_tasks(
     request: Request,
     status: Optional[str] = Query(None),
+    status_category: Optional[str] = Query(None),
     priority: Optional[str] = Query(None),
     branch_id: Optional[int] = Query(None),
     sort_by: str = Query("updated"),
     session: AsyncSession = Depends(db.session),
 ):
     return await my_tasks_controller.get_my_tasks(
-        status, priority, branch_id, sort_by, request, session
+        status, status_category, priority, branch_id, sort_by, request, session
     )

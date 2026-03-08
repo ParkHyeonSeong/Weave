@@ -500,10 +500,12 @@ async def search_for_chat(user_id: int, keyword: str, my_only: bool, db: AsyncSe
     result = await db.execute(text(f"""
         SELECT DISTINCT t.task_id, t.branch_id, t.display_number, t.title, t.status, t.priority,
                b.key AS branch_key,
-               t.updated_at, t.created_at
+               t.updated_at, t.created_at,
+               ws.label AS status_label, ws.color AS status_color, ws.category AS status_category
         FROM task t
         INNER JOIN branch b ON t.branch_id = b.branch_id
         INNER JOIN branch_member bm ON b.branch_id = bm.branch_id AND bm.user_id = :user_id
+        LEFT JOIN workflow_status ws ON ws.branch_id = t.branch_id AND ws.key = t.status
         WHERE t.title ILIKE :keyword_like
               {assignee_filter}
         ORDER BY t.updated_at DESC NULLS LAST, t.created_at DESC
@@ -541,7 +543,7 @@ async def search_for_chat(user_id: int, keyword: str, my_only: bool, db: AsyncSe
     return tasks
 
 
-async def find_by_assignee(user_id: int, status: str, priority: str,
+async def find_by_assignee(user_id: int, status: str, status_category: str, priority: str,
                            branch_id: int, sort_by: str, db: AsyncSession):
     """사용자에게 할당된 모든 Task (cross-branch)"""
     filters = []
@@ -550,6 +552,9 @@ async def find_by_assignee(user_id: int, status: str, priority: str,
     if status:
         filters.append("AND t.status = :status")
         params['status'] = status
+    if status_category:
+        filters.append("AND ws.category = :status_category")
+        params['status_category'] = status_category
     if priority:
         filters.append("AND t.priority = :priority")
         params['priority'] = priority
@@ -571,9 +576,11 @@ async def find_by_assignee(user_id: int, status: str, priority: str,
         SELECT t.task_id, t.branch_id, t.display_number, t.title,
                t.task_type, t.status, t.priority,
                t.start_date, t.due_date, t.updated_at, t.created_at,
-               b.key AS branch_key, b.branch_name, b.color AS branch_color
+               b.key AS branch_key, b.branch_name, b.color AS branch_color,
+               ws.label AS status_label, ws.color AS status_color, ws.category AS status_category
         FROM task t
         INNER JOIN branch b ON t.branch_id = b.branch_id
+        LEFT JOIN workflow_status ws ON ws.branch_id = t.branch_id AND ws.key = t.status
         WHERE t.task_id IN (SELECT task_id FROM task_assignee WHERE user_id = :user_id)
               {filter_clause}
         ORDER BY {order_clause}
@@ -643,13 +650,26 @@ async def set_labels(task_id: int, label_ids: list, db: AsyncSession):
 
 
 async def batch_statuses(task_ids: list[int], db: AsyncSession) -> dict:
-    """Ref 상태 배치 조회 (task_id → status)"""
+    """Ref 상태 배치 조회 (task_id → status + workflow info)"""
     if not task_ids:
         return {}
-    result = await db.execute(text(
-        "SELECT task_id, status FROM task WHERE task_id = ANY(:ids)"
-    ), {'ids': task_ids})
-    return {str(r.task_id): {'status': r.status} for r in result.fetchall()}
+    result = await db.execute(text("""
+        SELECT t.task_id, t.status,
+               ws.label AS status_label, ws.color AS status_color, ws.category AS status_category
+        FROM task t
+        LEFT JOIN workflow_status ws ON ws.branch_id = t.branch_id AND ws.key = t.status
+        WHERE t.task_id = ANY(:ids)
+    """), {'ids': task_ids})
+    out = {}
+    for r in result.fetchall():
+        row = dict(r._mapping)
+        out[str(row['task_id'])] = {
+            'status': row['status'],
+            'status_label': row.get('status_label'),
+            'status_color': row.get('status_color'),
+            'status_category': row.get('status_category'),
+        }
+    return out
 
 
 async def set_assignees(task_id: int, main_user_id, sub_user_ids: list, db: AsyncSession):

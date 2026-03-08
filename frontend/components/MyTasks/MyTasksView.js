@@ -5,10 +5,10 @@ import { axios } from '@/library/_axios';
 import CustomSelect from '@/components/common/CustomSelect';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 
-const DEFAULT_STATUS_OPTIONS = [
-  { value: 'todo', label: 'To Do', color: '#9CA3AF' },
-  { value: 'in_progress', label: 'In Progress', color: '#2563EB' },
-  { value: 'done', label: 'Done', color: '#16A34A' },
+const STATUS_CATEGORY_OPTIONS = [
+  { value: 'todo', label: 'To Do' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'done', label: 'Done' },
 ];
 
 const priorityOptions = [
@@ -35,7 +35,7 @@ export default function MyTasksView() {
 
   const fetchTasks = useCallback(async () => {
     const params = { sort_by: filters.sort_by };
-    if (filters.status) params.status = filters.status;
+    if (filters.status) params.status_category = filters.status;
     if (filters.priority) params.priority = filters.priority;
     if (filters.branch_id) params.branch_id = filters.branch_id;
 
@@ -82,7 +82,7 @@ export default function MyTasksView() {
           onChange={(e) => updateFilter('status', e.target.value)}
         >
           <option value="">All Status</option>
-          {DEFAULT_STATUS_OPTIONS.map((o) => (
+          {STATUS_CATEGORY_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
         </select>
@@ -166,7 +166,8 @@ function MyTasksRow({ task, onRefresh }) {
     return new Date(dateStr).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' });
   };
 
-  const isOverdue = task.due_date && task.status !== 'done' && new Date(task.due_date) < new Date();
+  const category = task.status_category || task.status;
+  const isOverdue = task.due_date && category !== 'done' && new Date(task.due_date) < new Date();
 
   return (
     <div
@@ -209,16 +210,14 @@ function MyTasksRow({ task, onRefresh }) {
         {task.branch_key}
       </button>
 
-      {/* 상태 (인라인 변경) */}
+      {/* 상태 */}
       <div className="MyTasksRow__Cell" onClick={(e) => e.stopPropagation()}>
-        <CustomSelect
-          value={task.status}
-          options={DEFAULT_STATUS_OPTIONS}
-          onChange={(val) => handleFieldChange('status', val)}
-          size="sm"
-          hideArrow
-          className={`MyTasksRow__Status MyTasksRow__Status--${task.status}`}
-        />
+        <span
+          className={`MyTasksRow__Status MyTasksRow__Status--${category}`}
+          style={task.status_color ? { backgroundColor: `${task.status_color}20`, color: task.status_color } : undefined}
+        >
+          {task.status_label || task.status}
+        </span>
       </div>
 
       {/* 마감일 */}

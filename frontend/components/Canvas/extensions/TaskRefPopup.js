@@ -2,11 +2,7 @@ import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 're
 import { Search, ListTodo } from 'lucide-react';
 import { axios } from '@/library/_axios';
 
-const STATUS_LABELS = {
-  todo: 'To Do',
-  in_progress: 'In Progress',
-  done: 'Done',
-};
+const formatStatusKey = (key) => key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
 const TaskRefPopup = forwardRef(({ keyword, mode, onSelect, onClose }, ref) => {
   const [tasks, setTasks] = useState([]);
@@ -81,8 +77,11 @@ const TaskRefPopup = forwardRef(({ keyword, mode, onSelect, onClose }, ref) => {
             <ListTodo size={12} className="TaskRefPopup__ItemIcon" />
             <span className="TaskRefPopup__ItemId">{task.display_id}</span>
             <span className="TaskRefPopup__ItemTitle">{task.title}</span>
-            <span className={`TaskRefPopup__ItemStatus TaskRefPopup__ItemStatus--${task.status}`}>
-              {STATUS_LABELS[task.status] || task.status}
+            <span
+              className={`TaskRefPopup__ItemStatus TaskRefPopup__ItemStatus--${task.status_category || task.status}`}
+              style={task.status_color ? { backgroundColor: `${task.status_color}20`, color: task.status_color } : undefined}
+            >
+              {task.status_label || formatStatusKey(task.status)}
             </span>
           </li>
         ))}

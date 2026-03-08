@@ -1,11 +1,8 @@
 import { useRouter } from 'next/router';
 import { X, ListTodo } from 'lucide-react';
 
-const STATUS_LABELS = {
-  todo: 'To Do',
-  in_progress: 'In Progress',
-  done: 'Done',
-};
+// snake_case key를 Title Case로 변환 (fallback용)
+const formatStatusKey = (key) => key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
 const PRIORITY_LABELS = {
   low: 'Low',
@@ -43,8 +40,11 @@ export default function TaskRefCard({ taskRef, removable, onRemove }) {
       </div>
       <div className="TaskRefCard__Title">{taskRef.title}</div>
       <div className="TaskRefCard__Footer">
-        <span className={`TaskRefCard__Status TaskRefCard__Status--${taskRef.status}`}>
-          {STATUS_LABELS[taskRef.status] || taskRef.status}
+        <span
+          className={`TaskRefCard__Status TaskRefCard__Status--${taskRef.status_category || taskRef.status}`}
+          style={taskRef.status_color ? { backgroundColor: `${taskRef.status_color}20`, color: taskRef.status_color } : undefined}
+        >
+          {taskRef.status_label || formatStatusKey(taskRef.status)}
         </span>
         {(() => {
           const main = (taskRef.assignees || []).find((a) => a.role === 'main');

@@ -33,6 +33,7 @@ export default function TaskListSprint({
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
   const [showStartConfirm, setShowStartConfirm] = useState(false);
   const typeDropdownRef = useRef(null);
+  const inlineFormRef = useRef(null);
   const tasks = sprint.tasks || [];
 
   const containerId = isBacklog ? 'backlog' : `sprint-${sprint.sprint_id}`;
@@ -225,7 +226,7 @@ export default function TaskListSprint({
 
           {/* 인라인 생성 */}
           {showInline && (
-            <form className="TaskList__InlineCreate" onSubmit={handleInlineCreate}>
+            <form className="TaskList__InlineCreate" ref={inlineFormRef} onSubmit={handleInlineCreate}>
               {/* 타입 선택 아이콘 */}
               <div className="TaskList__InlineTypeWrap" ref={typeDropdownRef}>
                 <button
@@ -263,7 +264,13 @@ export default function TaskListSprint({
                 value={inlineTitle}
                 onChange={(e) => setInlineTitle(e.target.value)}
                 onKeyDown={handleInlineKeyDown}
-                onBlur={() => { if (!inlineTitle.trim()) setShowInline(false); }}
+                onBlur={(e) => {
+                  // 타입 드롭다운 클릭 시 폼 닫히지 않도록
+                  if (inlineFormRef.current?.contains(e.relatedTarget)) return;
+                  setTimeout(() => {
+                    if (!inlineTitle.trim()) setShowInline(false);
+                  }, 200);
+                }}
                 autoFocus
                 disabled={creating}
               />

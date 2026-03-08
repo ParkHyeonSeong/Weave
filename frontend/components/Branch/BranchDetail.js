@@ -51,6 +51,13 @@ export default function BranchDetail() {
     return () => window.removeEventListener('workflow:updated', handler);
   }, [id]);
 
+  // tasktype:updated 이벤트 수신
+  useEffect(() => {
+    const handler = () => fetchTaskTypes();
+    window.addEventListener('tasktype:updated', handler);
+    return () => window.removeEventListener('tasktype:updated', handler);
+  }, [id]);
+
   // URL query tab 동기화
   useEffect(() => {
     if (queryTab && validTabs.includes(queryTab) && queryTab !== activeTab) {
