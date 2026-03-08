@@ -15,6 +15,7 @@ dependencies = [
     "PyJWT>=2.10.0",
     "python-multipart>=0.0.20",
     "pycrdt>=0.12",
+    "httpx>=0.28.0",
 ]
 
 [project.optional-dependencies]

@@ -1,0 +1,407 @@
+@use '../../variables' as *;
+
+.AIChat {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: $color-bg;
+
+  &__Loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    font-size: $font-size-sm;
+    color: $color-text-tertiary;
+  }
+
+  &__Header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: $space-3 $space-4;
+    border-bottom: 1px solid $color-border;
+    min-height: 44px;
+  }
+
+  &__HeaderLeft {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    flex: 1;
+    min-width: 0;
+    position: relative;
+  }
+
+  &__ConvToggle {
+    display: flex;
+    align-items: center;
+    gap: $space-1;
+    padding: $space-1 $space-2;
+    border-radius: $radius-md;
+    cursor: pointer;
+    min-width: 0;
+    transition: background $transition-fast;
+
+    &:hover {
+      background: $color-surface-hover;
+    }
+  }
+
+  &__ConversationTitle {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-semibold;
+    color: $color-text;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__HeaderActions {
+    display: flex;
+    align-items: center;
+    gap: $space-1;
+  }
+
+  &__HeaderBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: $radius-md;
+    color: $color-text-tertiary;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: $color-surface-hover;
+      color: $color-text;
+    }
+
+    &--active {
+      color: $color-primary;
+      background: $color-primary-subtle;
+    }
+  }
+
+  &__Messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: $space-4;
+    display: flex;
+    flex-direction: column;
+    gap: $space-4;
+  }
+
+  &__Welcome {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    gap: $space-3;
+    color: $color-text-tertiary;
+
+    svg {
+      opacity: 0.4;
+    }
+  }
+
+  &__WelcomeTitle {
+    font-size: $font-size-base;
+    font-weight: $font-weight-semibold;
+    color: $color-text-secondary;
+  }
+
+  &__WelcomeText {
+    font-size: $font-size-sm;
+    text-align: center;
+    max-width: 240px;
+    line-height: 1.5;
+  }
+
+  &__InputArea {
+    padding: $space-3 $space-4;
+    border-top: 1px solid $color-border;
+  }
+
+  // Conversation dropdown
+  &__ConvDropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    min-width: 200px;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+    box-shadow: $shadow-lg;
+    z-index: 10;
+    max-height: 300px;
+    overflow-y: auto;
+    margin-top: $space-1;
+    padding: $space-1;
+  }
+
+  &__ConvItem {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: $space-2 $space-3;
+    font-size: $font-size-sm;
+    cursor: pointer;
+    border-radius: $radius-md;
+    transition: background $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+    }
+
+    &--active {
+      background: $color-primary-subtle;
+      color: $color-primary;
+    }
+  }
+
+  &__ConvItemTitle {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__ConvDelete {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: $radius-sm;
+    color: $color-text-tertiary;
+    opacity: 0;
+    flex-shrink: 0;
+    margin-left: $space-2;
+    transition: all $transition-fast;
+
+    .AIChat__ConvItem:hover & {
+      opacity: 1;
+    }
+
+    &:hover {
+      background: $color-error-bg;
+      color: $color-error;
+    }
+  }
+
+  &__ConvEmpty {
+    padding: $space-3;
+    font-size: $font-size-sm;
+    color: $color-text-tertiary;
+    text-align: center;
+  }
+}
+
+// Message styles
+.AIChatMessage {
+  display: flex;
+  flex-direction: column;
+  max-width: 85%;
+  position: relative;
+
+  &--user {
+    align-self: flex-end;
+    align-items: flex-end;
+  }
+
+  &--assistant {
+    align-self: flex-start;
+    align-items: flex-start;
+  }
+
+  &__Bubble {
+    padding: $space-2 $space-3;
+    border-radius: $radius-xl;
+    font-size: $font-size-sm;
+    line-height: 1.6;
+    word-break: break-word;
+
+    .AIChatMessage--user & {
+      background: $color-primary;
+      color: $color-text-inverse;
+      border-bottom-right-radius: $radius-sm;
+      white-space: pre-wrap;
+    }
+
+    .AIChatMessage--assistant & {
+      background: $color-surface;
+      color: $color-text;
+      border-bottom-left-radius: $radius-sm;
+    }
+  }
+
+  &__Markdown {
+    p { margin: 0 0 $space-2 0; &:last-child { margin-bottom: 0; } }
+    strong { font-weight: $font-weight-semibold; }
+    ul, ol { margin: $space-1 0; padding-left: $space-4; }
+    li { margin-bottom: 2px; }
+    code {
+      background: rgba(0, 0, 0, 0.06);
+      padding: 1px 4px;
+      border-radius: $radius-sm;
+      font-size: 0.9em;
+    }
+    pre {
+      background: rgba(0, 0, 0, 0.06);
+      padding: $space-2 $space-3;
+      border-radius: $radius-md;
+      overflow-x: auto;
+      margin: $space-2 0;
+      code { background: none; padding: 0; }
+    }
+    h1, h2, h3, h4 {
+      font-weight: $font-weight-semibold;
+      margin: $space-2 0 $space-1 0;
+      &:first-child { margin-top: 0; }
+    }
+  }
+
+  &__Cursor {
+    display: inline-block;
+    width: 2px;
+    height: 14px;
+    background: $color-text;
+    margin-left: 1px;
+    vertical-align: text-bottom;
+    animation: blink 0.8s infinite;
+  }
+
+  &__Meta {
+    display: flex;
+    align-items: center;
+    gap: $space-1;
+    margin-top: 2px;
+  }
+
+  &__Actions {
+    display: flex;
+    gap: $space-1;
+    opacity: 0;
+    transition: opacity $transition-fast;
+
+    .AIChatMessage:hover & {
+      opacity: 1;
+    }
+
+    &--visible {
+      opacity: 1;
+    }
+  }
+
+  &__PinBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: $radius-sm;
+    color: $color-text-tertiary;
+
+    &:hover {
+      background: $color-surface-hover;
+      color: $color-primary;
+    }
+
+    &--pinned {
+      color: $color-primary;
+    }
+  }
+
+  &__Time {
+    font-size: 11px;
+    color: $color-text-tertiary;
+    padding: 0 $space-1;
+  }
+}
+
+// Input styles
+.AIChatInput {
+  display: flex;
+  align-items: center;
+  gap: $space-2;
+  background: $color-surface;
+  border: 1px solid $color-border;
+  border-radius: $radius-xl;
+  padding: $space-2 $space-3;
+  transition: border-color $transition-fast;
+
+  &:focus-within {
+    border-color: $color-primary;
+  }
+
+  &__Textarea {
+    flex: 1;
+    border: none;
+    background: transparent;
+    resize: none;
+    font-size: $font-size-sm;
+    line-height: 1.5;
+    color: $color-text;
+    max-height: 150px;
+    min-height: 20px;
+    outline: none;
+    font-family: inherit;
+
+    &::placeholder {
+      color: $color-text-tertiary;
+    }
+
+    &:disabled {
+      opacity: 0.6;
+    }
+  }
+
+  &__SendBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: $color-primary;
+    color: $color-text-inverse;
+    flex-shrink: 0;
+    transition: all $transition-fast;
+
+    &:hover:not(:disabled) {
+      background: $color-primary-hover;
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+
+  &__StopBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: $color-error;
+    color: $color-text-inverse;
+    flex-shrink: 0;
+    transition: all $transition-fast;
+
+    &:hover {
+      opacity: 0.9;
+    }
+  }
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}

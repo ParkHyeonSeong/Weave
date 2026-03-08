@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.model import task as task_model
 from core.model import branch_member as member_model
 from core.model import task_type_config as type_model
+from core.model import recent_view
 
 
 async def create(body, branch_id: int, request: Request, db: AsyncSession):
@@ -61,6 +62,9 @@ async def get_detail(task_id: int, branch_id: int, request: Request, db: AsyncSe
     # subtask 목록
     subtasks = await task_model.find_subtasks(task_id, db)
     task['subtasks'] = subtasks
+
+    # 조회 기록
+    await recent_view.upsert(user_id, 'task', task_id, db)
 
     return {'status': True, 'task': task}
 

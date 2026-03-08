@@ -44,6 +44,8 @@ import "@/styles/components/common/customSelect.scss";
 import "@/styles/components/branch/branchSettings.scss";
 import "@/styles/components/browse/browseBranches.scss";
 import "@/styles/components/home/launchpad.scss";
+import "@/styles/components/home/dashboard.scss";
+import "@/styles/components/home/widget.scss";
 import "@/styles/components/modal/createCanvas.scss";
 import "@/styles/components/branch/branchHome.scss";
 import "@/styles/components/canvas/canvasHome.scss";
@@ -60,6 +62,7 @@ import "@/styles/components/branch/taskIssueDetail.scss";
 import "@/styles/components/branch/createIssuePage.scss";
 import "@/styles/components/myTasks/myTasks.scss";
 import "@/styles/components/layout/toast.scss";
+import "@/styles/components/home/ai-chat.scss";
 
 const publicPaths = ['/auth/login', '/setup'];
 const noLayoutPaths = ['/auth/login', '/setup', '/admin'];

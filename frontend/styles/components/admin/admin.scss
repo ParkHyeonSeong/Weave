@@ -182,4 +182,75 @@
     color: $color-text-secondary;
     text-transform: capitalize;
   }
+
+  // -- 섹션 간격 --
+  &__Section + &__Section {
+    margin-top: $space-6;
+  }
+
+  // -- AI Config 폼 --
+  &__Form {
+    display: flex;
+    flex-direction: column;
+    gap: $space-4;
+  }
+
+  &__Field {
+    display: flex;
+    flex-direction: column;
+    gap: $space-1;
+  }
+
+  &__Label {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-text-secondary;
+  }
+
+  &__Input,
+  &__Select {
+    padding: $space-2 $space-3;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    font-size: $font-size-sm;
+    color: $color-text;
+    background: $color-bg;
+    outline: none;
+    transition: border-color $transition-fast;
+
+    &:focus {
+      border-color: $color-border-focus;
+    }
+
+    &::placeholder {
+      color: $color-text-tertiary;
+    }
+  }
+
+  &__Select {
+    cursor: pointer;
+  }
+
+  &__SaveBtn {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    padding: $space-2 $space-4;
+    background: $color-primary;
+    color: $color-text-inverse;
+    border-radius: $radius-md;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    transition: background $transition-fast;
+    margin-top: $space-2;
+
+    &:hover {
+      background: $color-primary-hover;
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  }
 }

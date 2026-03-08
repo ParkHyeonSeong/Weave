@@ -22,3 +22,4 @@ typing_extensions==4.15.0
 urllib3==2.6.3
 pycrdt>=0.12
 uvicorn==0.41.0
+httpx

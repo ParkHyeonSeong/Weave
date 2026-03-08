@@ -1,0 +1,97 @@
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
+import { axios } from '@/library/_axios';
+import { Clock, FileText } from 'lucide-react';
+
+export default function RecentItems() {
+  const router = useRouter();
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchRecent();
+  }, []);
+
+  const fetchRecent = async () => {
+    try {
+      const res = await axios.get('/recent-views', { params: { limit: 8 } });
+      if (res.data.status) {
+        setItems(res.data.items);
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getRelativeTime = (dateStr) => {
+    const now = new Date();
+    const date = new Date(dateStr);
+    const diff = Math.floor((now - date) / 1000);
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    if (diff < 172800) return 'yesterday';
+    return `${Math.floor(diff / 86400)}d ago`;
+  };
+
+  const handleClick = (item) => {
+    if (item.type === 'task') {
+      router.push(`/branch/${item.branch_id}/task/${item.task_id}`);
+    } else if (item.type === 'doc') {
+      router.push(`/canvas/${item.canvas_id}/${item.page_id}`);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="Widget">
+        <div className="Widget__Header">
+          <Clock size={16} />
+          <span className="Widget__Title">Recent Items</span>
+        </div>
+        <div className="Widget__Body">
+          <div className="Widget__Empty">Loading...</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="Widget">
+      <div className="Widget__Header">
+        <Clock size={16} />
+        <span className="Widget__Title">Recent Items</span>
+      </div>
+      <div className="Widget__Body">
+        {items.length === 0 ? (
+          <div className="Widget__Empty">No recent items</div>
+        ) : (
+          <div className="RecentItems__List">
+            {items.map((item) => (
+              <div
+                key={`${item.type}-${item.type === 'task' ? item.task_id : item.page_id}`}
+                className="RecentItems__Item"
+                onClick={() => handleClick(item)}
+              >
+                {item.type === 'task' ? (
+                  <div className={`RecentItems__StatusDot RecentItems__StatusDot--${item.status}`} />
+                ) : (
+                  <FileText size={12} className="RecentItems__DocIcon" />
+                )}
+                <span className="RecentItems__TaskId">
+                  {item.type === 'task' ? item.display_number : item.canvas_name}
+                </span>
+                <span className="RecentItems__TaskTitle">{item.title}</span>
+                <span className="RecentItems__TaskTime">
+                  {getRelativeTime(item.viewed_at)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.model import canvas_page as page_model
 from core.model import canvas_member as member_model
+from core.model import recent_view
 
 
 async def create(canvas_id: int, body, request: Request, db: AsyncSession):
@@ -47,6 +48,9 @@ async def get_detail(canvas_id: int, page_id: int, request: Request, db: AsyncSe
     page = await page_model.find_by_id(page_id, db)
     if not page or page['canvas_id'] != canvas_id:
         return {'status': False, 'message': 'PAGE_NOT_FOUND'}
+
+    # 조회 기록
+    await recent_view.upsert(user_id, 'doc', page_id, db)
 
     return {'status': True, 'page': page}
 

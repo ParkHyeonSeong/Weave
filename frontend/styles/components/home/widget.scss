@@ -1,0 +1,201 @@
+@use '../../variables' as *;
+
+// Task Summary
+.TaskSummary {
+  &__Stats {
+    display: flex;
+    gap: $space-3;
+  }
+
+  &__Stat {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: $space-1;
+    padding: $space-3;
+    border-radius: $radius-lg;
+    cursor: pointer;
+    transition: background $transition-fast;
+
+    &:hover {
+      background: $color-surface-hover;
+    }
+  }
+
+  &__StatCount {
+    font-size: $font-size-lg;
+    font-weight: $font-weight-bold;
+    color: $color-text;
+  }
+
+  &__StatLabel {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+  }
+}
+
+// Active Sprints
+.ActiveSprints {
+  &__Item {
+    &:not(:last-child) {
+      margin-bottom: $space-4;
+    }
+  }
+
+  &__SprintInfo {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: $space-2;
+  }
+
+  &__SprintName {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-text;
+  }
+
+  &__SprintBranch {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+  }
+
+  &__SprintCount {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+  }
+
+  &__ProgressBar {
+    height: 6px;
+    background: $color-surface;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  &__ProgressFill {
+    height: 100%;
+    background: $color-primary;
+    border-radius: 3px;
+    transition: width $transition-base;
+  }
+}
+
+// Recent Items
+.RecentItems {
+  &__List {
+    display: flex;
+    flex-direction: column;
+  }
+
+  &__Item {
+    display: flex;
+    align-items: center;
+    gap: $space-3;
+    padding: $space-2 $space-1;
+    border-radius: $radius-md;
+    cursor: pointer;
+    transition: background $transition-fast;
+
+    &:hover {
+      background: $color-surface-hover;
+    }
+  }
+
+  &__TaskId {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    color: $color-primary;
+    white-space: nowrap;
+    min-width: 56px;
+  }
+
+  &__TaskTitle {
+    font-size: $font-size-sm;
+    color: $color-text;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__TaskTime {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+    white-space: nowrap;
+  }
+
+  &__StatusDot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+
+    &--todo {
+      border: 1.5px solid $color-text-tertiary;
+      background: transparent;
+    }
+
+    &--in_progress {
+      background: $color-status-in-progress;
+    }
+
+    &--done {
+      background: $color-success;
+    }
+  }
+
+  &__DocIcon {
+    flex-shrink: 0;
+    color: $color-ref-doc;
+  }
+}
+
+// Unread Messages
+.UnreadMessages {
+  &__Total {
+    font-size: $font-size-xl;
+    font-weight: $font-weight-bold;
+    color: $color-text;
+    margin-bottom: $space-3;
+  }
+
+  &__Rooms {
+    display: flex;
+    flex-direction: column;
+    gap: $space-1;
+  }
+
+  &__Room {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: $space-2 $space-3;
+    border-radius: $radius-md;
+    cursor: pointer;
+    transition: background $transition-fast;
+
+    &:hover {
+      background: $color-surface-hover;
+    }
+  }
+
+  &__RoomName {
+    font-size: $font-size-sm;
+    color: $color-text;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__Badge {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-semibold;
+    color: $color-text-inverse;
+    background: $color-primary;
+    border-radius: 10px;
+    padding: 1px 8px;
+    min-width: 20px;
+    text-align: center;
+  }
+}
