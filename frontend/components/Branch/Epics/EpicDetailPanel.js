@@ -2,10 +2,19 @@ import { useState, useEffect } from 'react';
 import { axios } from '@/library/_axios';
 import { X, Trash2 } from 'lucide-react';
 import CustomSelect from '@/components/common/CustomSelect';
+import TaskTypeIcon from '@/components/common/TaskTypeIcon';
+
 const COLORS = ['#5E6AD2', '#2563EB', '#DC2626', '#16A34A', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4'];
 
-export default function EpicDetailPanel({ branchId, workflowStatuses = [], epicSummary, onClose }) {
+const STATUS_COLORS = {
+  todo: '#9CA3AF',
+  in_progress: '#2563EB',
+  done: '#16A34A',
+};
+
+export default function EpicDetailPanel({ branchId, workflowStatuses = [], epicSummary, onClose, onSelectTask }) {
   const [epic, setEpic] = useState(null);
+  const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // 제목 편집
@@ -24,11 +33,15 @@ export default function EpicDetailPanel({ branchId, workflowStatuses = [], epicS
   const fetchEpic = async () => {
     setLoading(true);
     try {
-      const res = await axios.get(`/branches/${branchId}/epics`);
-      if (res.data.status) {
-        const found = res.data.epics.find((e) => e.epic_id === epicSummary.epic_id);
+      const [epicRes, taskRes] = await Promise.all([
+        axios.get(`/branches/${branchId}/epics`),
+        axios.get(`/branches/${branchId}/epics/${epicSummary.epic_id}/tasks`),
+      ]);
+      if (epicRes.data.status) {
+        const found = epicRes.data.epics.find((e) => e.epic_id === epicSummary.epic_id);
         if (found) setEpic(found);
       }
+      if (taskRes.data.status) setTasks(taskRes.data.tasks);
     } catch {}
     setLoading(false);
   };
@@ -69,6 +82,11 @@ export default function EpicDetailPanel({ branchId, workflowStatuses = [], epicS
     } catch {}
   };
 
+  // 태스크 클릭 -> 태스크탭 + 상세패널 열기
+  const handleTaskClick = (task) => {
+    if (onSelectTask) onSelectTask(task);
+  };
+
   if (loading || !epic) {
     return (
       <div className="TaskDetailPanel">
@@ -81,6 +99,13 @@ export default function EpicDetailPanel({ branchId, workflowStatuses = [], epicS
       </div>
     );
   }
+
+  // 워크플로우 상태 정보 매핑
+  const getStatusInfo = (statusKey) => {
+    const ws = workflowStatuses.find((w) => w.key === statusKey);
+    if (ws) return { label: ws.label, color: ws.color };
+    return { label: statusKey, color: STATUS_COLORS[statusKey] || '#9CA3AF' };
+  };
 
   return (
     <div className="TaskDetailPanel">
@@ -212,14 +237,30 @@ export default function EpicDetailPanel({ branchId, workflowStatuses = [], epicS
                 />
               </div>
             </div>
+          </div>
+        </div>
 
-            {/* Task 수 */}
-            <div className="TaskDetailPanel__Row">
-              <span className="TaskDetailPanel__RowLabel">Tasks</span>
-              <div className="TaskDetailPanel__RowValue">
-                <span className="TaskDetailPanel__FieldValue">{epic.task_count || 0} tasks</span>
-              </div>
-            </div>
+        <div className="TaskDetailPanel__Divider" />
+
+        {/* 태스크 목록 */}
+        <div className="TaskDetailPanel__Section">
+          <div className="TaskDetailPanel__SectionLabel">Tasks ({tasks.length})</div>
+          <div className="EpicTaskList">
+            {tasks.length === 0 ? (
+              <div className="EpicTaskList__Empty">No tasks in this epic</div>
+            ) : (
+              tasks.map((task) => {
+                const si = getStatusInfo(task.status);
+                return (
+                  <div key={task.task_id} className="EpicTaskList__Item" onClick={() => handleTaskClick(task)}>
+                    <span className="EpicTaskList__StatusDot" style={{ backgroundColor: si.color }} />
+                    <TaskTypeIcon type={task.task_type} size={14} />
+                    <span className="EpicTaskList__Id">{task.display_id}</span>
+                    <span className="EpicTaskList__Title">{task.title}</span>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
 

@@ -125,6 +125,15 @@ export default function BranchDetail() {
     setSelectedTask(task);
   };
 
+  // 에픽 패널에서 태스크 클릭 -> 태스크탭 + 상세패널 열기
+  const handleEpicTaskClick = (task) => {
+    setSelectedEpic(null);
+    setActiveTab('tasks');
+    router.replace(`/branch/${id}?tab=tasks`, undefined, { shallow: true });
+    // activeTab 변경 후 cleanup이 먼저 실행되므로 다음 틱에서 설정
+    setTimeout(() => setSelectedTask(task), 0);
+  };
+
   const panelOpen = selectedTask || selectedEpic;
 
   if (loading || !branch) return null;
@@ -221,6 +230,7 @@ export default function BranchDetail() {
           workflowStatuses={workflowStatuses}
           epicSummary={selectedEpic}
           onClose={() => setSelectedEpic(null)}
+          onSelectTask={handleEpicTaskClick}
         />
       )}
     </div>

@@ -2,6 +2,7 @@ from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.model import epic as epic_model
+from core.model import task as task_model
 from core.model import branch_member as member_model
 
 
@@ -48,6 +49,16 @@ async def update(epic_id: int, body, branch_id: int, request: Request, db: Async
     fields = body.model_dump(exclude_none=True)
     await epic_model.update(epic_id, fields, db)
     return {'status': True}
+
+
+async def get_tasks(epic_id: int, branch_id: int, request: Request, db: AsyncSession):
+    """Epic에 속한 Task 목록"""
+    user_id = request.state.payload.get('user_id')
+    if not await member_model.is_member(branch_id, user_id, db):
+        return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+
+    tasks = await task_model.find_by_epic(epic_id, branch_id, db)
+    return {'status': True, 'tasks': tasks}
 
 
 async def reorder(body, branch_id: int, request: Request, db: AsyncSession):

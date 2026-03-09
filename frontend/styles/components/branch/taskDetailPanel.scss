@@ -699,3 +699,55 @@
     p { margin: 0; }
   }
 }
+
+// -- Epic 태스크 목록 --
+.EpicTaskList {
+  display: flex;
+  flex-direction: column;
+
+  &__Empty {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+    padding: $space-2 0;
+  }
+
+  &__Item {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: $space-2;
+    border-radius: $radius-sm;
+    cursor: pointer;
+    transition: background $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+    }
+
+    // 아이콘 축소 방지
+    svg {
+      flex-shrink: 0;
+    }
+  }
+
+  &__StatusDot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  &__Id {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+    flex-shrink: 0;
+  }
+
+  &__Title {
+    font-size: $font-size-sm;
+    color: $color-text;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}

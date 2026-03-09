@@ -72,7 +72,7 @@ export default function TaskListRow({ task, branchId, taskTypes, workflowStatuse
 
   const epicOptions = [
     { value: '', label: 'None', color: '#9CA3AF' },
-    ...(epics || []).map((e) => ({
+    ...(epics || []).filter((e) => e.status !== 'done' || e.epic_id === task.epic_id).map((e) => ({
       value: String(e.epic_id),
       label: e.epic_name,
       color: e.color || '#5E6AD2',

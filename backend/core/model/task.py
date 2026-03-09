@@ -263,6 +263,28 @@ async def find_for_board(branch_id: int, sprint_id, db: AsyncSession):
     return tasks
 
 
+async def find_by_epic(epic_id: int, branch_id: int, db: AsyncSession):
+    """Epic에 속한 Task 목록 (간략)"""
+    result = await db.execute(text("""
+        SELECT t.task_id, t.display_number, t.title,
+               t.task_type, t.status, t.priority,
+               t.sort_order, t.created_at,
+               b.key AS branch_key
+        FROM task t
+        INNER JOIN branch b ON t.branch_id = b.branch_id
+        WHERE t.epic_id = :epic_id AND t.branch_id = :branch_id
+              AND t.parent_task_id IS NULL
+        ORDER BY t.sort_order, t.created_at
+    """), {'epic_id': epic_id, 'branch_id': branch_id})
+    rows = result.fetchall()
+    tasks = []
+    for row in rows:
+        task = dict(row._mapping)
+        task['display_id'] = f"{task['branch_key']}-{task['display_number']}"
+        tasks.append(task)
+    return tasks
+
+
 async def find_archived(branch_id: int, db: AsyncSession):
     """Branch의 완료된(done) Task 목록 (Archive 탭용)"""
     params = {'branch_id': branch_id}
