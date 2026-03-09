@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { axios } from '@/library/_axios';
 import { Plus } from 'lucide-react';
 import EpicBar from './EpicBar';
@@ -14,7 +14,7 @@ function formatDateRange(start, end) {
 // 겹치는 스프린트를 별도 lane에 배치
 function assignLanes(sprintBars) {
   const sorted = [...sprintBars].sort((a, b) => a.left - b.left);
-  const lanes = []; // 각 lane의 마지막 right 값
+  const lanes = [];
   for (const bar of sorted) {
     let placed = false;
     for (let i = 0; i < lanes.length; i++) {
@@ -34,10 +34,12 @@ function assignLanes(sprintBars) {
 }
 
 const VIEW_MODES = [
-  { key: 'week', label: 'Week' },
-  { key: 'month', label: 'Month' },
-  { key: 'quarter', label: 'Quarter' },
+  { key: 'week', label: 'Week', pxPerDay: 16 },
+  { key: 'month', label: 'Month', pxPerDay: 4 },
+  { key: 'quarter', label: 'Quarter', pxPerDay: 1.5 },
 ];
+
+const NAME_COL_WIDTH = 200;
 
 export default function EpicTimeline({ branchId, onSelectEpic }) {
   const [epics, setEpics] = useState([]);
@@ -45,14 +47,16 @@ export default function EpicTimeline({ branchId, onSelectEpic }) {
   const [loading, setLoading] = useState(true);
   const [epicModal, setEpicModal] = useState({ open: false });
   const [viewMode, setViewMode] = useState('month');
-  const [sprintPopover, setSprintPopover] = useState(null); // sprint_id
+  const [sprintPopover, setSprintPopover] = useState(null);
+  const [showDone, setShowDone] = useState(false);
   const popoverRef = useRef(null);
+  const scrollRef = useRef(null);
+  const didScroll = useRef(false);
 
   useEffect(() => {
     fetchData();
   }, [branchId]);
 
-  // epic:updated 이벤트
   useEffect(() => {
     const handleRefresh = () => fetchData();
     window.addEventListener('epic:updated', handleRefresh);
@@ -71,67 +75,66 @@ export default function EpicTimeline({ branchId, onSelectEpic }) {
     setLoading(false);
   };
 
-  // 타임라인 범위 계산 (viewMode 기준)
+  const modeConfig = VIEW_MODES.find((m) => m.key === viewMode);
+  const pxPerDay = modeConfig?.pxPerDay || 4;
+
+  // 고정 범위: 1년 전 ~ 2년 후
   const { timelineStart, timelineEnd, totalDays, headerLabels } = useMemo(() => {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
-    let start, end;
-
-    if (viewMode === 'week') {
-      // 이번 주 월요일 ~ 2주 후
-      const dayOfWeek = now.getDay() || 7; // 일요일=7
-      start = new Date(now);
-      start.setDate(now.getDate() - dayOfWeek + 1 - 7); // 1주 전 월요일
-      end = new Date(start);
-      end.setDate(start.getDate() + 28); // 4주간
-    } else if (viewMode === 'month') {
-      // 이번 달 기준 앞뒤 1달씩
-      start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      end = new Date(now.getFullYear(), now.getMonth() + 2, 0);
-    } else {
-      // quarter: 이번 분기 기준 앞뒤 1달씩
-      const qStart = Math.floor(now.getMonth() / 3) * 3;
-      start = new Date(now.getFullYear(), qStart - 1, 1);
-      end = new Date(now.getFullYear(), qStart + 4, 0);
-    }
-
+    const start = new Date(now.getFullYear() - 1, now.getMonth(), 1);
+    const end = new Date(now.getFullYear() + 2, now.getMonth(), 0);
     const total = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
 
-    // 헤더 라벨 생성
+    // 월 단위 라벨
     const labels = [];
-    if (viewMode === 'week') {
-      // 주 단위 라벨
-      const cursor = new Date(start);
-      while (cursor <= end) {
-        const dayOffset = Math.ceil((new Date(cursor) - start) / (1000 * 60 * 60 * 24));
-        labels.push({
-          label: cursor.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
-          offset: dayOffset,
-        });
-        cursor.setDate(cursor.getDate() + 7);
-      }
-    } else {
-      // 월 단위 라벨
-      const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
-      while (cursor <= end) {
-        const dayOffset = Math.ceil((new Date(cursor) - start) / (1000 * 60 * 60 * 24));
-        labels.push({
-          label: cursor.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-          offset: dayOffset,
-        });
-        cursor.setMonth(cursor.getMonth() + 1);
-      }
+    const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+    while (cursor <= end) {
+      const dayOffset = Math.ceil((new Date(cursor) - start) / (1000 * 60 * 60 * 24));
+      const isJan = cursor.getMonth() === 0;
+      labels.push({
+        label: isJan
+          ? cursor.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+          : cursor.toLocaleDateString('en-US', { month: 'short' }),
+        offset: dayOffset,
+        isYear: isJan,
+      });
+      cursor.setMonth(cursor.getMonth() + 1);
     }
 
     return { timelineStart: start, timelineEnd: end, totalDays: total, headerLabels: labels };
-  }, [viewMode]);
+  }, []);
 
-  const getPosition = (dateStr) => {
+  const timelineWidth = totalDays * pxPerDay;
+
+  // 날짜 -> px 위치
+  const getPosition = useCallback((dateStr) => {
     if (!dateStr) return null;
-    const date = new Date(dateStr);
-    const days = (date - timelineStart) / (1000 * 60 * 60 * 24);
-    return (days / totalDays) * 100;
-  };
+    const d = new Date(dateStr);
+    const days = (d - timelineStart) / (1000 * 60 * 60 * 24);
+    return days * pxPerDay;
+  }, [timelineStart, pxPerDay]);
+
+  // 오늘 위치로 자동 스크롤 (최초 1회)
+  useEffect(() => {
+    if (loading || didScroll.current || !scrollRef.current) return;
+    const todayPx = getPosition(new Date().toISOString());
+    if (todayPx != null) {
+      const container = scrollRef.current;
+      container.scrollLeft = todayPx - container.clientWidth / 3;
+      didScroll.current = true;
+    }
+  }, [loading, getPosition]);
+
+  // viewMode 변경 시 오늘 중심으로 재스크롤
+  useEffect(() => {
+    if (!scrollRef.current) return;
+    const todayPx = getPosition(new Date().toISOString());
+    if (todayPx != null) {
+      const container = scrollRef.current;
+      container.scrollLeft = todayPx - container.clientWidth / 3;
+    }
+  }, [viewMode, getPosition]);
 
   // 팝오버 외부 클릭 닫기
   useEffect(() => {
@@ -153,20 +156,23 @@ export default function EpicTimeline({ branchId, onSelectEpic }) {
         const left = getPosition(s.start_date);
         const right = getPosition(s.end_date);
         if (left == null || right == null) return null;
-        return { ...s, left, width: Math.max(right - left, 1), lane: 0 };
+        return { ...s, left, width: Math.max(right - left, 2), lane: 0 };
       })
       .filter(Boolean);
     const count = assignLanes(bars);
     return { sprintBars: bars, laneCount: count };
-  }, [sprints, timelineStart, totalDays]);
+  }, [sprints, getPosition]);
 
-  const todayPos = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (today < timelineStart || today > timelineEnd) return null;
-    const days = (today - timelineStart) / (1000 * 60 * 60 * 24);
-    return (days / totalDays) * 100;
-  }, [timelineStart, timelineEnd, totalDays]);
+  const todayPx = useMemo(() => {
+    return getPosition(new Date().toISOString());
+  }, [getPosition]);
+
+  // 필터 + 정렬: in_progress > todo > done
+  const STATUS_ORDER = { in_progress: 0, todo: 1, done: 2 };
+  const filteredEpics = useMemo(() => {
+    const list = showDone ? epics : epics.filter((e) => e.status !== 'done');
+    return [...list].sort((a, b) => (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9));
+  }, [epics, showDone]);
 
   if (loading) return null;
 
@@ -182,7 +188,11 @@ export default function EpicTimeline({ branchId, onSelectEpic }) {
           Create Epic
         </button>
 
-        {/* 뷰 모드 토글 */}
+        <label className="EpicTimeline__ShowDone">
+          <input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} />
+          Show Done
+        </label>
+
         <div className="EpicTimeline__ViewModes">
           {VIEW_MODES.map((mode) => (
             <button
@@ -196,125 +206,131 @@ export default function EpicTimeline({ branchId, onSelectEpic }) {
         </div>
       </div>
 
-      {epics.length === 0 ? (
+      {filteredEpics.length === 0 ? (
         <div className="EpicTimeline__Empty">
           No epics yet. Create one to start planning.
         </div>
       ) : (
         <div className="EpicTimeline__Container">
-          {/* 월 헤더 */}
-          <div className="EpicTimeline__Header">
-            <div className="EpicTimeline__NameCol" />
-            <div className="EpicTimeline__TimelineCol">
-              {headerLabels.map((m, i) => (
-                <div
-                  key={i}
-                  className="EpicTimeline__Month"
-                  style={{ left: `${(m.offset / totalDays) * 100}%` }}
-                >
-                  {m.label}
-                </div>
-              ))}
-            </div>
-          </div>
+          {/* 스크롤 가능 영역 */}
+          <div className="EpicTimeline__ScrollWrap" ref={scrollRef}>
+            <div className="EpicTimeline__Inner" style={{ width: NAME_COL_WIDTH + timelineWidth }}>
 
-          {/* 스프린트 라벨 행 */}
-          {sprintBars.length > 0 && (
-            <div className="EpicTimeline__SprintRow">
-              <div className="EpicTimeline__NameCol">
-                <span className="EpicTimeline__SprintRowLabel">Sprints</span>
-              </div>
-              <div
-                className="EpicTimeline__SprintRowTimeline"
-                style={{ height: laneCount * 24 + 8 }}
-              >
-                {sprintBars.map((s) => {
-                  const statusClass = s.status === 'active' ? 'EpicTimeline__SprintLabel--active'
-                    : s.status === 'closed' ? 'EpicTimeline__SprintLabel--closed' : '';
-                  const isOpen = sprintPopover === s.sprint_id;
-                  return (
+              {/* 월 헤더 */}
+              <div className="EpicTimeline__Header">
+                <div className="EpicTimeline__NameCol" />
+                <div className="EpicTimeline__TimelineCol" style={{ width: timelineWidth }}>
+                  {headerLabels.map((m, i) => (
                     <div
-                      key={s.sprint_id}
-                      className={`EpicTimeline__SprintLabel ${statusClass}`}
-                      style={{
-                        left: `${s.left}%`,
-                        width: `${s.width}%`,
-                        top: s.lane * 24 + 4,
-                      }}
-                      onClick={() => setSprintPopover(isOpen ? null : s.sprint_id)}
+                      key={i}
+                      className={`EpicTimeline__Month ${m.isYear ? 'EpicTimeline__Month--year' : ''}`}
+                      style={{ left: m.offset * pxPerDay }}
                     >
-                      <span className="EpicTimeline__SprintLabelText">{s.sprint_name}</span>
-                      <span className="EpicTimeline__SprintTooltip">
-                        {s.sprint_name}
-                        <br />
-                        {formatDateRange(s.start_date, s.end_date)}
-                      </span>
-                      {isOpen && (
-                        <div className="EpicTimeline__SprintPopover" ref={popoverRef} onClick={(e) => e.stopPropagation()}>
-                          <div className="EpicTimeline__SprintPopoverName">{s.sprint_name}</div>
-                          <div className="EpicTimeline__SprintPopoverMeta">
-                            <span className={`EpicTimeline__SprintPopoverStatus EpicTimeline__SprintPopoverStatus--${s.status}`}>
-                              {STATUS_LABELS[s.status] || s.status}
-                            </span>
-                            <span className="EpicTimeline__SprintPopoverDate">
-                              {formatDateRange(s.start_date, s.end_date)}
-                            </span>
-                          </div>
-                          {s.goal && (
-                            <div className="EpicTimeline__SprintPopoverGoal">{s.goal}</div>
-                          )}
-                          <div className="EpicTimeline__SprintPopoverTasks">
-                            {s.task_count != null ? `${s.task_count} tasks` : ''}
-                          </div>
-                        </div>
-                      )}
+                      {m.label}
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
+              </div>
+
+              {/* 스프린트 라벨 행 */}
+              {sprintBars.length > 0 && (
+                <div className="EpicTimeline__SprintRow">
+                  <div className="EpicTimeline__NameCol">
+                    <span className="EpicTimeline__SprintRowLabel">Sprints</span>
+                  </div>
+                  <div
+                    className="EpicTimeline__SprintRowTimeline"
+                    style={{ width: timelineWidth, height: laneCount * 24 + 8 }}
+                  >
+                    {sprintBars.map((s) => {
+                      const statusClass = s.status === 'active' ? 'EpicTimeline__SprintLabel--active'
+                        : s.status === 'closed' ? 'EpicTimeline__SprintLabel--closed' : '';
+                      const isOpen = sprintPopover === s.sprint_id;
+                      return (
+                        <div
+                          key={s.sprint_id}
+                          className={`EpicTimeline__SprintLabel ${statusClass}`}
+                          style={{
+                            left: s.left,
+                            width: s.width,
+                            top: s.lane * 24 + 4,
+                          }}
+                          onClick={() => setSprintPopover(isOpen ? null : s.sprint_id)}
+                        >
+                          <span className="EpicTimeline__SprintLabelText">{s.sprint_name}</span>
+                          <span className="EpicTimeline__SprintTooltip">
+                            {s.sprint_name}
+                            <br />
+                            {formatDateRange(s.start_date, s.end_date)}
+                          </span>
+                          {isOpen && (
+                            <div className="EpicTimeline__SprintPopover" ref={popoverRef} onClick={(e) => e.stopPropagation()}>
+                              <div className="EpicTimeline__SprintPopoverName">{s.sprint_name}</div>
+                              <div className="EpicTimeline__SprintPopoverMeta">
+                                <span className={`EpicTimeline__SprintPopoverStatus EpicTimeline__SprintPopoverStatus--${s.status}`}>
+                                  {STATUS_LABELS[s.status] || s.status}
+                                </span>
+                                <span className="EpicTimeline__SprintPopoverDate">
+                                  {formatDateRange(s.start_date, s.end_date)}
+                                </span>
+                              </div>
+                              {s.goal && (
+                                <div className="EpicTimeline__SprintPopoverGoal">{s.goal}</div>
+                              )}
+                              <div className="EpicTimeline__SprintPopoverTasks">
+                                {s.task_count != null ? `${s.task_count} tasks` : ''}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* 에픽 행 */}
+              <div className="EpicTimeline__Body">
+                {/* Sprint 구간 배경 */}
+                <div className="EpicTimeline__SprintBg" style={{ left: NAME_COL_WIDTH, width: timelineWidth }}>
+                  {sprints
+                    .filter((s) => s.start_date && s.end_date)
+                    .map((s) => {
+                      const left = getPosition(s.start_date);
+                      const right = getPosition(s.end_date);
+                      if (left == null || right == null) return null;
+                      return (
+                        <div
+                          key={s.sprint_id}
+                          className="EpicTimeline__SprintRange"
+                          style={{ left, width: right - left }}
+                        />
+                      );
+                    })}
+                </div>
+
+                {/* 오늘 마커 */}
+                {todayPx != null && (
+                  <div className="EpicTimeline__Today" style={{ left: NAME_COL_WIDTH + todayPx }}>
+                    <div className="EpicTimeline__TodayLine" />
+                  </div>
+                )}
+
+                {filteredEpics.map((epic) => (
+                  <EpicBar
+                    key={epic.epic_id}
+                    epic={epic}
+                    getPosition={getPosition}
+                    timelineWidth={timelineWidth}
+                    onClick={() => onSelectEpic(epic)}
+                  />
+                ))}
               </div>
             </div>
-          )}
-
-          {/* 에픽 행 */}
-          <div className="EpicTimeline__Body">
-            {/* Sprint 구간 배경 */}
-            <div className="EpicTimeline__SprintBg">
-              {sprints
-                .filter((s) => s.start_date && s.end_date)
-                .map((s) => {
-                  const left = getPosition(s.start_date);
-                  const right = getPosition(s.end_date);
-                  if (left == null || right == null) return null;
-                  return (
-                    <div
-                      key={s.sprint_id}
-                      className="EpicTimeline__SprintRange"
-                      style={{ left: `${left}%`, width: `${right - left}%` }}
-                    />
-                  );
-                })}
-            </div>
-
-            {/* 오늘 마커 */}
-            {todayPos != null && (
-              <div className="EpicTimeline__Today" style={{ left: `calc(200px + ${todayPos}%)` }}>
-                <div className="EpicTimeline__TodayLine" />
-              </div>
-            )}
-
-            {epics.map((epic) => (
-              <EpicBar
-                key={epic.epic_id}
-                epic={epic}
-                getPosition={getPosition}
-                onClick={() => onSelectEpic(epic)}
-              />
-            ))}
           </div>
         </div>
       )}
 
-      {/* Epic 생성 모달 (생성 전용) */}
       {epicModal.open && (
         <EpicModal
           branchId={branchId}

@@ -66,6 +66,20 @@
     }
   }
 
+  &__ShowDone {
+    display: flex;
+    align-items: center;
+    gap: $space-1;
+    font-size: $font-size-xs;
+    color: $color-text-secondary;
+    cursor: pointer;
+    user-select: none;
+
+    input {
+      cursor: pointer;
+    }
+  }
+
   &__Empty {
     padding: $space-10;
     text-align: center;
@@ -77,7 +91,34 @@
   &__Container {
     border: 1px solid $color-border;
     border-radius: $radius-xl;
-    overflow: visible;
+    overflow: hidden;
+  }
+
+  // -- 스크롤 래퍼 --
+  &__ScrollWrap {
+    overflow-x: auto;
+    overflow-y: hidden;
+
+    // 스크롤바 스타일
+    &::-webkit-scrollbar {
+      height: 8px;
+    }
+    &::-webkit-scrollbar-track {
+      background: $color-surface;
+    }
+    &::-webkit-scrollbar-thumb {
+      background: $color-border;
+      border-radius: 4px;
+
+      &:hover {
+        background: $color-text-tertiary;
+      }
+    }
+  }
+
+  // -- 내부 (고정 폭) --
+  &__Inner {
+    min-width: 100%;
   }
 
   // -- 월 헤더 --
@@ -85,19 +126,30 @@
     display: flex;
     border-bottom: 1px solid $color-border;
     background: $color-surface;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+
+    .EpicTimeline__NameCol {
+      background: $color-surface;
+    }
   }
 
   &__NameCol {
     width: 200px;
+    min-width: 200px;
     flex-shrink: 0;
     border-right: 1px solid $color-border;
+    background: $color-bg;
+    position: sticky;
+    left: 0;
+    z-index: 6;
   }
 
   &__TimelineCol {
-    flex: 1;
     position: relative;
     height: 32px;
-    overflow: hidden;
+    flex-shrink: 0;
   }
 
   &__Month {
@@ -112,6 +164,11 @@
     color: $color-text-secondary;
     border-left: 1px solid $color-border;
     white-space: nowrap;
+
+    &--year {
+      font-weight: $font-weight-semibold;
+      color: $color-text;
+    }
   }
 
   // -- 스프린트 라벨 행 --
@@ -121,6 +178,10 @@
     background: $color-surface;
     position: relative;
     z-index: 5;
+
+    .EpicTimeline__NameCol {
+      background: $color-surface;
+    }
   }
 
   &__SprintRowLabel {
@@ -135,8 +196,8 @@
   }
 
   &__SprintRowTimeline {
-    flex: 1;
     position: relative;
+    flex-shrink: 0;
   }
 
   &__SprintLabel {
@@ -278,6 +339,8 @@
   &__Body {
     position: relative;
     min-height: 100px;
+    background: $color-bg;
+    isolation: isolate; // z-index 스태킹 컨텍스트 확립
   }
 
   // -- Sprint 배경 구간 --
@@ -285,9 +348,8 @@
     position: absolute;
     top: 0;
     bottom: 0;
-    left: 200px;
-    right: 0;
     pointer-events: none;
+    z-index: 1;
   }
 
   &__SprintRange {
@@ -331,11 +393,16 @@
 
   &:hover {
     background: $color-surface;
+
+    .EpicBar__Info {
+      background: $color-surface;
+    }
   }
 
-  // -- 왼쪽 정보 영역 --
+  // -- 왼쪽 정보 영역 (sticky) --
   &__Info {
     width: 200px;
+    min-width: 200px;
     flex-shrink: 0;
     display: flex;
     align-items: center;
@@ -343,6 +410,10 @@
     padding: $space-2 $space-3;
     border-right: 1px solid $color-border;
     overflow: hidden;
+    background: $color-bg;
+    position: sticky;
+    left: 0;
+    z-index: 3;
   }
 
   &__Color {
@@ -386,20 +457,11 @@
     }
   }
 
-  &__TaskCount {
-    font-size: 10px;
-    color: $color-text-tertiary;
-    white-space: nowrap;
-    flex-shrink: 0;
-    display: none; // 공간 부족 시 숨김
-  }
-
   // -- 오른쪽 타임라인 바 --
   &__Timeline {
-    flex: 1;
     position: relative;
     height: 28px;
-    margin: 0 $space-2;
+    flex-shrink: 0;
   }
 
   &__Bar {
