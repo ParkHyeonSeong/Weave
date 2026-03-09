@@ -46,7 +46,11 @@ const DocRefNode = Node.create({
       dom.contentEditable = 'false';
       dom.textContent = node.attrs.title;
       dom.title = `${node.attrs.canvasName} > ${node.attrs.title}`;
-      return { dom };
+      return {
+        dom,
+        selectNode() { dom.classList.add('ProseMirror-selectednode'); },
+        deselectNode() { dom.classList.remove('ProseMirror-selectednode'); },
+      };
     };
   },
 

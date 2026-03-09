@@ -145,6 +145,29 @@
           overflow-wrap: break-word;
           word-break: break-word;
           position: relative;
+          // 인라인 칩(task-ref, doc-ref 등) 셀 내 개행
+          .task-ref,
+          .doc-ref,
+          .issue-ref {
+            display: inline-block;
+            max-width: 100%;
+            white-space: normal;
+            word-break: break-all;
+            line-height: 1.6;
+            border: 1px solid $color-border;
+            border-radius: 4px;
+            padding: 2px 6px;
+
+            &::before {
+              vertical-align: middle;
+              margin-right: 3px;
+            }
+
+            .ref-chip__badge {
+              vertical-align: middle;
+              margin-left: 2px;
+            }
+          }
         }
         th {
           background: $color-surface;
@@ -249,6 +272,12 @@
         &:hover {
           border-color: $color-primary;
         }
+
+        // 노드 선택 표시 (클릭 시)
+        &.ProseMirror-selectednode {
+          border-color: $color-primary;
+          box-shadow: 0 0 0 2px rgba($color-primary, 0.2);
+        }
       }
 
       // 문서 레퍼런스 인라인 칩
@@ -280,6 +309,11 @@
         }
 
         &:hover { border-color: $color-ref-doc; }
+
+        &.ProseMirror-selectednode {
+          border-color: $color-ref-doc;
+          box-shadow: 0 0 0 2px rgba($color-ref-doc, 0.2);
+        }
       }
 
       // 이슈 레퍼런스 인라인 칩
@@ -311,6 +345,11 @@
         }
 
         &:hover { border-color: $color-ref-issue; }
+
+        &.ProseMirror-selectednode {
+          border-color: $color-ref-issue;
+          box-shadow: 0 0 0 2px rgba($color-ref-issue, 0.2);
+        }
       }
 
       // Ref 상태 뱃지 (Confluence 스타일)

@@ -58,7 +58,11 @@ const IssueRefNode = Node.create({
       badge.setAttribute('data-ref-badge', 'true');
       dom.appendChild(badge);
 
-      return { dom };
+      return {
+        dom,
+        selectNode() { dom.classList.add('ProseMirror-selectednode'); },
+        deselectNode() { dom.classList.remove('ProseMirror-selectednode'); },
+      };
     };
   },
 

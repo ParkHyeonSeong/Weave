@@ -164,9 +164,6 @@ export default function SidebarCanvases({ onCreateCanvas }) {
     <>
       <div className="Sidebar__SectionHeader">
         <span className="Sidebar__SectionLabel">Canvases</span>
-        <button className="Sidebar__SectionAddBtn" onClick={onCreateCanvas} title="Create Canvas">
-          <Plus size={14} />
-        </button>
       </div>
 
       <div className="Sidebar__Branches">

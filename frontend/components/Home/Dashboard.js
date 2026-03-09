@@ -3,7 +3,6 @@ import { LayoutDashboard } from 'lucide-react';
 import TaskSummary from './DashboardWidgets/TaskSummary';
 import ActiveSprints from './DashboardWidgets/ActiveSprints';
 import RecentItems from './DashboardWidgets/RecentItems';
-import UnreadMessages from './DashboardWidgets/UnreadMessages';
 import AIChat from './AIChat/AIChat';
 
 const AI_PANEL_MIN_WIDTH = 320;
@@ -61,7 +60,6 @@ export default function Dashboard() {
             <TaskSummary />
             <ActiveSprints />
             <RecentItems />
-            <UnreadMessages />
           </div>
         </div>
       </div>

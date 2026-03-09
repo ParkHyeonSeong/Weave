@@ -41,7 +41,9 @@ const VIEW_MODES = [
   { key: 'quarter', label: 'Quarter', pxPerDay: 1.5 },
 ];
 
-const NAME_COL_WIDTH = 200;
+const DEFAULT_nameColWidth = 400;
+const MIN_nameColWidth = 200;
+const MAX_nameColWidth = 600;
 
 export default function EpicTimeline({ branchId, onSelectEpic }) {
   const [epics, setEpics] = useState([]);
@@ -52,14 +54,34 @@ export default function EpicTimeline({ branchId, onSelectEpic }) {
   const [sprintPopover, setSprintPopover] = useState(null);
   const [showDone, setShowDone] = useState(false);
   const [activeId, setActiveId] = useState(null);
+  const [nameColWidth, setNameColWidth] = useState(DEFAULT_nameColWidth);
   const popoverRef = useRef(null);
   const scrollRef = useRef(null);
   const didScroll = useRef(false);
+  const resizeRef = useRef(null);
 
   // DnD 센서: 5px 이동 후 드래그 시작 (클릭과 구분)
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
+
+  // 컬럼 리사이즈 핸들러
+  const handleResizeStart = useCallback((e) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = nameColWidth;
+
+    const onMove = (ev) => {
+      const newWidth = Math.min(MAX_nameColWidth, Math.max(MIN_nameColWidth, startWidth + ev.clientX - startX));
+      setNameColWidth(newWidth);
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [nameColWidth]);
 
   useEffect(() => {
     fetchData();
@@ -183,10 +205,17 @@ export default function EpicTimeline({ branchId, onSelectEpic }) {
   // 드래그 중인 에픽
   const activeEpic = activeId ? filteredEpics.find((e) => String(e.epic_id) === activeId) : null;
 
-  // 드래그 완료 -> 순서 저장
+  // 드래그 시작 -> 스크롤 잠금
+  const handleDragStart = ({ active }) => {
+    setActiveId(active.id);
+    if (scrollRef.current) scrollRef.current.style.overflowX = 'hidden';
+  };
+
+  // 드래그 완료 -> 스크롤 복원 + 순서 저장
   const handleDragEnd = async (event) => {
     const { active, over } = event;
     setActiveId(null);
+    if (scrollRef.current) scrollRef.current.style.overflowX = 'auto';
     if (!over || active.id === over.id) return;
 
     const oldIndex = filteredEpics.findIndex((e) => String(e.epic_id) === active.id);
@@ -246,11 +275,13 @@ export default function EpicTimeline({ branchId, onSelectEpic }) {
         <div className="EpicTimeline__Container">
           {/* 스크롤 가능 영역 */}
           <div className="EpicTimeline__ScrollWrap" ref={scrollRef}>
-            <div className="EpicTimeline__Inner" style={{ width: NAME_COL_WIDTH + timelineWidth }}>
+            <div className="EpicTimeline__Inner" style={{ width: nameColWidth + timelineWidth }}>
 
               {/* 월 헤더 */}
               <div className="EpicTimeline__Header">
-                <div className="EpicTimeline__NameCol" />
+                <div className="EpicTimeline__NameCol" style={{ width: nameColWidth, minWidth: nameColWidth }}>
+                  <div className="EpicTimeline__ResizeHandle" onMouseDown={handleResizeStart} />
+                </div>
                 <div className="EpicTimeline__TimelineCol" style={{ width: timelineWidth }}>
                   {headerLabels.map((m, i) => (
                     <div
@@ -267,7 +298,7 @@ export default function EpicTimeline({ branchId, onSelectEpic }) {
               {/* 스프린트 라벨 행 */}
               {sprintBars.length > 0 && (
                 <div className="EpicTimeline__SprintRow">
-                  <div className="EpicTimeline__NameCol">
+                  <div className="EpicTimeline__NameCol" style={{ width: nameColWidth, minWidth: nameColWidth }}>
                     <span className="EpicTimeline__SprintRowLabel">Sprints</span>
                   </div>
                   <div
@@ -324,7 +355,7 @@ export default function EpicTimeline({ branchId, onSelectEpic }) {
               {/* 에픽 행 */}
               <div className="EpicTimeline__Body">
                 {/* Sprint 구간 배경 */}
-                <div className="EpicTimeline__SprintBg" style={{ left: NAME_COL_WIDTH, width: timelineWidth }}>
+                <div className="EpicTimeline__SprintBg" style={{ left: nameColWidth, width: timelineWidth }}>
                   {sprints
                     .filter((s) => s.start_date && s.end_date)
                     .map((s) => {
@@ -343,7 +374,7 @@ export default function EpicTimeline({ branchId, onSelectEpic }) {
 
                 {/* 오늘 마커 */}
                 {todayPx != null && (
-                  <div className="EpicTimeline__Today" style={{ left: NAME_COL_WIDTH + todayPx }}>
+                  <div className="EpicTimeline__Today" style={{ left: nameColWidth + todayPx }}>
                     <div className="EpicTimeline__TodayLine" />
                   </div>
                 )}
@@ -351,8 +382,12 @@ export default function EpicTimeline({ branchId, onSelectEpic }) {
                 {/* DnD 영역 */}
                 <DndContext
                   sensors={sensors}
-                  onDragStart={({ active }) => setActiveId(active.id)}
+                  onDragStart={handleDragStart}
                   onDragEnd={handleDragEnd}
+                  onDragCancel={() => {
+                    setActiveId(null);
+                    if (scrollRef.current) scrollRef.current.style.overflowX = 'auto';
+                  }}
                 >
                   <SortableContext
                     items={filteredEpics.map((e) => String(e.epic_id))}
@@ -364,6 +399,7 @@ export default function EpicTimeline({ branchId, onSelectEpic }) {
                         epic={epic}
                         getPosition={getPosition}
                         timelineWidth={timelineWidth}
+                        nameColWidth={nameColWidth}
                         onClick={() => onSelectEpic(epic)}
                       />
                     ))}
@@ -374,6 +410,7 @@ export default function EpicTimeline({ branchId, onSelectEpic }) {
                         epic={activeEpic}
                         getPosition={getPosition}
                         timelineWidth={timelineWidth}
+                        nameColWidth={nameColWidth}
                         isOverlay
                       />
                     )}

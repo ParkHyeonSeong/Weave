@@ -136,14 +136,28 @@
   }
 
   &__NameCol {
-    width: 200px;
-    min-width: 200px;
+    position: sticky;
+    left: 0;
     flex-shrink: 0;
     border-right: 1px solid $color-border;
     background: $color-bg;
-    position: sticky;
-    left: 0;
     z-index: 6;
+  }
+
+  &__ResizeHandle {
+    position: absolute;
+    top: 0;
+    right: -3px;
+    width: 6px;
+    height: 100%;
+    cursor: col-resize;
+    z-index: 7;
+
+    &:hover,
+    &:active {
+      background: $color-primary;
+      opacity: 0.3;
+    }
   }
 
   &__TimelineCol {
@@ -432,8 +446,6 @@
 
   // -- 왼쪽 정보 영역 (sticky) --
   &__Info {
-    width: 200px;
-    min-width: 200px;
     flex-shrink: 0;
     display: flex;
     align-items: center;

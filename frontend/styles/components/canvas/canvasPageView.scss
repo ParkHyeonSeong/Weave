@@ -303,6 +303,28 @@
         vertical-align: top;
         overflow-wrap: break-word;
         word-break: break-word;
+        .task-ref,
+        .doc-ref,
+        .issue-ref {
+          display: inline-block;
+          max-width: 100%;
+          white-space: normal;
+          word-break: break-all;
+          line-height: 1.6;
+          border: 1px solid $color-border;
+          border-radius: 4px;
+          padding: 2px 6px;
+
+          &::before {
+            vertical-align: middle;
+            margin-right: 3px;
+          }
+
+          .ref-chip__badge {
+            vertical-align: middle;
+            margin-left: 2px;
+          }
+        }
       }
       th {
         background: $color-surface;

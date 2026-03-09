@@ -8,7 +8,7 @@ const STATUS_LABELS = {
   done: 'Done',
 };
 
-export default function EpicBar({ epic, getPosition, timelineWidth, onClick, isOverlay }) {
+export default function EpicBar({ epic, getPosition, timelineWidth, nameColWidth, onClick, isOverlay }) {
   const {
     attributes,
     listeners,
@@ -43,7 +43,7 @@ export default function EpicBar({ epic, getPosition, timelineWidth, onClick, isO
       style={style}
       onClick={onClick}
     >
-      <div className="EpicBar__Info">
+      <div className="EpicBar__Info" style={{ width: nameColWidth, minWidth: nameColWidth }}>
         <div className="EpicBar__DragHandle" {...attributes} {...listeners}>
           <GripVertical size={14} />
         </div>

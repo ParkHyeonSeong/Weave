@@ -8,8 +8,7 @@ import Placeholder from '@tiptap/extension-placeholder';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import { Table } from '@tiptap/extension-table';
 import { TableRow } from '@tiptap/extension-table-row';
-import { TableCellWithBgColor } from './extensions/TableCellExtension';
-import { TableHeader } from '@tiptap/extension-table-header';
+import { TableCellWithBgColor, TableHeaderWithBgColor } from './extensions/TableCellExtension';
 import Underline from '@tiptap/extension-underline';
 import TextAlign from '@tiptap/extension-text-align';
 import Highlight from '@tiptap/extension-highlight';
@@ -58,7 +57,7 @@ export default function CanvasEditor({ content, onChange, canvasId }) {
     Table.configure({ resizable: true }),
     TableRow,
     TableCellWithBgColor,
-    TableHeader,
+    TableHeaderWithBgColor,
     Underline,
     TextAlign.configure({
       types: ['heading', 'paragraph', 'image'],

@@ -83,6 +83,7 @@
 
 // Recent Items
 .RecentItems {
+  grid-column: 1 / -1;
   &__List {
     display: flex;
     flex-direction: column;
