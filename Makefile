@@ -1,4 +1,4 @@
-.PHONY: up down build restart logs logs-backend logs-frontend ps clean db-shell \
+.PHONY: up down build restart logs logs-backend logs-frontend ps clean reset db-shell \
        prod prod-build prod-down prod-logs prod-ps ssl-init ssl-renew
 
 # -- Primary commands ------------------------------------------------------
@@ -6,8 +6,8 @@
 up:                    ## Start all services
 	docker compose up -d
 
-up-build:              ## Build and start all services
-	docker compose up -d --build
+up-build:              ## Build and start all services (renews node_modules volume)
+	docker compose up -d --build --renew-anon-volumes
 
 down:                  ## Stop all services
 	docker compose down
@@ -86,6 +86,10 @@ clean:                 ## Stop services and remove volumes
 
 clean-all:             ## Stop services, remove volumes and images
 	docker compose down -v --rmi local
+
+reset:                 ## Full reset: remove everything and rebuild from scratch
+	docker compose down -v --rmi local
+	docker compose up -d --build
 
 # -- Help ------------------------------------------------------------------
 

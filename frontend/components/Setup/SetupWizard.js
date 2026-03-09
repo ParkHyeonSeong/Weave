@@ -128,170 +128,176 @@ export default function SetupWizard() {
           ))}
         </div>
 
-        {/* Step 1: 워크스페이스 이름 */}
-        {step === 1 && (
-          <div className="Setup__Content">
-            <div className="Setup__ContentHeader">
-              <Building2 size={20} className="Setup__ContentIcon" />
-              <h2 className="Setup__ContentTitle">Workspace Name</h2>
-            </div>
-            <p className="Setup__ContentDesc">
-              Enter your team or company name. This will be displayed throughout the app.
-            </p>
-            <div className="Setup__Field">
-              <div className="Setup__InputWrap">
-                <Building2 size={16} className="Setup__InputIcon" />
-                <input
-                  type="text"
-                  className="Setup__Input"
-                  placeholder="e.g., Acme Corp"
-                  value={workspaceName}
-                  onChange={(e) => setWorkspaceName(e.target.value)}
-                  autoFocus
-                />
+        <form onSubmit={(e) => {
+          e.preventDefault();
+          if (step < TOTAL_STEPS) handleNext();
+          else handleSubmit();
+        }}>
+          {/* Step 1: 워크스페이스 이름 */}
+          {step === 1 && (
+            <div className="Setup__Content">
+              <div className="Setup__ContentHeader">
+                <Building2 size={20} className="Setup__ContentIcon" />
+                <h2 className="Setup__ContentTitle">Workspace Name</h2>
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* Step 2: 등록 정책 */}
-        {step === 2 && (
-          <div className="Setup__Content">
-            <div className="Setup__ContentHeader">
-              <Users size={20} className="Setup__ContentIcon" />
-              <h2 className="Setup__ContentTitle">Registration Policy</h2>
-            </div>
-            <p className="Setup__ContentDesc">
-              Choose who can create an account on this workspace.
-            </p>
-            <div className="Setup__PolicyCards">
-              <button
-                type="button"
-                className={`Setup__PolicyCard ${registrationPolicy === 'public' ? 'Setup__PolicyCard--active' : ''}`}
-                onClick={() => setRegistrationPolicy('public')}
-              >
-                <Users size={24} className="Setup__PolicyIcon" />
-                <strong className="Setup__PolicyTitle">Public</strong>
-                <p className="Setup__PolicyDesc">Anyone can sign up freely.</p>
-              </button>
-              <button
-                type="button"
-                className={`Setup__PolicyCard ${registrationPolicy === 'private' ? 'Setup__PolicyCard--active' : ''}`}
-                onClick={() => setRegistrationPolicy('private')}
-              >
-                <Shield size={24} className="Setup__PolicyIcon" />
-                <strong className="Setup__PolicyTitle">Private</strong>
-                <p className="Setup__PolicyDesc">Admin must approve new members.</p>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Step 3: 관리자 계정 */}
-        {step === 3 && (
-          <div className="Setup__Content">
-            <div className="Setup__ContentHeader">
-              <Shield size={20} className="Setup__ContentIcon" />
-              <h2 className="Setup__ContentTitle">Admin Account</h2>
-            </div>
-            <p className="Setup__ContentDesc">
-              Create the first administrator account for this workspace.
-            </p>
-            <div className="Setup__Form">
+              <p className="Setup__ContentDesc">
+                Enter your team or company name. This will be displayed throughout the app.
+              </p>
               <div className="Setup__Field">
-                <label className="Setup__Label" htmlFor="setup-username">Name</label>
                 <div className="Setup__InputWrap">
-                  <User size={16} className="Setup__InputIcon" />
+                  <Building2 size={16} className="Setup__InputIcon" />
                   <input
-                    id="setup-username"
                     type="text"
                     className="Setup__Input"
-                    placeholder="Your name"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    autoComplete="name"
+                    placeholder="e.g., Acme Corp"
+                    value={workspaceName}
+                    onChange={(e) => setWorkspaceName(e.target.value)}
                     autoFocus
                   />
                 </div>
               </div>
+            </div>
+          )}
 
-              <div className="Setup__Field">
-                <label className="Setup__Label" htmlFor="setup-email">Email</label>
-                <div className="Setup__InputWrap">
-                  <Mail size={16} className="Setup__InputIcon" />
-                  <input
-                    id="setup-email"
-                    type="email"
-                    className="Setup__Input"
-                    placeholder="admin@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    autoComplete="email"
-                  />
-                </div>
+          {/* Step 2: 등록 정책 */}
+          {step === 2 && (
+            <div className="Setup__Content">
+              <div className="Setup__ContentHeader">
+                <Users size={20} className="Setup__ContentIcon" />
+                <h2 className="Setup__ContentTitle">Registration Policy</h2>
               </div>
-
-              <div className="Setup__Field">
-                <label className="Setup__Label" htmlFor="setup-password">Password</label>
-                <div className="Setup__InputWrap">
-                  <Lock size={16} className="Setup__InputIcon" />
-                  <input
-                    id="setup-password"
-                    type={showPassword ? 'text' : 'password'}
-                    className="Setup__Input"
-                    placeholder="At least 6 characters"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    autoComplete="new-password"
-                  />
-                  <button
-                    type="button"
-                    className="Setup__TogglePassword"
-                    onClick={() => setShowPassword(!showPassword)}
-                    tabIndex={-1}
-                  >
-                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
-                </div>
+              <p className="Setup__ContentDesc">
+                Choose who can create an account on this workspace.
+              </p>
+              <div className="Setup__PolicyCards">
+                <button
+                  type="button"
+                  className={`Setup__PolicyCard ${registrationPolicy === 'public' ? 'Setup__PolicyCard--active' : ''}`}
+                  onClick={() => setRegistrationPolicy('public')}
+                >
+                  <Users size={24} className="Setup__PolicyIcon" />
+                  <strong className="Setup__PolicyTitle">Public</strong>
+                  <p className="Setup__PolicyDesc">Anyone can sign up freely.</p>
+                </button>
+                <button
+                  type="button"
+                  className={`Setup__PolicyCard ${registrationPolicy === 'private' ? 'Setup__PolicyCard--active' : ''}`}
+                  onClick={() => setRegistrationPolicy('private')}
+                >
+                  <Shield size={24} className="Setup__PolicyIcon" />
+                  <strong className="Setup__PolicyTitle">Private</strong>
+                  <p className="Setup__PolicyDesc">Admin must approve new members.</p>
+                </button>
               </div>
+            </div>
+          )}
 
-              <div className="Setup__Field">
-                <label className="Setup__Label" htmlFor="setup-confirm">Confirm Password</label>
-                <div className="Setup__InputWrap">
-                  <Lock size={16} className="Setup__InputIcon" />
-                  <input
-                    id="setup-confirm"
-                    type={showPassword ? 'text' : 'password'}
-                    className="Setup__Input"
-                    placeholder="Confirm password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    autoComplete="new-password"
-                  />
+          {/* Step 3: 관리자 계정 */}
+          {step === 3 && (
+            <div className="Setup__Content">
+              <div className="Setup__ContentHeader">
+                <Shield size={20} className="Setup__ContentIcon" />
+                <h2 className="Setup__ContentTitle">Admin Account</h2>
+              </div>
+              <p className="Setup__ContentDesc">
+                Create the first administrator account for this workspace.
+              </p>
+              <div className="Setup__Form">
+                <div className="Setup__Field">
+                  <label className="Setup__Label" htmlFor="setup-username">Name</label>
+                  <div className="Setup__InputWrap">
+                    <User size={16} className="Setup__InputIcon" />
+                    <input
+                      id="setup-username"
+                      type="text"
+                      className="Setup__Input"
+                      placeholder="Your name"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      autoComplete="name"
+                      autoFocus
+                    />
+                  </div>
+                </div>
+
+                <div className="Setup__Field">
+                  <label className="Setup__Label" htmlFor="setup-email">Email</label>
+                  <div className="Setup__InputWrap">
+                    <Mail size={16} className="Setup__InputIcon" />
+                    <input
+                      id="setup-email"
+                      type="email"
+                      className="Setup__Input"
+                      placeholder="admin@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      autoComplete="email"
+                    />
+                  </div>
+                </div>
+
+                <div className="Setup__Field">
+                  <label className="Setup__Label" htmlFor="setup-password">Password</label>
+                  <div className="Setup__InputWrap">
+                    <Lock size={16} className="Setup__InputIcon" />
+                    <input
+                      id="setup-password"
+                      type={showPassword ? 'text' : 'password'}
+                      className="Setup__Input"
+                      placeholder="At least 6 characters"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      autoComplete="new-password"
+                    />
+                    <button
+                      type="button"
+                      className="Setup__TogglePassword"
+                      onClick={() => setShowPassword(!showPassword)}
+                      tabIndex={-1}
+                    >
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="Setup__Field">
+                  <label className="Setup__Label" htmlFor="setup-confirm">Confirm Password</label>
+                  <div className="Setup__InputWrap">
+                    <Lock size={16} className="Setup__InputIcon" />
+                    <input
+                      id="setup-confirm"
+                      type={showPassword ? 'text' : 'password'}
+                      className="Setup__Input"
+                      placeholder="Confirm password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      autoComplete="new-password"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* 하단 버튼 */}
-        <div className="Setup__Actions">
-          {step > 1 && (
-            <button type="button" className="Setup__BackBtn" onClick={handleBack}>
-              <ArrowLeft size={16} /> Back
-            </button>
-          )}
-          <div className="Setup__ActionsSpacer" />
-          {step < TOTAL_STEPS ? (
-            <button type="button" className="Setup__NextBtn" onClick={handleNext}>
-              Next <ArrowRight size={16} />
-            </button>
-          ) : (
-            <button type="button" className="Setup__SubmitBtn" onClick={handleSubmit} disabled={loading}>
-              {loading ? <Loader2 size={18} className="Setup__Spinner" /> : 'Complete Setup'}
-            </button>
-          )}
-        </div>
+          {/* 하단 버튼 */}
+          <div className="Setup__Actions">
+            {step > 1 && (
+              <button type="button" className="Setup__BackBtn" onClick={handleBack}>
+                <ArrowLeft size={16} /> Back
+              </button>
+            )}
+            <div className="Setup__ActionsSpacer" />
+            {step < TOTAL_STEPS ? (
+              <button type="submit" className="Setup__NextBtn">
+                Next <ArrowRight size={16} />
+              </button>
+            ) : (
+              <button type="submit" className="Setup__SubmitBtn" disabled={loading}>
+                {loading ? <Loader2 size={18} className="Setup__Spinner" /> : 'Complete Setup'}
+              </button>
+            )}
+          </div>
+        </form>
       </div>
 
       <Alert
