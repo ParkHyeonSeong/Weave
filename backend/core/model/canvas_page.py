@@ -136,7 +136,7 @@ async def search_for_chat(user_id: int, keyword: str, db: AsyncSession):
         INNER JOIN canvas_member cm ON c.canvas_id = cm.canvas_id
         WHERE cm.user_id = :user_id
           AND p.is_archived = FALSE
-          AND p.title ILIKE :keyword
+          AND (p.title ILIKE :keyword OR p.content ILIKE :keyword)
         ORDER BY p.updated_at DESC
         LIMIT 10
     """), {'user_id': user_id, 'keyword': f'%{keyword}%'})
