@@ -1,3 +1,4 @@
+import json
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,7 +32,7 @@ async def find_by_id(epic_id: int, db: AsyncSession):
     result = await db.execute(text("""
         SELECT epic_id, branch_id, epic_name, description,
                status, color, start_date, due_date, sort_order,
-               created_by, created_at, updated_at
+               flow_positions, created_by, created_at, updated_at
         FROM epic
         WHERE epic_id = :epic_id
     """), {'epic_id': epic_id})
@@ -58,7 +59,7 @@ async def find_by_branch(branch_id: int, db: AsyncSession):
 
 async def update(epic_id: int, fields: dict, db: AsyncSession):
     """Epic 수정 (동적 필드)"""
-    allowed = {'epic_name', 'description', 'status', 'color', 'start_date', 'due_date', 'sort_order'}
+    allowed = {'epic_name', 'description', 'status', 'color', 'start_date', 'due_date', 'sort_order', 'flow_positions'}
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
         return
@@ -69,6 +70,9 @@ async def update(epic_id: int, fields: dict, db: AsyncSession):
     for k, v in updates.items():
         if isinstance(v, type(text(''))):
             set_parts.append(f'{k} = NOW()')
+        elif k == 'flow_positions':
+            set_parts.append(f'{k} = CAST(:{k} AS jsonb)')
+            params[k] = json.dumps(v)
         else:
             set_parts.append(f'{k} = :{k}')
             params[k] = v

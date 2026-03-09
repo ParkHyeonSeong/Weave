@@ -1,0 +1,307 @@
+@use '../../variables' as *;
+
+// -- EpicFlow (메인 컨테이너) -------------------------------------------------
+.EpicFlow {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 140px);
+  overflow: hidden;
+
+  &__Header {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid $color-border;
+  }
+
+  &__SelectorWrap {
+    position: relative;
+  }
+
+  &__Selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: $color-surface;
+    border: 1px solid $color-border;
+    border-radius: 6px;
+    color: $color-text;
+    font-size: 13px;
+    cursor: pointer;
+    transition: border-color 150ms;
+
+    &:hover {
+      border-color: $color-text-secondary;
+    }
+  }
+
+  &__SelectorPlaceholder {
+    color: $color-text-secondary;
+  }
+
+  &__EpicDot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  &__Dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    min-width: 280px;
+    background: $color-surface;
+    border: 1px solid $color-border;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    z-index: 100;
+    padding: 4px;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+
+  &__DropdownItem {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 6px;
+    color: $color-text;
+    font-size: 13px;
+    text-align: left;
+    transition: background 100ms;
+
+    &:hover {
+      background: $color-surface-hover;
+    }
+
+    &--active {
+      background: $color-surface-hover;
+    }
+  }
+
+  &__TaskCount {
+    margin-left: auto;
+    color: $color-text-secondary;
+    font-size: 11px;
+  }
+
+  &__DropdownEmpty {
+    padding: 12px;
+    color: $color-text-secondary;
+    font-size: 13px;
+    text-align: center;
+  }
+
+  &__Empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 8px;
+    color: $color-text-secondary;
+    font-size: 14px;
+
+    svg {
+      opacity: 0.3;
+    }
+  }
+
+  &__EmptySub {
+    font-size: 12px;
+    opacity: 0.6;
+  }
+
+  &__Canvas {
+    flex: 1;
+    min-height: 0;
+
+    .react-flow__node {
+      cursor: grab;
+
+      &:active {
+        cursor: grabbing;
+      }
+    }
+
+    .react-flow__edge {
+      cursor: pointer;
+    }
+
+    .react-flow__controls {
+      background: $color-surface;
+      border: 1px solid $color-border;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+
+      button {
+        background: $color-surface;
+        border-bottom: 1px solid $color-border;
+        color: $color-text;
+        width: 28px;
+        height: 28px;
+
+        &:hover {
+          background: $color-surface-hover;
+        }
+
+        svg {
+          fill: $color-text;
+        }
+      }
+    }
+
+    .react-flow__background {
+      background: $color-bg;
+    }
+  }
+}
+
+// -- TaskNode (커스텀 노드) ---------------------------------------------------
+.TaskNode {
+  &__Card {
+    background: $color-surface;
+    border: 1px solid $color-border;
+    border-radius: 8px;
+    padding: 10px 14px;
+    min-width: 180px;
+    max-width: 240px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    transition: box-shadow 150ms, border-color 150ms;
+
+    &:hover {
+      border-color: $color-text-secondary;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    }
+  }
+
+  &__Header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+
+  &__DisplayId {
+    font-size: 11px;
+    color: $color-text-secondary;
+    font-weight: 500;
+  }
+
+  &__Title {
+    font-size: 13px;
+    color: $color-text;
+    line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    word-break: break-word;
+  }
+
+  &__Footer {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  &__StatusDot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  &__Avatar {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: $color-surface-hover;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    color: $color-text;
+    font-weight: 600;
+    margin-left: auto;
+    overflow: hidden;
+  }
+
+  &__AvatarImg {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  &__Handle {
+    width: 8px;
+    height: 8px;
+    background: $color-text-secondary;
+    border: 2px solid $color-surface;
+    transition: background 150ms;
+
+    &:hover {
+      background: $color-primary;
+    }
+  }
+}
+
+// -- FlowToolbar (우상단 패널) ------------------------------------------------
+.FlowToolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: $color-surface;
+  border: 1px solid $color-border;
+  border-radius: 8px;
+  padding: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+
+  &__EdgeType {
+    display: flex;
+    gap: 2px;
+  }
+
+  &__Btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 28px;
+    border-radius: 4px;
+    color: $color-text-secondary;
+    transition: background 100ms, color 100ms;
+
+    &:hover {
+      background: $color-surface-hover;
+      color: $color-text;
+    }
+
+    &--active {
+      background: $color-surface-hover;
+      color: $color-primary;
+    }
+  }
+
+  &__Legend {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-top: 4px;
+    border-top: 1px solid $color-border;
+  }
+
+  &__LegendItem {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: $color-text-secondary;
+  }
+}

@@ -33,6 +33,12 @@ async def get_epic_tasks(branch_id: int, epic_id: int, request: Request,
     return await epic_controller.get_tasks(epic_id, branch_id, request, session)
 
 
+@router.get("/{epic_id}", summary="Epic 단건 조회", dependencies=[Depends(require_login)])
+async def get_epic(branch_id: int, epic_id: int, request: Request,
+                   session: AsyncSession = Depends(db.session)):
+    return await epic_controller.get_detail(epic_id, branch_id, request, session)
+
+
 @router.patch("/{epic_id}", summary="Epic 수정", dependencies=[Depends(require_login)])
 async def update_epic(branch_id: int, epic_id: int, body: epic_schema.EpicUpdate,
                       request: Request, session: AsyncSession = Depends(db.session)):

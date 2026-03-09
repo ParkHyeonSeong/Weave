@@ -63,6 +63,7 @@ import "@/styles/components/branch/createIssuePage.scss";
 import "@/styles/components/myTasks/myTasks.scss";
 import "@/styles/components/layout/toast.scss";
 import "@/styles/components/home/ai-chat.scss";
+import "@/styles/components/branch/epicFlow.scss";
 
 const publicPaths = ['/auth/login', '/setup'];
 const noLayoutPaths = ['/auth/login', '/setup', '/admin'];

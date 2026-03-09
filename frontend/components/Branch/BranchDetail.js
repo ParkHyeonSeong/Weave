@@ -1,19 +1,21 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { axios } from '@/library/_axios';
-import { Zap, ListTodo, Columns3, Archive, Settings } from 'lucide-react';
+import { Zap, ListTodo, Columns3, Workflow, Archive, Settings } from 'lucide-react';
 import TaskList from './Tasks/TaskList';
 import BoardView from './Board/BoardView';
 import EpicTimeline from './Epics/EpicTimeline';
 import ArchiveList from './Archive/ArchiveList';
 import TaskDetailPanel from './Tasks/TaskDetailPanel';
 import EpicDetailPanel from './Epics/EpicDetailPanel';
+import EpicFlow from './Flow/EpicFlow';
 import BranchSettings from './Settings/BranchSettings';
 
 const TABS = [
   { key: 'epics', label: 'Epics', icon: Zap },
   { key: 'tasks', label: 'Tasks', icon: ListTodo },
   { key: 'board', label: 'Board', icon: Columns3 },
+  { key: 'flow', label: 'Flow', icon: Workflow },
   { key: 'archive', label: 'Archive', icon: Archive },
   { key: 'settings', label: 'Settings', icon: Settings },
 ];
@@ -187,6 +189,13 @@ export default function BranchDetail() {
               branchId={branch.branch_id}
               branchKey={branch.key}
               taskTypes={taskTypes}
+              workflowStatuses={workflowStatuses}
+              onSelectTask={handleSelectTask}
+            />
+          )}
+          {activeTab === 'flow' && (
+            <EpicFlow
+              branchId={branch.branch_id}
               workflowStatuses={workflowStatuses}
               onSelectTask={handleSelectTask}
             />

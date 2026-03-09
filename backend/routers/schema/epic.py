@@ -19,6 +19,7 @@ class EpicUpdate(BaseModel):
     color: Optional[str] = None
     start_date: Optional[date] = None
     due_date: Optional[date] = None
+    flow_positions: Optional[dict] = None
 
 
 class EpicReorder(BaseModel):

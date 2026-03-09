@@ -36,6 +36,19 @@ async def get_list(branch_id: int, request: Request, db: AsyncSession):
     return {'status': True, 'epics': epics}
 
 
+async def get_detail(epic_id: int, branch_id: int, request: Request, db: AsyncSession):
+    """Epic 단건 조회"""
+    user_id = request.state.payload.get('user_id')
+    if not await member_model.is_member(branch_id, user_id, db):
+        return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+
+    epic = await epic_model.find_by_id(epic_id, db)
+    if not epic or epic['branch_id'] != branch_id:
+        return {'status': False, 'message': 'EPIC_NOT_FOUND'}
+
+    return {'status': True, 'epic': epic}
+
+
 async def update(epic_id: int, body, branch_id: int, request: Request, db: AsyncSession):
     """Epic 수정"""
     user_id = request.state.payload.get('user_id')
