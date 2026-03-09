@@ -50,6 +50,16 @@ async def update(epic_id: int, body, branch_id: int, request: Request, db: Async
     return {'status': True}
 
 
+async def reorder(body, branch_id: int, request: Request, db: AsyncSession):
+    """Epic 순서 변경"""
+    user_id = request.state.payload.get('user_id')
+    if not await member_model.is_member(branch_id, user_id, db):
+        return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+
+    await epic_model.reorder(branch_id, body.epic_ids, db)
+    return {'status': True}
+
+
 async def delete(epic_id: int, branch_id: int, request: Request, db: AsyncSession):
     """Epic 삭제"""
     user_id = request.state.payload.get('user_id')

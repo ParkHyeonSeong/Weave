@@ -80,6 +80,16 @@ async def update(epic_id: int, fields: dict, db: AsyncSession):
     await db.commit()
 
 
+async def reorder(branch_id: int, epic_ids: list, db: AsyncSession):
+    """Epic 순서 일괄 변경"""
+    for idx, eid in enumerate(epic_ids):
+        await db.execute(text("""
+            UPDATE epic SET sort_order = :sort_order
+            WHERE epic_id = :epic_id AND branch_id = :branch_id
+        """), {'sort_order': idx, 'epic_id': eid, 'branch_id': branch_id})
+    await db.commit()
+
+
 async def delete(epic_id: int, db: AsyncSession):
     """Epic 삭제 (task들의 epic_id = NULL로)"""
     await db.execute(text("""

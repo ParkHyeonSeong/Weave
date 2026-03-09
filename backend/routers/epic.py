@@ -21,6 +21,12 @@ async def list_epics(branch_id: int, request: Request,
     return await epic_controller.get_list(branch_id, request, session)
 
 
+@router.post("/reorder", summary="Epic 순서 변경", dependencies=[Depends(require_login)])
+async def reorder_epics(branch_id: int, body: epic_schema.EpicReorder,
+                        request: Request, session: AsyncSession = Depends(db.session)):
+    return await epic_controller.reorder(body, branch_id, request, session)
+
+
 @router.patch("/{epic_id}", summary="Epic 수정", dependencies=[Depends(require_login)])
 async def update_epic(branch_id: int, epic_id: int, body: epic_schema.EpicUpdate,
                       request: Request, session: AsyncSession = Depends(db.session)):

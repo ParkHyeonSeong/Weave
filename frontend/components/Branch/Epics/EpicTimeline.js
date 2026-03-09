@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { axios } from '@/library/_axios';
 import { Plus } from 'lucide-react';
+import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import EpicBar from './EpicBar';
 import EpicModal from '@/components/modal/EpicModal';
 
@@ -49,9 +51,15 @@ export default function EpicTimeline({ branchId, onSelectEpic }) {
   const [viewMode, setViewMode] = useState('month');
   const [sprintPopover, setSprintPopover] = useState(null);
   const [showDone, setShowDone] = useState(false);
+  const [activeId, setActiveId] = useState(null);
   const popoverRef = useRef(null);
   const scrollRef = useRef(null);
   const didScroll = useRef(false);
+
+  // DnD 센서: 5px 이동 후 드래그 시작 (클릭과 구분)
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+  );
 
   useEffect(() => {
     fetchData();
@@ -167,12 +175,36 @@ export default function EpicTimeline({ branchId, onSelectEpic }) {
     return getPosition(new Date().toISOString());
   }, [getPosition]);
 
-  // 필터 + 정렬: in_progress > todo > done
-  const STATUS_ORDER = { in_progress: 0, todo: 1, done: 2 };
+  // 필터: done 숨기기 (sort_order는 서버에서 이미 적용)
   const filteredEpics = useMemo(() => {
-    const list = showDone ? epics : epics.filter((e) => e.status !== 'done');
-    return [...list].sort((a, b) => (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9));
+    return showDone ? epics : epics.filter((e) => e.status !== 'done');
   }, [epics, showDone]);
+
+  // 드래그 중인 에픽
+  const activeEpic = activeId ? filteredEpics.find((e) => String(e.epic_id) === activeId) : null;
+
+  // 드래그 완료 -> 순서 저장
+  const handleDragEnd = async (event) => {
+    const { active, over } = event;
+    setActiveId(null);
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = filteredEpics.findIndex((e) => String(e.epic_id) === active.id);
+    const newIndex = filteredEpics.findIndex((e) => String(e.epic_id) === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    // 낙관적 업데이트
+    const reordered = arrayMove(filteredEpics, oldIndex, newIndex);
+    setEpics(showDone ? reordered : reordered.concat(epics.filter((e) => e.status === 'done')));
+
+    try {
+      await axios.post(`/branches/${branchId}/epics/reorder`, {
+        epic_ids: reordered.map((e) => e.epic_id),
+      });
+    } catch {
+      fetchData(); // 실패 시 원복
+    }
+  };
 
   if (loading) return null;
 
@@ -316,15 +348,37 @@ export default function EpicTimeline({ branchId, onSelectEpic }) {
                   </div>
                 )}
 
-                {filteredEpics.map((epic) => (
-                  <EpicBar
-                    key={epic.epic_id}
-                    epic={epic}
-                    getPosition={getPosition}
-                    timelineWidth={timelineWidth}
-                    onClick={() => onSelectEpic(epic)}
-                  />
-                ))}
+                {/* DnD 영역 */}
+                <DndContext
+                  sensors={sensors}
+                  onDragStart={({ active }) => setActiveId(active.id)}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext
+                    items={filteredEpics.map((e) => String(e.epic_id))}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    {filteredEpics.map((epic) => (
+                      <EpicBar
+                        key={epic.epic_id}
+                        epic={epic}
+                        getPosition={getPosition}
+                        timelineWidth={timelineWidth}
+                        onClick={() => onSelectEpic(epic)}
+                      />
+                    ))}
+                  </SortableContext>
+                  <DragOverlay dropAnimation={null}>
+                    {activeEpic && (
+                      <EpicBar
+                        epic={activeEpic}
+                        getPosition={getPosition}
+                        timelineWidth={timelineWidth}
+                        isOverlay
+                      />
+                    )}
+                  </DragOverlay>
+                </DndContext>
               </div>
             </div>
           </div>

@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from datetime import date
 from pydantic import BaseModel
 
@@ -19,3 +19,7 @@ class EpicUpdate(BaseModel):
     color: Optional[str] = None
     start_date: Optional[date] = None
     due_date: Optional[date] = None
+
+
+class EpicReorder(BaseModel):
+    epic_ids: List[int]
