@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
+import Head from 'next/head';
 import AdminLayout from '@/components/Admin/AdminLayout';
 import { axios } from '@/library/_axios';
 import { Shield, UserCheck, UserX, UserPlus } from 'lucide-react';
@@ -126,6 +127,9 @@ export default function AdminPage() {
 
   return (
     <AdminLayout>
+      <Head>
+        <title>Admin - Weave</title>
+      </Head>
       <div className="Admin">
         <div className="Admin__Header">
           <Shield size={20} />

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
+import Head from 'next/head';
 import AdminLayout from '@/components/Admin/AdminLayout';
 import { axios } from '@/library/_axios';
 import { Blocks, Bot } from 'lucide-react';
@@ -90,6 +91,9 @@ export default function IntegrationsPage() {
 
   return (
     <AdminLayout>
+      <Head>
+        <title>Integrations - Weave</title>
+      </Head>
       <div className="Admin">
         <div className="Admin__Header">
           <Blocks size={20} />
