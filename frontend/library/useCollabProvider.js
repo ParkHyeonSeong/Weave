@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
+import { getWsBaseURL } from '@/library/_axios';
 
 /**
  * Yjs collaboration provider 관리 훅
@@ -30,15 +31,9 @@ export default function useCollabProvider(canvasId, pageId, user) {
 
     const doc = new Y.Doc();
 
-    // WebSocket URL 구성 (Chat과 동일한 패턴: 브라우저 hostname + 백엔드 포트)
+    // WebSocket URL 구성: axios base URL 기반
     // y-websocket은 `${serverUrl}/${roomname}` 형태로 연결
-    let backendPort = '8000';
-    try {
-      const parsed = new URL(process.env.NEXT_PUBLIC_API_URL || '');
-      backendPort = parsed.port || '8000';
-    } catch {}
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const serverUrl = `${wsProtocol}://${window.location.hostname}:${backendPort}/ws/canvas/${canvasId}/pages`;
+    const serverUrl = `${getWsBaseURL()}/api/ws/canvas/${canvasId}/pages`;
 
     // 쿠키가 cross-port에서 안 붙을 수 있으므로 token을 query param으로도 전달
     const token = document.cookie

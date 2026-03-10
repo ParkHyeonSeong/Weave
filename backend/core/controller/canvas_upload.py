@@ -40,5 +40,5 @@ async def upload_image(canvas_id: int, file: UploadFile, request: Request, db: A
     with open(filepath, 'wb') as f:
         f.write(content)
 
-    image_url = f"/uploads/canvas/{filename}"
+    image_url = f"/api/uploads/canvas/{filename}"
     return {'status': True, 'url': image_url}

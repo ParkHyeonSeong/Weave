@@ -7,8 +7,8 @@ const nextConfig = {
     const apiUrl = process.env.INTERNAL_API_URL || 'http://backend:8000';
     return [
       {
-        source: '/uploads/:path*',
-        destination: `${apiUrl}/uploads/:path*`,
+        source: '/api/uploads/:path*',
+        destination: `${apiUrl}/api/uploads/:path*`,
       },
     ];
   },

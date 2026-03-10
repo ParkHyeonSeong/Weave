@@ -31,12 +31,23 @@ function getBaseURL() {
   }
 }
 
+// WebSocket base URL 생성 (HTTP URL -> WS URL 변환)
+function getWsBaseURL() {
+  const base = getBaseURL();
+  if (!base) {
+    // 프로덕션: same-origin, 프로토콜만 변환
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    return `${wsProtocol}://${window.location.host}`;
+  }
+  return base.replace(/^http/, 'ws');
+}
+
 const api = axios.create({
-  baseURL: getBaseURL(),
+  baseURL: `${getBaseURL()}/api`,
   headers: { 'Content-Type': 'application/json' },
   withCredentials: true,
 });
 
 api.interceptors.response.use(handleResponseFulfilled, handleResponseRejected);
 
-export { api as axios, getBaseURL };
+export { api as axios, getBaseURL, getWsBaseURL };

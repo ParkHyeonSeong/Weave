@@ -147,7 +147,7 @@ export default function AIChat() {
     abortRef.current = controller;
 
     try {
-      const response = await fetch(`${getBaseURL()}/ai/conversations/${activeConversationId}/chat`, {
+      const response = await fetch(`${getBaseURL()}/api/ai/conversations/${activeConversationId}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

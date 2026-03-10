@@ -7,6 +7,7 @@ import CreateBranch from '@/components/modal/CreateBranch';
 import CreateCanvas from '@/components/modal/CreateCanvas';
 import CommandPalette from '@/components/modal/CommandPalette';
 import { requestNotificationPermission, showNotification, playNotificationSound } from '@/library/notification';
+import { getWsBaseURL } from '@/library/_axios';
 import { showToast } from './Toast';
 
 const MESSENGER_MIN_WIDTH = 280;
@@ -211,14 +212,8 @@ export default function Layout({ children }) {
 
     requestNotificationPermission();
 
-    // API URL에서 포트만 추출, 브라우저 hostname 사용 (LAN IP 대응)
-    let backendPort = '10001';
-    try {
-      const parsed = new URL(process.env.NEXT_PUBLIC_API_URL || '');
-      backendPort = parsed.port || '10001';
-    } catch {}
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const wsUrl = `${wsProtocol}://${window.location.hostname}:${backendPort}/ws/chat`;
+    // WebSocket URL: axios base URL 기반으로 생성
+    const wsUrl = `${getWsBaseURL()}/api/ws/chat`;
 
     let reconnectTimer = null;
     let alive = true;

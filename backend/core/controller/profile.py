@@ -91,9 +91,11 @@ async def upload_avatar(file: UploadFile, request: Request, db: AsyncSession):
 
     # 기존 아바타 삭제
     if user.get('avatar_url'):
+        # URL 경로(/api/uploads/...)에서 실제 파일 경로(uploads/...)로 변환
+        rel = user['avatar_url'].replace('/api/uploads/', 'uploads/').lstrip('/')
         old_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-            user['avatar_url'].lstrip('/')
+            rel
         )
         if os.path.exists(old_path):
             os.remove(old_path)
@@ -104,7 +106,7 @@ async def upload_avatar(file: UploadFile, request: Request, db: AsyncSession):
     with open(filepath, 'wb') as f:
         f.write(content)
 
-    avatar_url = f"/uploads/avatars/{filename}"
+    avatar_url = f"/api/uploads/avatars/{filename}"
     await user_model.update_avatar(user_id, avatar_url, db)
 
     return {'status': True, 'avatar_url': avatar_url}

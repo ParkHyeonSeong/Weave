@@ -57,8 +57,9 @@ app = FastAPI(
     title="Weave API",
     description="In-house project management platform",
     version="0.1.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json",
     lifespan=lifespan,
 )
 
@@ -102,46 +103,41 @@ async def auth_middleware(request: Request, call_next):
 
 
 # -- Routers ---------------------------------------------------------------
-app.include_router(auth_router.router, prefix="/auth", tags=["auth"])
-app.include_router(setup_router.router, prefix="/setup", tags=["setup"])
-app.include_router(branch_router.router, prefix="/branches", tags=["branches"])
-app.include_router(chat_router.router, prefix="/chat", tags=["chat"])
-app.include_router(ws_chat_router.router, tags=["websocket"])
-app.include_router(ws_canvas_router.router, tags=["websocket"])
-app.include_router(admin_router.router, prefix="/admin", tags=["admin"])
-app.include_router(sprint_router.router, prefix="/branches/{branch_id}/sprints", tags=["sprints"])
-app.include_router(label_router.router, prefix="/branches/{branch_id}/labels", tags=["labels"])
-app.include_router(epic_router.router, prefix="/branches/{branch_id}/epics", tags=["epics"])
-app.include_router(task_router.router, prefix="/branches/{branch_id}/tasks", tags=["tasks"])
-app.include_router(task_type_config_router.router, prefix="/branches/{branch_id}/task-types", tags=["task-types"])
-app.include_router(profile_router.router, prefix="/profile", tags=["profile"])
-app.include_router(canvas_router.router, prefix="/canvases", tags=["canvases"])
-app.include_router(canvas_page_router.router, prefix="/canvases/{canvas_id}/pages", tags=["canvas-pages"])
-app.include_router(task_issue_router.router, prefix="/branches/{branch_id}/tasks/{task_id}/issues", tags=["task-issues"])
-app.include_router(my_tasks_router.router, prefix="/my-tasks", tags=["my-tasks"])
-app.include_router(ref_status_router.router, prefix="/ref-status", tags=["ref-status"])
-app.include_router(ai_router.router, prefix="/ai", tags=["ai"])
-app.include_router(recent_view_router.router, prefix="/recent-views", tags=["recent-views"])
-app.include_router(workflow_status_router.router, prefix="/branches/{branch_id}/workflow-statuses", tags=["workflow-statuses"])
-app.include_router(custom_field_router.router, prefix="/branches/{branch_id}/task-types/{type_id}/custom-fields", tags=["custom-fields"])
-app.include_router(notification_router.router, prefix="/notifications", tags=["notifications"])
-app.include_router(task_dependency_router.router, prefix="/branches/{branch_id}/dependencies", tags=["dependencies"])
+app.include_router(auth_router.router, prefix="/api/auth", tags=["auth"])
+app.include_router(setup_router.router, prefix="/api/setup", tags=["setup"])
+app.include_router(branch_router.router, prefix="/api/branches", tags=["branches"])
+app.include_router(chat_router.router, prefix="/api/chat", tags=["chat"])
+app.include_router(ws_chat_router.router, prefix="/api", tags=["websocket"])
+app.include_router(ws_canvas_router.router, prefix="/api", tags=["websocket"])
+app.include_router(admin_router.router, prefix="/api/admin", tags=["admin"])
+app.include_router(sprint_router.router, prefix="/api/branches/{branch_id}/sprints", tags=["sprints"])
+app.include_router(label_router.router, prefix="/api/branches/{branch_id}/labels", tags=["labels"])
+app.include_router(epic_router.router, prefix="/api/branches/{branch_id}/epics", tags=["epics"])
+app.include_router(task_router.router, prefix="/api/branches/{branch_id}/tasks", tags=["tasks"])
+app.include_router(task_type_config_router.router, prefix="/api/branches/{branch_id}/task-types", tags=["task-types"])
+app.include_router(profile_router.router, prefix="/api/profile", tags=["profile"])
+app.include_router(canvas_router.router, prefix="/api/canvases", tags=["canvases"])
+app.include_router(canvas_page_router.router, prefix="/api/canvases/{canvas_id}/pages", tags=["canvas-pages"])
+app.include_router(task_issue_router.router, prefix="/api/branches/{branch_id}/tasks/{task_id}/issues", tags=["task-issues"])
+app.include_router(my_tasks_router.router, prefix="/api/my-tasks", tags=["my-tasks"])
+app.include_router(ref_status_router.router, prefix="/api/ref-status", tags=["ref-status"])
+app.include_router(ai_router.router, prefix="/api/ai", tags=["ai"])
+app.include_router(recent_view_router.router, prefix="/api/recent-views", tags=["recent-views"])
+app.include_router(workflow_status_router.router, prefix="/api/branches/{branch_id}/workflow-statuses", tags=["workflow-statuses"])
+app.include_router(custom_field_router.router, prefix="/api/branches/{branch_id}/task-types/{type_id}/custom-fields", tags=["custom-fields"])
+app.include_router(notification_router.router, prefix="/api/notifications", tags=["notifications"])
+app.include_router(task_dependency_router.router, prefix="/api/branches/{branch_id}/dependencies", tags=["dependencies"])
 
 # -- Static files (업로드 파일 서빙) -----------------------------------------
 uploads_dir = os.path.join(os.path.dirname(__file__), 'uploads')
 os.makedirs(os.path.join(uploads_dir, 'avatars'), exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+app.mount("/api/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
 
 # -- Health ----------------------------------------------------------------
-@app.get("/", summary="Health Check")
-def health_check():
-    return {"status": "ok", "service": "weave-api"}
-
-
 @app.get("/api/health", summary="API Health Check")
 def api_health():
-    return {"status": "ok"}
+    return {"status": "ok", "service": "weave-api"}
 
 
 # -- Exception handlers ----------------------------------------------------
