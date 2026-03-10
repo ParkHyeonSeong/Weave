@@ -1,3 +1,4 @@
+from typing import List, Optional
 from pydantic import BaseModel, field_validator
 
 
@@ -26,3 +27,8 @@ class UpdatePassword(BaseModel):
         if len(v) < 6:
             raise ValueError('password must be at least 6 characters')
         return v
+
+
+class UpdateSidebarOrder(BaseModel):
+    branches: Optional[List[int]] = None
+    canvases: Optional[List[int]] = None

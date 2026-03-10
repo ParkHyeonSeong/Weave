@@ -130,3 +130,22 @@ async def update_avatar(user_id: int, avatar_url: str, db: AsyncSession):
         WHERE user_id = :user_id
     """), {'user_id': user_id, 'avatar_url': avatar_url})
     await db.commit()
+
+
+async def get_sidebar_order(user_id: int, db: AsyncSession):
+    """사이드바 순서 조회"""
+    result = await db.execute(text("""
+        SELECT sidebar_order FROM "user" WHERE user_id = :user_id
+    """), {'user_id': user_id})
+    row = result.fetchone()
+    return row._mapping['sidebar_order'] if row else None
+
+
+async def update_sidebar_order(user_id: int, sidebar_order: dict, db: AsyncSession):
+    """사이드바 순서 저장"""
+    await db.execute(text("""
+        UPDATE "user"
+        SET sidebar_order = CAST(:sidebar_order AS jsonb)
+        WHERE user_id = :user_id
+    """), {'user_id': user_id, 'sidebar_order': __import__('json').dumps(sidebar_order)})
+    await db.commit()

@@ -1,20 +1,21 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import {
   Plus, ChevronRight, ChevronDown,
   FileText, Folder, FolderOpen, BookOpen, FolderPlus, MoreHorizontal, Settings,
+  GripVertical,
 } from 'lucide-react';
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
   DragOverlay,
 } from '@dnd-kit/core';
 import {
-  SortableContext, verticalListSortingStrategy, useSortable,
+  SortableContext, verticalListSortingStrategy, useSortable, arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { axios } from '@/library/_axios';
 
-export default function SidebarCanvases({ onCreateCanvas }) {
+export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderChange }) {
   const router = useRouter();
   const [canvases, setCanvases] = useState([]);
   const [expandedId, setExpandedId] = useState(null);
@@ -154,6 +155,43 @@ export default function SidebarCanvases({ onCreateCanvas }) {
     if (e.key === 'Escape') { setInlineCreate(null); setInlineTitle(''); }
   };
 
+  // 캔버스 목록 DnD
+  const [activeCanvas, setActiveCanvas] = useState(null);
+  const canvasSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+  );
+
+  // 저장된 순서에 따라 캔버스 정렬
+  const sortedCanvases = useMemo(() => {
+    if (!savedOrder || savedOrder.length === 0) return canvases;
+    const orderMap = {};
+    savedOrder.forEach((id, idx) => { orderMap[id] = idx; });
+    return [...canvases].sort((a, b) => {
+      const aIdx = orderMap[a.canvas_id] ?? 9999;
+      const bIdx = orderMap[b.canvas_id] ?? 9999;
+      return aIdx - bIdx;
+    });
+  }, [canvases, savedOrder]);
+
+  const canvasSortableIds = sortedCanvases.map((c) => c.canvas_id);
+
+  const handleCanvasDragStart = (event) => {
+    const item = sortedCanvases.find((c) => c.canvas_id === event.active.id);
+    setActiveCanvas(item || null);
+  };
+
+  const handleCanvasDragEnd = (event) => {
+    setActiveCanvas(null);
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = sortedCanvases.findIndex((c) => c.canvas_id === active.id);
+    const newIndex = sortedCanvases.findIndex((c) => c.canvas_id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const reordered = arrayMove(sortedCanvases, oldIndex, newIndex);
+    const newOrder = reordered.map((c) => c.canvas_id);
+    onOrderChange(newOrder);
+  };
+
   const overviewPage = pages.find((p) => p.type === 'overview');
   const rootChildren = getChildren(null);
   const sortableIds = pages
@@ -167,12 +205,19 @@ export default function SidebarCanvases({ onCreateCanvas }) {
       </div>
 
       <div className="Sidebar__Branches">
-        {canvases.length === 0 ? (
+        {sortedCanvases.length === 0 ? (
           <div className="Sidebar__Empty">
             No canvases yet.<br />Create one to get started.
           </div>
         ) : (
-          canvases.map((canvas) => (
+          <DndContext
+            sensors={canvasSensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleCanvasDragStart}
+            onDragEnd={handleCanvasDragEnd}
+          >
+            <SortableContext items={canvasSortableIds} strategy={verticalListSortingStrategy}>
+              {sortedCanvases.map((canvas) => (
             <div key={canvas.canvas_id}>
               <CanvasRow
                 canvas={canvas}
@@ -267,7 +312,21 @@ export default function SidebarCanvases({ onCreateCanvas }) {
                 </div>
               )}
             </div>
-          ))
+              ))}
+            </SortableContext>
+
+            <DragOverlay>
+              {activeCanvas && (
+                <div className="Sidebar__BranchItem Sidebar__BranchItem--dragging">
+                  <span
+                    className="Sidebar__BranchDot"
+                    style={{ backgroundColor: activeCanvas.color || '#16A34A' }}
+                  />
+                  <span className="Sidebar__BranchName">{activeCanvas.canvas_name}</span>
+                </div>
+              )}
+            </DragOverlay>
+          </DndContext>
         )}
       </div>
     </>
@@ -282,6 +341,10 @@ function CanvasRow({ canvas, isActive, isExpanded, onToggle, onAddDocument, onAd
   const addMenuRef = useRef(null);
   const moreMenuRef = useRef(null);
 
+  const {
+    attributes, listeners, setNodeRef, transform, transition, isDragging,
+  } = useSortable({ id: canvas.canvas_id });
+
   // 외부 클릭 시 메뉴 닫기
   useEffect(() => {
     if (!showAddMenu && !showMoreMenu) return;
@@ -293,12 +356,25 @@ function CanvasRow({ canvas, isActive, isExpanded, onToggle, onAddDocument, onAd
     return () => document.removeEventListener('mousedown', handleClick);
   }, [showAddMenu, showMoreMenu]);
 
+  const rowStyle = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  };
+
   return (
-    <div className={`Sidebar__BranchRow ${isActive ? 'Sidebar__BranchRow--active' : ''}`}>
+    <div
+      ref={setNodeRef}
+      style={rowStyle}
+      className={`Sidebar__BranchRow ${isActive ? 'Sidebar__BranchRow--active' : ''}`}
+    >
       <button
         className={`Sidebar__BranchItem ${isActive ? 'Sidebar__BranchItem--active' : ''}`}
         onClick={onToggle}
       >
+        <span className="Sidebar__DragHandle" {...attributes} {...listeners}>
+          <GripVertical size={12} />
+        </span>
         <span className="Sidebar__ExpandIcon">
           {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         </span>
