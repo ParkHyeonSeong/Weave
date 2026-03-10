@@ -27,6 +27,7 @@ services:
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - LOG_LEVEL=${LOG_LEVEL:-WARNING}
       - DEBUG=${DEBUG:-false}
     volumes:
