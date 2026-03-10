@@ -107,6 +107,44 @@ make help           # Show all available commands
 
 > Ports are configurable via `.env`.
 
+## Production Deployment
+
+For deploying to a server (IDC, VPS, etc.) with an existing Nginx reverse proxy:
+
+```bash
+# 1. Clone and configure
+git clone https://github.com/your-org/Weave.git
+cd Weave
+cp .env.production.example .env.production
+# Edit .env.production — set DOMAIN, POSTGRES_PASSWORD, ports, etc.
+
+# 2. Build and start
+make prod-build
+
+# 3. Update (when new version is available)
+git pull && make prod-build
+```
+
+Configure your host Nginx to proxy to the exposed ports — see `nginx/host-nginx.conf.example` for a reference config.
+
+### Minimum Requirements
+
+| Resource | Recommended |
+|----------|-------------|
+| CPU      | 2 cores     |
+| RAM      | 2 GB        |
+| Disk     | 10 GB       |
+| Docker   | 24+         |
+
+### Production Commands
+
+```bash
+make prod-build   # Build and start production services
+make prod-down    # Stop production services
+make prod-logs    # Tail production logs
+make prod-ps      # Show production service status
+```
+
 ## Tech Stack
 
 | Layer        | Technology                                         |
@@ -116,7 +154,7 @@ make help           # Show all available commands
 | Database     | PostgreSQL 17                                       |
 | Auth         | JWT (httpOnly cookie) + bcrypt                      |
 | Real-time    | WebSocket                                           |
-| Infra        | Docker Compose, Nginx (production)                  |
+| Infra        | Docker Compose                                      |
 
 ## Contributing
 
