@@ -33,6 +33,7 @@ from routers import workflow_status as workflow_status_router
 from routers import custom_field as custom_field_router
 from routers import notification as notification_router
 from routers import task_dependency as task_dependency_router
+from routers import task_page_link as task_page_link_router
 
 # -- Logging ---------------------------------------------------------------
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -127,6 +128,7 @@ app.include_router(workflow_status_router.router, prefix="/api/branches/{branch_
 app.include_router(custom_field_router.router, prefix="/api/branches/{branch_id}/task-types/{type_id}/custom-fields", tags=["custom-fields"])
 app.include_router(notification_router.router, prefix="/api/notifications", tags=["notifications"])
 app.include_router(task_dependency_router.router, prefix="/api/branches/{branch_id}/dependencies", tags=["dependencies"])
+app.include_router(task_page_link_router.router, prefix="/api/branches/{branch_id}/tasks/{task_id}/pages", tags=["task-pages"])
 
 # -- Static files (업로드 파일 서빙) -----------------------------------------
 uploads_dir = os.path.join(os.path.dirname(__file__), 'uploads')

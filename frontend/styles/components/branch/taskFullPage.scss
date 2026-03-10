@@ -151,6 +151,10 @@
     height: 1px;
     background: $color-border;
     margin: $space-2 0;
+
+    & + & {
+      display: none;
+    }
   }
 
   // -- 설명 --

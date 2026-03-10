@@ -7,6 +7,7 @@ import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import useTaskDetail from '@/hooks/useTaskDetail';
 import TaskIssueSection from './TaskIssueSection';
 import TaskDependencySection from './TaskDependencySection';
+import TaskPageLinkSection from './TaskPageLinkSection';
 import TaskDescriptionEditor from './TaskDescriptionEditor';
 import ConfirmModal from '@/components/modal/ConfirmModal';
 
@@ -164,6 +165,11 @@ export default function TaskFullPage() {
             taskId={task.task_id}
             onSelectTask={(dep) => router.push(`/branch/${branchId}/task/${dep.task_id}`)}
           />
+
+          <div className="TaskFullPage__Divider" />
+
+          {/* 연결된 페이지 */}
+          <TaskPageLinkSection branchId={branchId} taskId={task.task_id} />
 
           <div className="TaskFullPage__Divider" />
 
