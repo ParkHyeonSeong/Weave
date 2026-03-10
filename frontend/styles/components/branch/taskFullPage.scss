@@ -18,6 +18,39 @@
     font-size: $font-size-sm;
   }
 
+  &__Error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    height: 300px;
+    color: $color-text-tertiary;
+    font-size: $font-size-sm;
+
+    svg {
+      color: $color-text-tertiary;
+    }
+
+    p {
+      margin: 0;
+    }
+  }
+
+  &__ErrorBtn {
+    padding: 6px 16px;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    background: transparent;
+    color: $color-text-secondary;
+    font-size: $font-size-sm;
+    cursor: pointer;
+
+    &:hover {
+      background: $color-border;
+    }
+  }
+
   // -- 헤더 --
   &__Header {
     display: flex;

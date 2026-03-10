@@ -4,6 +4,7 @@ import { axios } from '@/library/_axios';
 export default function useTaskDetail(branchId, taskId) {
   const [task, setTask] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   // 옵션 데이터
   const [sprints, setSprints] = useState([]);
@@ -17,12 +18,17 @@ export default function useTaskDetail(branchId, taskId) {
   const fetchTask = useCallback(async () => {
     if (!branchId || !taskId) return;
     setLoading(true);
+    setError(null);
     try {
       const res = await axios.get(`/branches/${branchId}/tasks/${taskId}`);
       if (res.data.status) {
         setTask(res.data.task);
+      } else {
+        setError(res.data.message || 'UNKNOWN_ERROR');
       }
-    } catch {}
+    } catch {
+      setError('NETWORK_ERROR');
+    }
     setLoading(false);
   }, [branchId, taskId]);
 
@@ -137,6 +143,7 @@ export default function useTaskDetail(branchId, taskId) {
   return {
     task,
     loading,
+    error,
     sprints,
     epics,
     members,

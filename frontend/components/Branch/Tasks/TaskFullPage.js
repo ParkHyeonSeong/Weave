@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
-import { ArrowLeft, Trash2, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Trash2, ChevronDown, ShieldAlert } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import CustomSelect from '@/components/common/CustomSelect';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
@@ -18,7 +18,7 @@ export default function TaskFullPage() {
   const [branch, setBranch] = useState(null);
 
   const {
-    task, loading, sprints, epics, members, labels,
+    task, loading, error, sprints, epics, members, labels,
     workflowStatuses, taskTypes, customFields,
     updateField, updateAssignees, toggleLabel, handleDelete, handleSelectChange,
   } = useTaskDetail(branchId, taskId);
@@ -65,8 +65,26 @@ export default function TaskFullPage() {
   };
 
   if (!branchId || !taskId) return null;
-  if (loading || !task) {
+  if (loading) {
     return <div className="TaskFullPage"><div className="TaskFullPage__Loading">Loading...</div></div>;
+  }
+  if (error || !task) {
+    const msg = error === 'NOT_BRANCH_MEMBER'
+      ? '이 태스크가 속한 브랜치의 멤버가 아닙니다.'
+      : error === 'NOT_FOUND'
+        ? '태스크를 찾을 수 없습니다.'
+        : '태스크를 불러올 수 없습니다.';
+    return (
+      <div className="TaskFullPage">
+        <div className="TaskFullPage__Error">
+          <ShieldAlert size={32} />
+          <p>{msg}</p>
+          <button className="TaskFullPage__ErrorBtn" onClick={() => router.back()}>
+            Go Back
+          </button>
+        </div>
+      </div>
+    );
   }
 
   const branchKey = branch?.key || '';
