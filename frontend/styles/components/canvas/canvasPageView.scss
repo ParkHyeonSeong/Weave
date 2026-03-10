@@ -98,6 +98,15 @@
         background: $color-surface;
       }
     }
+
+    &--danger {
+      color: $color-text-tertiary;
+
+      &:hover {
+        color: $color-error;
+        background: $color-error-bg;
+      }
+    }
   }
 
   &__Kbd {

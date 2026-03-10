@@ -166,6 +166,23 @@ async def remove_member(branch_id: int, target_user_id: int, request: Request, d
     return {'status': True}
 
 
+async def leave(branch_id: int, request: Request, db: AsyncSession):
+    """브랜치 나가기 (본인)"""
+    user_id = request.state.payload.get('user_id')
+    role = await member_model.get_role(branch_id, user_id, db)
+    if not role:
+        return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+
+    # 마지막 admin이면 나갈 수 없음
+    if role == 'admin':
+        admin_count = await member_model.count_admins(branch_id, db)
+        if admin_count <= 1:
+            return {'status': False, 'message': 'CANNOT_LEAVE_LAST_ADMIN'}
+
+    await member_model.remove(branch_id, user_id, db)
+    return {'status': True}
+
+
 async def delete(branch_id: int, request: Request, db: AsyncSession):
     """Branch 삭제/아카이브 (admin만)"""
     user_id = request.state.payload.get('user_id')

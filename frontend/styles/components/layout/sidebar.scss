@@ -242,6 +242,21 @@
       background: $color-surface;
       color: $color-text;
     }
+
+    &--danger {
+      color: $color-error;
+
+      &:hover {
+        background: $color-error-bg;
+        color: $color-error;
+      }
+    }
+  }
+
+  &__AddMenuDivider {
+    height: 1px;
+    background: $color-border;
+    margin: $space-1 0;
   }
 
   // -- Drag handle --
@@ -358,7 +373,8 @@
     &:hover {
       background: $color-surface;
 
-      .Sidebar__PageAddBtn {
+      .Sidebar__PageAddBtn,
+      .Sidebar__PageDeleteBtn {
         opacity: 1;
       }
     }
@@ -379,7 +395,8 @@
     padding-right: $space-2;
   }
 
-  &__PageAddBtn {
+  &__PageAddBtn,
+  &__PageDeleteBtn {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -394,6 +411,11 @@
       background: $color-border;
       color: $color-text;
     }
+  }
+
+  &__PageDeleteBtn:hover {
+    color: $color-error;
+    background: $color-error-bg;
   }
 
   &__PageItem--input {

@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import {
   Plus, ChevronRight, ChevronDown,
   FileText, Folder, FolderOpen, BookOpen, FolderPlus, MoreHorizontal, Settings,
-  GripVertical,
+  GripVertical, Trash2,
 } from 'lucide-react';
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
@@ -155,6 +155,22 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
     if (e.key === 'Escape') { setInlineCreate(null); setInlineTitle(''); }
   };
 
+  // 페이지 삭제
+  const handleDeletePage = async (canvasId, pageId) => {
+    try {
+      const res = await axios.delete(`/canvases/${canvasId}/pages/${pageId}`);
+      if (res.data.status) {
+        window.dispatchEvent(new CustomEvent('canvas:page_deleted'));
+        // 현재 보고 있는 페이지였으면 overview로 이동
+        if (String(router.query.pageId) === String(pageId)) {
+          const overview = pages.find((p) => p.type === 'overview' && p.canvas_id === canvasId);
+          if (overview) router.push(`/canvas/${canvasId}/${overview.page_id}`);
+          else router.push(`/canvas/${canvasId}`);
+        }
+      }
+    } catch {}
+  };
+
   // 캔버스 목록 DnD
   const [activeCanvas, setActiveCanvas] = useState(null);
   const canvasSensors = useSensors(
@@ -271,6 +287,7 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
                           getChildren={getChildren}
                           router={router}
                           onFolderAdd={startFolderInlineCreate}
+                          onDeletePage={handleDeletePage}
                           inlineCreate={inlineCreate}
                           inlineTitle={inlineTitle}
                           setInlineTitle={setInlineTitle}
@@ -437,7 +454,7 @@ function CanvasRow({ canvas, isActive, isExpanded, onToggle, onAddDocument, onAd
 
 function SidebarPageItem({
   page, canvasId, depth, expandedFolders, toggleFolder, getChildren, router,
-  onFolderAdd, inlineCreate, inlineTitle, setInlineTitle, handleInlineKeyDown, setInlineCreate,
+  onFolderAdd, onDeletePage, inlineCreate, inlineTitle, setInlineTitle, handleInlineKeyDown, setInlineCreate,
 }) {
   const {
     attributes, listeners, setNodeRef, transform, transition, isDragging,
@@ -516,24 +533,49 @@ function SidebarPageItem({
                 }}>
                   <FolderPlus size={13} /> Folder
                 </button>
+                <div className="Sidebar__AddMenuDivider" />
+                <button className="Sidebar__AddMenuItem Sidebar__AddMenuItem--danger" onClick={() => {
+                  setShowMenu(false);
+                  if (confirm('이 폴더와 하위 문서가 모두 삭제됩니다. 계속하시겠습니까?')) {
+                    onDeletePage(canvasId, page.page_id);
+                  }
+                }}>
+                  <Trash2 size={13} /> Delete
+                </button>
               </div>
             )}
           </div>
         </div>
       ) : (
-        <button
-          ref={setNodeRef}
-          style={style}
-          {...attributes}
-          {...listeners}
-          className={`Sidebar__PageItem ${
-            router.query.pageId == page.page_id ? 'Sidebar__PageItem--active' : ''
-          }`}
-          onClick={() => router.push(`/canvas/${canvasId}/${page.page_id}`)}
-        >
-          <FileText size={13} className="Sidebar__PageIcon" />
-          <span className="Sidebar__BranchName">{page.title}</span>
-        </button>
+        <div className="Sidebar__PageRow" style={{ paddingLeft: `${40 + depth * 14}px` }}>
+          <button
+            ref={setNodeRef}
+            style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
+            {...attributes}
+            {...listeners}
+            className={`Sidebar__PageItem Sidebar__PageItem--inRow ${
+              router.query.pageId == page.page_id ? 'Sidebar__PageItem--active' : ''
+            }`}
+            onClick={() => router.push(`/canvas/${canvasId}/${page.page_id}`)}
+          >
+            <FileText size={13} className="Sidebar__PageIcon" />
+            <span className="Sidebar__BranchName">{page.title}</span>
+          </button>
+          <div className="Sidebar__PageActions">
+            <button
+              className="Sidebar__PageDeleteBtn"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (confirm(`"${page.title}" 문서를 삭제하시겠습니까?`)) {
+                  onDeletePage(canvasId, page.page_id);
+                }
+              }}
+              title="Delete"
+            >
+              <Trash2 size={12} />
+            </button>
+          </div>
+        </div>
       )}
 
       {isFolder && isExpanded && (
@@ -549,6 +591,7 @@ function SidebarPageItem({
               getChildren={getChildren}
               router={router}
               onFolderAdd={onFolderAdd}
+              onDeletePage={onDeletePage}
               inlineCreate={inlineCreate}
               inlineTitle={inlineTitle}
               setInlineTitle={setInlineTitle}

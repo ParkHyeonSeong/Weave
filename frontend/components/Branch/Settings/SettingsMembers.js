@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/router';
 import { axios } from '@/library/_axios';
-import { UserPlus, X, Search } from 'lucide-react';
+import { UserPlus, X, Search, LogOut } from 'lucide-react';
 import CustomSelect from '@/components/common/CustomSelect';
+import ConfirmModal from '@/components/modal/ConfirmModal';
 
 const roleOptions = [
   { value: 'admin', label: 'Admin' },
@@ -9,8 +11,10 @@ const roleOptions = [
 ];
 
 export default function SettingsMembers({ branchId, isAdmin }) {
+  const router = useRouter();
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
 
   // 초대 검색
   const [showInvite, setShowInvite] = useState(false);
@@ -91,6 +95,19 @@ export default function SettingsMembers({ branchId, isAdmin }) {
       if (res.data.status) fetchMembers();
     } catch {}
   };
+
+  // 나가기
+  const handleLeave = async () => {
+    setShowLeaveConfirm(false);
+    try {
+      const res = await axios.post(`/branches/${branchId}/leave`);
+      if (res.data.status) {
+        router.push('/');
+      }
+    } catch {}
+  };
+
+  const isLastAdmin = isAdmin && members.filter((m) => m.role === 'admin').length <= 1;
 
   if (loading) return null;
 
@@ -190,6 +207,29 @@ export default function SettingsMembers({ branchId, isAdmin }) {
           </div>
         ))}
       </div>
+
+      {/* 나가기 */}
+      <div className="SettingsMembers__LeaveWrap">
+        <button
+          className="SettingsMembers__LeaveBtn"
+          onClick={() => setShowLeaveConfirm(true)}
+          disabled={isLastAdmin}
+          title={isLastAdmin ? '마지막 관리자는 나갈 수 없습니다' : ''}
+        >
+          <LogOut size={14} />
+          Leave Branch
+        </button>
+      </div>
+
+      <ConfirmModal
+        isOpen={showLeaveConfirm}
+        onClose={() => setShowLeaveConfirm(false)}
+        onConfirm={handleLeave}
+        title="Leave Branch"
+        message="이 브랜치에서 나가시겠습니까? 기존 태스크의 담당자 배정은 유지됩니다."
+        confirmLabel="Leave"
+        variant="danger"
+      />
     </div>
   );
 }

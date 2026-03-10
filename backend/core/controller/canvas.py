@@ -160,6 +160,22 @@ async def remove_member(canvas_id: int, target_user_id: int, request: Request, d
     return {'status': True}
 
 
+async def leave(canvas_id: int, request: Request, db: AsyncSession):
+    """캔버스 나가기 (본인)"""
+    user_id = request.state.payload.get('user_id')
+    role = await member_model.get_role(canvas_id, user_id, db)
+    if not role:
+        return {'status': False, 'message': 'NOT_CANVAS_MEMBER'}
+
+    if role == 'admin':
+        admin_count = await member_model.count_admins(canvas_id, db)
+        if admin_count <= 1:
+            return {'status': False, 'message': 'CANNOT_LEAVE_LAST_ADMIN'}
+
+    await member_model.remove(canvas_id, user_id, db)
+    return {'status': True}
+
+
 async def delete(canvas_id: int, request: Request, db: AsyncSession):
     """Canvas 삭제/아카이브 (admin만)"""
     user_id = request.state.payload.get('user_id')

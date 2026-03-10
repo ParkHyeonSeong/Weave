@@ -45,6 +45,12 @@ async def delete_canvas(canvas_id: int, request: Request,
     return await canvas_controller.delete(canvas_id, request, session)
 
 
+@router.post("/{canvas_id}/leave", summary="Canvas 나가기", dependencies=[Depends(require_login)])
+async def leave_canvas(canvas_id: int, request: Request,
+                       session: AsyncSession = Depends(db.session)):
+    return await canvas_controller.leave(canvas_id, request, session)
+
+
 @router.post("/{canvas_id}/join", summary="Public Canvas 가입", dependencies=[Depends(require_login)])
 async def join_canvas(canvas_id: int, request: Request,
                       session: AsyncSession = Depends(db.session)):

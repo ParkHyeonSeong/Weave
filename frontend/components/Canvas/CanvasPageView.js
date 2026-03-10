@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import dynamic from 'next/dynamic';
-import { Pencil, X, Wifi, WifiOff, Loader, RefreshCw, Maximize2, Minimize2 } from 'lucide-react';
+import { Pencil, X, Wifi, WifiOff, Loader, RefreshCw, Maximize2, Minimize2, Trash2 } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import ConfirmModal from '@/components/modal/ConfirmModal';
 import useCollabProvider from '@/library/useCollabProvider';
 import PresenceBar from './PresenceBar';
 import katex from 'katex';
@@ -294,6 +295,29 @@ export default function CanvasPageView() {
     }
   };
 
+  // 삭제
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  const handleDelete = async () => {
+    setShowDeleteConfirm(false);
+    try {
+      const res = await axios.delete(`/canvases/${canvasId}/pages/${pageId}`);
+      if (res.data.status) {
+        window.dispatchEvent(new CustomEvent('canvas:page_deleted'));
+        // overview 페이지로 이동
+        const treeRes = await axios.get(`/canvases/${canvasId}/pages`);
+        if (treeRes.data.status) {
+          const overview = treeRes.data.pages.find((p) => p.type === 'overview');
+          if (overview) {
+            router.push(`/canvas/${canvasId}/${overview.page_id}`);
+            return;
+          }
+        }
+        router.push(`/canvas/${canvasId}`);
+      }
+    } catch {}
+  };
+
   // 탭 포커스 복귀 시 업데이트 감지
   const [updateToast, setUpdateToast] = useState(null);
 
@@ -403,6 +427,15 @@ export default function CanvasPageView() {
           <>
             <div />
             <div className="CanvasPageView__Actions">
+              {page.type !== 'overview' && (
+                <button
+                  className="CanvasPageView__ActionBtn CanvasPageView__ActionBtn--danger"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  title="Delete page"
+                >
+                  <Trash2 size={15} />
+                </button>
+              )}
               <button
                 className="CanvasPageView__ActionBtn"
                 onClick={toggleWideMode}
@@ -479,6 +512,17 @@ export default function CanvasPageView() {
           </button>
         </div>
       )}
+      <ConfirmModal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDelete}
+        title="Delete Page"
+        message={page.type === 'folder'
+          ? `"${page.title}" 폴더와 하위 문서가 모두 삭제됩니다. 이 작업은 되돌릴 수 없습니다.`
+          : `"${page.title}" 문서를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`}
+        confirmLabel="Delete"
+        variant="danger"
+      />
     </div>
   );
 }
