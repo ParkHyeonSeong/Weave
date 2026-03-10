@@ -1,0 +1,52 @@
+# Weave — 호스트 nginx 설정 예시
+# IDC 인스턴스의 nginx에 추가 (sites-available 또는 conf.d)
+# SSL은 기존 호스트 nginx에서 처리한다고 가정
+#
+# .env.production의 포트와 맞춰야 함:
+#   FRONTEND_EXPOSE_PORT=13000
+#   BACKEND_EXPOSE_PORT=13001
+
+server {
+    listen 80;
+    server_name weave.example.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name weave.example.com;
+
+    # SSL 인증서 (기존 호스트 nginx 설정에 맞게 수정)
+    ssl_certificate     /etc/letsencrypt/live/weave.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/weave.example.com/privkey.pem;
+
+    client_max_body_size 20M;
+
+    # Backend API 경로들
+    location ~ ^/(auth|branches|setup|chat|ws|admin|profile|canvases|my-tasks|ref-status|ai|recent-views|notifications|uploads|docs|redoc|openapi\.json|api) {
+        proxy_pass http://127.0.0.1:13001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # WebSocket (채팅, 캔버스 협업)
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+    # Frontend (나머지 전부)
+    location / {
+        proxy_pass http://127.0.0.1:13000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Next.js HMR (개발시에만 필요하지만 넣어도 무방)
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}

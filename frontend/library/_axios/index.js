@@ -22,7 +22,9 @@ function getBaseURL() {
   const envUrl = process.env.NEXT_PUBLIC_API_URL || '';
   try {
     const parsed = new URL(envUrl);
-    // 브라우저의 현재 hostname 사용 (LAN IP 대응)
+    // 프로덕션 (포트 명시 없음): URL 그대로 사용
+    if (!parsed.port) return envUrl;
+    // 개발 (포트 명시): 브라우저의 현재 hostname 사용 (LAN IP 대응)
     return `${parsed.protocol}//${window.location.hostname}:${parsed.port}`;
   } catch {
     return envUrl;
