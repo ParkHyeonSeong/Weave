@@ -10,6 +10,12 @@
     min-width: 0;
     overflow-y: auto;
     padding: $space-6;
+
+    &--flow {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
   }
 
   &__Header {
@@ -75,5 +81,12 @@
   // -- 콘텐츠 --
   &__Content {
     min-height: 400px;
+
+    .BranchDetail__Main--flow & {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
   }
 }

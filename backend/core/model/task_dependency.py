@@ -36,6 +36,26 @@ async def find_by_epic(epic_id: int, branch_id: int, db: AsyncSession):
     return [dict(row._mapping) for row in result.fetchall()]
 
 
+async def find_by_task(task_id: int, branch_id: int, db: AsyncSession):
+    """태스크의 의존관계 조회 (상대 태스크 정보 포함)"""
+    result = await db.execute(text("""
+        SELECT d.dependency_id, d.source_task_id, d.target_task_id, d.dep_type,
+               CASE WHEN d.source_task_id = :task_id THEN 'outgoing' ELSE 'incoming' END AS direction,
+               t.task_id, t.title, t.status,
+               COALESCE(b.key, '') || '-' || t.display_number AS display_id
+        FROM task_dependency d
+        INNER JOIN task t ON t.task_id = CASE
+            WHEN d.source_task_id = :task_id THEN d.target_task_id
+            ELSE d.source_task_id
+        END
+        LEFT JOIN branch b ON t.branch_id = b.branch_id
+        WHERE d.branch_id = :branch_id
+          AND (d.source_task_id = :task_id OR d.target_task_id = :task_id)
+        ORDER BY d.dep_type, d.created_at
+    """), {'task_id': task_id, 'branch_id': branch_id})
+    return [dict(row._mapping) for row in result.fetchall()]
+
+
 async def delete(dependency_id: int, branch_id: int, db: AsyncSession):
     """의존관계 삭제"""
     await db.execute(text("""

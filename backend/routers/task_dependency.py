@@ -21,6 +21,12 @@ async def get_epic_dependencies(branch_id: int, epic_id: int,
     return await dep_controller.get_by_epic(epic_id, branch_id, request, session)
 
 
+@router.get("/task/{task_id}", summary="태스크의 의존관계 목록", dependencies=[Depends(require_login)])
+async def get_task_dependencies(branch_id: int, task_id: int,
+                                request: Request, session: AsyncSession = Depends(db.session)):
+    return await dep_controller.get_by_task(task_id, branch_id, request, session)
+
+
 @router.delete("/{dependency_id}", summary="의존관계 삭제", dependencies=[Depends(require_login)])
 async def delete_dependency(branch_id: int, dependency_id: int,
                             request: Request, session: AsyncSession = Depends(db.session)):

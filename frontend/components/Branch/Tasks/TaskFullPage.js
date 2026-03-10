@@ -6,6 +6,7 @@ import CustomSelect from '@/components/common/CustomSelect';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import useTaskDetail from '@/hooks/useTaskDetail';
 import TaskIssueSection from './TaskIssueSection';
+import TaskDependencySection from './TaskDependencySection';
 import TaskDescriptionEditor from './TaskDescriptionEditor';
 import ConfirmModal from '@/components/modal/ConfirmModal';
 
@@ -154,6 +155,15 @@ export default function TaskFullPage() {
               </div>
             )}
           </div>
+
+          <div className="TaskFullPage__Divider" />
+
+          {/* 의존관계 */}
+          <TaskDependencySection
+            branchId={branchId}
+            taskId={task.task_id}
+            onSelectTask={(dep) => router.push(`/branch/${branchId}/task/${dep.task_id}`)}
+          />
 
           <div className="TaskFullPage__Divider" />
 

@@ -5,10 +5,11 @@ import CustomSelect from '@/components/common/CustomSelect';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import useTaskDetail from '@/hooks/useTaskDetail';
 import TaskIssueSection from './TaskIssueSection';
+import TaskDependencySection from './TaskDependencySection';
 import TaskDescriptionEditor from './TaskDescriptionEditor';
 import ConfirmModal from '@/components/modal/ConfirmModal';
 
-export default function TaskDetailPanel({ branchId, branchKey, taskTypes: externalTaskTypes, workflowStatuses: externalStatuses, taskSummary, onClose }) {
+export default function TaskDetailPanel({ branchId, branchKey, taskTypes: externalTaskTypes, workflowStatuses: externalStatuses, taskSummary, onClose, onSelectTask }) {
   const router = useRouter();
   const {
     task, loading, sprints, epics, members, labels,
@@ -324,6 +325,15 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
             </div>
           </>
         )}
+
+        <div className="TaskDetailPanel__Divider" />
+
+        {/* 의존관계 섹션 */}
+        <TaskDependencySection
+          branchId={branchId}
+          taskId={task.task_id}
+          onSelectTask={onSelectTask}
+        />
 
         <div className="TaskDetailPanel__Divider" />
 

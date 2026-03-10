@@ -52,6 +52,16 @@ async def get_by_epic(epic_id: int, branch_id: int, request: Request, db: AsyncS
     return {'status': True, 'dependencies': deps}
 
 
+async def get_by_task(task_id: int, branch_id: int, request: Request, db: AsyncSession):
+    """태스크의 의존관계 목록"""
+    user_id = request.state.payload.get('user_id')
+    if not await member_model.is_member(branch_id, user_id, db):
+        return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+
+    deps = await dep_model.find_by_task(task_id, branch_id, db)
+    return {'status': True, 'dependencies': deps}
+
+
 async def delete(dependency_id: int, branch_id: int, request: Request, db: AsyncSession):
     """의존관계 삭제"""
     user_id = request.state.payload.get('user_id')

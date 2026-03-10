@@ -751,3 +751,71 @@
     text-overflow: ellipsis;
   }
 }
+
+// -- TaskDependencySection ---------------------------------------------------
+.TaskDependencySection {
+  display: flex;
+  flex-direction: column;
+  gap: $space-2;
+
+  &__Title {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-semibold;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: $color-text-secondary;
+  }
+
+  &__List {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__Item {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    width: 100%;
+    padding: 6px 8px;
+    border-radius: $radius-md;
+    cursor: pointer;
+    transition: background $transition-fast;
+    font-size: $font-size-sm;
+    text-align: left;
+
+    &:hover {
+      background: $color-surface-hover;
+    }
+  }
+
+  &__Arrow {
+    color: $color-text-secondary;
+    font-size: $font-size-xs;
+    font-family: monospace;
+    width: 20px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  &__DisplayId {
+    color: $color-text-secondary;
+    font-size: $font-size-xs;
+    flex-shrink: 0;
+  }
+
+  &__TaskTitle {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: $color-text;
+  }
+
+  &__StatusDot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+}

@@ -3,66 +3,19 @@
 // -- EpicFlow (메인 컨테이너) -------------------------------------------------
 .EpicFlow {
   display: flex;
-  flex-direction: column;
-  height: calc(100vh - 140px);
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
 
-  &__Header {
-    display: flex;
-    align-items: center;
-    padding: 12px 16px;
-    border-bottom: 1px solid $color-border;
-  }
-
-  &__SelectorWrap {
-    position: relative;
-  }
-
-  &__Selector {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 12px;
-    background: $color-surface;
-    border: 1px solid $color-border;
-    border-radius: 6px;
-    color: $color-text;
-    font-size: 13px;
-    cursor: pointer;
-    transition: border-color 150ms;
-
-    &:hover {
-      border-color: $color-text-secondary;
-    }
-  }
-
-  &__SelectorPlaceholder {
-    color: $color-text-secondary;
-  }
-
-  &__EpicDot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
+  &__Sidebar {
+    width: 200px;
     flex-shrink: 0;
-  }
-
-  &__Dropdown {
-    position: absolute;
-    top: calc(100% + 4px);
-    left: 0;
-    min-width: 280px;
-    background: $color-surface;
-    border: 1px solid $color-border;
-    border-radius: 8px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-    z-index: 100;
-    padding: 4px;
-    max-height: 320px;
     overflow-y: auto;
+    padding: 8px;
   }
 
-  &__DropdownItem {
+  &__EpicItem {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -72,6 +25,7 @@
     color: $color-text;
     font-size: 13px;
     text-align: left;
+    cursor: pointer;
     transition: background 100ms;
 
     &:hover {
@@ -80,20 +34,44 @@
 
     &--active {
       background: $color-surface-hover;
+      font-weight: 500;
     }
+  }
+
+  &__EpicDot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  &__EpicName {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   &__TaskCount {
     margin-left: auto;
     color: $color-text-secondary;
     font-size: 11px;
+    flex-shrink: 0;
   }
 
-  &__DropdownEmpty {
+  &__SidebarEmpty {
     padding: 12px;
     color: $color-text-secondary;
     font-size: 13px;
     text-align: center;
+  }
+
+  &__Content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 8px;
   }
 
   &__Empty {
@@ -119,6 +97,9 @@
   &__Canvas {
     flex: 1;
     min-height: 0;
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+    overflow: hidden;
 
     .react-flow__node {
       cursor: grab;

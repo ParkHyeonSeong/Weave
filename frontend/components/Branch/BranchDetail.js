@@ -142,7 +142,7 @@ export default function BranchDetail() {
 
   return (
     <div className={`BranchDetail ${panelOpen ? 'BranchDetail--panel-open' : ''}`}>
-      <div className="BranchDetail__Main">
+      <div className={`BranchDetail__Main ${activeTab === 'flow' ? 'BranchDetail__Main--flow' : ''}`}>
         {/* 헤더 */}
         <div className="BranchDetail__Header">
           <span
@@ -229,6 +229,7 @@ export default function BranchDetail() {
           workflowStatuses={workflowStatuses}
           taskSummary={selectedTask}
           onClose={() => setSelectedTask(null)}
+          onSelectTask={handleSelectTask}
         />
       )}
 
