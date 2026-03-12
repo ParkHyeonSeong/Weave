@@ -44,8 +44,19 @@ const DocRefNode = Node.create({
       const dom = document.createElement('span');
       dom.className = 'doc-ref';
       dom.contentEditable = 'false';
+      dom.setAttribute('data-doc-ref', 'true');
+      dom.setAttribute('data-canvas-id', node.attrs.canvasId);
+      dom.setAttribute('data-page-id', node.attrs.pageId);
       dom.textContent = node.attrs.title;
       dom.title = `${node.attrs.canvasName} > ${node.attrs.title}`;
+
+      dom.addEventListener('click', (e) => {
+        e.stopPropagation();
+        window.dispatchEvent(new CustomEvent('canvas:ref_click', {
+          detail: { type: 'doc', data: { canvasId: node.attrs.canvasId, pageId: node.attrs.pageId } },
+        }));
+      });
+
       return {
         dom,
         selectNode() { dom.classList.add('ProseMirror-selectednode'); },

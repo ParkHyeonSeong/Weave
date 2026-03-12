@@ -15,7 +15,7 @@ const lowlight = createLowlight(common);
 // SSR 비활성화
 const CanvasCollabEditor = dynamic(() => import('./CanvasCollabEditor'), { ssr: false });
 
-export default function CanvasPageView() {
+export default function CanvasPageView({ onRefClick }) {
   const router = useRouter();
   const { canvasId, pageId } = router.query;
   const [page, setPage] = useState(null);
@@ -38,6 +38,14 @@ export default function CanvasPageView() {
     scrollParent.addEventListener('scroll', handleScroll, { passive: true });
     return () => scrollParent.removeEventListener('scroll', handleScroll);
   }, [page]);
+
+  // 편집 모드에서 ref 클릭 이벤트 수신
+  useEffect(() => {
+    if (!onRefClick) return;
+    const handler = (e) => onRefClick(e.detail);
+    window.addEventListener('canvas:ref_click', handler);
+    return () => window.removeEventListener('canvas:ref_click', handler);
+  }, [onRefClick]);
 
   // sessionStorage에서 유저 정보 로드
   useEffect(() => {
@@ -122,7 +130,12 @@ export default function CanvasPageView() {
       const handler = () => {
         const branchId = el.getAttribute('data-branch-id');
         const taskId = el.getAttribute('data-task-id');
-        if (branchId && taskId) router.push(`/branch/${branchId}/task/${taskId}`);
+        if (!branchId || !taskId) return;
+        if (onRefClick) {
+          onRefClick({ type: 'task', data: { branchId, taskId } });
+        } else {
+          router.push(`/branch/${branchId}/task/${taskId}`);
+        }
       };
       el.addEventListener('click', handler);
       handlers.push({ el, handler });
@@ -132,9 +145,14 @@ export default function CanvasPageView() {
       el.classList.add('doc-ref');
       el.style.cursor = 'pointer';
       const handler = () => {
-        const cId = el.getAttribute('data-canvas-id');
-        const pId = el.getAttribute('data-page-id');
-        if (cId && pId) router.push(`/canvas/${cId}/${pId}`);
+        const canvasId = el.getAttribute('data-canvas-id');
+        const pageId = el.getAttribute('data-page-id');
+        if (!canvasId || !pageId) return;
+        if (onRefClick) {
+          onRefClick({ type: 'doc', data: { canvasId, pageId } });
+        } else {
+          router.push(`/canvas/${canvasId}/${pageId}`);
+        }
       };
       el.addEventListener('click', handler);
       handlers.push({ el, handler });
@@ -147,14 +165,30 @@ export default function CanvasPageView() {
         const branchId = el.getAttribute('data-branch-id');
         const taskId = el.getAttribute('data-task-id');
         const issueId = el.getAttribute('data-issue-id');
-        if (branchId && taskId && issueId) router.push(`/branch/${branchId}/task/${taskId}/issue/${issueId}`);
+        if (!branchId || !taskId || !issueId) return;
+        if (onRefClick) {
+          onRefClick({ type: 'issue', data: { branchId, taskId, issueId } });
+        } else {
+          router.push(`/branch/${branchId}/task/${taskId}/issue/${issueId}`);
+        }
+      };
+      el.addEventListener('click', handler);
+      handlers.push({ el, handler });
+    });
+
+    // Bookmark 카드 클릭 → 새 탭에서 열기
+    contentRef.current.querySelectorAll('[data-bookmark]').forEach((el) => {
+      el.style.cursor = 'pointer';
+      const handler = () => {
+        const url = el.getAttribute('data-url');
+        if (url) window.open(url, '_blank', 'noopener,noreferrer');
       };
       el.addEventListener('click', handler);
       handlers.push({ el, handler });
     });
 
     return () => handlers.forEach(({ el, handler }) => el.removeEventListener('click', handler));
-  }, [isEditing, page?.content, router]);
+  }, [isEditing, page?.content, router, onRefClick]);
 
   // 읽기 모드에서 ref 상태 배치 갱신 + 뱃지 주입
   useEffect(() => {

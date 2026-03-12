@@ -48,6 +48,10 @@ const IssueRefNode = Node.create({
       const dom = document.createElement('span');
       dom.className = 'issue-ref';
       dom.contentEditable = 'false';
+      dom.setAttribute('data-issue-ref', 'true');
+      dom.setAttribute('data-branch-id', node.attrs.branchId);
+      dom.setAttribute('data-task-id', node.attrs.taskId);
+      dom.setAttribute('data-issue-id', node.attrs.issueId);
       dom.title = `${node.attrs.displayId} - ${node.attrs.title}`;
 
       dom.appendChild(document.createTextNode(`${node.attrs.displayId} ${node.attrs.title}`));
@@ -57,6 +61,13 @@ const IssueRefNode = Node.create({
       badge.textContent = node.attrs.status === 'open' ? 'Open' : 'Closed';
       badge.setAttribute('data-ref-badge', 'true');
       dom.appendChild(badge);
+
+      dom.addEventListener('click', (e) => {
+        e.stopPropagation();
+        window.dispatchEvent(new CustomEvent('canvas:ref_click', {
+          detail: { type: 'issue', data: { branchId: node.attrs.branchId, taskId: node.attrs.taskId, issueId: node.attrs.issueId } },
+        }));
+      });
 
       return {
         dom,

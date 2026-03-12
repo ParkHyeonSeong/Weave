@@ -56,6 +56,7 @@ import "katex/dist/katex.min.css";
 import "highlight.js/styles/github.min.css";
 import "@/styles/components/canvas/canvasCollabEditor.scss";
 import "@/styles/components/canvas/canvasSettings.scss";
+import "@/styles/components/canvas/refPreviewPanel.scss";
 import "@/styles/components/branch/taskFullPage.scss";
 import "@/styles/components/branch/taskIssueSection.scss";
 import "@/styles/components/branch/taskIssueDetail.scss";

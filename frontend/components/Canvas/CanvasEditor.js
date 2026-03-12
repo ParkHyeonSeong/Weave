@@ -22,6 +22,8 @@ import CalloutExtension from './extensions/CalloutExtension';
 import TaskRefNode from './extensions/TaskRefExtension';
 import MentionNode from './extensions/MentionExtension';
 import { createImageUploadPlugin } from './extensions/ImageUploadPlugin';
+import BookmarkNode from './extensions/BookmarkExtension';
+import { createBookmarkPastePlugin } from './extensions/BookmarkPastePlugin';
 import CanvasEditorToolbar from './CanvasEditorToolbar';
 
 const lowlight = createLowlight(common);
@@ -40,6 +42,13 @@ export default function CanvasEditor({ content, onChange, canvasId }) {
         },
       })
     : null;
+
+  const BookmarkPaste = Extension.create({
+    name: 'bookmarkPaste',
+    addProseMirrorPlugins() {
+      return [createBookmarkPastePlugin()];
+    },
+  });
 
   const extensions = [
     StarterKit.configure({
@@ -74,6 +83,8 @@ export default function CanvasEditor({ content, onChange, canvasId }) {
     CalloutExtension,
     TaskRefNode,
     MentionNode,
+    BookmarkNode,
+    BookmarkPaste,
     Mathematics.configure({
       katexOptions: { throwOnError: false },
     }),

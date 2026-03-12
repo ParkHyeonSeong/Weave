@@ -1,0 +1,236 @@
+@use '../../variables' as *;
+
+// 캔버스 페이지 레이아웃 (미리보기 패널 포함)
+.CanvasPageLayout {
+  display: flex;
+  height: 100%;
+
+  &__Main {
+    flex: 1;
+    min-width: 0;
+    overflow-y: auto;
+  }
+}
+
+// Ref 미리보기 패널
+.RefPreviewPanel {
+  width: 420px;
+  height: 100%;
+  background: $color-bg;
+  border-left: 1px solid $color-border;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow: hidden;
+
+  &__Header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: $space-3 $space-4;
+    border-bottom: 1px solid $color-border;
+    flex-shrink: 0;
+  }
+
+  &__TypeLabel {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-semibold;
+    color: $color-text-tertiary;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  &__HeaderRight {
+    display: flex;
+    align-items: center;
+    gap: $space-1;
+  }
+
+  &__HeaderBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: $radius-md;
+    color: $color-text-secondary;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+      color: $color-text;
+    }
+  }
+
+  &__Body {
+    flex: 1;
+    overflow-y: auto;
+    padding: $space-4;
+  }
+
+  &__Loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: $space-8;
+  }
+
+  &__Spinner {
+    animation: refPanelSpin 1s linear infinite;
+    color: $color-text-tertiary;
+  }
+
+  &__Empty {
+    text-align: center;
+    padding: $space-8;
+    font-size: $font-size-sm;
+    color: $color-text-tertiary;
+  }
+
+  &__Content {
+    display: flex;
+    flex-direction: column;
+    gap: $space-3;
+  }
+
+  &__TitleRow {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    flex-wrap: wrap;
+  }
+
+  &__DisplayId {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    color: $color-text-tertiary;
+  }
+
+  &__Badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+
+    &--todo { background: rgba(0, 0, 0, 0.06); color: $color-text-secondary; }
+    &--in_progress { background: $color-status-in-progress-bg; color: $color-status-in-progress; }
+    &--done { background: $color-success-bg; color: $color-success; }
+    &--open { background: $color-status-in-progress-bg; color: $color-status-in-progress; }
+    &--closed { background: rgba(0, 0, 0, 0.06); color: $color-text-secondary; }
+  }
+
+  &__Title {
+    font-size: $font-size-lg;
+    font-weight: $font-weight-semibold;
+    color: $color-text;
+    line-height: 1.4;
+    margin: 0;
+  }
+
+  &__Field {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    font-size: $font-size-sm;
+  }
+
+  &__FieldLabel {
+    color: $color-text-tertiary;
+    min-width: 80px;
+    flex-shrink: 0;
+  }
+
+  &__FieldValue {
+    color: $color-text;
+  }
+
+  &__Section {
+    display: flex;
+    flex-direction: column;
+    gap: $space-2;
+    margin-top: $space-2;
+  }
+
+  &__SectionTitle {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-semibold;
+    color: $color-text-tertiary;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  &__HtmlContent {
+    font-size: $font-size-sm;
+    color: $color-text-secondary;
+    line-height: 1.6;
+    word-break: break-word;
+
+    p { margin: 0.4em 0; }
+    ul, ol { padding-left: 1.5em; margin: 0.4em 0; }
+    code {
+      background: $color-surface;
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+
+    &--doc {
+      max-height: none;
+      max-width: 100%;
+      overflow-x: hidden;
+
+      // 모든 요소 넘침 방지
+      * {
+        max-width: 100%;
+        box-sizing: border-box;
+      }
+
+      table {
+        font-size: $font-size-xs;
+        width: 100% !important;
+        min-width: 0 !important;
+        table-layout: fixed !important;
+        word-break: break-word;
+        border-collapse: collapse;
+
+        colgroup { display: none; }
+
+        td, th {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          padding: 4px 6px;
+          border: 1px solid $color-border;
+          vertical-align: top;
+          width: auto !important;
+          min-width: 0 !important;
+        }
+      }
+      img {
+        max-width: 100%;
+        height: auto;
+      }
+      [data-bookmark] {
+        max-width: 100%;
+        overflow: hidden;
+      }
+      pre {
+        overflow-x: auto;
+        font-size: 0.8em;
+      }
+      // 인라인 ref 칩 축소
+      [data-task-ref],
+      [data-doc-ref],
+      [data-issue-ref] {
+        display: inline;
+        font-size: $font-size-xs;
+      }
+    }
+  }
+}
+
+@keyframes refPanelSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

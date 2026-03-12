@@ -25,6 +25,8 @@ import MentionNode from './extensions/MentionExtension';
 import DocRefNode from './extensions/DocRefExtension';
 import IssueRefNode from './extensions/IssueRefExtension';
 import { createImageUploadPlugin } from './extensions/ImageUploadPlugin';
+import BookmarkNode from './extensions/BookmarkExtension';
+import { createBookmarkPastePlugin } from './extensions/BookmarkPastePlugin';
 import CanvasEditorToolbar from './CanvasEditorToolbar';
 import { axios } from '@/library/_axios';
 
@@ -60,6 +62,13 @@ function CollabEditorInner({
           },
         })
       : null;
+
+    const BookmarkPaste = Extension.create({
+      name: 'bookmarkPaste',
+      addProseMirrorPlugins() {
+        return [createBookmarkPastePlugin()];
+      },
+    });
 
     // 커스텀 커서 빌더: 볼드 캐럿 + 작은 원형 아바타
     const cursorBuilder = (user) => {
@@ -125,6 +134,8 @@ function CollabEditorInner({
       MentionNode,
       DocRefNode,
       IssueRefNode,
+      BookmarkNode,
+      BookmarkPaste,
       Mathematics.configure({
         katexOptions: { throwOnError: false },
       }),

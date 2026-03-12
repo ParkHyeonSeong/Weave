@@ -65,6 +65,9 @@ const TaskRefNode = Node.create({
       const dom = document.createElement('span');
       dom.className = 'task-ref';
       dom.contentEditable = 'false';
+      dom.setAttribute('data-task-ref', 'true');
+      dom.setAttribute('data-branch-id', node.attrs.branchId);
+      dom.setAttribute('data-task-id', node.attrs.taskId);
       dom.title = `${node.attrs.displayId} - ${node.attrs.title}`;
 
       dom.appendChild(document.createTextNode(`${node.attrs.displayId} ${node.attrs.title}`));
@@ -80,6 +83,14 @@ const TaskRefNode = Node.create({
       }
       badge.setAttribute('data-ref-badge', 'true');
       dom.appendChild(badge);
+
+      // 클릭 시 미리보기 패널 이벤트 발행
+      dom.addEventListener('click', (e) => {
+        e.stopPropagation();
+        window.dispatchEvent(new CustomEvent('canvas:ref_click', {
+          detail: { type: 'task', data: { branchId: node.attrs.branchId, taskId: node.attrs.taskId } },
+        }));
+      });
 
       return {
         dom,
