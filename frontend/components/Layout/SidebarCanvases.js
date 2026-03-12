@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import {
   Plus, ChevronRight, ChevronDown,
   FileText, Folder, FolderOpen, BookOpen, FolderPlus, MoreHorizontal, Settings,
-  GripVertical, Trash2,
+  Trash2,
 } from 'lucide-react';
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
@@ -309,8 +309,8 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
                     </DragOverlay>
                   </DndContext>
 
-                  {/* 인라인 생성 입력 */}
-                  {inlineCreate && inlineCreate.canvasId === canvas.canvas_id && (
+                  {/* 인라인 생성 입력 (루트 레벨만, 폴더 안 생성은 SidebarPageItem에서 처리) */}
+                  {inlineCreate && inlineCreate.canvasId === canvas.canvas_id && !inlineCreate.parentPageId && (
                     <div className="Sidebar__PageItem Sidebar__PageItem--input">
                       {inlineCreate.type === 'folder'
                         ? <Folder size={13} className="Sidebar__PageIcon" />
@@ -388,10 +388,9 @@ function CanvasRow({ canvas, isActive, isExpanded, onToggle, onAddDocument, onAd
       <button
         className={`Sidebar__BranchItem ${isActive ? 'Sidebar__BranchItem--active' : ''}`}
         onClick={onToggle}
+        {...attributes}
+        {...listeners}
       >
-        <span className="Sidebar__DragHandle" {...attributes} {...listeners}>
-          <GripVertical size={12} />
-        </span>
         <span className="Sidebar__ExpandIcon">
           {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         </span>
