@@ -148,6 +148,11 @@ async def websocket_chat(ws: WebSocket):
                         },
                     }, session)
 
+                    # 오프라인 멤버에게 Web Push
+                    await notification_service.push_chat_to_offline(
+                        room_id, user_id, username, content, session
+                    )
+
             elif action == 'mark_read':
                 room_id = data.get('room_id')
                 if not room_id:

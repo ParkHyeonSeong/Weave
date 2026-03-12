@@ -100,3 +100,26 @@ async def notify_bulk(user_ids: list[int], ntype: str, actor_id: int, title: str
     """여러 수신자에게 일괄 알림 (actor 제외, 중복 제거)"""
     for uid in set(user_ids):
         await notify(uid, ntype, actor_id, title, link, entity_type, entity_id, db)
+
+
+async def push_chat_to_offline(room_id: int, sender_id: int, sender_name: str,
+                                content: str, db: AsyncSession):
+    """오프라인 채팅방 멤버에게 Web Push 전송 (DB 알림 저장 없이 push만)"""
+    from sqlalchemy import text
+
+    result = await db.execute(text("""
+        SELECT user_id FROM chat_room_member WHERE room_id = :room_id
+    """), {'room_id': room_id})
+    member_ids = [row[0] for row in result.fetchall()]
+
+    body = f'{sender_name}: {content}' if content else f'{sender_name}: new message'
+
+    for uid in member_ids:
+        if uid == sender_id:
+            continue
+        # WebSocket 연결이 없는 멤버에게만 push
+        if uid not in manager.active_connections:
+            try:
+                await _send_web_push(uid, body, None, db)
+            except Exception as e:
+                logger.warning(f"Chat push failed for user {uid}: {e}")
