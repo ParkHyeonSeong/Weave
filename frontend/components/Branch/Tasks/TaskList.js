@@ -22,11 +22,19 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
   const [backlogTasks, setBacklogTasks] = useState([]);
   const [epics, setEpics] = useState([]);
   const [members, setMembers] = useState([]);
+  const [labels, setLabels] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // 필터 상태
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedUserIds, setSelectedUserIds] = useState(new Set());
+  const [filters, setFilters] = useState({
+    priorities: new Set(),
+    labelIds: new Set(),
+    epicIds: new Set(),
+    typeKeys: new Set(),
+    statusKeys: new Set(),
+  });
 
   // 모달 상태
   const [sprintModal, setSprintModal] = useState({ open: false, sprint: null });
@@ -62,6 +70,10 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
     try {
       const memberRes = await axios.get(`/branches/${branchId}/members`);
       if (memberRes.data.status) setMembers(memberRes.data.members);
+    } catch {}
+    try {
+      const labelRes = await axios.get(`/branches/${branchId}/labels`);
+      if (labelRes.data.status) setLabels(labelRes.data.labels);
     } catch {}
   };
 
@@ -106,6 +118,25 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
     });
   };
 
+  const handleToggleFilter = (category, value) => {
+    setFilters((prev) => {
+      const next = { ...prev, [category]: new Set(prev[category]) };
+      if (next[category].has(value)) next[category].delete(value);
+      else next[category].add(value);
+      return next;
+    });
+  };
+
+  const handleClearFilters = () => {
+    setFilters({
+      priorities: new Set(),
+      labelIds: new Set(),
+      epicIds: new Set(),
+      typeKeys: new Set(),
+      statusKeys: new Set(),
+    });
+  };
+
   const filterTasks = (tasks) => tasks.filter((t) => {
     if (searchQuery && !t.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     if (selectedUserIds.size > 0) {
@@ -113,6 +144,14 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
       if (selectedUserIds.has(0) && taskUserIds.length === 0) return true;
       if (!taskUserIds.some((uid) => selectedUserIds.has(uid))) return false;
     }
+    if (filters.priorities.size > 0 && !filters.priorities.has(t.priority)) return false;
+    if (filters.labelIds.size > 0) {
+      const taskLabelIds = (t.labels || []).map((l) => l.label_id);
+      if (!taskLabelIds.some((id) => filters.labelIds.has(id))) return false;
+    }
+    if (filters.epicIds.size > 0 && !filters.epicIds.has(t.epic_id)) return false;
+    if (filters.typeKeys.size > 0 && !filters.typeKeys.has(t.task_type)) return false;
+    if (filters.statusKeys.size > 0 && !filters.statusKeys.has(t.status)) return false;
     return true;
   });
 
@@ -376,6 +415,13 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
           onSearchChange={setSearchQuery}
           selectedUserIds={selectedUserIds}
           onToggleUser={handleToggleUser}
+          labels={labels}
+          epics={epics}
+          taskTypes={taskTypes}
+          workflowStatuses={workflowStatuses}
+          filters={filters}
+          onToggleFilter={handleToggleFilter}
+          onClearFilters={handleClearFilters}
         />
         <button className="TaskList__SprintBtn" onClick={() => setSprintModal({ open: true, sprint: null })}>
           <Plus size={14} />

@@ -446,6 +446,67 @@
     font-weight: $font-weight-bold;
     border: 1px solid $color-border;
   }
+
+  // -- 필터 드롭다운 영역 --
+  &__Filters {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  &__ClearAll {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    color: $color-text-tertiary;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: $radius-sm;
+    transition: all $transition-fast;
+
+    &:hover {
+      color: $color-error;
+      background: $color-error-bg;
+    }
+  }
+
+  // -- 활성 필터 칩 --
+  &__ActiveFilters {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  &__ActiveChip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 6px;
+    font-size: 11px;
+    font-weight: $font-weight-medium;
+    border: 1px solid $color-border;
+    border-radius: $radius-sm;
+    white-space: nowrap;
+    line-height: 1.4;
+  }
+
+  &__ActiveChipRemove {
+    display: inline-flex;
+    align-items: center;
+    padding: 0;
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity $transition-fast;
+
+    &:hover {
+      opacity: 1;
+    }
+  }
 }
 
 // -- Task Row --

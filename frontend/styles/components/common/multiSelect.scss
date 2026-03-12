@@ -1,0 +1,163 @@
+@use '../../variables' as *;
+
+.MultiSelect {
+  position: relative;
+  display: inline-flex;
+
+  &__Trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    color: $color-text-secondary;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    cursor: pointer;
+    transition: all $transition-fast;
+    white-space: nowrap;
+    font-family: $font-family;
+    height: 28px;
+
+    &:hover {
+      border-color: $color-border-hover;
+      color: $color-text;
+    }
+  }
+
+  &--open &__Trigger {
+    border-color: $color-primary;
+    box-shadow: $shadow-focus;
+    color: $color-text;
+  }
+
+  &--active &__Trigger {
+    border-color: $color-primary;
+    color: $color-primary;
+  }
+
+  &__Label {
+    line-height: 1;
+  }
+
+  &__Badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    font-size: 10px;
+    font-weight: $font-weight-bold;
+    color: $color-text-inverse;
+    background: $color-primary;
+    border-radius: 8px;
+    line-height: 1;
+  }
+
+  &__Arrow {
+    flex-shrink: 0;
+    color: $color-text-tertiary;
+    transition: transform $transition-fast;
+  }
+
+  &--open &__Arrow {
+    transform: rotate(180deg);
+  }
+
+  // -- 드롭다운 --
+  &__Dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    min-width: 180px;
+    max-height: 240px;
+    overflow-y: auto;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+    box-shadow: $shadow-md;
+    z-index: 200;
+    padding: $space-1 0;
+    animation: multiSelectFadeIn 120ms ease;
+  }
+
+  // -- 옵션 --
+  &__Option {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 6px $space-3;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-family: $font-family;
+    font-size: $font-size-xs;
+    color: $color-text;
+    text-align: left;
+    transition: background $transition-fast;
+    white-space: nowrap;
+
+    &:hover {
+      background: $color-surface;
+    }
+
+    &--selected {
+      color: $color-primary;
+      font-weight: $font-weight-medium;
+    }
+  }
+
+  &__Check {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    border: 1px solid $color-border;
+    flex-shrink: 0;
+    color: transparent;
+    transition: all $transition-fast;
+
+    &--visible {
+      background: $color-primary;
+      border-color: $color-primary;
+      color: $color-text-inverse;
+    }
+  }
+
+  &__Dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  &__Icon {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  &__OptionLabel {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+@keyframes multiSelectFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
