@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import {
   Plus, ChevronRight, ChevronDown,
-  FileText, Folder, FolderOpen, BookOpen, FolderPlus, MoreHorizontal, Settings,
+  FileText, Folder, FolderOpen, FolderPlus, MoreHorizontal, Settings,
   Trash2,
 } from 'lucide-react';
 import {
@@ -208,7 +208,6 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
     onOrderChange(newOrder);
   };
 
-  const overviewPage = pages.find((p) => p.type === 'overview');
   const rootChildren = getChildren(null);
   const sortableIds = pages
     .filter((p) => p.type !== 'overview')
@@ -257,18 +256,6 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
 
               {expandedId === canvas.canvas_id && (
                 <div className="Sidebar__PageList">
-                  {overviewPage && (
-                    <button
-                      className={`Sidebar__PageItem ${
-                        router.query.pageId == overviewPage.page_id ? 'Sidebar__PageItem--active' : ''
-                      }`}
-                      onClick={() => router.push(`/canvas/${canvas.canvas_id}/${overviewPage.page_id}`)}
-                    >
-                      <BookOpen size={13} className="Sidebar__PageIcon" />
-                      <span className="Sidebar__BranchName">Overview</span>
-                    </button>
-                  )}
-
                   <DndContext
                     sensors={sensors}
                     collisionDetection={closestCenter}
@@ -490,15 +477,13 @@ function SidebarPageItem({
   return (
     <>
       {isFolder ? (
-        <div className="Sidebar__PageRow" style={{ paddingLeft: `${40 + depth * 14}px` }}>
+        <div className={`Sidebar__PageRow ${router.query.pageId == page.page_id ? 'Sidebar__PageRow--active' : ''}`} style={{ paddingLeft: `${40 + depth * 14}px` }}>
           <button
             ref={setNodeRef}
             {...attributes}
             {...listeners}
             style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
-            className={`Sidebar__PageItem Sidebar__PageItem--inRow ${
-              router.query.pageId == page.page_id ? 'Sidebar__PageItem--active' : ''
-            }`}
+            className="Sidebar__PageItem Sidebar__PageItem--inRow"
             onClick={() => toggleFolder(page.page_id)}
           >
             <span className="Sidebar__ExpandIcon">
@@ -546,15 +531,13 @@ function SidebarPageItem({
           </div>
         </div>
       ) : (
-        <div className="Sidebar__PageRow" style={{ paddingLeft: `${40 + depth * 14}px` }}>
+        <div className={`Sidebar__PageRow ${router.query.pageId == page.page_id ? 'Sidebar__PageRow--active' : ''}`} style={{ paddingLeft: `${40 + depth * 14}px` }}>
           <button
             ref={setNodeRef}
             style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
             {...attributes}
             {...listeners}
-            className={`Sidebar__PageItem Sidebar__PageItem--inRow ${
-              router.query.pageId == page.page_id ? 'Sidebar__PageItem--active' : ''
-            }`}
+            className="Sidebar__PageItem Sidebar__PageItem--inRow"
             onClick={() => router.push(`/canvas/${canvasId}/${page.page_id}`)}
           >
             <FileText size={13} className="Sidebar__PageIcon" />

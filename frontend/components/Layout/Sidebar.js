@@ -41,12 +41,9 @@ export default function Sidebar({ width, onResizeStart, onCreateBranch, onCreate
   const APP_HOME = { branch: '/branch', canvas: '/canvas' };
 
   const handleAppClick = (app) => {
-    if (activeApp === app) {
-      setActiveApp(null);
-    } else {
-      setActiveApp(app);
-      router.push(APP_HOME[app]);
-    }
+    if (activeApp === app) return;
+    setActiveApp(app);
+    router.push(APP_HOME[app]);
   };
 
   return (
