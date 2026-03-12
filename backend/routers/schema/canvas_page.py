@@ -13,8 +13,8 @@ class CanvasPageCreate(BaseModel):
     @field_validator('type')
     @classmethod
     def validate_type(cls, v):
-        if v not in ('document', 'folder'):
-            raise ValueError('type must be "document" or "folder"')
+        if v not in ('document', 'folder', 'typst'):
+            raise ValueError('type must be "document", "folder", or "typst"')
         return v
 
     @field_validator('content')

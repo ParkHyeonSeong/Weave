@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import dynamic from 'next/dynamic';
-import { Pencil, X, Wifi, WifiOff, Loader, RefreshCw, Maximize2, Minimize2, Trash2 } from 'lucide-react';
+import { Pencil, X, Wifi, WifiOff, Loader, RefreshCw, Maximize2, Minimize2, Trash2, Download, AlertTriangle } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import ConfirmModal from '@/components/modal/ConfirmModal';
 import useCollabProvider from '@/library/useCollabProvider';
@@ -9,11 +9,13 @@ import PresenceBar from './PresenceBar';
 import katex from 'katex';
 import { common, createLowlight } from 'lowlight';
 import { toHtml } from 'hast-util-to-html';
+import { compileToSvg, downloadPdf } from '@/library/typstCompiler';
 
 const lowlight = createLowlight(common);
 
 // SSR 비활성화
 const CanvasCollabEditor = dynamic(() => import('./CanvasCollabEditor'), { ssr: false });
+const TypstEditor = dynamic(() => import('./TypstEditor'), { ssr: false });
 
 export default function CanvasPageView({ onRefClick }) {
   const router = useRouter();
@@ -29,6 +31,10 @@ export default function CanvasPageView({ onRefClick }) {
   const contentTimerRef = useRef(null);
   const stickyRef = useRef(null);
   const [isScrolled, setIsScrolled] = useState(false);
+
+  // Typst 읽기 모드용 상태
+  const [typstSvg, setTypstSvg] = useState(null);
+  const [typstExporting, setTypstExporting] = useState(false);
 
   // 스크롤 감지 → 헤더 border 표시
   useEffect(() => {
@@ -88,7 +94,7 @@ export default function CanvasPageView({ onRefClick }) {
 
   // 읽기 모드에서 KaTeX 수식 렌더링
   useEffect(() => {
-    if (isEditing || !contentRef.current) return;
+    if (isEditing || !contentRef.current || page?.type === 'typst') return;
     const mathNodes = contentRef.current.querySelectorAll('[data-type="block-math"], [data-type="inline-math"]');
     mathNodes.forEach((el) => {
       const latex = el.getAttribute('data-latex');
@@ -103,7 +109,7 @@ export default function CanvasPageView({ onRefClick }) {
 
   // 읽기 모드에서 코드 블록 구문 강조
   useEffect(() => {
-    if (isEditing || !contentRef.current) return;
+    if (isEditing || !contentRef.current || page?.type === 'typst') return;
     const codeBlocks = contentRef.current.querySelectorAll('pre code');
     codeBlocks.forEach((el) => {
       if (el.dataset.highlighted) return;
@@ -121,7 +127,7 @@ export default function CanvasPageView({ onRefClick }) {
 
   // 읽기 모드에서 레퍼런스 클릭 핸들러 (task, doc, issue)
   useEffect(() => {
-    if (isEditing || !contentRef.current) return;
+    if (isEditing || !contentRef.current || page?.type === 'typst') return;
     const handlers = [];
 
     contentRef.current.querySelectorAll('[data-task-ref]').forEach((el) => {
@@ -192,7 +198,7 @@ export default function CanvasPageView({ onRefClick }) {
 
   // 읽기 모드에서 ref 상태 배치 갱신 + 뱃지 주입
   useEffect(() => {
-    if (isEditing || !contentRef.current) return;
+    if (isEditing || !contentRef.current || page?.type === 'typst') return;
 
     const taskIds = new Set();
     const issueIds = new Set();
@@ -389,6 +395,43 @@ export default function CanvasPageView({ onRefClick }) {
     };
   }, [canvasId, pageId, page?.updated_at, isEditing]);
 
+  // Typst 읽기 모드: content를 SVG로 컴파일
+  const [typstError, setTypstError] = useState(null);
+
+  useEffect(() => {
+    if (isEditing || page?.type !== 'typst' || !page?.content) {
+      setTypstSvg(null);
+      setTypstError(null);
+      return;
+    }
+    let cancelled = false;
+    compileToSvg(page.content).then(({ svg, errors }) => {
+      if (cancelled) return;
+      if (svg) {
+        setTypstSvg(svg);
+        setTypstError(null);
+      } else {
+        setTypstSvg(null);
+        // SourceDiagnostic 문자열에서 message 추출
+        const raw = errors?.[0] || 'Compile error';
+        const match = raw.match(/message:\s*"([^"]+)"/);
+        setTypstError(match ? match[1] : raw);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [isEditing, page?.type, page?.content]);
+
+  // Typst PDF 내보내기 (읽기 모드)
+  const handleTypstExportPdf = async () => {
+    if (!page?.content?.trim()) return;
+    setTypstExporting(true);
+    try {
+      const filename = (page.title || 'document').replace(/[^a-zA-Z0-9가-힣\s_-]/g, '') + '.pdf';
+      await downloadPdf(page.content, filename);
+    } catch {}
+    setTypstExporting(false);
+  };
+
   // 키보드 단축키: e → Edit, Cmd+S → Save & Close
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -423,7 +466,7 @@ export default function CanvasPageView({ onRefClick }) {
   if (!page) return null;
 
   return (
-    <div className={`CanvasPageView${page?.wide_mode ? ' CanvasPageView--wide' : ''}`}>
+    <div className={`CanvasPageView${page?.wide_mode ? ' CanvasPageView--wide' : ''}${page?.type === 'typst' && isEditing ? ' CanvasPageView--typst-editing' : ''}`}>
       <div ref={stickyRef} className={`CanvasPageView__StickyHeader ${isScrolled ? 'CanvasPageView__StickyHeader--scrolled' : ''}`}>
       <div className="CanvasPageView__TopBar">
         {isEditing ? (
@@ -477,6 +520,17 @@ export default function CanvasPageView({ onRefClick }) {
               >
                 {page.wide_mode ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
               </button>
+              {page.type === 'typst' && (
+                <button
+                  className="CanvasPageView__ActionBtn"
+                  onClick={handleTypstExportPdf}
+                  disabled={typstExporting}
+                  title="Download PDF"
+                >
+                  {typstExporting ? <Loader size={15} className="CanvasPageView__StatusSpin" /> : <Download size={15} />}
+                  PDF
+                </button>
+              )}
               <button
                 className="CanvasPageView__ActionBtn"
                 onClick={() => setIsEditing(true)}
@@ -512,20 +566,49 @@ export default function CanvasPageView({ onRefClick }) {
       </div>
 
       {/* 내용 */}
-      <div className="CanvasPageView__Body">
+      <div className={`CanvasPageView__Body${page.type === 'typst' ? ' CanvasPageView__Body--typst' : ''}`}>
         {isEditing ? (
           ydoc && provider ? (
-            <CanvasCollabEditor
-              ydoc={ydoc}
-              provider={provider}
-              canvasId={Number(canvasId)}
-              initialContent={page.content || ''}
-              hasExistingYjsState={!!page.yjs_state}
-              onHtmlChange={handleHtmlChange}
-            />
+            page.type === 'typst' ? (
+              <TypstEditor
+                ydoc={ydoc}
+                provider={provider}
+                initialContent={page.content || ''}
+                hasExistingYjsState={!!page.yjs_state}
+                onContentChange={handleHtmlChange}
+                pageTitle={page.title}
+              />
+            ) : (
+              <CanvasCollabEditor
+                ydoc={ydoc}
+                provider={provider}
+                canvasId={Number(canvasId)}
+                initialContent={page.content || ''}
+                hasExistingYjsState={!!page.yjs_state}
+                onHtmlChange={handleHtmlChange}
+              />
+            )
           ) : (
             <div className="CanvasPageView__Loading">Connecting...</div>
           )
+        ) : page.type === 'typst' ? (
+          <div className="CanvasPageView__TypstPreview">
+            {typstSvg ? (
+              <div className="CanvasPageView__TypstPage" dangerouslySetInnerHTML={{ __html: typstSvg }} />
+            ) : typstError ? (
+              <div className="CanvasPageView__TypstError">
+                <AlertTriangle size={14} />
+                <span>{typstError}</span>
+              </div>
+            ) : page.content ? (
+              <div className="CanvasPageView__Loading">
+                <Loader size={16} className="CanvasPageView__StatusSpin" />
+                Rendering...
+              </div>
+            ) : (
+              <p className="CanvasPageView__Empty">No content yet. Click Edit to start writing.</p>
+            )}
+          </div>
         ) : (
           <div
             ref={contentRef}

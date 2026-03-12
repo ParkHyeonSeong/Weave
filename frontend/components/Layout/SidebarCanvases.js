@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import {
   Plus, ChevronRight, ChevronDown,
-  FileText, Folder, FolderOpen, FolderPlus, MoreHorizontal, Settings,
+  FileText, FileCode, Folder, FolderOpen, FolderPlus, MoreHorizontal, Settings,
   Trash2,
 } from 'lucide-react';
 import {
@@ -135,7 +135,7 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
         setInlineCreate(null);
         fetchPages(inlineCreate.canvasId);
         window.dispatchEvent(new CustomEvent('canvas:page_created'));
-        if (inlineCreate.type === 'document') {
+        if (inlineCreate.type === 'document' || inlineCreate.type === 'typst') {
           router.push(`/canvas/${inlineCreate.canvasId}/${res.data.page_id}`);
         }
       }
@@ -252,6 +252,11 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
                   setInlineCreate({ canvasId: canvas.canvas_id, type: 'folder' });
                   setInlineTitle('');
                 }}
+                onAddTypst={() => {
+                  setExpandedId(canvas.canvas_id);
+                  setInlineCreate({ canvasId: canvas.canvas_id, type: 'typst' });
+                  setInlineTitle('');
+                }}
               />
 
               {expandedId === canvas.canvas_id && (
@@ -289,7 +294,9 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
                         <div className="Sidebar__PageItem Sidebar__PageItem--dragging">
                           {activeItem.type === 'folder'
                             ? <Folder size={13} className="Sidebar__PageIcon" />
-                            : <FileText size={13} className="Sidebar__PageIcon" />}
+                            : activeItem.type === 'typst'
+                              ? <FileCode size={13} className="Sidebar__PageIcon" />
+                              : <FileText size={13} className="Sidebar__PageIcon" />}
                           <span className="Sidebar__BranchName">{activeItem.title}</span>
                         </div>
                       )}
@@ -301,7 +308,9 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
                     <div className="Sidebar__PageItem Sidebar__PageItem--input">
                       {inlineCreate.type === 'folder'
                         ? <Folder size={13} className="Sidebar__PageIcon" />
-                        : <FileText size={13} className="Sidebar__PageIcon" />}
+                        : inlineCreate.type === 'typst'
+                          ? <FileCode size={13} className="Sidebar__PageIcon" />
+                          : <FileText size={13} className="Sidebar__PageIcon" />}
                       <input
                         autoFocus
                         className="Sidebar__InlineInput"
@@ -309,7 +318,7 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
                         onChange={(e) => setInlineTitle(e.target.value)}
                         onKeyDown={handleInlineKeyDown}
                         onBlur={() => { if (!inlineTitle.trim()) { setInlineCreate(null); setInlineTitle(''); } }}
-                        placeholder={inlineCreate.type === 'folder' ? 'Folder name...' : 'Document title...'}
+                        placeholder={inlineCreate.type === 'folder' ? 'Folder name...' : inlineCreate.type === 'typst' ? 'Typst document title...' : 'Document title...'}
                       />
                     </div>
                   )}
@@ -338,7 +347,7 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
 }
 
 // 캔버스 제목 row + 호버 시 더보기/+ 버튼
-function CanvasRow({ canvas, isActive, isExpanded, onToggle, onAddDocument, onAddFolder }) {
+function CanvasRow({ canvas, isActive, isExpanded, onToggle, onAddDocument, onAddFolder, onAddTypst }) {
   const router = useRouter();
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
@@ -425,6 +434,10 @@ function CanvasRow({ canvas, isActive, isExpanded, onToggle, onAddDocument, onAd
               <button className="Sidebar__AddMenuItem" onClick={() => { setShowAddMenu(false); onAddDocument(); }}>
                 <FileText size={13} />
                 Document
+              </button>
+              <button className="Sidebar__AddMenuItem" onClick={() => { setShowAddMenu(false); onAddTypst(); }}>
+                <FileCode size={13} />
+                Typst Document
               </button>
               <button className="Sidebar__AddMenuItem" onClick={() => { setShowAddMenu(false); onAddFolder(); }}>
                 <FolderPlus size={13} />
@@ -513,6 +526,12 @@ function SidebarPageItem({
                 </button>
                 <button className="Sidebar__AddMenuItem" onClick={() => {
                   setShowMenu(false);
+                  onFolderAdd(canvasId, page.page_id, 'typst');
+                }}>
+                  <FileCode size={13} /> Typst Document
+                </button>
+                <button className="Sidebar__AddMenuItem" onClick={() => {
+                  setShowMenu(false);
                   onFolderAdd(canvasId, page.page_id, 'folder');
                 }}>
                   <FolderPlus size={13} /> Folder
@@ -540,7 +559,9 @@ function SidebarPageItem({
             className="Sidebar__PageItem Sidebar__PageItem--inRow"
             onClick={() => router.push(`/canvas/${canvasId}/${page.page_id}`)}
           >
-            <FileText size={13} className="Sidebar__PageIcon" />
+            {page.type === 'typst'
+              ? <FileCode size={13} className="Sidebar__PageIcon" />
+              : <FileText size={13} className="Sidebar__PageIcon" />}
             <span className="Sidebar__BranchName">{page.title}</span>
           </button>
           <div className="Sidebar__PageActions">
@@ -586,7 +607,9 @@ function SidebarPageItem({
             <div className="Sidebar__PageItem Sidebar__PageItem--input" style={{ paddingLeft: `${40 + (depth + 1) * 14}px` }}>
               {inlineCreate.type === 'folder'
                 ? <Folder size={13} className="Sidebar__PageIcon" />
-                : <FileText size={13} className="Sidebar__PageIcon" />}
+                : inlineCreate.type === 'typst'
+                  ? <FileCode size={13} className="Sidebar__PageIcon" />
+                  : <FileText size={13} className="Sidebar__PageIcon" />}
               <input
                 autoFocus
                 className="Sidebar__InlineInput"
@@ -594,7 +617,7 @@ function SidebarPageItem({
                 onChange={(e) => setInlineTitle(e.target.value)}
                 onKeyDown={handleInlineKeyDown}
                 onBlur={() => { if (!inlineTitle.trim()) { setInlineCreate(null); setInlineTitle(''); } }}
-                placeholder={inlineCreate.type === 'folder' ? 'Folder name...' : 'Document title...'}
+                placeholder={inlineCreate.type === 'folder' ? 'Folder name...' : inlineCreate.type === 'typst' ? 'Typst document title...' : 'Document title...'}
               />
             </div>
           )}

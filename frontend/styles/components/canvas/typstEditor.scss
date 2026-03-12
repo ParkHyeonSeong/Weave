@@ -1,0 +1,258 @@
+@use '../../variables' as *;
+
+.TypstEditor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+
+  &__Toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: $space-2 $space-4;
+    border-bottom: 1px solid $color-border;
+    background: $color-surface;
+    flex-shrink: 0;
+  }
+
+  &__ToolbarLeft {
+    display: flex;
+    align-items: center;
+    gap: $space-3;
+  }
+
+  &__ToolbarRight {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+  }
+
+  &__Label {
+    font-size: $font-size-sm;
+    font-weight: 600;
+    color: $color-text-secondary;
+  }
+
+  &__Compiling {
+    display: flex;
+    align-items: center;
+    gap: $space-1;
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+  }
+
+  &__Spin {
+    animation: typst-spin 1s linear infinite;
+  }
+
+  &__ExportBtn {
+    display: flex;
+    align-items: center;
+    gap: $space-1;
+    padding: $space-1 $space-3;
+    font-size: $font-size-sm;
+    font-weight: 500;
+    color: $color-text;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    cursor: pointer;
+    transition: background 0.15s;
+
+    &:hover:not(:disabled) {
+      background: $color-surface-hover;
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+
+  &__Split {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+  }
+
+  &__Code {
+    flex: 1;
+    overflow: auto;
+    border-right: 1px solid $color-border;
+
+    .cm-editor {
+      height: 100%;
+    }
+
+    .cm-scroller {
+      overflow: auto;
+    }
+
+    .cm-gutters {
+      background: $color-surface;
+      border-right: 1px solid $color-border;
+      color: $color-text-tertiary;
+    }
+
+    .cm-activeLineGutter {
+      background: $color-surface-hover;
+    }
+
+    .cm-activeLine {
+      background: rgba($color-primary, 0.04);
+    }
+
+    .cm-selectionBackground {
+      background: rgba($color-primary, 0.15) !important;
+    }
+
+    // Yjs 커서
+    .yRemoteSelection {
+      opacity: 0.3;
+    }
+
+    .yRemoteSelectionHead {
+      position: absolute;
+      border-left: 2px solid;
+      border-color: inherit;
+      height: 100%;
+    }
+
+    .yRemoteSelectionHead::after {
+      content: attr(data-name);
+      position: absolute;
+      top: -1.4em;
+      left: -1px;
+      font-size: 10px;
+      padding: 1px 4px;
+      border-radius: 3px;
+      color: #fff;
+      background: inherit;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+  }
+
+  &__Preview {
+    flex: 1;
+    overflow: auto;
+    padding: $space-4;
+    background: $color-surface;
+  }
+
+  &__Page {
+    background: #fff;
+    border-radius: $radius-md;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+    padding: $space-4;
+    max-width: 100%;
+    overflow: hidden;
+
+    svg {
+      width: 100%;
+      height: auto;
+    }
+  }
+
+  &__Error {
+    display: flex;
+    gap: $space-2;
+    padding: $space-3;
+    margin-bottom: $space-3;
+    background: rgba($color-error, 0.06);
+    border: 1px solid rgba($color-error, 0.2);
+    border-radius: $radius-md;
+    color: $color-error;
+    font-size: $font-size-sm;
+
+    svg {
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+  }
+
+  &__ErrorList {
+    flex: 1;
+    overflow: auto;
+
+    pre {
+      margin: 0;
+      font-size: $font-size-xs;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: monospace;
+    }
+  }
+
+  &__Empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: $space-3;
+    height: 100%;
+    min-height: 200px;
+    color: $color-text-tertiary;
+    font-size: $font-size-sm;
+  }
+}
+
+// Typst 편집 시 Layout__Content 스크롤 비활성화 (에디터 내부에서 스크롤)
+.CanvasPageView--typst-editing {
+  overflow: hidden;
+}
+
+// CanvasPageView Typst 읽기 모드
+.CanvasPageView__Body--typst {
+  padding: 0;
+}
+
+.CanvasPageView__TypstPreview {
+  padding: $space-6;
+  background: $color-surface;
+  min-height: 300px;
+}
+
+.CanvasPageView__TypstPage {
+  background: #fff;
+  border-radius: $radius-md;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  padding: $space-6;
+  max-width: 800px;
+  margin: 0 auto;
+
+  svg {
+    width: 100%;
+    height: auto;
+  }
+}
+
+.CanvasPageView__TypstError {
+  display: flex;
+  align-items: center;
+  gap: $space-2;
+  padding: $space-4;
+  margin: $space-4;
+  background: rgba($color-error, 0.06);
+  border: 1px solid rgba($color-error, 0.2);
+  border-radius: $radius-md;
+  color: $color-error;
+  font-size: $font-size-sm;
+
+  svg {
+    flex-shrink: 0;
+  }
+}
+
+.CanvasPageView__Empty {
+  color: $color-text-tertiary;
+  font-size: $font-size-sm;
+  text-align: center;
+  padding: $space-8;
+}
+
+@keyframes typst-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

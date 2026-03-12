@@ -17,6 +17,11 @@
     flex: 1;
     overflow-y: auto;
     min-width: 0;
+
+    // Typst 편집 모드: 내부 에디터가 자체 스크롤 처리
+    &:has(.CanvasPageView--typst-editing) {
+      overflow: hidden;
+    }
   }
 
   // 메신저 리사이즈 핸들
