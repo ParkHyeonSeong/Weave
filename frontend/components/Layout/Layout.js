@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import Footer from './Footer';
@@ -11,6 +12,7 @@ import { subscribeToPush } from '@/library/pushSubscription';
 import { getWsBaseURL } from '@/library/_axios';
 import { showToast } from './Toast';
 import useMobile from '@/hooks/useMobile';
+import usePictureInPicture from '@/hooks/usePictureInPicture';
 
 const MESSENGER_MIN_WIDTH = 280;
 const MESSENGER_DEFAULT_WIDTH = 320;
@@ -51,6 +53,7 @@ export default function Layout({ children }) {
   const isResizingRef = useRef(false);
   const wsRef = useRef(null);
   const activeRoomRef = useRef(null);
+  const { isSupported: isPipSupported, isPipActive, portalContainer: pipContainer, openPip, closePip } = usePictureInPicture();
 
   // 모바일 진입 시 사이드바/메신저 자동 닫기
   useEffect(() => {
@@ -386,7 +389,7 @@ export default function Layout({ children }) {
         {isMobile && !isMessengerCollapsed && (
           <div className="Layout__Backdrop" onClick={handleMessengerBackdropClick} />
         )}
-        {!isMessengerCollapsed && (
+        {!isMessengerCollapsed && !isPipActive && (
           <>
             {!isMobile && (
               <div
@@ -399,8 +402,19 @@ export default function Layout({ children }) {
               activeRoomRef={activeRoomRef}
               panelWidth={isMobile ? undefined : messengerWidth}
               isMobile={isMobile}
+              onPopOut={isPipSupported && !isMobile ? openPip : undefined}
             />
           </>
+        )}
+        {/* PiP: createPortal로 별도 윈도우에 렌더링 */}
+        {isPipActive && pipContainer && createPortal(
+          <Messenger
+            wsRef={wsRef}
+            activeRoomRef={activeRoomRef}
+            isMobile={false}
+            isPip
+          />,
+          pipContainer
         )}
       </div>
       <Footer

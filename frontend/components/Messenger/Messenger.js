@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { MessageSquare, Users, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
+import { MessageSquare, Users, PanelLeftClose, PanelLeftOpen, X, ExternalLink } from 'lucide-react';
 import MessengerChatList from './MessengerChatList';
 import MessengerUserList from './MessengerUserList';
 import MessengerChatRoom from './MessengerChatRoom';
@@ -7,7 +7,7 @@ import MessengerNewChat from './MessengerNewChat';
 
 const SPLIT_THRESHOLD = 560;
 
-export default function Messenger({ wsRef, activeRoomRef, panelWidth, isMobile }) {
+export default function Messenger({ wsRef, activeRoomRef, panelWidth, isMobile, isPip, onPopOut }) {
   const [activeTab, setActiveTab] = useState('chats');
   const [activeRoomId, setActiveRoomId] = useState(() => {
     try {
@@ -82,6 +82,15 @@ export default function Messenger({ wsRef, activeRoomRef, panelWidth, isMobile }
           <Users size={14} />
           Users
         </button>
+        {onPopOut && (
+          <button
+            className="Messenger__PopOutBtn"
+            onClick={onPopOut}
+            title="Pop out chat"
+          >
+            <ExternalLink size={14} />
+          </button>
+        )}
       </div>
       <div className="Messenger__Content">
         {activeTab === 'chats' ? (
@@ -149,11 +158,12 @@ export default function Messenger({ wsRef, activeRoomRef, panelWidth, isMobile }
 
   // --- Narrow view (기존 동작: 뷰 전환) ---
   const mobileClass = isMobile ? ' Messenger--mobile' : '';
-  const narrowStyle = isMobile ? undefined : { width: panelWidth };
+  const pipClass = isPip ? ' Messenger--pip' : '';
+  const narrowStyle = isMobile || isPip ? undefined : { width: panelWidth };
 
   if (activeRoomId) {
     return (
-      <div className={`Messenger${mobileClass}`} style={narrowStyle}>
+      <div className={`Messenger${mobileClass}${pipClass}`} style={narrowStyle}>
         <MessengerChatRoom
           roomId={activeRoomId}
           wsRef={wsRef}
@@ -165,7 +175,7 @@ export default function Messenger({ wsRef, activeRoomRef, panelWidth, isMobile }
 
   if (showNewChat) {
     return (
-      <div className={`Messenger${mobileClass}`} style={narrowStyle}>
+      <div className={`Messenger${mobileClass}${pipClass}`} style={narrowStyle}>
         <MessengerNewChat
           wsRef={wsRef}
           onBack={handleBack}
@@ -176,7 +186,7 @@ export default function Messenger({ wsRef, activeRoomRef, panelWidth, isMobile }
   }
 
   return (
-    <div className={`Messenger${mobileClass}`} style={narrowStyle}>
+    <div className={`Messenger${mobileClass}${pipClass}`} style={narrowStyle}>
       {listPanel}
     </div>
   );
