@@ -7,6 +7,12 @@
     align-items: center;
     gap: $space-3;
     margin-bottom: $space-5;
+
+    @include mobile {
+      flex-wrap: wrap;
+      gap: $space-2;
+      margin-bottom: $space-3;
+    }
   }
 
   &__CreateBtn,
@@ -355,6 +361,11 @@
   gap: $space-4;
   flex: 1;
 
+  @include mobile {
+    flex-wrap: wrap;
+    gap: $space-2;
+  }
+
   &__Search {
     position: relative;
   }
@@ -377,6 +388,10 @@
     outline: none;
     background: $color-bg;
     width: 200px;
+
+    @include mobile {
+      width: 100%;
+    }
     transition: border-color $transition-fast;
 
     &:focus {
@@ -520,6 +535,10 @@
   transition: background $transition-fast;
   user-select: none;
 
+  @include mobile {
+    padding: $space-2 $space-3;
+  }
+
   &:last-child {
     border-bottom: none;
   }
@@ -557,6 +576,10 @@
     &:active {
       cursor: grabbing;
     }
+
+    @include mobile {
+      display: none;
+    }
   }
 
   &:hover &__DragHandle {
@@ -573,6 +596,10 @@
     color: $color-text-tertiary;
     white-space: nowrap;
     min-width: 60px;
+
+    @include mobile {
+      min-width: auto;
+    }
   }
 
   &__TitleWrap {
@@ -607,6 +634,10 @@
     display: flex;
     gap: 4px;
     flex-shrink: 0;
+
+    @include mobile {
+      display: none;
+    }
   }
 
   &__Label {
@@ -647,10 +678,18 @@
 
   &__Cell--dueDate {
     width: 50px;
+
+    @include mobile {
+      display: none;
+    }
   }
 
   &__Cell--priority {
     width: 72px;
+
+    @include mobile {
+      display: none;
+    }
   }
 
   &__Status {

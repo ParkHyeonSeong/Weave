@@ -335,4 +335,43 @@
     border-radius: 50%;
     object-fit: cover;
   }
+
+  // -- Logo wrapper --
+  &__Logo {
+    display: flex;
+    align-items: center;
+    gap: $space-3;
+  }
+
+  // -- Mobile --
+  &--mobile {
+    .Header__Left {
+      gap: $space-1;
+    }
+
+    .Header__Center {
+      padding: 0 $space-2;
+    }
+
+    .Header__SearchBtn {
+      max-width: none;
+      width: 40px;
+      padding: 6px;
+      justify-content: center;
+    }
+
+    .Header__NotiMenu {
+      position: fixed;
+      left: $space-3;
+      right: $space-3;
+      top: 52px;
+      width: auto;
+    }
+
+    .Header__SettingsMenu {
+      position: fixed;
+      right: $space-3;
+      top: 52px;
+    }
+  }
 }

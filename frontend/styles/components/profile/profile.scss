@@ -185,6 +185,27 @@
   }
 }
 
+// -- Mobile --
+.Profile {
+  @include mobile {
+    padding: $space-3;
+
+    &__Section {
+      padding: $space-4;
+    }
+
+    &__AvatarArea {
+      flex-direction: column;
+      text-align: center;
+    }
+
+    &__SaveBtn {
+      align-self: stretch;
+      justify-content: center;
+    }
+  }
+}
+
 @keyframes profile-spin {
   to { transform: rotate(360deg); }
 }

@@ -6,6 +6,10 @@
   border-radius: $radius-xl;
   box-shadow: $shadow-lg;
 
+  @include mobile {
+    width: calc(100vw - 32px);
+  }
+
   &__Backdrop {
     position: fixed;
     inset: 0;

@@ -291,4 +291,38 @@
   &__Spinner {
     animation: spin 1s linear infinite;
   }
+
+  // -- Mobile --
+  @include mobile {
+    padding: $space-3;
+
+    &__Card {
+      padding: $space-6 $space-4;
+    }
+
+    &__Steps {
+      gap: $space-4;
+      margin-bottom: $space-5;
+    }
+
+    &__PolicyCards {
+      flex-direction: column;
+    }
+
+    &__Actions {
+      flex-direction: column-reverse;
+      gap: $space-3;
+    }
+
+    &__BackBtn,
+    &__NextBtn,
+    &__SubmitBtn {
+      width: 100%;
+      justify-content: center;
+    }
+
+    &__ActionsSpacer {
+      display: none;
+    }
+  }
 }

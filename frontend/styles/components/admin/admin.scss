@@ -189,6 +189,12 @@
     text-transform: capitalize;
   }
 
+  // -- 테이블 래퍼 (모바일 스크롤) --
+  &__TableWrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
   // -- 섹션 간격 --
   &__Section + &__Section {
     margin-top: $space-6;
@@ -257,6 +263,30 @@
     &:disabled {
       opacity: 0.6;
       cursor: not-allowed;
+    }
+  }
+
+  // -- Mobile --
+  @include mobile {
+    padding: $space-3;
+
+    &__Section {
+      padding: $space-4;
+    }
+
+    &__SectionHeader {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: $space-3;
+    }
+
+    &__Table {
+      min-width: 600px;
+    }
+
+    &__Actions {
+      flex-direction: column;
+      gap: $space-1;
     }
   }
 }

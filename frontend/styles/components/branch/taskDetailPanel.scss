@@ -10,6 +10,18 @@
   flex-shrink: 0;
   overflow: hidden;
 
+  // -- Mobile: 풀스크린 오버레이 --
+  @include mobile {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    z-index: 300;
+    border-left: none;
+  }
+
   &__Header {
     display: flex;
     align-items: center;

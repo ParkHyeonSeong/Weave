@@ -10,6 +10,7 @@ import { requestNotificationPermission, showNotification, playNotificationSound 
 import { subscribeToPush } from '@/library/pushSubscription';
 import { getWsBaseURL } from '@/library/_axios';
 import { showToast } from './Toast';
+import useMobile from '@/hooks/useMobile';
 
 const MESSENGER_MIN_WIDTH = 280;
 const MESSENGER_DEFAULT_WIDTH = 320;
@@ -17,6 +18,7 @@ const SIDEBAR_MIN_WIDTH = 200;
 const SIDEBAR_DEFAULT_WIDTH = 240;
 
 export default function Layout({ children }) {
+  const { isMobile } = useMobile();
   const [showCreateBranch, setShowCreateBranch] = useState(false);
   const [showCreateCanvas, setShowCreateCanvas] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
@@ -50,18 +52,28 @@ export default function Layout({ children }) {
   const wsRef = useRef(null);
   const activeRoomRef = useRef(null);
 
-  // 사이드바 접힘 상태 저장
+  // 모바일 진입 시 사이드바/메신저 자동 닫기
   useEffect(() => {
+    if (isMobile) {
+      setIsSidebarCollapsed(true);
+      setIsMessengerCollapsed(true);
+    }
+  }, [isMobile]);
+
+  // 사이드바 접힘 상태 저장 (모바일에서는 저장하지 않음)
+  useEffect(() => {
+    if (isMobile) return;
     try { sessionStorage.setItem('sidebar_collapsed', isSidebarCollapsed ? 'true' : 'false'); }
     catch {}
-  }, [isSidebarCollapsed]);
+  }, [isSidebarCollapsed, isMobile]);
 
-  // 메신저 열림 상태 저장
+  // 메신저 열림 상태 저장 (모바일에서는 저장하지 않음)
   useEffect(() => {
+    if (isMobile) return;
     try {
       sessionStorage.setItem('messenger_open', isMessengerCollapsed ? 'false' : 'true');
     } catch {}
-  }, [isMessengerCollapsed]);
+  }, [isMessengerCollapsed, isMobile]);
 
   // 사이드바 리사이즈 드래그 핸들러
   const handleSidebarResizeStart = useCallback((e) => {
@@ -299,9 +311,19 @@ export default function Layout({ children }) {
     };
   }, []);
 
+  // 모바일에서 사이드바/메신저 열릴 때 backdrop 클릭으로 닫기
+  const handleBackdropClick = useCallback(() => {
+    setIsSidebarCollapsed(true);
+  }, []);
+  const handleMessengerBackdropClick = useCallback(() => {
+    setIsMessengerCollapsed(true);
+  }, []);
+
   return (
-    <div className="Layout">
+    <div className={`Layout ${isMobile ? 'Layout--mobile' : ''}`}>
       <Header
+        isMobile={isMobile}
+        onToggleSidebar={() => setIsSidebarCollapsed((prev) => !prev)}
         onSearchClick={() => setShowPalette(true)}
         notifications={notifications}
         unreadCount={unreadCount}
@@ -343,32 +365,46 @@ export default function Layout({ children }) {
         }}
       />
       <div className="Layout__Body">
+        {/* 모바일: 사이드바 backdrop */}
+        {isMobile && !isSidebarCollapsed && (
+          <div className="Layout__Backdrop" onClick={handleBackdropClick} />
+        )}
         {!isSidebarCollapsed && (
           <Sidebar
-            width={sidebarWidth}
-            onResizeStart={handleSidebarResizeStart}
+            isMobile={isMobile}
+            width={isMobile ? undefined : sidebarWidth}
+            onResizeStart={isMobile ? undefined : handleSidebarResizeStart}
             onCreateBranch={() => setShowCreateBranch(true)}
             onCreateCanvas={() => setShowCreateCanvas(true)}
+            onClose={() => setIsSidebarCollapsed(true)}
           />
         )}
         <main className="Layout__Content">
           {children}
         </main>
+        {/* 모바일: 메신저 backdrop */}
+        {isMobile && !isMessengerCollapsed && (
+          <div className="Layout__Backdrop" onClick={handleMessengerBackdropClick} />
+        )}
         {!isMessengerCollapsed && (
           <>
-            <div
-              className="Layout__ResizeHandle"
-              onMouseDown={handleResizeStart}
-            />
+            {!isMobile && (
+              <div
+                className="Layout__ResizeHandle"
+                onMouseDown={handleResizeStart}
+              />
+            )}
             <Messenger
               wsRef={wsRef}
               activeRoomRef={activeRoomRef}
-              panelWidth={messengerWidth}
+              panelWidth={isMobile ? undefined : messengerWidth}
+              isMobile={isMobile}
             />
           </>
         )}
       </div>
       <Footer
+        isMobile={isMobile}
         isSidebarCollapsed={isSidebarCollapsed}
         isMessengerCollapsed={isMessengerCollapsed}
         onToggleSidebar={() => setIsSidebarCollapsed((prev) => !prev)}

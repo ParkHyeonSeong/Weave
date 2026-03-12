@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/router';
-import { Search, Bell, CircleHelp, Settings, Shield, AtSign, UserPlus, AlertCircle, MessageSquare, CheckCircle2 } from 'lucide-react';
+import { Search, Bell, CircleHelp, Settings, Shield, AtSign, UserPlus, AlertCircle, MessageSquare, CheckCircle2, Menu } from 'lucide-react';
 import { formatMessageTime } from '@/library/formatTime';
 import { getBaseURL } from '@/library/_axios';
 
@@ -13,7 +13,7 @@ const NOTI_ICONS = {
   task_status_changed: CheckCircle2,
 };
 
-export default function Header({ onSearchClick, notifications = [], unreadCount = 0, chatUnreadCount = 0, onChatClick, onClearNotifications, onMarkAllRead, onReadNotification, onNotiClick }) {
+export default function Header({ isMobile, onToggleSidebar, onSearchClick, notifications = [], unreadCount = 0, chatUnreadCount = 0, onChatClick, onClearNotifications, onMarkAllRead, onReadNotification, onNotiClick }) {
   const router = useRouter();
   const [workspaceName, setWorkspaceName] = useState('');
   const [username, setUsername] = useState('');
@@ -89,23 +89,31 @@ export default function Header({ onSearchClick, notifications = [], unreadCount 
   const initial = username ? username.charAt(0).toUpperCase() : '?';
 
   return (
-    <header className="Header">
-      <div className="Header__Left" onClick={() => router.push('/')} style={{ cursor: 'pointer' }}>
-        <img src="/icons/weave_square.svg" alt="Weave" className="Header__LogoIcon" />
-        <span className="Header__LogoText">Weave</span>
-        {workspaceName && (
-          <>
-            <span className="Header__Separator">/</span>
-            <span className="Header__WorkspaceName">{workspaceName}</span>
-          </>
+    <header className={`Header ${isMobile ? 'Header--mobile' : ''}`}>
+      <div className="Header__Left">
+        {/* 모바일: 햄버거 메뉴 */}
+        {isMobile && (
+          <button className="Header__IconBtn" onClick={onToggleSidebar} title="Menu">
+            <Menu size={20} />
+          </button>
         )}
+        <div className="Header__Logo" onClick={() => router.push('/')} style={{ cursor: 'pointer' }}>
+          <img src="/icons/weave_square.svg" alt="Weave" className="Header__LogoIcon" />
+          {!isMobile && <span className="Header__LogoText">Weave</span>}
+          {!isMobile && workspaceName && (
+            <>
+              <span className="Header__Separator">/</span>
+              <span className="Header__WorkspaceName">{workspaceName}</span>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="Header__Center">
         <button className="Header__SearchBtn" onClick={onSearchClick}>
           <Search size={14} className="Header__SearchIcon" />
-          <span className="Header__SearchText">Search...</span>
-          <kbd className="Header__SearchShortcut">Cmd+K</kbd>
+          {!isMobile && <span className="Header__SearchText">Search...</span>}
+          {!isMobile && <kbd className="Header__SearchShortcut">Cmd+K</kbd>}
         </button>
       </div>
 

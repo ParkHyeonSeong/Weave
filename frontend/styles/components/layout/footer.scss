@@ -78,4 +78,35 @@
       margin-left: 4px;
     }
   }
+
+  // -- Mobile: 바텀 네비게이션 --
+  &--mobile {
+    height: calc(56px + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+  }
+
+  &__NavItem {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    flex: 1;
+    height: 56px;
+    color: $color-text-tertiary;
+    transition: color $transition-fast;
+
+    &--active {
+      color: $color-primary;
+    }
+  }
+
+  &__NavLabel {
+    font-size: 10px;
+    font-weight: $font-weight-medium;
+    line-height: 1;
+  }
 }

@@ -18,6 +18,10 @@
   box-shadow: $shadow-lg;
   overflow: hidden;
 
+  @include mobile {
+    max-width: calc(100vw - 32px);
+  }
+
   &__Header {
     display: flex;
     align-items: center;

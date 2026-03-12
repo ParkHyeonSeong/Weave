@@ -5,6 +5,10 @@
   margin: 0 auto;
   padding: $space-6;
 
+  @include mobile {
+    padding: $space-3;
+  }
+
   &__Header {
     display: flex;
     align-items: center;
@@ -42,6 +46,10 @@
     margin-bottom: $space-4;
     padding-bottom: $space-3;
     border-bottom: 1px solid $color-border;
+
+    @include mobile {
+      flex-wrap: wrap;
+    }
   }
 
   &__Filter {
@@ -84,6 +92,10 @@
     color: $color-text-tertiary;
     text-transform: uppercase;
     letter-spacing: 0.3px;
+
+    @include mobile {
+      display: none;
+    }
   }
 
   &__Empty {
@@ -113,6 +125,14 @@
   cursor: pointer;
   transition: background $transition-fast;
 
+  // Mobile: 카드 레이아웃
+  @include mobile {
+    display: flex;
+    flex-wrap: wrap;
+    padding: $space-3;
+    gap: $space-1;
+  }
+
   &:last-child {
     border-bottom: none;
   }
@@ -141,12 +161,22 @@
     overflow: hidden;
     text-overflow: ellipsis;
     min-width: 0;
+
+    @include mobile {
+      width: 100%;
+      flex-basis: 100%;
+      order: -1;
+    }
   }
 
   &__Labels {
     display: flex;
     gap: 4px;
     flex-shrink: 0;
+
+    @include mobile {
+      display: none;
+    }
   }
 
   &__Label {
@@ -216,6 +246,10 @@
     white-space: nowrap;
     text-align: center;
 
+    @include mobile {
+      display: none;
+    }
+
     &--overdue {
       color: $color-error;
       font-weight: $font-weight-medium;
@@ -226,6 +260,10 @@
     font-size: $font-size-xs;
     font-weight: $font-weight-medium;
     white-space: nowrap;
+
+    @include mobile {
+      display: none;
+    }
 
     &--urgent {
       color: #DC2626;

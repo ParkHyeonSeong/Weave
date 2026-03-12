@@ -38,4 +38,20 @@
       background: $color-primary;
     }
   }
+
+  // 모바일: 사이드바/메신저 오버레이용 backdrop
+  &__Backdrop {
+    display: none;
+  }
+
+  &--mobile &__Backdrop {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 190;
+  }
 }

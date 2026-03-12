@@ -84,6 +84,25 @@
     overflow-x: auto;
     padding-bottom: $space-2;
   }
+
+  // -- Mobile --
+  @include mobile {
+    &__Header {
+      flex-wrap: wrap;
+      gap: $space-2;
+    }
+
+    &__SprintTabs {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    &__Columns {
+      gap: $space-3;
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+    }
+  }
 }
 
 // -- 개별 컬럼 --
@@ -92,6 +111,11 @@
   flex-direction: column;
   flex: 1 0 260px;
   min-width: 260px;
+
+  @include mobile {
+    min-width: 85vw;
+    scroll-snap-align: start;
+  }
   background: $color-surface;
   border-radius: $radius-xl;
   overflow: hidden;

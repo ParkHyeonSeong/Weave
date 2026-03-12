@@ -17,6 +17,10 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  // PWA standalone: 노치/Dynamic Island 대응
+  padding-top: env(safe-area-inset-top);
+  // 300ms 탭 딜레이 제거
+  touch-action: manipulation;
 }
 
 a {

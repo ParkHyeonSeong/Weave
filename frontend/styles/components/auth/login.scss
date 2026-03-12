@@ -154,6 +154,21 @@
   }
 }
 
+// -- Mobile --
+.Login {
+  @include mobile {
+    padding: $space-3;
+
+    &__Card {
+      padding: $space-6 $space-4;
+    }
+
+    &__Header {
+      margin-bottom: $space-5;
+    }
+  }
+}
+
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }

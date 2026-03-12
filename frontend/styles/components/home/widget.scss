@@ -5,6 +5,10 @@
   &__Stats {
     display: flex;
     gap: $space-3;
+
+    @include mobile {
+      flex-wrap: wrap;
+    }
   }
 
   &__Stat {

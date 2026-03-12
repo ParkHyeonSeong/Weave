@@ -143,4 +143,42 @@
     border-radius: 0 0 $radius-2xl $radius-2xl;
     overflow-y: auto;
   }
+
+  // -- Mobile: 풀스크린 오버레이 --
+  &--mobile {
+    position: fixed;
+    top: 48px;
+    left: 0;
+    right: 0;
+    bottom: calc(56px + env(safe-area-inset-bottom));
+    z-index: 200;
+    padding: 0;
+    background: $color-bg;
+    animation: messenger-slide-in $transition-base;
+
+    .Messenger__Tabs {
+      border-radius: 0;
+    }
+
+    .Messenger__Content {
+      border-radius: 0;
+    }
+
+    .MessengerChatRoom {
+      border-radius: 0;
+    }
+
+    .MessengerNewChat {
+      border-radius: 0;
+    }
+  }
+}
+
+@keyframes messenger-slide-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
 }

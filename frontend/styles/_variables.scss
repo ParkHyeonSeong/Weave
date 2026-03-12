@@ -85,3 +85,25 @@ $shadow-focus: 0 0 0 3px $color-primary-subtle;
 $transition-fast: 150ms ease;
 $transition-base: 200ms ease;
 $transition-slow: 300ms ease;
+
+// -- Breakpoints ----------------------------------------------------------
+$bp-mobile: 768px;
+$bp-desktop: 1024px;
+
+@mixin mobile {
+  @media (max-width: #{$bp-mobile - 1px}) {
+    @content;
+  }
+}
+
+@mixin tablet {
+  @media (min-width: $bp-mobile) and (max-width: #{$bp-desktop - 1px}) {
+    @content;
+  }
+}
+
+@mixin mobile-tablet {
+  @media (max-width: #{$bp-desktop - 1px}) {
+    @content;
+  }
+}

@@ -8,6 +8,12 @@
   overflow: hidden;
   background: $color-surface;
 
+  @include mobile {
+    padding: $space-3;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
   &__Panel {
     display: flex;
     flex-direction: column;
@@ -50,6 +56,10 @@
     overflow: hidden;
     padding: $space-5;
     min-height: 0;
+
+    @include mobile {
+      padding: $space-3;
+    }
   }
 
   &__WidgetGrid {
@@ -60,7 +70,7 @@
     height: 100%;
     min-height: 0;
 
-    @media (max-width: 900px) {
+    @include mobile-tablet {
       grid-template-columns: 1fr;
     }
   }

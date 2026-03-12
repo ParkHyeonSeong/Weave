@@ -7,7 +7,7 @@ import MessengerNewChat from './MessengerNewChat';
 
 const SPLIT_THRESHOLD = 560;
 
-export default function Messenger({ wsRef, activeRoomRef, panelWidth }) {
+export default function Messenger({ wsRef, activeRoomRef, panelWidth, isMobile }) {
   const [activeTab, setActiveTab] = useState('chats');
   const [activeRoomId, setActiveRoomId] = useState(() => {
     try {
@@ -21,7 +21,7 @@ export default function Messenger({ wsRef, activeRoomRef, panelWidth }) {
     catch { return false; }
   });
 
-  const isSplitView = panelWidth >= SPLIT_THRESHOLD;
+  const isSplitView = !isMobile && panelWidth >= SPLIT_THRESHOLD;
 
   // 채팅방 진입
   const handleOpenRoom = (roomId) => {
@@ -148,9 +148,12 @@ export default function Messenger({ wsRef, activeRoomRef, panelWidth }) {
   }
 
   // --- Narrow view (기존 동작: 뷰 전환) ---
+  const mobileClass = isMobile ? ' Messenger--mobile' : '';
+  const narrowStyle = isMobile ? undefined : { width: panelWidth };
+
   if (activeRoomId) {
     return (
-      <div className="Messenger" style={{ width: panelWidth }}>
+      <div className={`Messenger${mobileClass}`} style={narrowStyle}>
         <MessengerChatRoom
           roomId={activeRoomId}
           wsRef={wsRef}
@@ -162,7 +165,7 @@ export default function Messenger({ wsRef, activeRoomRef, panelWidth }) {
 
   if (showNewChat) {
     return (
-      <div className="Messenger" style={{ width: panelWidth }}>
+      <div className={`Messenger${mobileClass}`} style={narrowStyle}>
         <MessengerNewChat
           wsRef={wsRef}
           onBack={handleBack}
@@ -173,7 +176,7 @@ export default function Messenger({ wsRef, activeRoomRef, panelWidth }) {
   }
 
   return (
-    <div className="Messenger" style={{ width: panelWidth }}>
+    <div className={`Messenger${mobileClass}`} style={narrowStyle}>
       {listPanel}
     </div>
   );

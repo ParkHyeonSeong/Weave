@@ -5,6 +5,10 @@
   max-width: 800px;
   margin: 0 auto;
 
+  @include mobile {
+    padding: 0 $space-3 $space-3;
+  }
+
   &--wide {
     max-width: 100%;
   }

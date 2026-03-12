@@ -89,4 +89,33 @@
       flex-direction: column;
     }
   }
+
+  // -- Mobile --
+  @include mobile {
+    &__Main {
+      padding: $space-3;
+    }
+
+    &__Header {
+      flex-wrap: wrap;
+      margin-bottom: $space-3;
+    }
+
+    &__Name {
+      font-size: $font-size-lg;
+    }
+
+    &__Tabs {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      margin-bottom: $space-3;
+      scrollbar-width: none;
+      &::-webkit-scrollbar { display: none; }
+    }
+
+    &__Tab {
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+  }
 }
