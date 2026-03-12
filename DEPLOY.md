@@ -58,7 +58,33 @@ docker compose -f docker-compose.prod.yml restart nginx
 make prod-build
 ```
 
-### 5. 확인
+### 5. (선택) Push 알림 설정
+
+PWA 백그라운드 알림을 사용하려면 VAPID 키를 생성해야 합니다.
+
+```bash
+# VAPID 키 생성
+make generate-vapid
+
+# 출력된 VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY를 .env.production에 추가
+# VAPID_SUBJECT도 실제 이메일로 변경
+```
+
+`.env.production`에 추가:
+```env
+VAPID_PUBLIC_KEY=생성된_공개키
+VAPID_PRIVATE_KEY=생성된_비밀키
+VAPID_SUBJECT=mailto:admin@your-domain.com
+```
+
+```bash
+# 변경사항 적용
+make prod-build
+```
+
+> **참고**: VAPID 키를 설정하지 않으면 Push 알림 없이도 정상 동작합니다. WebSocket 기반 실시간 알림은 별도 설정 없이 작동합니다.
+
+### 6. 확인
 
 ```bash
 # 서비스 상태 확인
@@ -80,6 +106,7 @@ make prod-logs
 | `make prod-logs` | 로그 확인 |
 | `make prod-ps` | 서비스 상태 |
 | `make ssl-renew` | SSL 인증서 갱신 |
+| `make generate-vapid` | VAPID 키 생성 (Push 알림용) |
 
 ## SSL 인증서 자동 갱신
 
