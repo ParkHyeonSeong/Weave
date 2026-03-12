@@ -121,6 +121,52 @@ export default function useTaskDetail(branchId, taskId) {
     } catch {}
   };
 
+  // 라벨 생성 후 태스크에 할당
+  const createLabel = async (labelName, color) => {
+    if (!task || !labelName.trim()) return;
+    try {
+      const body = { label_name: labelName.trim() };
+      if (color) body.color = color;
+      const res = await axios.post(`/branches/${branchId}/labels`, body);
+      if (res.data.status) {
+        const newLabelId = res.data.label_id;
+        await fetchOptions();
+        const currentIds = (task.labels || []).map((l) => l.label_id);
+        const patchRes = await axios.patch(`/branches/${branchId}/tasks/${task.task_id}`, {
+          label_ids: [...currentIds, newLabelId],
+        });
+        if (patchRes.data.status) {
+          fetchTask();
+          window.dispatchEvent(new Event('task:updated'));
+        }
+      }
+    } catch {}
+  };
+
+  // 라벨 수정 (색상 변경 등)
+  const updateLabel = async (labelId, updates) => {
+    try {
+      const res = await axios.patch(`/branches/${branchId}/labels/${labelId}`, updates);
+      if (res.data.status) {
+        await fetchOptions();
+        fetchTask();
+        window.dispatchEvent(new Event('task:updated'));
+      }
+    } catch {}
+  };
+
+  // 브랜치에서 라벨 삭제
+  const deleteLabel = async (labelId) => {
+    try {
+      const res = await axios.delete(`/branches/${branchId}/labels/${labelId}`);
+      if (res.data.status) {
+        await fetchOptions();
+        fetchTask();
+        window.dispatchEvent(new Event('task:updated'));
+      }
+    } catch {}
+  };
+
   // 삭제
   const handleDelete = async () => {
     if (!task) return false;
@@ -155,6 +201,9 @@ export default function useTaskDetail(branchId, taskId) {
     updateField,
     updateAssignees,
     toggleLabel,
+    createLabel,
+    updateLabel,
+    deleteLabel,
     handleDelete,
     handleSelectChange,
   };

@@ -41,6 +41,7 @@ import "@/styles/components/modal/epicModal.scss";
 import "@/styles/components/branch/taskDetailPanel.scss";
 import "@/styles/components/profile/profile.scss";
 import "@/styles/components/common/customSelect.scss";
+import "@/styles/components/common/labelTagInput.scss";
 import "@/styles/components/branch/branchSettings.scss";
 import "@/styles/components/browse/browseBranches.scss";
 import "@/styles/components/home/launchpad.scss";

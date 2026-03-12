@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { ArrowLeft, Trash2, ChevronDown, ShieldAlert } from 'lucide-react';
+import LabelTagInput from '@/components/common/LabelTagInput';
 import { axios } from '@/library/_axios';
 import CustomSelect from '@/components/common/CustomSelect';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
@@ -20,7 +21,7 @@ export default function TaskFullPage() {
   const {
     task, loading, error, sprints, epics, members, labels,
     workflowStatuses, taskTypes, customFields,
-    updateField, updateAssignees, toggleLabel, handleDelete, handleSelectChange,
+    updateField, updateAssignees, toggleLabel, createLabel, updateLabel, deleteLabel, handleDelete, handleSelectChange,
   } = useTaskDetail(branchId, taskId);
 
   // 제목 편집
@@ -285,26 +286,14 @@ export default function TaskFullPage() {
             </FieldRow>
 
             <FieldRow label="Labels" align="top">
-              <div className="TaskFullPage__Labels">
-                {labels.map((label) => {
-                  const selected = (task.labels || []).some((l) => l.label_id === label.label_id);
-                  return (
-                    <button
-                      key={label.label_id}
-                      className={`TaskFullPage__LabelChip ${selected ? 'TaskFullPage__LabelChip--selected' : ''}`}
-                      style={{
-                        backgroundColor: selected ? label.color + '20' : 'transparent',
-                        borderColor: label.color,
-                        color: label.color,
-                      }}
-                      onClick={() => toggleLabel(label.label_id)}
-                    >
-                      {label.label_name}
-                    </button>
-                  );
-                })}
-                {labels.length === 0 && <span className="TaskFullPage__FieldEmpty">None</span>}
-              </div>
+              <LabelTagInput
+                assignedLabels={task.labels || []}
+                allLabels={labels}
+                onToggle={toggleLabel}
+                onCreate={createLabel}
+                onDelete={deleteLabel}
+                onUpdateColor={(labelId, color) => updateLabel(labelId, { color })}
+              />
             </FieldRow>
 
             <FieldRow label="Start date">

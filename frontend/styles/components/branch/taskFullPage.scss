@@ -266,27 +266,6 @@
     color: $color-text-tertiary;
   }
 
-  // -- 라벨 --
-  &__Labels {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-  }
-
-  &__LabelChip {
-    font-size: 11px;
-    font-weight: $font-weight-medium;
-    padding: 1px 8px;
-    border-radius: $radius-sm;
-    border: 1px solid;
-    cursor: pointer;
-    transition: all $transition-fast;
-
-    &--selected {
-      font-weight: $font-weight-semibold;
-    }
-  }
-
   // -- 서브 담당자 --
   &__SubAssigneeWrap {
     position: relative;

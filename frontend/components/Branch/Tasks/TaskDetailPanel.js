@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { X, Maximize2, Trash2, ChevronDown } from 'lucide-react';
+import LabelTagInput from '@/components/common/LabelTagInput';
 import CustomSelect from '@/components/common/CustomSelect';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import useTaskDetail from '@/hooks/useTaskDetail';
@@ -15,7 +16,7 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
   const {
     task, loading, sprints, epics, members, labels,
     workflowStatuses: hookStatuses, taskTypes: hookTaskTypes, customFields,
-    updateField, updateAssignees, toggleLabel, handleDelete, handleSelectChange,
+    updateField, updateAssignees, toggleLabel, createLabel, updateLabel, deleteLabel, handleDelete, handleSelectChange,
   } = useTaskDetail(branchId, taskSummary?.task_id);
 
   const workflowStatuses = (externalStatuses && externalStatuses.length > 0) ? externalStatuses : hookStatuses;
@@ -257,28 +258,14 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
 
             {/* 라벨 */}
             <DetailRow label="Labels" align="top">
-              <div className="TaskDetailPanel__Labels">
-                {labels.map((label) => {
-                  const selected = (task.labels || []).some((l) => l.label_id === label.label_id);
-                  return (
-                    <button
-                      key={label.label_id}
-                      className={`TaskDetailPanel__LabelChip ${selected ? 'TaskDetailPanel__LabelChip--selected' : ''}`}
-                      style={{
-                        backgroundColor: selected ? label.color + '20' : 'transparent',
-                        borderColor: label.color,
-                        color: label.color,
-                      }}
-                      onClick={() => toggleLabel(label.label_id)}
-                    >
-                      {label.label_name}
-                    </button>
-                  );
-                })}
-                {labels.length === 0 && (
-                  <span className="TaskDetailPanel__FieldValue">None</span>
-                )}
-              </div>
+              <LabelTagInput
+                assignedLabels={task.labels || []}
+                allLabels={labels}
+                onToggle={toggleLabel}
+                onCreate={createLabel}
+                onDelete={deleteLabel}
+                onUpdateColor={(labelId, color) => updateLabel(labelId, { color })}
+              />
             </DetailRow>
 
             {/* 시작일 */}
