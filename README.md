@@ -57,9 +57,10 @@ Built-in team communication via WebSocket.
 - **Registration Policies** — public or invite-only signup
 
 ### ⚡ Productivity
+- **PWA (Progressive Web App)** — install Weave as a native app on desktop and mobile
+- **Background Push Notifications** — receive alerts even when the browser is closed
 - **Command Palette** — `⌘K` to quickly navigate or create resources
 - **Resizable Panels** — sidebar and messenger widths persist across sessions
-- **Browser Notifications** — stay updated even when the tab is in the background
 - **Browse & Discover** — find and join public projects and canvases
 
 ## Quick Start
@@ -80,6 +81,11 @@ cp .env.example .env
 
 # 3. Build and start (migrations run automatically)
 make up-build
+
+# 4. (Optional) Generate VAPID keys for push notifications
+make generate-vapid
+# Add the output to your .env file, then restart:
+make restart
 ```
 
 That's it. Open [http://localhost:3000](http://localhost:3000) and follow the setup wizard.
@@ -129,7 +135,7 @@ Configure your host Nginx to proxy to the exposed ports — see `nginx/host-ngin
 
 ### Minimum Requirements
 
-| Resource | Recommended |
+| Resource | Recommended |ㄴ
 |----------|-------------|
 | CPU      | 2 cores     |
 | RAM      | 2 GB        |

@@ -30,6 +30,9 @@ services:
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - LOG_LEVEL=${LOG_LEVEL:-WARNING}
       - DEBUG=${DEBUG:-false}
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}
+      - VAPID_SUBJECT=${VAPID_SUBJECT:-mailto:admin@weave.local}
     volumes:
       - backend-uploads:/app/uploads
     command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]

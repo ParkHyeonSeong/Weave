@@ -7,6 +7,7 @@ import CreateBranch from '@/components/modal/CreateBranch';
 import CreateCanvas from '@/components/modal/CreateCanvas';
 import CommandPalette from '@/components/modal/CommandPalette';
 import { requestNotificationPermission, showNotification, playNotificationSound } from '@/library/notification';
+import { subscribeToPush } from '@/library/pushSubscription';
 import { getWsBaseURL } from '@/library/_axios';
 import { showToast } from './Toast';
 
@@ -211,6 +212,7 @@ export default function Layout({ children }) {
     if (!profile.user_id) return;
 
     requestNotificationPermission();
+    subscribeToPush();
 
     // WebSocket URL: axios base URL 기반으로 생성
     const wsUrl = `${getWsBaseURL()}/api/ws/chat`;

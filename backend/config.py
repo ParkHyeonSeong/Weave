@@ -24,3 +24,8 @@ COOKIE_NAME = "weave_token"
 COOKIE_SECURE = not DEBUG
 COOKIE_SAMESITE = "lax"
 COOKIE_HTTPONLY = True
+
+# Web Push (VAPID)
+VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
+VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
+VAPID_SUBJECT = os.getenv("VAPID_SUBJECT", "mailto:admin@weave.local")

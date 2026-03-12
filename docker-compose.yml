@@ -15,6 +15,9 @@ services:
       - FRONTEND_PORT=${FRONTEND_PORT:-3000}
       - LOG_LEVEL=DEBUG
       - DEBUG=true
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}
+      - VAPID_SUBJECT=${VAPID_SUBJECT:-mailto:admin@weave.local}
     depends_on:
       db:
         condition: service_healthy

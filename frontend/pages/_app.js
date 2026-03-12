@@ -138,6 +138,13 @@ export default function App({ Component, pageProps }) {
     setAppReady(true);
   };
 
+  // Service Worker 등록 (PWA)
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js');
+    }
+  }, []);
+
   // auth:expired 이벤트 수신 (axios 인터셉터에서 발송)
   useEffect(() => {
     const handleExpired = () => {

@@ -79,6 +79,19 @@ ssl-init:              ## Issue SSL certificate (run once after domain DNS is se
 ssl-renew:             ## Renew SSL certificate
 	$(PROD_COMPOSE) run --rm certbot renew
 
+# -- Utilities -------------------------------------------------------------
+
+generate-vapid:        ## Generate VAPID key pair for Web Push
+	@docker compose exec backend python -c "\
+from py_vapid import Vapid; import base64; \
+v = Vapid(); v.generate_keys(); \
+raw = v.private_key.private_numbers().private_value.to_bytes(32, 'big'); \
+pub = v.private_key.public_key().public_numbers(); \
+x = pub.x.to_bytes(32, 'big'); y = pub.y.to_bytes(32, 'big'); \
+print(f'VAPID_PRIVATE_KEY={base64.urlsafe_b64encode(raw).decode().rstrip(chr(61))}'); \
+print(f'VAPID_PUBLIC_KEY={base64.urlsafe_b64encode(b\"\\x04\"+x+y).decode().rstrip(chr(61))}')"
+	@echo "Add the above values to your .env file"
+
 # -- Cleanup ---------------------------------------------------------------
 
 clean:                 ## Stop services and remove volumes
