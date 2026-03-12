@@ -89,7 +89,10 @@ async def notify(user_id: int, ntype: str, actor_id: int, title: str,
 
     # WebSocket 연결 없음 -> Web Push 전송
     if user_id not in manager.active_connections:
-        await _send_web_push(user_id, title, link, db)
+        try:
+            await _send_web_push(user_id, title, link, db)
+        except Exception as e:
+            logger.warning(f"Web Push fallback failed: {e}")
 
 
 async def notify_bulk(user_ids: list[int], ntype: str, actor_id: int, title: str,

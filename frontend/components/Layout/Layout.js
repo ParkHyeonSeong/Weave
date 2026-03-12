@@ -211,8 +211,7 @@ export default function Layout({ children }) {
     } catch {}
     if (!profile.user_id) return;
 
-    requestNotificationPermission();
-    subscribeToPush();
+    requestNotificationPermission().then(() => subscribeToPush());
 
     // WebSocket URL: axios base URL 기반으로 생성
     const wsUrl = `${getWsBaseURL()}/api/ws/chat`;

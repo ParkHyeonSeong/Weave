@@ -30,9 +30,9 @@ export function playNotificationSound() {
 /**
  * 브라우저 알림 요청 및 발송
  */
-export function requestNotificationPermission() {
+export async function requestNotificationPermission() {
   if ('Notification' in window && Notification.permission === 'default') {
-    Notification.requestPermission();
+    await Notification.requestPermission();
   }
 }
 
