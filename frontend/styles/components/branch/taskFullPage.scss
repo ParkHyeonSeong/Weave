@@ -86,6 +86,26 @@
     color: $color-text-tertiary;
   }
 
+  &__StarBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: $radius-md;
+    color: $color-text-secondary;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+      color: $color-warning;
+    }
+
+    &--active {
+      color: $color-warning;
+    }
+  }
+
   &__DeleteBtn {
     display: flex;
     align-items: center;

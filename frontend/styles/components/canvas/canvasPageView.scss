@@ -130,6 +130,14 @@
         background: $color-error-bg;
       }
     }
+
+    &--starred {
+      color: $color-warning;
+
+      &:hover {
+        color: $color-warning;
+      }
+    }
   }
 
   &__Kbd {

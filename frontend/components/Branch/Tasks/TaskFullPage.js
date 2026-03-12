@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
-import { ArrowLeft, Trash2, ChevronDown, ShieldAlert } from 'lucide-react';
+import { ArrowLeft, Trash2, ChevronDown, ShieldAlert, Star } from 'lucide-react';
+import useStar from '@/hooks/useStar';
 import LabelTagInput from '@/components/common/LabelTagInput';
 import { axios } from '@/library/_axios';
 import CustomSelect from '@/components/common/CustomSelect';
@@ -23,6 +24,8 @@ export default function TaskFullPage() {
     workflowStatuses, taskTypes, customFields,
     updateField, updateAssignees, toggleLabel, createLabel, updateLabel, deleteLabel, handleDelete, handleSelectChange,
   } = useTaskDetail(branchId, taskId);
+
+  const { starred, toggle: toggleStar } = useStar('task', task?.task_id);
 
   // 제목 편집
   const [editingTitle, setEditingTitle] = useState(false);
@@ -106,6 +109,13 @@ export default function TaskFullPage() {
             color={typeConfig?.color || '#5E6AD2'}
           />
           <span className="TaskFullPage__DisplayId">{displayId}</span>
+          <button
+            className={`TaskFullPage__StarBtn ${starred ? 'TaskFullPage__StarBtn--active' : ''}`}
+            onClick={toggleStar}
+            title={starred ? 'Remove star' : 'Add star'}
+          >
+            <Star size={14} fill={starred ? 'currentColor' : 'none'} />
+          </button>
         </div>
         <button className="TaskFullPage__DeleteBtn" onClick={() => setShowDeleteConfirm(true)}>
           <Trash2 size={14} />

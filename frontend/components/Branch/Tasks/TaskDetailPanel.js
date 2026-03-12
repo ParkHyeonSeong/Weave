@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
-import { X, Maximize2, Trash2, ChevronDown } from 'lucide-react';
+import { X, Maximize2, Trash2, ChevronDown, Star } from 'lucide-react';
+import useStar from '@/hooks/useStar';
 import LabelTagInput from '@/components/common/LabelTagInput';
 import CustomSelect from '@/components/common/CustomSelect';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
@@ -21,6 +22,8 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
 
   const workflowStatuses = (externalStatuses && externalStatuses.length > 0) ? externalStatuses : hookStatuses;
   const taskTypes = (externalTaskTypes && externalTaskTypes.length > 0) ? externalTaskTypes : hookTaskTypes;
+
+  const { starred, toggle: toggleStar } = useStar('task', task?.task_id);
 
   // 제목 편집
   const [editingTitle, setEditingTitle] = useState(false);
@@ -85,6 +88,13 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
           <span className="TaskDetailPanel__Id">{displayId}</span>
         </div>
         <div className="TaskDetailPanel__HeaderRight">
+          <button
+            className={`TaskDetailPanel__StarBtn ${starred ? 'TaskDetailPanel__StarBtn--active' : ''}`}
+            onClick={toggleStar}
+            title={starred ? 'Remove star' : 'Add star'}
+          >
+            <Star size={14} fill={starred ? 'currentColor' : 'none'} />
+          </button>
           <button
             className="TaskDetailPanel__ExpandBtn"
             onClick={() => router.push(`/branch/${branchId}/task/${task.task_id}`)}

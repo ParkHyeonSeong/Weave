@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import { LayoutDashboard } from 'lucide-react';
 import TaskSummary from './DashboardWidgets/TaskSummary';
 import ActiveSprints from './DashboardWidgets/ActiveSprints';
+import StarredItems from './DashboardWidgets/StarredItems';
 import RecentItems from './DashboardWidgets/RecentItems';
 import AIChat from './AIChat/AIChat';
 
@@ -59,6 +60,7 @@ export default function Dashboard() {
           <div className="Dashboard__WidgetGrid">
             <TaskSummary />
             <ActiveSprints />
+            <StarredItems />
             <RecentItems />
           </div>
         </div>

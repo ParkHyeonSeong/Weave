@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import dynamic from 'next/dynamic';
-import { Pencil, X, Wifi, WifiOff, Loader, RefreshCw, Maximize2, Minimize2, Trash2, Download, AlertTriangle } from 'lucide-react';
+import { Pencil, X, Wifi, WifiOff, Loader, RefreshCw, Maximize2, Minimize2, Trash2, Download, AlertTriangle, Star } from 'lucide-react';
+import useStar from '@/hooks/useStar';
 import { axios } from '@/library/_axios';
 import ConfirmModal from '@/components/modal/ConfirmModal';
 import useCollabProvider from '@/library/useCollabProvider';
@@ -31,6 +32,8 @@ export default function CanvasPageView({ onRefClick }) {
   const contentTimerRef = useRef(null);
   const stickyRef = useRef(null);
   const [isScrolled, setIsScrolled] = useState(false);
+
+  const { starred, toggle: toggleStar } = useStar('doc', pageId ? Number(pageId) : null);
 
   // Typst 읽기 모드용 상태
   const [typstSvg, setTypstSvg] = useState(null);
@@ -484,6 +487,13 @@ export default function CanvasPageView({ onRefClick }) {
             <div className="CanvasPageView__Actions">
               <PresenceBar users={connectedUsers} currentUserId={user?.user_id} />
               <button
+                className={`CanvasPageView__ActionBtn ${starred ? 'CanvasPageView__ActionBtn--starred' : ''}`}
+                onClick={toggleStar}
+                title={starred ? 'Remove star' : 'Add star'}
+              >
+                <Star size={15} fill={starred ? 'currentColor' : 'none'} />
+              </button>
+              <button
                 className="CanvasPageView__ActionBtn"
                 onClick={toggleWideMode}
                 title={page.wide_mode ? '기본 너비' : '넓게 보기'}
@@ -504,6 +514,13 @@ export default function CanvasPageView({ onRefClick }) {
           <>
             <div />
             <div className="CanvasPageView__Actions">
+              <button
+                className={`CanvasPageView__ActionBtn ${starred ? 'CanvasPageView__ActionBtn--starred' : ''}`}
+                onClick={toggleStar}
+                title={starred ? 'Remove star' : 'Add star'}
+              >
+                <Star size={15} fill={starred ? 'currentColor' : 'none'} />
+              </button>
               {page.type !== 'overview' && (
                 <button
                   className="CanvasPageView__ActionBtn CanvasPageView__ActionBtn--danger"
