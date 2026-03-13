@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/router';
 import { axios } from '@/library/_axios';
-import { Globe, Lock, AlertTriangle } from 'lucide-react';
+import { Globe, Lock, AlertTriangle, Upload } from 'lucide-react';
+import JiraMigrationModal from './JiraMigrationModal';
 
 export default function SettingsGeneral({ branchId, branch, isAdmin, onUpdated }) {
   const router = useRouter();
@@ -15,6 +16,7 @@ export default function SettingsGeneral({ branchId, branch, isAdmin, onUpdated }
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteInput, setDeleteInput] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [showJiraMigration, setShowJiraMigration] = useState(false);
 
   const handleKeyChange = (v) => {
     const upper = v.toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -135,6 +137,19 @@ export default function SettingsGeneral({ branchId, branch, isAdmin, onUpdated }
         </div>
       )}
 
+      {/* Import from Jira */}
+      {isAdmin && (
+        <div className="SettingsGeneral__Actions">
+          <button
+            className="SettingsGeneral__ImportBtn"
+            onClick={() => setShowJiraMigration(true)}
+          >
+            <Upload size={14} />
+            Import from Jira
+          </button>
+        </div>
+      )}
+
       {/* Danger Zone */}
       {isAdmin && (
         <div className="SettingsGeneral__Danger">
@@ -197,6 +212,12 @@ export default function SettingsGeneral({ branchId, branch, isAdmin, onUpdated }
             </div>
           )}
         </div>
+      )}
+      {showJiraMigration && (
+        <JiraMigrationModal
+          branchId={branchId}
+          onClose={() => setShowJiraMigration(false)}
+        />
       )}
     </div>
   );

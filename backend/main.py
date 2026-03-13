@@ -38,6 +38,7 @@ from routers import url_meta as url_meta_router
 from routers import star as star_router
 from routers import push as push_router
 from routers import schedule_event as schedule_event_router
+from routers import jira_migrate as jira_migrate_router
 
 # -- Logging ---------------------------------------------------------------
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -137,6 +138,7 @@ app.include_router(url_meta_router.router, prefix="/api/url-meta", tags=["url-me
 app.include_router(star_router.router, prefix="/api/stars", tags=["stars"])
 app.include_router(push_router.router, prefix="/api/push", tags=["push"])
 app.include_router(schedule_event_router.router, prefix="/api/branches/{branch_id}/schedule-events", tags=["schedule-events"])
+app.include_router(jira_migrate_router.router, prefix="/api/branches/{branch_id}/jira-migrate", tags=["jira-migrate"])
 
 # -- Static files (업로드 파일 서빙) -----------------------------------------
 uploads_dir = os.path.join(os.path.dirname(__file__), 'uploads')

@@ -181,6 +181,26 @@
     }
   }
 
+  &__ImportBtn {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: $space-2 $space-4;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-text-secondary;
+    background: $color-surface;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    cursor: pointer;
+    transition: all $transition-fast;
+
+    &:hover {
+      color: $color-text;
+      background: $color-surface-hover;
+    }
+  }
+
   // Danger Zone
   &__Danger {
     margin-top: $space-4;

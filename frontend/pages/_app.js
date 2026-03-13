@@ -70,6 +70,7 @@ import "@/styles/components/home/ai-chat.scss";
 import "@/styles/components/branch/epicFlow.scss";
 import "@/styles/components/branch/branchSchedule.scss";
 import "@/styles/components/modal/scheduleEventModal.scss";
+import "@/styles/components/modal/jiraMigrationModal.scss";
 
 const publicPaths = ['/auth/login', '/setup'];
 const noLayoutPaths = ['/auth/login', '/setup', '/admin'];
