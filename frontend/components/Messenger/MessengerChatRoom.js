@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, Fragment } from 'react';
-import { ArrowLeft, Send, Pencil, Check, X } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback, Fragment } from 'react';
+import { ArrowLeft, Send, Pencil, Check, X, Paperclip, File as FileIcon, Download } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import { formatMessageTime } from '@/library/formatTime';
 import TaskSearchPopup from './TaskSearchPopup';
@@ -9,6 +9,25 @@ import DocRefCard from './DocRefCard';
 import IssueSearchPopup from './IssueSearchPopup';
 import IssueRefCard from './IssueRefCard';
 import MentionSearchPopup from './MentionSearchPopup';
+
+const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+const FILE_EXTENSIONS = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt', '.csv', '.zip'];
+const ALLOWED_EXTENSIONS = [...IMAGE_EXTENSIONS, ...FILE_EXTENSIONS];
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_FILES = 10;
+
+const isImageType = (fileType) => fileType?.startsWith('image/');
+
+const formatFileSize = (bytes) => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const getFileExtension = (filename) => {
+  const dot = filename.lastIndexOf('.');
+  return dot >= 0 ? filename.slice(dot).toLowerCase() : '';
+};
 
 export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, headerLeft, headerRight }) {
   const [messages, setMessages] = useState([]);
@@ -21,19 +40,23 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
   const [attachedTask, setAttachedTask] = useState(null);
   const [attachedDoc, setAttachedDoc] = useState(null);
   const [attachedIssue, setAttachedIssue] = useState(null);
-  const [slashCommand, setSlashCommand] = useState(null); // { type: 'task'|'doc'|'issue', ... }
+  const [slashCommand, setSlashCommand] = useState(null);
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashMenuIdx, setSlashMenuIdx] = useState(0);
-  const [mentionCommand, setMentionCommand] = useState(null); // { keyword: '' }
+  const [mentionCommand, setMentionCommand] = useState(null);
   const [mentionedUserIds, setMentionedUserIds] = useState([]);
   const [myLastReadAt, setMyLastReadAt] = useState(null);
   const [showUnreadDivider, setShowUnreadDivider] = useState(true);
+  const [pendingFiles, setPendingFiles] = useState([]);
+  const [isDragOver, setIsDragOver] = useState(false);
   const messagesEndRef = useRef(null);
   const unreadDividerRef = useRef(null);
   const editInputRef = useRef(null);
   const textareaRef = useRef(null);
+  const fileInputRef = useRef(null);
   const justSelectedRef = useRef(false);
   const isInitialLoadRef = useRef(true);
+  const dragCounterRef = useRef(0);
 
   let myUserId = 0;
   try {
@@ -47,16 +70,13 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
       try {
         const res = await axios.get(`/chat/${roomId}/messages`);
         if (res.data.status) {
-          // 최신순 -> 시간순으로 뒤집기
           const msgs = res.data.messages.reverse();
           setMessages(msgs);
           setRoomType(res.data.room_type || 'dm');
           setMyLastReadAt(res.data.my_last_read_at || null);
           setShowUnreadDivider(true);
           isInitialLoadRef.current = true;
-          // 멤버 목록 저장 (읽음 처리용)
           if (res.data.members) setMembers(res.data.members);
-          // DM: 상대방 이름, Group: room_name
           if (res.data.room_type === 'dm' && res.data.members?.length) {
             setRoomName(res.data.members[0].username);
           } else if (res.data.room_name) {
@@ -66,8 +86,6 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
       } catch {}
     };
     fetchMessages();
-
-    // 읽음 처리
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ action: 'mark_read', room_id: roomId }));
       window.dispatchEvent(new CustomEvent('chat:unread_changed'));
@@ -80,17 +98,14 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
       const data = e.detail;
       if (data.type === 'new_message' && data.room_id === roomId) {
         setMessages((prev) => {
-          // 중복 메시지 방지
           if (prev.some((m) => m.message_id === data.message.message_id)) return prev;
           return [...prev, data.message];
         });
-        // 읽음 처리
         if (wsRef.current?.readyState === WebSocket.OPEN) {
           wsRef.current.send(JSON.stringify({ action: 'mark_read', room_id: roomId }));
           window.dispatchEvent(new CustomEvent('chat:unread_changed'));
         }
       }
-      // 상대방이 읽음 처리했을 때 해당 멤버의 last_read_at 갱신
       if (data.type === 'mark_read' && data.room_id === roomId && data.user_id !== myUserId) {
         setMembers((prev) =>
           prev.map((m) =>
@@ -103,7 +118,7 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
     return () => window.removeEventListener('chat:ws_message', handleWsMessage);
   }, [roomId, myUserId]);
 
-  // 스크롤: 초기 로드 시 unread 구분선으로, 이후 새 메시지는 최하단으로
+  // 스크롤
   useEffect(() => {
     if (isInitialLoadRef.current) {
       isInitialLoadRef.current = false;
@@ -112,7 +127,6 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
       } else {
         messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
       }
-      // 초기 스크롤 후 divider 제거 (읽음 처리 완료)
       setTimeout(() => setShowUnreadDivider(false), 1500);
     } else {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -131,13 +145,114 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
     autoResize();
   }, [input]);
 
-  // 코드블록 모드 판별 (```가 홀수번 열린 상태 = 닫히지 않음)
   const isCodeMode = (input.match(/```/g) || []).length % 2 === 1;
 
+  // -- 파일 업로드 --
+  const uploadFile = useCallback(async (file) => {
+    const ext = getFileExtension(file.name);
+    if (!ALLOWED_EXTENSIONS.includes(ext)) return;
+    if (file.size > MAX_FILE_SIZE) return;
+
+    const tempId = `${Date.now()}_${Math.random()}`;
+    const preview = file.type.startsWith('image/') ? URL.createObjectURL(file) : null;
+
+    setPendingFiles((prev) => {
+      if (prev.length >= MAX_FILES) return prev;
+      return [...prev, {
+        id: tempId, file_name: file.name, file_type: file.type,
+        file_size: file.size, preview, status: 'uploading', progress: 0,
+      }];
+    });
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await axios.post('/chat/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (e) => {
+          if (e.total) {
+            const pct = Math.round((e.loaded / e.total) * 100);
+            setPendingFiles((prev) =>
+              prev.map((f) => f.id === tempId ? { ...f, progress: pct } : f)
+            );
+          }
+        },
+      });
+      if (res.data.status) {
+        setPendingFiles((prev) =>
+          prev.map((f) => f.id === tempId ? {
+            ...f, status: 'done', progress: 100,
+            url: res.data.url, file_name: res.data.file_name,
+            file_type: res.data.file_type, file_size: res.data.file_size,
+          } : f)
+        );
+      } else {
+        setPendingFiles((prev) => prev.filter((f) => f.id !== tempId));
+      }
+    } catch {
+      setPendingFiles((prev) => prev.filter((f) => f.id !== tempId));
+    }
+  }, []);
+
+  const handleFilesSelected = useCallback((files) => {
+    Array.from(files).forEach((file) => uploadFile(file));
+  }, [uploadFile]);
+
+  const removePendingFile = (id) => {
+    setPendingFiles((prev) => {
+      const item = prev.find((f) => f.id === id);
+      if (item?.preview) URL.revokeObjectURL(item.preview);
+      return prev.filter((f) => f.id !== id);
+    });
+  };
+
+  // 클립보드 붙여넣기
+  const handlePaste = useCallback((e) => {
+    const items = Array.from(e.clipboardData?.items || []);
+    const imageItem = items.find((item) => item.type.startsWith('image/'));
+    if (!imageItem) return; // 텍스트 붙여넣기는 기본 동작
+    e.preventDefault();
+    const file = imageItem.getAsFile();
+    if (file) uploadFile(file);
+  }, [uploadFile]);
+
+  // 드래그앤드롭
+  const handleDragEnter = useCallback((e) => {
+    e.preventDefault();
+    dragCounterRef.current++;
+    if (e.dataTransfer?.types?.includes('Files')) setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e) => {
+    e.preventDefault();
+    dragCounterRef.current--;
+    if (dragCounterRef.current <= 0) {
+      dragCounterRef.current = 0;
+      setIsDragOver(false);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault();
+  }, []);
+
+  const handleDrop = useCallback((e) => {
+    e.preventDefault();
+    dragCounterRef.current = 0;
+    setIsDragOver(false);
+    const files = Array.from(e.dataTransfer?.files || []);
+    files.forEach((file) => uploadFile(file));
+  }, [uploadFile]);
+
+  // -- 메시지 전송 --
   const handleSend = () => {
-    if (isCodeMode) return; // 코드블록이 닫히지 않으면 전송 차단
+    if (isCodeMode) return;
+    const isUploading = pendingFiles.some((f) => f.status === 'uploading');
+    if (isUploading) return;
+
     const content = input.trim();
-    if (!content && !attachedTask && !attachedDoc && !attachedIssue) return;
+    const doneFiles = pendingFiles.filter((f) => f.status === 'done');
+    if (!content && !attachedTask && !attachedDoc && !attachedIssue && doneFiles.length === 0) return;
 
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       const payload = { action: 'send_message', room_id: roomId, content };
@@ -145,6 +260,11 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
       if (attachedDoc) payload.canvas_page_id = attachedDoc.page_id;
       if (attachedIssue) payload.issue_id = attachedIssue.issue_id;
       if (mentionedUserIds.length > 0) payload.mentioned_user_ids = mentionedUserIds;
+      if (doneFiles.length > 0) {
+        payload.attachments = doneFiles.map((f) => ({
+          url: f.url, file_name: f.file_name, file_type: f.file_type, file_size: f.file_size,
+        }));
+      }
       wsRef.current.send(JSON.stringify(payload));
     }
     setInput('');
@@ -153,6 +273,9 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
     setAttachedIssue(null);
     setSlashCommand(null);
     setMentionedUserIds([]);
+    // preview URL 해제
+    pendingFiles.forEach((f) => { if (f.preview) URL.revokeObjectURL(f.preview); });
+    setPendingFiles([]);
   };
 
   const SLASH_COMMANDS = [
@@ -162,14 +285,12 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
     { cmd: '/i', desc: 'Search issues' },
   ];
 
-  // 입력값에 따라 슬래시 메뉴 필터링
   const filteredSlashCommands = SLASH_COMMANDS.filter(
     (c) => c.cmd.startsWith(input) || input === '/'
   );
 
   const handleKeyDown = (e) => {
     if (e.nativeEvent.isComposing) return;
-    // 슬래시 메뉴 키보드 네비게이션
     if (showSlashMenu && filteredSlashCommands.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -191,19 +312,16 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
         return;
       }
     }
-    // 팝업에서 선택 직후 Enter 중복 방지 (한글 IME 이중 keydown)
     if (justSelectedRef.current && e.key === 'Enter') {
       e.preventDefault();
       justSelectedRef.current = false;
       return;
     }
-    // @멘션 팝업 활성화 시 키보드 이벤트 위임
     if (mentionCommand && ['ArrowDown', 'ArrowUp', 'Escape'].includes(e.key)) return;
     if (mentionCommand && e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       return;
     }
-    // 슬래시 커맨드 팝업 활성화 시 키보드 이벤트 위임 (TaskSearchPopup에서 처리)
     if (slashCommand && ['ArrowDown', 'ArrowUp', 'Escape'].includes(e.key)) return;
     if (slashCommand && e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -211,9 +329,8 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
     }
     if (e.key === 'Enter') {
       if (isCodeMode || slashCommand) {
-        // 코드모드 또는 검색중: Enter는 줄바꿈 또는 무시
+        // 코드모드 또는 검색중
       } else {
-        // 일반모드: Enter로 전송, Shift+Enter로 줄바꿈
         if (!e.shiftKey) {
           e.preventDefault();
           handleSend();
@@ -222,12 +339,10 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
     }
   };
 
-  // 슬래시 커맨드 감지
   const handleInputChange = (e) => {
     const val = e.target.value;
     setInput(val);
 
-    // '/'만 입력하면 커맨드 목록 표시
     if (val === '/') {
       setShowSlashMenu(true);
       setSlashMenuIdx(0);
@@ -235,7 +350,6 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
       return;
     }
 
-    // 슬래시 커맨드 감지 (/ta를 /t보다 먼저 체크)
     if (val.match(/^\/ta\s/)) {
       setSlashCommand({ type: 'task', mode: 'all', keyword: val.slice(4) });
       setShowSlashMenu(false);
@@ -249,7 +363,6 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
       setSlashCommand({ type: 'issue', keyword: val.slice(3) });
       setShowSlashMenu(false);
     } else if (val.match(/^\/[tdia]?$/) || val.match(/^\/ta?$/)) {
-      // 커맨드 타이핑 중 (아직 스페이스 안 침)
       setShowSlashMenu(true);
       setSlashMenuIdx(0);
       if (slashCommand) setSlashCommand(null);
@@ -258,7 +371,6 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
       if (showSlashMenu) setShowSlashMenu(false);
     }
 
-    // @멘션 감지: 커서 위치 기준으로 @ 뒤의 키워드 추출
     const textarea = textareaRef.current;
     if (textarea) {
       const cursorPos = textarea.selectionStart;
@@ -272,7 +384,6 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
     }
   };
 
-  // 슬래시 메뉴에서 커맨드 선택
   const handleSlashMenuSelect = (cmd) => {
     setInput(cmd + ' ');
     setShowSlashMenu(false);
@@ -288,7 +399,6 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
     textareaRef.current?.focus();
   };
 
-  // IME 조합을 강제 종료하고 input을 비우는 헬퍼
   const clearInputWithIME = () => {
     if (textareaRef.current) {
       textareaRef.current.blur();
@@ -302,51 +412,38 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
     }, 50);
   };
 
-  // 태스크 선택 시
   const handleTaskSelect = (task) => {
     justSelectedRef.current = true;
     setAttachedTask({
-      task_id: task.task_id,
-      branch_id: task.branch_id,
-      display_id: task.display_id,
-      title: task.title,
-      status: task.status,
-      priority: task.priority,
+      task_id: task.task_id, branch_id: task.branch_id,
+      display_id: task.display_id, title: task.title,
+      status: task.status, priority: task.priority,
       assignees: task.assignees || [],
-      status_label: task.status_label,
-      status_color: task.status_color,
+      status_label: task.status_label, status_color: task.status_color,
       status_category: task.status_category,
     });
     clearInputWithIME();
   };
 
-  // 문서 선택 시
   const handleDocSelect = (doc) => {
     justSelectedRef.current = true;
     setAttachedDoc({
-      page_id: doc.page_id,
-      canvas_id: doc.canvas_id,
-      title: doc.title,
-      canvas_name: doc.canvas_name,
+      page_id: doc.page_id, canvas_id: doc.canvas_id,
+      title: doc.title, canvas_name: doc.canvas_name,
     });
     clearInputWithIME();
   };
 
-  // 이슈 선택 시
   const handleIssueSelect = (issue) => {
     justSelectedRef.current = true;
     setAttachedIssue({
-      issue_id: issue.issue_id,
-      task_id: issue.task_id,
-      branch_id: issue.branch_id,
-      display_id: issue.display_id,
-      title: issue.title,
-      status: issue.status,
+      issue_id: issue.issue_id, task_id: issue.task_id,
+      branch_id: issue.branch_id, display_id: issue.display_id,
+      title: issue.title, status: issue.status,
     });
     clearInputWithIME();
   };
 
-  // @멘션 사용자 선택 시
   const handleMentionSelect = (user) => {
     justSelectedRef.current = true;
     const textarea = textareaRef.current;
@@ -391,7 +488,6 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
       const res = await axios.patch(`/chat/${roomId}/name`, { room_name: trimmed });
       if (res.data.status) {
         setRoomName(res.data.room_name);
-        // 채팅 목록 갱신
         window.dispatchEvent(new CustomEvent('chat:new_message'));
       }
     } catch {}
@@ -407,16 +503,14 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
     }
   };
 
-  // 메시지 내용 렌더링 (코드블록, 인라인코드, 볼드)
+  // 메시지 내용 렌더링
   const renderContent = (text) => {
-    // 코드블록 분리: ```...```
     const parts = text.split(/(```[\s\S]*?```)/g);
     return parts.map((part, i) => {
       if (part.startsWith('```') && part.endsWith('```')) {
         const code = part.slice(3, -3).replace(/^\n/, '');
         return <pre key={i} className="MessengerChatRoom__CodeBlock"><code>{code}</code></pre>;
       }
-      // 인라인 파싱: `code`, **bold**
       return <span key={i}>{renderInline(part)}</span>;
     });
   };
@@ -434,7 +528,38 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
     });
   };
 
-  // 같은 발신자 + 같은 분(HH:MM)이면 마지막 메시지에만 시간 표시
+  // 첨부파일 렌더링 (메시지 내)
+  const renderAttachments = (attachments) => {
+    if (!attachments?.length) return null;
+    const images = attachments.filter((a) => isImageType(a.file_type));
+    const files = attachments.filter((a) => !isImageType(a.file_type));
+    const gridClass = images.length === 1 ? 'single' : images.length === 2 ? 'duo' : 'multi';
+
+    return (
+      <div className="MessengerChatRoom__Attachments">
+        {images.length > 0 && (
+          <div className={`MessengerChatRoom__ImageGrid MessengerChatRoom__ImageGrid--${gridClass}`}>
+            {images.map((att, i) => (
+              <a key={i} href={att.file_url} target="_blank" rel="noopener noreferrer"
+                 className="MessengerChatRoom__ImageLink">
+                <img src={att.file_url} alt={att.file_name} loading="lazy" />
+              </a>
+            ))}
+          </div>
+        )}
+        {files.map((att, i) => (
+          <a key={i} className="MessengerChatRoom__FileCard"
+             href={att.file_url} download={att.file_name} target="_blank" rel="noopener noreferrer">
+            <FileIcon size={16} />
+            <span className="MessengerChatRoom__FileCardName">{att.file_name}</span>
+            <span className="MessengerChatRoom__FileCardSize">{formatFileSize(att.file_size)}</span>
+            <Download size={14} className="MessengerChatRoom__FileCardDl" />
+          </a>
+        ))}
+      </div>
+    );
+  };
+
   const getMinuteKey = (dateStr) => {
     const d = new Date(dateStr);
     return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}-${d.getHours()}-${d.getMinutes()}`;
@@ -448,7 +573,6 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
     return getMinuteKey(msg.created_at) !== getMinuteKey(next.created_at);
   };
 
-  // 해당 메시지를 안 읽은 멤버 수
   const getUnreadCount = (msg) => {
     const msgTime = new Date(msg.created_at);
     return members.filter((m) => {
@@ -457,8 +581,22 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
     }).length;
   };
 
+  const isUploading = pendingFiles.some((f) => f.status === 'uploading');
+  const sendDisabled = isCodeMode || !!slashCommand || isUploading;
+
   return (
-    <div className="MessengerChatRoom">
+    <div className="MessengerChatRoom"
+         onDragEnter={handleDragEnter}
+         onDragLeave={handleDragLeave}
+         onDragOver={handleDragOver}
+         onDrop={handleDrop}>
+      {/* 드래그 오버레이 */}
+      {isDragOver && (
+        <div className="MessengerChatRoom__DragOverlay">
+          <span>Drop files to attach</span>
+        </div>
+      )}
+
       <div className="MessengerChatRoom__Header">
         {headerLeft}
         {!hideback && (
@@ -498,11 +636,9 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
 
       <div className="MessengerChatRoom__Messages">
         {(() => {
-          // 첫 번째 미읽 메시지 인덱스 계산
           let firstUnreadIdx = -1;
           if (myLastReadAt) {
             let effectiveReadTime = new Date(myLastReadAt);
-            // 사용자가 보낸 메시지 = 방에 있었다는 증거 → 그 시점까지 다 읽음
             for (const m of messages) {
               if (m.sender_id === myUserId) {
                 const sentTime = new Date(m.created_at);
@@ -513,7 +649,6 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
               (m) => m.sender_id !== myUserId && new Date(m.created_at) > effectiveReadTime
             );
           } else if (messages.length > 0 && messages.some((m) => m.sender_id !== myUserId)) {
-            // last_read_at이 null이면 모두 미읽
             firstUnreadIdx = messages.findIndex((m) => m.sender_id !== myUserId);
           }
           return messages.map((msg, idx) => {
@@ -548,6 +683,7 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
                   <IssueRefCard issueRef={msg.issue_ref} />
                 </div>
               )}
+              {renderAttachments(msg.attachments)}
               <div className="MessengerChatRoom__MsgRow">
                 {msg.sender_id === myUserId && (() => {
                   const unread = getUnreadCount(msg);
@@ -635,31 +771,67 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
         )}
         {attachedTask && (
           <div className="MessengerChatRoom__AttachedTask">
-            <TaskRefCard
-              taskRef={attachedTask}
-              removable
-              onRemove={() => setAttachedTask(null)}
-            />
+            <TaskRefCard taskRef={attachedTask} removable onRemove={() => setAttachedTask(null)} />
           </div>
         )}
         {attachedDoc && (
           <div className="MessengerChatRoom__AttachedTask">
-            <DocRefCard
-              docRef={attachedDoc}
-              removable
-              onRemove={() => setAttachedDoc(null)}
-            />
+            <DocRefCard docRef={attachedDoc} removable onRemove={() => setAttachedDoc(null)} />
           </div>
         )}
         {attachedIssue && (
           <div className="MessengerChatRoom__AttachedTask">
-            <IssueRefCard
-              issueRef={attachedIssue}
-              removable
-              onRemove={() => setAttachedIssue(null)}
-            />
+            <IssueRefCard issueRef={attachedIssue} removable onRemove={() => setAttachedIssue(null)} />
           </div>
         )}
+        {/* 파일 프리뷰 영역 */}
+        {pendingFiles.length > 0 && (
+          <div className="MessengerChatRoom__PendingFiles">
+            {pendingFiles.map((pf) => (
+              <div key={pf.id} className="MessengerChatRoom__PendingFile">
+                {pf.preview ? (
+                  <img src={pf.preview} alt={pf.file_name} className="MessengerChatRoom__PendingThumb" />
+                ) : (
+                  <div className="MessengerChatRoom__PendingFileIcon">
+                    <FileIcon size={20} />
+                  </div>
+                )}
+                <div className="MessengerChatRoom__PendingInfo">
+                  <span className="MessengerChatRoom__PendingName">{pf.file_name}</span>
+                  <span className="MessengerChatRoom__PendingSize">{formatFileSize(pf.file_size)}</span>
+                </div>
+                {pf.status === 'uploading' && (
+                  <div className="MessengerChatRoom__PendingProgress">
+                    <div className="MessengerChatRoom__PendingProgressBar"
+                         style={{ width: `${pf.progress}%` }} />
+                  </div>
+                )}
+                <button className="MessengerChatRoom__PendingRemove"
+                        onClick={() => removePendingFile(pf.id)}>
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          style={{ display: 'none' }}
+          accept={ALLOWED_EXTENSIONS.join(',')}
+          onChange={(e) => {
+            if (e.target.files?.length) handleFilesSelected(e.target.files);
+            e.target.value = '';
+          }}
+        />
+        <button
+          className="MessengerChatRoom__AttachBtn"
+          onClick={() => fileInputRef.current?.click()}
+          title="Attach files"
+        >
+          <Paperclip size={16} />
+        </button>
         <div className={`MessengerChatRoom__InputWrap ${isCodeMode ? 'MessengerChatRoom__InputWrap--code' : ''}`}>
           {isCodeMode && (
             <div className="MessengerChatRoom__CodeLabel">Code</div>
@@ -669,15 +841,16 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
             value={input}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             placeholder={isCodeMode ? 'Enter code... (close with ``` to send)' : 'Type a message... (/ for commands)'}
             className={`MessengerChatRoom__InputField ${isCodeMode ? 'MessengerChatRoom__InputField--code' : ''}`}
             rows={1}
           />
         </div>
         <button
-          className={`MessengerChatRoom__SendBtn ${isCodeMode || slashCommand ? 'MessengerChatRoom__SendBtn--disabled' : ''}`}
+          className={`MessengerChatRoom__SendBtn ${sendDisabled ? 'MessengerChatRoom__SendBtn--disabled' : ''}`}
           onClick={handleSend}
-          disabled={isCodeMode || !!slashCommand}
+          disabled={sendDisabled}
         >
           <Send size={14} />
         </button>

@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Request, Depends, Query
+from fastapi import APIRouter, Request, Depends, Query, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .schema import chat as chat_schema
 from core.controller import chat as chat_controller
+from core.controller import chat_upload
 from library.validator import require_login
 import db_engine as db
 
@@ -18,6 +19,11 @@ async def create_room(request: Request, body: chat_schema.ChatRoomCreate,
 @router.get("", summary="내 채팅방 목록", dependencies=[Depends(require_login)])
 async def list_rooms(request: Request, session: AsyncSession = Depends(db.session)):
     return await chat_controller.get_rooms(request, session)
+
+
+@router.post("/upload", summary="채팅 파일 업로드", dependencies=[Depends(require_login)])
+async def upload_file(request: Request, file: UploadFile = File(...)):
+    return await chat_upload.upload(file, request)
 
 
 @router.get("/task-search", summary="채팅용 Task 검색",

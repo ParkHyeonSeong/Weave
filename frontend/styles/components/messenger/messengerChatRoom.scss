@@ -348,6 +348,23 @@
     }
   }
 
+  &__AttachBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: $radius-md;
+    color: $color-text-tertiary;
+    transition: all $transition-fast;
+    flex-shrink: 0;
+
+    &:hover {
+      background: $color-surface;
+      color: $color-text;
+    }
+  }
+
   &__SendBtn {
     display: flex;
     align-items: center;
@@ -372,6 +389,237 @@
       &:hover {
         background: $color-primary;
       }
+    }
+  }
+
+  // 드래그 오버레이
+  &__DragOverlay {
+    position: absolute;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba($color-primary, 0.08);
+    border: 2px dashed $color-primary;
+    border-radius: $radius-2xl;
+    pointer-events: none;
+
+    span {
+      font-size: $font-size-sm;
+      font-weight: $font-weight-semibold;
+      color: $color-primary;
+    }
+  }
+
+  // 파일 프리뷰 영역
+  &__PendingFiles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $space-2;
+    width: 100%;
+    margin-bottom: $space-1;
+  }
+
+  &__PendingFile {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: $space-2;
+    background: $color-surface;
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+    min-width: 0;
+    max-width: 200px;
+  }
+
+  &__PendingThumb {
+    width: 48px;
+    height: 48px;
+    border-radius: $radius-md;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+
+  &__PendingFileIcon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border-radius: $radius-md;
+    background: $color-bg;
+    color: $color-text-tertiary;
+    flex-shrink: 0;
+  }
+
+  &__PendingInfo {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  &__PendingName {
+    font-size: 11px;
+    color: $color-text;
+    font-weight: $font-weight-medium;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__PendingSize {
+    font-size: 10px;
+    color: $color-text-tertiary;
+  }
+
+  &__PendingProgress {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: $color-border;
+    border-radius: 0 0 $radius-lg $radius-lg;
+    overflow: hidden;
+  }
+
+  &__PendingProgressBar {
+    height: 100%;
+    background: $color-primary;
+    transition: width 0.2s ease;
+  }
+
+  &__PendingRemove {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: $color-text-tertiary;
+    color: $color-bg;
+    transition: background $transition-fast;
+
+    &:hover {
+      background: $color-error;
+    }
+  }
+
+  // 메시지 내 첨부파일
+  &__Attachments {
+    display: flex;
+    flex-direction: column;
+    gap: $space-1;
+    margin-bottom: $space-1;
+    width: 100%;
+    max-width: 280px;
+  }
+
+  &__ImageGrid {
+    display: grid;
+    gap: 2px;
+    border-radius: $radius-lg;
+    overflow: hidden;
+
+    &--single {
+      grid-template-columns: 1fr;
+    }
+
+    &--duo {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    &--multi {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  &__ImageLink {
+    display: block;
+    line-height: 0;
+
+    img {
+      width: 100%;
+      max-height: 240px;
+      object-fit: cover;
+      cursor: pointer;
+      transition: opacity $transition-fast;
+
+      &:hover {
+        opacity: 0.9;
+      }
+    }
+  }
+
+  &__FileCard {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: $space-2 $space-3;
+    background: $color-surface;
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+    text-decoration: none;
+    color: $color-text;
+    transition: all $transition-fast;
+
+    &:hover {
+      border-color: $color-primary;
+    }
+
+    .MessengerChatRoom__Msg--mine & {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: rgba(255, 255, 255, 0.2);
+      color: $color-text-inverse;
+
+      &:hover {
+        border-color: rgba(255, 255, 255, 0.4);
+      }
+    }
+
+    svg {
+      flex-shrink: 0;
+      color: $color-text-tertiary;
+
+      .MessengerChatRoom__Msg--mine & {
+        color: rgba(255, 255, 255, 0.7);
+      }
+    }
+  }
+
+  &__FileCardName {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__FileCardSize {
+    font-size: 10px;
+    color: $color-text-tertiary;
+    white-space: nowrap;
+
+    .MessengerChatRoom__Msg--mine & {
+      color: rgba(255, 255, 255, 0.6);
+    }
+  }
+
+  &__FileCardDl {
+    opacity: 0;
+    transition: opacity $transition-fast;
+
+    .MessengerChatRoom__FileCard:hover & {
+      opacity: 1;
     }
   }
 }

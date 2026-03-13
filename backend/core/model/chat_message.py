@@ -1,6 +1,8 @@
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.model import chat_attachment as attachment_model
+
 
 async def create(room_id: int, sender_id: int, content: str, db: AsyncSession,
                  task_id: int = None, canvas_page_id: int = None,
@@ -96,4 +98,11 @@ async def find_by_room(room_id: int, limit: int, offset: int, db: AsyncSession):
             if key.startswith('ref_'):
                 del msg[key]
         messages.append(msg)
+
+    # 첨부파일 일괄 조회
+    message_ids = [m['message_id'] for m in messages]
+    att_map = await attachment_model.find_by_message_ids(message_ids, db)
+    for msg in messages:
+        msg['attachments'] = att_map.get(msg['message_id'], [])
+
     return messages

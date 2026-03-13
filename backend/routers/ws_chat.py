@@ -8,6 +8,7 @@ from config import JWT_SECRET_KEY, JWT_ALGORITHM, COOKIE_NAME
 from library.ws_manager import manager
 from core.model import chat_message as message_model
 from core.model import chat_member as member_model
+from core.model import chat_attachment as attachment_model
 from core.model import task as task_model
 from core.model import canvas_page as canvas_page_model
 from core.model import task_issue as issue_model
@@ -59,8 +60,9 @@ async def websocket_chat(ws: WebSocket):
                 task_id = data.get('task_id')
                 canvas_page_id = data.get('canvas_page_id')
                 issue_id = data.get('issue_id')
-                # content 또는 첨부 중 하나는 있어야 함
-                if not room_id or (not content and not task_id and not canvas_page_id and not issue_id):
+                attachments = data.get('attachments', [])  # [{ url, file_name, file_type, file_size }]
+                # content, 참조, 또는 첨부 중 하나는 있어야 함
+                if not room_id or (not content and not task_id and not canvas_page_id and not issue_id and not attachments):
                     continue
 
                 # DB 세션 생성 (WebSocket은 Depends 사용 불가)
@@ -117,6 +119,21 @@ async def websocket_chat(ws: WebSocket):
                                 'status': issue['status'],
                             }
 
+                    # 첨부파일 저장
+                    saved_attachments = []
+                    if attachments:
+                        valid = [a for a in attachments[:10]
+                                 if a.get('url') and a.get('file_name')]
+                        if valid:
+                            att_list = [{
+                                'file_url': a['url'],
+                                'file_name': a['file_name'],
+                                'file_type': a.get('file_type', 'application/octet-stream'),
+                                'file_size': a.get('file_size', 0),
+                            } for a in valid]
+                            await attachment_model.bulk_create(msg['message_id'], att_list, session)
+                            saved_attachments = att_list
+
                     # @멘션 알림 처리
                     mentioned_user_ids = data.get('mentioned_user_ids', [])
                     if mentioned_user_ids:
@@ -145,6 +162,7 @@ async def websocket_chat(ws: WebSocket):
                             'task_ref': task_ref,
                             'doc_ref': doc_ref,
                             'issue_ref': issue_ref,
+                            'attachments': saved_attachments,
                         },
                     }, session)
 

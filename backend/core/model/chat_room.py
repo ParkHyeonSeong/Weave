@@ -38,6 +38,8 @@ async def find_rooms_by_user(user_id: int, db: AsyncSession):
                     CASE WHEN cm2.task_id IS NOT NULL THEN 'Shared a task'
                          WHEN cm2.canvas_page_id IS NOT NULL THEN 'Shared a document'
                          WHEN cm2.issue_id IS NOT NULL THEN 'Shared an issue'
+                         WHEN EXISTS (SELECT 1 FROM chat_attachment ca
+                                      WHERE ca.message_id = cm2.message_id) THEN 'Sent a file'
                          ELSE NULL END)
                 FROM chat_message cm2
                 WHERE cm2.room_id = cr.room_id
