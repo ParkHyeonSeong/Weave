@@ -465,9 +465,9 @@
   // -- Mobile drawer --
   &--mobile {
     position: fixed;
-    top: 48px;
+    top: calc(48px + env(safe-area-inset-top));
     left: 0;
-    bottom: 0;
+    bottom: calc(56px + env(safe-area-inset-bottom));
     width: 80vw;
     max-width: 320px;
     z-index: 200;

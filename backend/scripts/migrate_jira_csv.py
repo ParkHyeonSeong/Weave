@@ -161,12 +161,14 @@ def parse_start_date_field(s):
 # 마이그레이터
 # ---------------------------------------------------------------------------
 class CsvMigrator:
-    def __init__(self, csv_path, branch_key, fallback_user_id, dry_run, db_url):
+    def __init__(self, csv_path, branch_key, fallback_user_id, dry_run, db_url,
+                 user_mapping=None):
         self.csv_path = csv_path
         self.branch_key = branch_key
         self.fallback_user_id = fallback_user_id
         self.dry_run = dry_run
         self.engine = create_engine(db_url)
+        self.user_mapping = user_mapping or {}  # Jira 이름 -> Weave user_id
 
         self.branch_id = None
         self.rows = []           # 파싱된 CSV 행
@@ -566,13 +568,21 @@ class CsvMigrator:
             task_id = result.scalar_one()
             self.task_map[jira_key] = task_id
 
-            # 담당자 (main)
+            # 담당자 (main) - user_mapping으로 매핑
             assignee = row[COL_ASSIGNEE].strip() if COL_ASSIGNEE < len(row) else ""
             if assignee:
-                conn.execute(text("""
-                    INSERT INTO task_assignee (task_id, user_id, role)
-                    VALUES (:tid, :uid, 'main')
-                """), {"tid": task_id, "uid": self.fallback_user_id})
+                mapped_uid = self.user_mapping.get(assignee)
+                if mapped_uid:
+                    conn.execute(text("""
+                        INSERT INTO task_assignee (task_id, user_id, role)
+                        VALUES (:tid, :uid, 'main')
+                    """), {"tid": task_id, "uid": mapped_uid})
+                elif not self.user_mapping:
+                    # CLI 호출 시 (user_mapping 없으면 fallback 사용)
+                    conn.execute(text("""
+                        INSERT INTO task_assignee (task_id, user_id, role)
+                        VALUES (:tid, :uid, 'main')
+                    """), {"tid": task_id, "uid": self.fallback_user_id})
 
             # 라벨
             label_name = row[COL_LABEL].strip() if COL_LABEL < len(row) else ""
@@ -636,6 +646,61 @@ class CsvMigrator:
         log.info(f"  Epics:      {self.stats['epics']}개 생성")
         log.info(f"  Tasks:      {self.stats['tasks']}개 생성 ({self.stats['tasks_failed']}개 실패)")
         log.info("=" * 60)
+
+
+    # -----------------------------------------------------------------------
+    # 프리뷰 (API용)
+    # -----------------------------------------------------------------------
+    @staticmethod
+    def preview(csv_path):
+        """CSV 파싱 후 프리뷰 데이터 반환 (담당자 목록, 통계)"""
+        with open(csv_path, "r", encoding="utf-8") as f:
+            reader = csv.reader(f)
+            next(reader)  # 헤더 스킵
+            rows = list(reader)
+
+        assignees = set()
+        epics = 0
+        tasks = 0
+        subtasks = 0
+        sprint_names = set()
+        label_names = set()
+
+        for row in rows:
+            issue_type = row[COL_ISSUE_TYPE].strip()
+            if issue_type == "에픽":
+                epics += 1
+            elif issue_type == "하위 작업":
+                subtasks += 1
+            else:
+                tasks += 1
+
+            # 담당자 수집
+            assignee = row[COL_ASSIGNEE].strip() if COL_ASSIGNEE < len(row) else ""
+            if assignee:
+                assignees.add(assignee)
+
+            # 라벨 수집
+            label = row[COL_LABEL].strip() if COL_LABEL < len(row) else ""
+            if label:
+                label_names.add(label)
+
+            # 스프린트 수집
+            for i in range(COL_SPRINT_START, COL_SPRINT_END + 1):
+                if i < len(row) and row[i].strip():
+                    sprint_names.add(row[i].strip())
+
+        return {
+            "assignees": sorted(assignees),
+            "stats": {
+                "total": len(rows),
+                "epics": epics,
+                "tasks": tasks,
+                "subtasks": subtasks,
+                "sprints": len(sprint_names),
+                "labels": len(label_names),
+            },
+        }
 
 
 # ---------------------------------------------------------------------------

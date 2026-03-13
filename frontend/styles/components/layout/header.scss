@@ -364,14 +364,14 @@
       position: fixed;
       left: $space-3;
       right: $space-3;
-      top: 52px;
+      top: calc(52px + env(safe-area-inset-top));
       width: auto;
     }
 
     .Header__SettingsMenu {
       position: fixed;
       right: $space-3;
-      top: 52px;
+      top: calc(52px + env(safe-area-inset-top));
     }
   }
 }

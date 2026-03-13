@@ -77,6 +77,13 @@ async def update(canvas_id: int, body, request: Request, db: AsyncSession):
     if not fields:
         return {'status': True}
 
+    # key 변경 시 중복 체크
+    if 'key' in fields:
+        canvas = await canvas_model.find_by_id(canvas_id, db)
+        if canvas and canvas['key'] != fields['key']:
+            if await canvas_model.find_by_key(fields['key'], db):
+                return {'status': False, 'message': 'KEY_ALREADY_EXISTS'}
+
     await canvas_model.update(canvas_id, fields, db)
     return {'status': True}
 

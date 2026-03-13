@@ -78,6 +78,13 @@ async def update(branch_id: int, body, request: Request, db: AsyncSession):
     if not fields:
         return {'status': True}
 
+    # key 변경 시 중복 체크
+    if 'key' in fields:
+        branch = await branch_model.find_by_id(branch_id, db)
+        if branch and branch['key'] != fields['key']:
+            if await branch_model.find_by_key(fields['key'], db):
+                return {'status': False, 'message': 'KEY_ALREADY_EXISTS'}
+
     await branch_model.update(branch_id, fields, db)
     return {'status': True}
 

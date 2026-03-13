@@ -6,6 +6,8 @@ import { Globe, Lock, AlertTriangle } from 'lucide-react';
 export default function SettingsGeneral({ branchId, branch, isAdmin, onUpdated }) {
   const router = useRouter();
   const [branchName, setBranchName] = useState(branch?.branch_name || '');
+  const [key, setKey] = useState(branch?.key || '');
+  const [keyError, setKeyError] = useState('');
   const [description, setDescription] = useState(branch?.description || '');
   const [visibility, setVisibility] = useState(branch?.visibility || 'private');
   const [saving, setSaving] = useState(false);
@@ -14,13 +16,24 @@ export default function SettingsGeneral({ branchId, branch, isAdmin, onUpdated }
   const [deleteInput, setDeleteInput] = useState('');
   const [deleting, setDeleting] = useState(false);
 
+  const handleKeyChange = (v) => {
+    const upper = v.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    setKey(upper);
+    if (upper && !/^[A-Z][A-Z0-9]{1,9}$/.test(upper)) {
+      setKeyError('2-10 uppercase letters/numbers, starting with a letter');
+    } else {
+      setKeyError('');
+    }
+  };
+
   const handleSave = async () => {
-    if (!branchName.trim() || saving) return;
+    if (!branchName.trim() || !key.trim() || keyError || saving) return;
     setSaving(true);
     setSaved(false);
     try {
       const res = await axios.patch(`/branches/${branchId}`, {
         branch_name: branchName.trim(),
+        key: key.trim(),
         description: description.trim() || null,
         visibility,
       });
@@ -28,6 +41,8 @@ export default function SettingsGeneral({ branchId, branch, isAdmin, onUpdated }
         setSaved(true);
         if (onUpdated) onUpdated();
         setTimeout(() => setSaved(false), 2000);
+      } else if (res.data.message === 'KEY_ALREADY_EXISTS') {
+        setKeyError('This key is already in use.');
       }
     } catch {}
     setSaving(false);
@@ -46,15 +61,22 @@ export default function SettingsGeneral({ branchId, branch, isAdmin, onUpdated }
         />
       </div>
 
-      {/* Key (읽기 전용) */}
+      {/* Key */}
       <div className="SettingsGeneral__Field">
         <label className="SettingsGeneral__Label">Key</label>
         <input
-          className="SettingsGeneral__Input SettingsGeneral__Input--readonly"
-          value={branch?.key || ''}
-          disabled
+          className={`SettingsGeneral__Input ${!isAdmin ? 'SettingsGeneral__Input--readonly' : ''}`}
+          value={key}
+          onChange={(e) => handleKeyChange(e.target.value)}
+          disabled={!isAdmin}
+          maxLength={10}
         />
-        <span className="SettingsGeneral__Hint">Key cannot be changed after creation.</span>
+        {keyError && <span className="SettingsGeneral__Error">{keyError}</span>}
+        {isAdmin && !keyError && (
+          <span className="SettingsGeneral__Hint">
+            Changing the key will update all task IDs (e.g., {branch?.key}-1 → {key || '?'}-1)
+          </span>
+        )}
       </div>
 
       {/* Description */}
@@ -106,7 +128,7 @@ export default function SettingsGeneral({ branchId, branch, isAdmin, onUpdated }
           <button
             className="SettingsGeneral__SaveBtn"
             onClick={handleSave}
-            disabled={!branchName.trim() || saving}
+            disabled={!branchName.trim() || !key.trim() || keyError || saving}
           >
             {saving ? 'Saving...' : saved ? 'Saved' : 'Save Changes'}
           </button>

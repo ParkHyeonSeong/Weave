@@ -118,6 +118,11 @@
     color: $color-text-tertiary;
   }
 
+  &__Error {
+    font-size: $font-size-xs;
+    color: $color-error;
+  }
+
   &__VisibilityGroup {
     display: flex;
     gap: $space-2;

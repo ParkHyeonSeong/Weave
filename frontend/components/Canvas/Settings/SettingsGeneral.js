@@ -6,6 +6,8 @@ import { Globe, Lock, AlertTriangle } from 'lucide-react';
 export default function SettingsGeneral({ canvasId, canvas, isAdmin, onUpdated }) {
   const router = useRouter();
   const [canvasName, setCanvasName] = useState(canvas?.canvas_name || '');
+  const [key, setKey] = useState(canvas?.key || '');
+  const [keyError, setKeyError] = useState('');
   const [description, setDescription] = useState(canvas?.description || '');
   const [visibility, setVisibility] = useState(canvas?.visibility || 'private');
   const [saving, setSaving] = useState(false);
@@ -14,13 +16,24 @@ export default function SettingsGeneral({ canvasId, canvas, isAdmin, onUpdated }
   const [deleteInput, setDeleteInput] = useState('');
   const [deleting, setDeleting] = useState(false);
 
+  const handleKeyChange = (v) => {
+    const upper = v.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    setKey(upper);
+    if (upper && !/^[A-Z][A-Z0-9]{1,9}$/.test(upper)) {
+      setKeyError('2-10 uppercase letters/numbers, starting with a letter');
+    } else {
+      setKeyError('');
+    }
+  };
+
   const handleSave = async () => {
-    if (!canvasName.trim() || saving) return;
+    if (!canvasName.trim() || !key.trim() || keyError || saving) return;
     setSaving(true);
     setSaved(false);
     try {
       const res = await axios.patch(`/canvases/${canvasId}`, {
         canvas_name: canvasName.trim(),
+        key: key.trim(),
         description: description.trim() || null,
         visibility,
       });
@@ -29,6 +42,8 @@ export default function SettingsGeneral({ canvasId, canvas, isAdmin, onUpdated }
         if (onUpdated) onUpdated();
         window.dispatchEvent(new Event('canvas:created'));
         setTimeout(() => setSaved(false), 2000);
+      } else if (res.data.message === 'KEY_ALREADY_EXISTS') {
+        setKeyError('This key is already in use.');
       }
     } catch {}
     setSaving(false);
@@ -47,15 +62,22 @@ export default function SettingsGeneral({ canvasId, canvas, isAdmin, onUpdated }
         />
       </div>
 
-      {/* Key (읽기 전용) */}
+      {/* Key */}
       <div className="SettingsGeneral__Field">
         <label className="SettingsGeneral__Label">Key</label>
         <input
-          className="SettingsGeneral__Input SettingsGeneral__Input--readonly"
-          value={canvas?.key || ''}
-          disabled
+          className={`SettingsGeneral__Input ${!isAdmin ? 'SettingsGeneral__Input--readonly' : ''}`}
+          value={key}
+          onChange={(e) => handleKeyChange(e.target.value)}
+          disabled={!isAdmin}
+          maxLength={10}
         />
-        <span className="SettingsGeneral__Hint">Key cannot be changed after creation.</span>
+        {keyError && <span className="SettingsGeneral__Error">{keyError}</span>}
+        {isAdmin && !keyError && (
+          <span className="SettingsGeneral__Hint">
+            2-10 uppercase letters/numbers, starting with a letter
+          </span>
+        )}
       </div>
 
       {/* Description */}
@@ -107,7 +129,7 @@ export default function SettingsGeneral({ canvasId, canvas, isAdmin, onUpdated }
           <button
             className="SettingsGeneral__SaveBtn"
             onClick={handleSave}
-            disabled={!canvasName.trim() || saving}
+            disabled={!canvasName.trim() || !key.trim() || keyError || saving}
           >
             {saving ? 'Saving...' : saved ? 'Saved' : 'Save Changes'}
           </button>

@@ -28,8 +28,18 @@ class CanvasCreate(BaseModel):
 
 class CanvasUpdate(BaseModel):
     canvas_name: Optional[str] = None
+    key: Optional[str] = None
     description: Optional[str] = None
     visibility: Optional[str] = None
+
+    @field_validator('key')
+    @classmethod
+    def validate_key(cls, v):
+        if v is not None:
+            v = v.strip().upper()
+            if not re.match(r'^[A-Z][A-Z0-9]{1,9}$', v):
+                raise ValueError('key must be 2-10 uppercase letters/numbers, starting with a letter')
+        return v
 
     @field_validator('visibility')
     @classmethod

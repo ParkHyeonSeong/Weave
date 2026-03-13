@@ -166,7 +166,7 @@
   // -- Mobile: 풀스크린 오버레이 --
   &--mobile {
     position: fixed;
-    top: 48px;
+    top: calc(48px + env(safe-area-inset-top));
     left: 0;
     right: 0;
     bottom: calc(56px + env(safe-area-inset-bottom));
