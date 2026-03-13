@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { X, ExternalLink, ArrowRight, Loader } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import { sanitizeHtml } from '@/library/sanitize';
 
 export default function RefPreviewPanel({ refType, refData, onClose }) {
   const router = useRouter();
@@ -141,7 +142,7 @@ function TaskPreview({ task }) {
           <span className="RefPreviewPanel__SectionTitle">Description</span>
           <div
             className="RefPreviewPanel__HtmlContent"
-            dangerouslySetInnerHTML={{ __html: task.description }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(task.description) }}
           />
         </div>
       )}
@@ -157,7 +158,7 @@ function DocPreview({ page }) {
       {page.content && (
         <div
           className="RefPreviewPanel__HtmlContent RefPreviewPanel__HtmlContent--doc ProseMirror"
-          dangerouslySetInnerHTML={{ __html: page.content }}
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(page.content) }}
         />
       )}
     </div>
@@ -181,7 +182,7 @@ function IssuePreview({ issue }) {
           <span className="RefPreviewPanel__SectionTitle">Description</span>
           <div
             className="RefPreviewPanel__HtmlContent"
-            dangerouslySetInnerHTML={{ __html: issue.description }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(issue.description) }}
           />
         </div>
       )}

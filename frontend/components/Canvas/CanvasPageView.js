@@ -6,6 +6,7 @@ import useStar from '@/hooks/useStar';
 import { axios } from '@/library/_axios';
 import ConfirmModal from '@/components/modal/ConfirmModal';
 import useCollabProvider from '@/library/useCollabProvider';
+import { sanitizeHtml } from '@/library/sanitize';
 import PresenceBar from './PresenceBar';
 import katex from 'katex';
 import { common, createLowlight } from 'lowlight';
@@ -630,7 +631,7 @@ export default function CanvasPageView({ onRefClick }) {
           <div
             ref={contentRef}
             className="CanvasPageView__Content ProseMirror"
-            dangerouslySetInnerHTML={{ __html: page.content || '<p>No content yet. Click Edit to start writing.</p>' }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(page.content) || '<p>No content yet. Click Edit to start writing.</p>' }}
           />
         )}
       </div>

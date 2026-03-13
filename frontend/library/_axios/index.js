@@ -13,6 +13,12 @@ const handleResponseFulfilled = (response) => {
 };
 
 const handleResponseRejected = (error) => {
+  if (error.response?.status === 401 && !isAuthExpiredDispatched) {
+    isAuthExpiredDispatched = true;
+    sessionStorage.removeItem('profile');
+    window.dispatchEvent(new CustomEvent('auth:expired'));
+    setTimeout(() => { isAuthExpiredDispatched = false; }, 3000);
+  }
   return Promise.reject(error);
 };
 

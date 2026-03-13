@@ -7,7 +7,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from slowapi.errors import RateLimitExceeded
+
 from library import validator
+from library.rate_limiter import limiter
 from library.ws_collab_manager import collab_manager
 from routers import auth as auth_router
 from routers import setup as setup_router
@@ -59,17 +62,20 @@ async def lifespan(app):
 
 
 # -- App -------------------------------------------------------------------
+DEBUG = os.getenv("DEBUG", "false").lower() == "true"
+
 app = FastAPI(
     title="Weave API",
     description="In-house project management platform",
     version="0.1.0",
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
-    openapi_url="/api/openapi.json",
+    docs_url="/api/docs" if DEBUG else None,
+    redoc_url="/api/redoc" if DEBUG else None,
+    openapi_url="/api/openapi.json" if DEBUG else None,
     lifespan=lifespan,
 )
+# -- Rate Limiting ---------------------------------------------------------
+app.state.limiter = limiter
 
-DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 FRONTEND_PORT = os.getenv("FRONTEND_PORT", "3000")
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS")
 
@@ -82,10 +88,10 @@ else:
     ]
 
 if DEBUG and not ALLOWED_ORIGINS:
-    # 개발 모드: 모든 origin 허용 (LAN IP 접근 등) + credentials 지원
+    # 개발 모드: LAN 범위 origin 허용 + credentials 지원
     app.add_middleware(
         CORSMiddleware,
-        allow_origin_regex=r"https?://.*",
+        allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(:\d+)?",
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -153,10 +159,18 @@ def api_health():
 
 
 # -- Exception handlers ----------------------------------------------------
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(
+        status_code=429,
+        content={"status": False, "message": "RATE_LIMIT_EXCEEDED"},
+    )
+
+
 @app.exception_handler(validator.UnAuthorizedException)
 async def unauthorized_handler(request: Request, exc: validator.UnAuthorizedException):
     return JSONResponse(
-        status_code=200,
+        status_code=401,
         content={"status": exc.status, "message": exc.message},
     )
 

@@ -26,8 +26,8 @@ def _verify_token(token: str) -> dict | None:
 @router.websocket("/ws/canvas/{canvas_id}/pages/{page_id}")
 async def websocket_canvas_collab(ws: WebSocket, canvas_id: int, page_id: int):
     """Canvas 페이지 실시간 협업 WebSocket"""
-    # JWT 인증: cookie 우선, query param fallback (cross-port 대응)
-    token = ws.cookies.get(COOKIE_NAME, '') or ws.query_params.get('token', '')
+    # JWT 인증: cookie 기반
+    token = ws.cookies.get(COOKIE_NAME, '')
     payload = _verify_token(token)
     if not payload:
         await ws.close(code=4001, reason="Unauthorized")

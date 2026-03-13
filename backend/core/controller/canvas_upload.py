@@ -5,6 +5,7 @@ from fastapi import Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.model import canvas_member as member_model
+from library.file_validator import validate_image_magic_bytes
 
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'uploads', 'canvas')
 ALLOWED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
@@ -30,6 +31,10 @@ async def upload_image(canvas_id: int, file: UploadFile, request: Request, db: A
     content = await file.read()
     if len(content) > MAX_FILE_SIZE:
         return {'status': False, 'message': 'FILE_TOO_LARGE'}
+
+    # 매직 바이트 검증
+    if not validate_image_magic_bytes(content, ext):
+        return {'status': False, 'message': 'INVALID_FILE_CONTENT'}
 
     # 디렉토리 생성
     os.makedirs(UPLOAD_DIR, exist_ok=True)

@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.model import user as user_model
 from core.controller.auth import _create_token, _set_auth_cookie
+from library.file_validator import validate_image_magic_bytes
 
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'uploads', 'avatars')
 ALLOWED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
@@ -85,6 +86,10 @@ async def upload_avatar(file: UploadFile, request: Request, db: AsyncSession):
     content = await file.read()
     if len(content) > MAX_FILE_SIZE:
         return {'status': False, 'message': 'FILE_TOO_LARGE'}
+
+    # 매직 바이트 검증
+    if not validate_image_magic_bytes(content, ext):
+        return {'status': False, 'message': 'INVALID_FILE_CONTENT'}
 
     # 업로드 디렉토리 생성
     os.makedirs(UPLOAD_DIR, exist_ok=True)

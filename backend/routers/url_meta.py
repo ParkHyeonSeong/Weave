@@ -5,6 +5,8 @@ from bs4 import BeautifulSoup
 from fastapi import APIRouter, Request
 
 from library.validator import require_login
+from library.url_validator import validate_url_for_ssrf
+from library.rate_limiter import limiter
 from routers.schema.url_meta import URLMetaRequest
 
 router = APIRouter()
@@ -13,14 +15,21 @@ MAX_BODY_SIZE = 100 * 1024  # 100KB
 
 
 @router.post('')
-async def fetch_url_meta(req: Request, body: URLMetaRequest):
+@limiter.limit("10/minute")
+async def fetch_url_meta(request: Request, body: URLMetaRequest):
     """URL 메타데이터 추출 (title, description, favicon, og:image)"""
-    require_login(req)
+    require_login(request)
+
+    # SSRF 방지: 내부 네트워크/메타데이터 URL 차단
+    ssrf_error = validate_url_for_ssrf(body.url)
+    if ssrf_error:
+        return {'status': False, 'message': ssrf_error}
 
     try:
         async with httpx.AsyncClient(
             timeout=5.0,
             follow_redirects=True,
+            max_redirects=3,
             headers={'User-Agent': 'Mozilla/5.0 (compatible; Weave/1.0)'},
         ) as client:
             resp = await client.get(body.url)

@@ -7,6 +7,7 @@ import { axios } from '@/library/_axios';
 import CustomSelect from '@/components/common/CustomSelect';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import useTaskDetail from '@/hooks/useTaskDetail';
+import { sanitizeHtml } from '@/library/sanitize';
 import TaskIssueSection from './TaskIssueSection';
 import TaskDependencySection from './TaskDependencySection';
 import TaskPageLinkSection from './TaskPageLinkSection';
@@ -178,7 +179,7 @@ export default function TaskFullPage() {
                 onClick={() => setEditingDesc(true)}
               >
                 {task.description ? (
-                  <div className="TaskDescReadonly" dangerouslySetInnerHTML={{ __html: task.description }} />
+                  <div className="TaskDescReadonly" dangerouslySetInnerHTML={{ __html: sanitizeHtml(task.description) }} />
                 ) : (
                   'Add description...'
                 )}

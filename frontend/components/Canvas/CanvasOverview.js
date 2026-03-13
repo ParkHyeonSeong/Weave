@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import { Pencil, X, Wifi, WifiOff, Loader } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import useCollabProvider from '@/library/useCollabProvider';
+import { sanitizeHtml } from '@/library/sanitize';
 import PresenceBar from './PresenceBar';
 
 const CanvasCollabEditor = dynamic(() => import('./CanvasCollabEditor'), { ssr: false });
@@ -303,7 +304,7 @@ export default function CanvasOverview() {
                 ref={contentRef}
                 className="CanvasOverview__OverviewContent"
                 dangerouslySetInnerHTML={{
-                  __html: overview.content || '<p>No content yet. Click Edit to start writing.</p>',
+                  __html: sanitizeHtml(overview.content) || '<p>No content yet. Click Edit to start writing.</p>',
                 }}
               />
             )}

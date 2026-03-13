@@ -35,17 +35,11 @@ export default function useCollabProvider(canvasId, pageId, user) {
     // y-websocket은 `${serverUrl}/${roomname}` 형태로 연결
     const serverUrl = `${getWsBaseURL()}/api/ws/canvas/${canvasId}/pages`;
 
-    // 쿠키가 cross-port에서 안 붙을 수 있으므로 token을 query param으로도 전달
-    const token = document.cookie
-      .split('; ')
-      .find((c) => c.startsWith('weave_token='))
-      ?.split('=')[1] || '';
-
     const prov = new WebsocketProvider(
       serverUrl,
       String(pageId),
       doc,
-      { connect: true, params: { token } }
+      { connect: true }
     );
 
     // Awareness에 사용자 정보 설정

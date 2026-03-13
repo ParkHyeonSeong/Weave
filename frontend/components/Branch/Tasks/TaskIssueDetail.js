@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { ArrowLeft, CircleDot, MoreHorizontal, Pencil, Trash2, XCircle, CheckCircle2 } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import { ensureHtml } from '@/library/ensureHtml';
+import { sanitizeHtml } from '@/library/sanitize';
 import IssueEditor from './IssueEditor';
 import ConfirmModal from '@/components/modal/ConfirmModal';
 
@@ -296,7 +297,7 @@ export default function TaskIssueDetail() {
             ) : (
               <div className={`IssueDetail__CardBody ${!issue.body ? 'IssueDetail__CardBody--empty' : ''}`}>
                 {issue.body ? (
-                  <div className="TaskDescReadonly" dangerouslySetInnerHTML={{ __html: ensureHtml(issue.body) }} />
+                  <div className="TaskDescReadonly" dangerouslySetInnerHTML={{ __html: sanitizeHtml(ensureHtml(issue.body)) }} />
                 ) : (
                   isAuthor ? 'No description provided yet.' : 'No description provided.'
                 )}
@@ -350,7 +351,7 @@ export default function TaskIssueDetail() {
                   </div>
                 ) : (
                   <div className="IssueDetail__CardBody">
-                    <div className="TaskDescReadonly" dangerouslySetInnerHTML={{ __html: ensureHtml(comment.content) }} />
+                    <div className="TaskDescReadonly" dangerouslySetInnerHTML={{ __html: sanitizeHtml(ensureHtml(comment.content)) }} />
                   </div>
                 )}
               </div>

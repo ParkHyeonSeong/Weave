@@ -6,6 +6,7 @@ import LabelTagInput from '@/components/common/LabelTagInput';
 import CustomSelect from '@/components/common/CustomSelect';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import useTaskDetail from '@/hooks/useTaskDetail';
+import { sanitizeHtml } from '@/library/sanitize';
 import TaskIssueSection from './TaskIssueSection';
 import TaskDependencySection from './TaskDependencySection';
 import TaskPageLinkSection from './TaskPageLinkSection';
@@ -161,7 +162,7 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
               onClick={() => setEditingDesc(true)}
             >
               {task.description ? (
-                <div className="TaskDescReadonly" dangerouslySetInnerHTML={{ __html: task.description }} />
+                <div className="TaskDescReadonly" dangerouslySetInnerHTML={{ __html: sanitizeHtml(task.description) }} />
               ) : (
                 'Add description...'
               )}
