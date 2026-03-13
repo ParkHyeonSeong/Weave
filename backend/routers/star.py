@@ -26,9 +26,10 @@ async def toggle_star(body: StarToggle, request: Request,
 
 @router.get("", summary="Star 목록")
 async def get_starred(request: Request, limit: int = 20,
+                      type: str | None = None,
                       session: AsyncSession = Depends(db.session)):
     user_id = request.state.payload.get('user_id')
-    items = await star_model.find_starred(user_id, min(limit, 50), session)
+    items = await star_model.find_starred(user_id, min(limit, 50), session, item_type=type)
     return {'status': True, 'items': items}
 
 

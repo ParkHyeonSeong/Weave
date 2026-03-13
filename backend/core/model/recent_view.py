@@ -13,9 +13,15 @@ async def upsert(user_id: int, item_type: str, item_id: int, db: AsyncSession):
     await db.commit()
 
 
-async def find_recent(user_id: int, limit: int, db: AsyncSession):
-    """최근 조회 항목 (태스크 + 문서 통합)"""
-    result = await db.execute(text("""
+async def find_recent(user_id: int, limit: int, db: AsyncSession, item_type: str | None = None):
+    """최근 조회 항목 (태스크 + 문서 통합, item_type으로 필터 가능)"""
+    where = "WHERE rv.user_id = :user_id"
+    params = {'user_id': user_id, 'limit': limit}
+    if item_type:
+        where += " AND rv.item_type = :item_type"
+        params['item_type'] = item_type
+
+    result = await db.execute(text(f"""
         SELECT rv.item_type, rv.item_id, rv.viewed_at,
                t.task_id, t.branch_id, t.display_number, t.title AS task_title,
                t.status AS task_status,
@@ -27,10 +33,10 @@ async def find_recent(user_id: int, limit: int, db: AsyncSession):
         LEFT JOIN branch b ON t.branch_id = b.branch_id
         LEFT JOIN canvas_page cp ON rv.item_type = 'doc' AND rv.item_id = cp.page_id
         LEFT JOIN canvas c ON cp.canvas_id = c.canvas_id
-        WHERE rv.user_id = :user_id
+        {where}
         ORDER BY rv.viewed_at DESC
         LIMIT :limit
-    """), {'user_id': user_id, 'limit': limit})
+    """), params)
     rows = result.fetchall()
     items = []
     for row in rows:

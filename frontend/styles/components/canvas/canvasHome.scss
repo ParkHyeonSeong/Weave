@@ -2,12 +2,18 @@
 
 .CanvasHome {
   padding: $space-8;
+  overflow-y: auto;
+  height: 100%;
+
+  @include mobile {
+    padding: $space-4;
+  }
 
   &__Header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: $space-8;
+    margin-bottom: $space-6;
   }
 
   &__Title {
@@ -33,9 +39,110 @@
     }
   }
 
+  // 위젯 그리드
+  &__WidgetGrid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: $space-4;
+    margin-bottom: $space-5;
+
+    @include mobile {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  // 문서 목록 (Recent / Starred 공통)
+  &__DocList {
+    display: flex;
+    flex-direction: column;
+  }
+
+  &__DocItem {
+    display: flex;
+    align-items: center;
+    gap: $space-3;
+    padding: $space-2 $space-1;
+    border-radius: $radius-md;
+    cursor: pointer;
+    transition: background $transition-fast;
+
+    &:hover {
+      background: $color-surface-hover;
+    }
+  }
+
+  &__DocIcon {
+    flex-shrink: 0;
+    color: $color-ref-doc;
+  }
+
+  &__DocCanvas {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    color: $color-primary;
+    white-space: nowrap;
+    min-width: 56px;
+  }
+
+  &__DocTitle {
+    font-size: $font-size-sm;
+    color: $color-text;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__DocTime {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+    white-space: nowrap;
+  }
+
+  // 구분선
+  &__Divider {
+    height: 1px;
+    background: $color-border;
+    margin: $space-2 0 $space-6;
+  }
+
+  // 검색 + 전체 목록
+  &__ListSection {
+    // wrapper
+  }
+
+  &__SearchWrap {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: $space-2 $space-3;
+    background: $color-surface;
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+    margin-bottom: $space-5;
+
+    svg {
+      color: $color-text-tertiary;
+      flex-shrink: 0;
+    }
+  }
+
+  &__SearchInput {
+    flex: 1;
+    border: none;
+    background: none;
+    font-size: $font-size-sm;
+    color: $color-text;
+    outline: none;
+
+    &::placeholder {
+      color: $color-text-tertiary;
+    }
+  }
+
   &__Empty {
     text-align: center;
-    padding: $space-16 0;
+    padding: $space-10 0;
     color: $color-text-tertiary;
     font-size: $font-size-sm;
     line-height: 1.6;
