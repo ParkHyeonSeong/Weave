@@ -112,6 +112,13 @@ make prod-logs
 
 certbot 컨테이너가 12시간마다 자동으로 갱신을 시도합니다. 별도 설정 불필요.
 
+## 보안 참고사항
+
+- **Swagger UI**: 프로덕션(`DEBUG=false`)에서는 자동 비활성화됩니다.
+- **Rate Limiting**: 로그인(5회/분), 회원가입(3회/분) 등 주요 엔드포인트에 기본 적용됩니다.
+- **보안 헤더**: 컨테이너 Nginx에 `X-Content-Type-Options`, `X-Frame-Options` 등이 기본 설정되어 있습니다. 호스트 Nginx 설정은 `nginx/host-nginx.conf.example`을 참고하세요.
+- **CORS**: `ALLOWED_ORIGINS` 환경변수에 명시된 origin만 허용됩니다. 쉼표로 여러 도메인을 지정할 수 있습니다.
+
 ## 업데이트
 
 ```bash

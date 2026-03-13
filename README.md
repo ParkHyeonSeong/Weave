@@ -108,10 +108,21 @@ make help           # Show all available commands
 |------------|------------------------------|
 | Frontend   | http://localhost:3000         |
 | Backend    | http://localhost:8000         |
-| API Docs   | http://localhost:8000/docs    |
+| API Docs   | http://localhost:8000/docs (dev only) |
 | PostgreSQL | localhost:5432               |
 
-> Ports are configurable via `.env`.
+> Ports are configurable via `.env`. API Docs (Swagger UI) is only available when `DEBUG=true`.
+
+## Security
+
+Weave includes the following built-in security measures:
+
+- **SSRF Protection** — URL metadata fetching validates DNS-resolved IPs, blocking internal networks and cloud metadata endpoints
+- **Rate Limiting** — login, registration, and API endpoints are rate-limited per IP
+- **XSS Prevention** — all user-generated HTML is sanitized with DOMPurify before rendering
+- **File Upload Validation** — image uploads are verified by magic bytes, not just file extension
+- **HTTP Security Headers** — `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, HSTS via Nginx
+- **CORS Restriction** — production mode only allows the configured `ALLOWED_ORIGINS`; dev mode restricts to LAN
 
 ## Production Deployment
 
@@ -135,7 +146,7 @@ Configure your host Nginx to proxy to the exposed ports — see `nginx/host-ngin
 
 ### Minimum Requirements
 
-| Resource | Recommended |ㄴ
+| Resource | Recommended |
 |----------|-------------|
 | CPU      | 2 cores     |
 | RAM      | 2 GB        |
