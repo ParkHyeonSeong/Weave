@@ -83,8 +83,9 @@ async def update(page_id: int, fields: dict, updated_by: int, db: AsyncSession):
     await db.commit()
 
 
-async def archive(page_id: int, db: AsyncSession):
-    """페이지 아카이브 (soft delete) - 하위 페이지도 함께"""
+async def hard_delete(page_id: int, db: AsyncSession):
+    """페이지 영구 삭제 (하위 페이지 포함)"""
+    # 하위 페이지 포함 recent_view, user_star 정리
     await db.execute(text("""
         WITH RECURSIVE descendants AS (
             SELECT page_id FROM canvas_page WHERE page_id = :page_id
@@ -92,7 +93,27 @@ async def archive(page_id: int, db: AsyncSession):
             SELECT wp.page_id FROM canvas_page wp
             INNER JOIN descendants d ON wp.parent_page_id = d.page_id
         )
-        UPDATE canvas_page SET is_archived = TRUE, updated_at = NOW()
+        DELETE FROM recent_view
+        WHERE item_type = 'doc' AND item_id IN (SELECT page_id FROM descendants)
+    """), {'page_id': page_id})
+    await db.execute(text("""
+        WITH RECURSIVE descendants AS (
+            SELECT page_id FROM canvas_page WHERE page_id = :page_id
+            UNION ALL
+            SELECT wp.page_id FROM canvas_page wp
+            INNER JOIN descendants d ON wp.parent_page_id = d.page_id
+        )
+        DELETE FROM user_star
+        WHERE item_type = 'doc' AND item_id IN (SELECT page_id FROM descendants)
+    """), {'page_id': page_id})
+    await db.execute(text("""
+        WITH RECURSIVE descendants AS (
+            SELECT page_id FROM canvas_page WHERE page_id = :page_id
+            UNION ALL
+            SELECT wp.page_id FROM canvas_page wp
+            INNER JOIN descendants d ON wp.parent_page_id = d.page_id
+        )
+        DELETE FROM canvas_page
         WHERE page_id IN (SELECT page_id FROM descendants)
     """), {'page_id': page_id})
     await db.commit()

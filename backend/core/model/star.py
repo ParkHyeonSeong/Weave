@@ -49,7 +49,9 @@ async def find_starred(user_id: int, limit: int, db: AsyncSession, item_type: st
         LEFT JOIN task t ON us.item_type = 'task' AND us.item_id = t.task_id
         LEFT JOIN branch b ON t.branch_id = b.branch_id
         LEFT JOIN canvas_page cp ON us.item_type = 'doc' AND us.item_id = cp.page_id
+            AND cp.is_archived = FALSE
         LEFT JOIN canvas c ON cp.canvas_id = c.canvas_id
+            AND c.is_archived = FALSE
         {where}
         ORDER BY us.created_at DESC
         LIMIT :limit

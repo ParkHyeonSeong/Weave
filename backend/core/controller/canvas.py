@@ -194,7 +194,7 @@ async def delete(canvas_id: int, request: Request, db: AsyncSession):
     if not canvas:
         return {'status': False, 'message': 'CANVAS_NOT_FOUND'}
 
-    await canvas_model.archive(canvas_id, db)
+    await canvas_model.hard_delete(canvas_id, db)
     return {'status': True}
 
 

@@ -5,6 +5,7 @@ import {
   FileText, FileCode, Folder, FolderOpen, FolderPlus, MoreHorizontal, Settings,
   Trash2,
 } from 'lucide-react';
+import ConfirmModal from '@/components/modal/ConfirmModal';
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
   DragOverlay,
@@ -156,19 +157,26 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
   };
 
   // 페이지 삭제
-  const handleDeletePage = async (canvasId, pageId) => {
+  const [deleteTarget, setDeleteTarget] = useState(null);
+
+  const requestDeletePage = (canvasId, page) => {
+    setDeleteTarget({ canvasId, pageId: page.page_id, title: page.title, isFolder: page.type === 'folder' });
+  };
+
+  const executeDeletePage = async () => {
+    if (!deleteTarget) return;
     try {
-      const res = await axios.delete(`/canvases/${canvasId}/pages/${pageId}`);
+      const res = await axios.delete(`/canvases/${deleteTarget.canvasId}/pages/${deleteTarget.pageId}`);
       if (res.data.status) {
         window.dispatchEvent(new CustomEvent('canvas:page_deleted'));
-        // 현재 보고 있는 페이지였으면 overview로 이동
-        if (String(router.query.pageId) === String(pageId)) {
-          const overview = pages.find((p) => p.type === 'overview' && p.canvas_id === canvasId);
-          if (overview) router.push(`/canvas/${canvasId}/${overview.page_id}`);
-          else router.push(`/canvas/${canvasId}`);
+        if (String(router.query.pageId) === String(deleteTarget.pageId)) {
+          const overview = pages.find((p) => p.type === 'overview');
+          if (overview) router.push(`/canvas/${deleteTarget.canvasId}/${overview.page_id}`);
+          else router.push(`/canvas/${deleteTarget.canvasId}`);
         }
       }
     } catch {}
+    setDeleteTarget(null);
   };
 
   // 캔버스 목록 DnD
@@ -279,7 +287,7 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
                           getChildren={getChildren}
                           router={router}
                           onFolderAdd={startFolderInlineCreate}
-                          onDeletePage={handleDeletePage}
+                          onDeletePage={requestDeletePage}
                           inlineCreate={inlineCreate}
                           inlineTitle={inlineTitle}
                           setInlineTitle={setInlineTitle}
@@ -342,6 +350,18 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
           </DndContext>
         )}
       </div>
+
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={executeDeletePage}
+        title={deleteTarget?.isFolder ? 'Delete Folder' : 'Delete Page'}
+        message={deleteTarget?.isFolder
+          ? `"${deleteTarget?.title}" 폴더와 하위 문서가 모두 영구 삭제됩니다. 이 작업은 되돌릴 수 없습니다.`
+          : `"${deleteTarget?.title}" 문서를 영구 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`}
+        confirmLabel="Delete"
+        variant="danger"
+      />
     </>
   );
 }
@@ -539,9 +559,7 @@ function SidebarPageItem({
                 <div className="Sidebar__AddMenuDivider" />
                 <button className="Sidebar__AddMenuItem Sidebar__AddMenuItem--danger" onClick={() => {
                   setShowMenu(false);
-                  if (confirm('이 폴더와 하위 문서가 모두 삭제됩니다. 계속하시겠습니까?')) {
-                    onDeletePage(canvasId, page.page_id);
-                  }
+                  onDeletePage(canvasId, page);
                 }}>
                   <Trash2 size={13} /> Delete
                 </button>
@@ -569,9 +587,7 @@ function SidebarPageItem({
               className="Sidebar__PageDeleteBtn"
               onClick={(e) => {
                 e.stopPropagation();
-                if (confirm(`"${page.title}" 문서를 삭제하시겠습니까?`)) {
-                  onDeletePage(canvasId, page.page_id);
-                }
+                onDeletePage(canvasId, page);
               }}
               title="Delete"
             >

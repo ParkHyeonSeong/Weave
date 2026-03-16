@@ -68,11 +68,23 @@ async def find_by_key(key: str, db: AsyncSession):
     return result.fetchone() is not None
 
 
-async def archive(canvas_id: int, db: AsyncSession):
-    """Canvas 아카이브 (soft delete)"""
+async def hard_delete(canvas_id: int, db: AsyncSession):
+    """Canvas 영구 삭제 (CASCADE로 페이지, 멤버 자동 삭제)"""
+    # recent_view, user_star에서 관련 문서 기록 정리
     await db.execute(text("""
-        UPDATE canvas SET is_archived = TRUE, updated_at = NOW()
-        WHERE canvas_id = :canvas_id
+        DELETE FROM recent_view
+        WHERE item_type = 'doc' AND item_id IN (
+            SELECT page_id FROM canvas_page WHERE canvas_id = :canvas_id
+        )
+    """), {'canvas_id': canvas_id})
+    await db.execute(text("""
+        DELETE FROM user_star
+        WHERE item_type = 'doc' AND item_id IN (
+            SELECT page_id FROM canvas_page WHERE canvas_id = :canvas_id
+        )
+    """), {'canvas_id': canvas_id})
+    await db.execute(text("""
+        DELETE FROM canvas WHERE canvas_id = :canvas_id
     """), {'canvas_id': canvas_id})
     await db.commit()
 

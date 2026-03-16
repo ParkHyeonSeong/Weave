@@ -126,5 +126,5 @@ async def delete(canvas_id: int, page_id: int, request: Request, db: AsyncSessio
     if page['type'] == 'overview':
         return {'status': False, 'message': 'CANNOT_DELETE_OVERVIEW'}
 
-    await page_model.archive(page_id, db)
+    await page_model.hard_delete(page_id, db)
     return {'status': True}
