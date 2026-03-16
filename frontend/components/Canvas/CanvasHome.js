@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/router';
-import { Plus, Clock, Star, FileText, Search } from 'lucide-react';
+import { Plus, Clock, Star, FileText, Search, FileEdit } from 'lucide-react';
 import { axios } from '@/library/_axios';
 
 const getRelativeTime = (dateStr) => {
@@ -62,16 +62,19 @@ export default function CanvasHome() {
 
   return (
     <div className="CanvasHome">
-      <div className="CanvasHome__Header">
-        <h2 className="CanvasHome__Title">Canvas</h2>
-        <button
-          className="CanvasHome__CreateBtn"
-          onClick={() => window.dispatchEvent(new CustomEvent('layout:create-canvas'))}
-        >
-          <Plus size={16} />
-          New Canvas
-        </button>
-      </div>
+      <div className="CanvasHome__Panel">
+        <div className="CanvasHome__PanelHeader">
+          <FileEdit size={16} />
+          <span className="CanvasHome__PanelTitle">Canvas</span>
+          <button
+            className="CanvasHome__CreateBtn"
+            onClick={() => window.dispatchEvent(new CustomEvent('layout:create-canvas'))}
+          >
+            <Plus size={14} />
+            New Canvas
+          </button>
+        </div>
+        <div className="CanvasHome__PanelBody">
 
       {/* 위젯 영역 */}
       <div className="CanvasHome__WidgetGrid">
@@ -179,6 +182,8 @@ export default function CanvasHome() {
             ))}
           </div>
         )}
+      </div>
+        </div>
       </div>
     </div>
   );

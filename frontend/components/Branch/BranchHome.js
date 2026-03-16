@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/router';
-import { Plus, Clock, Search, FileText } from 'lucide-react';
+import { Plus, Clock, Search, FileText, GitBranch } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import TaskSummary from '@/components/Home/DashboardWidgets/TaskSummary';
 import ActiveSprints from '@/components/Home/DashboardWidgets/ActiveSprints';
@@ -57,16 +57,19 @@ export default function BranchHome() {
 
   return (
     <div className="BranchHome">
-      <div className="BranchHome__Header">
-        <h2 className="BranchHome__Title">Branch</h2>
-        <button
-          className="BranchHome__CreateBtn"
-          onClick={() => window.dispatchEvent(new CustomEvent('layout:create-branch'))}
-        >
-          <Plus size={16} />
-          New Branch
-        </button>
-      </div>
+      <div className="BranchHome__Panel">
+        <div className="BranchHome__PanelHeader">
+          <GitBranch size={16} />
+          <span className="BranchHome__PanelTitle">Branch</span>
+          <button
+            className="BranchHome__CreateBtn"
+            onClick={() => window.dispatchEvent(new CustomEvent('layout:create-branch'))}
+          >
+            <Plus size={14} />
+            New Branch
+          </button>
+        </div>
+        <div className="BranchHome__PanelBody">
 
       {/* 위젯 영역 */}
       <div className="BranchHome__WidgetGrid">
@@ -154,6 +157,8 @@ export default function BranchHome() {
             ))}
           </div>
         )}
+      </div>
+        </div>
       </div>
     </div>
   );
