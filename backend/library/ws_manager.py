@@ -38,6 +38,18 @@ class ConnectionManager:
             for ws in dead_connections:
                 self.disconnect(user_id, ws)
 
+    def get_online_user_ids(self) -> list[int]:
+        """현재 접속 중인 사용자 ID 목록"""
+        return list(self.active_connections.keys())
+
+    def is_online(self, user_id: int) -> bool:
+        return user_id in self.active_connections
+
+    async def broadcast_to_all(self, data: dict):
+        """접속 중인 모든 사용자에게 메시지 전송"""
+        for uid in list(self.active_connections.keys()):
+            await self.send_to_user(uid, data)
+
     async def broadcast_to_room(self, room_id: int, data: dict, db):
         """채팅방 멤버 중 온라인 사용자에게 broadcast"""
         result = await db.execute(text("""

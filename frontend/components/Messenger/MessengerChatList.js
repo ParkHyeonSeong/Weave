@@ -5,6 +5,7 @@ import { formatMessageTime } from '@/library/formatTime';
 
 export default function MessengerChatList({ onOpenRoom, onNewChat, activeRoomId }) {
   const [rooms, setRooms] = useState([]);
+  const [onlineSet, setOnlineSet] = useState(new Set());
 
   const fetchRooms = async () => {
     try {
@@ -17,6 +18,16 @@ export default function MessengerChatList({ onOpenRoom, onNewChat, activeRoomId 
 
   useEffect(() => {
     fetchRooms();
+    // 초기 온라인 목록
+    const fetchOnline = async () => {
+      try {
+        const res = await axios.get('/chat/online');
+        if (res.data.status) {
+          setOnlineSet(new Set(res.data.user_ids));
+        }
+      } catch {}
+    };
+    fetchOnline();
   }, []);
 
   // 새 메시지 수신 시 목록 갱신
@@ -24,6 +35,21 @@ export default function MessengerChatList({ onOpenRoom, onNewChat, activeRoomId 
     const handleNewMessage = () => fetchRooms();
     window.addEventListener('chat:new_message', handleNewMessage);
     return () => window.removeEventListener('chat:new_message', handleNewMessage);
+  }, []);
+
+  // presence 이벤트 실시간 반영
+  useEffect(() => {
+    const handlePresence = (e) => {
+      const { user_id, status } = e.detail;
+      setOnlineSet((prev) => {
+        const next = new Set(prev);
+        if (status === 'online') next.add(user_id);
+        else next.delete(user_id);
+        return next;
+      });
+    };
+    window.addEventListener('chat:presence', handlePresence);
+    return () => window.removeEventListener('chat:presence', handlePresence);
   }, []);
 
   // 미리보기용 마크다운 문법 제거
@@ -61,6 +87,9 @@ export default function MessengerChatList({ onOpenRoom, onNewChat, activeRoomId 
               <div className="MessengerChatList__ItemInfo">
                 <div className="MessengerChatList__ItemTop">
                   <span className="MessengerChatList__ItemName">
+                    {room.dm_partner_id && onlineSet.has(room.dm_partner_id) && (
+                      <span className="MessengerChatList__Online" />
+                    )}
                     {room.dm_partner_name || room.room_name || 'Direct Message'}
                   </span>
                   {room.last_message_at && (

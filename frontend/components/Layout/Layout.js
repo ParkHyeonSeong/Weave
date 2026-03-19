@@ -251,6 +251,10 @@ export default function Layout({ children }) {
           // 컴포넌트에 전달용 커스텀 이벤트
           window.dispatchEvent(new CustomEvent('chat:ws_message', { detail: data }));
 
+          if (data.type === 'presence') {
+            window.dispatchEvent(new CustomEvent('chat:presence', { detail: data }));
+          }
+
           if (data.type === 'notification') {
             // 영구 알림 실시간 수신
             setNotifications((prev) => {

@@ -42,7 +42,16 @@ async def websocket_chat(ws: WebSocket):
     user_id = payload['user_id']
     username = payload.get('username', '')
 
+    # 첫 연결인지 확인 (멀티탭 대응: 기존 연결 0개일 때만 online broadcast)
+    was_offline = not manager.is_online(user_id)
     await manager.connect(user_id, ws)
+
+    if was_offline:
+        await manager.broadcast_to_all({
+            'type': 'presence',
+            'user_id': user_id,
+            'status': 'online',
+        })
 
     try:
         while True:
@@ -189,5 +198,17 @@ async def websocket_chat(ws: WebSocket):
 
     except WebSocketDisconnect:
         manager.disconnect(user_id, ws)
+        if not manager.is_online(user_id):
+            await manager.broadcast_to_all({
+                'type': 'presence',
+                'user_id': user_id,
+                'status': 'offline',
+            })
     except Exception:
         manager.disconnect(user_id, ws)
+        if not manager.is_online(user_id):
+            await manager.broadcast_to_all({
+                'type': 'presence',
+                'user_id': user_id,
+                'status': 'offline',
+            })

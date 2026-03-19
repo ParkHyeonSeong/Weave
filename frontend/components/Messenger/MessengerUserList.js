@@ -5,6 +5,7 @@ import { axios } from '@/library/_axios';
 export default function MessengerUserList({ onOpenRoom }) {
   const [users, setUsers] = useState([]);
   const [search, setSearch] = useState('');
+  const [onlineSet, setOnlineSet] = useState(new Set());
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -15,7 +16,31 @@ export default function MessengerUserList({ onOpenRoom }) {
         }
       } catch {}
     };
+    const fetchOnline = async () => {
+      try {
+        const res = await axios.get('/chat/online');
+        if (res.data.status) {
+          setOnlineSet(new Set(res.data.user_ids));
+        }
+      } catch {}
+    };
     fetchUsers();
+    fetchOnline();
+  }, []);
+
+  // presence 이벤트 실시간 반영
+  useEffect(() => {
+    const handlePresence = (e) => {
+      const { user_id, status } = e.detail;
+      setOnlineSet((prev) => {
+        const next = new Set(prev);
+        if (status === 'online') next.add(user_id);
+        else next.delete(user_id);
+        return next;
+      });
+    };
+    window.addEventListener('chat:presence', handlePresence);
+    return () => window.removeEventListener('chat:presence', handlePresence);
   }, []);
 
   // DM 시작
@@ -41,7 +66,12 @@ export default function MessengerUserList({ onOpenRoom }) {
   const keyword = search.toLowerCase();
   const filteredUsers = users
     .filter((u) => u.user_id !== myUserId)
-    .filter((u) => !keyword || u.username.toLowerCase().includes(keyword) || u.email.toLowerCase().includes(keyword));
+    .filter((u) => !keyword || u.username.toLowerCase().includes(keyword) || u.email.toLowerCase().includes(keyword))
+    .sort((a, b) => {
+      const aOnline = onlineSet.has(a.user_id) ? 0 : 1;
+      const bOnline = onlineSet.has(b.user_id) ? 0 : 1;
+      return aOnline - bOnline;
+    });
 
   return (
     <div className="MessengerUserList">
@@ -67,8 +97,13 @@ export default function MessengerUserList({ onOpenRoom }) {
               className="MessengerUserList__Item"
               onClick={() => handleStartDM(user.user_id)}
             >
-              <div className="MessengerUserList__Avatar">
-                {user.username.charAt(0).toUpperCase()}
+              <div className="MessengerUserList__AvatarWrap">
+                <div className="MessengerUserList__Avatar">
+                  {user.username.charAt(0).toUpperCase()}
+                </div>
+                {onlineSet.has(user.user_id) && (
+                  <span className="MessengerUserList__Online" />
+                )}
               </div>
               <div className="MessengerUserList__Info">
                 <span className="MessengerUserList__Name">{user.username}</span>

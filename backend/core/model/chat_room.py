@@ -48,6 +48,11 @@ async def find_rooms_by_user(user_id: int, db: AsyncSession):
                 WHERE cm3.room_id = cr.room_id
                 ORDER BY cm3.created_at DESC LIMIT 1) AS last_message_at,
                CASE WHEN cr.room_type = 'dm' THEN
+                   (SELECT crm2.user_id FROM chat_room_member crm2
+                    WHERE crm2.room_id = cr.room_id AND crm2.user_id != :user_id
+                    LIMIT 1)
+               ELSE NULL END AS dm_partner_id,
+               CASE WHEN cr.room_type = 'dm' THEN
                    (SELECT u.username FROM chat_room_member crm2
                     INNER JOIN "user" u ON crm2.user_id = u.user_id
                     WHERE crm2.room_id = cr.room_id AND crm2.user_id != :user_id

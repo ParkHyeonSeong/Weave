@@ -81,12 +81,24 @@
   }
 
   &__ItemName {
+    display: flex;
+    align-items: center;
+    gap: $space-1;
     font-size: $font-size-sm;
     font-weight: $font-weight-medium;
     color: $color-text;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  &__Online {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #16A34A;
+    flex-shrink: 0;
   }
 
   &__ItemTime {

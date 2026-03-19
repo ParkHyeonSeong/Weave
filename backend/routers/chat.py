@@ -5,6 +5,7 @@ from .schema import chat as chat_schema
 from core.controller import chat as chat_controller
 from core.controller import chat_upload
 from library.validator import require_login
+from library.ws_manager import manager
 import db_engine as db
 
 router = APIRouter()
@@ -65,6 +66,11 @@ async def mention_search(request: Request,
 @router.get("/users", summary="전체 사용자 목록", dependencies=[Depends(require_login)])
 async def list_users(session: AsyncSession = Depends(db.session)):
     return await chat_controller.get_users(session)
+
+
+@router.get("/online", summary="접속 중인 사용자 목록", dependencies=[Depends(require_login)])
+async def online_users():
+    return {'status': True, 'user_ids': manager.get_online_user_ids()}
 
 
 @router.get("/{room_id}/messages", summary="채팅방 메시지 목록",

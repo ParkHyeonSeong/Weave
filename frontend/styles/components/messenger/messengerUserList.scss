@@ -67,6 +67,11 @@
     }
   }
 
+  &__AvatarWrap {
+    position: relative;
+    flex-shrink: 0;
+  }
+
   &__Avatar {
     width: 32px;
     height: 32px;
@@ -78,7 +83,17 @@
     justify-content: center;
     font-size: $font-size-sm;
     font-weight: $font-weight-semibold;
-    flex-shrink: 0;
+  }
+
+  &__Online {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #16A34A;
+    border: 2px solid $color-bg;
   }
 
   &__Info {
