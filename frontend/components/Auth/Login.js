@@ -101,7 +101,9 @@ export default function Login() {
           </p>
         </div>
 
-        <form className="Login__Form" onSubmit={handleSubmit}>
+        <form className="Login__Form" onSubmit={handleSubmit} onKeyDown={(e) => {
+          if (e.key === 'Enter' && e.nativeEvent.isComposing) e.preventDefault();
+        }}>
           {mode === 'register' && (
             <div className="Login__Field">
               <label className="Login__Label" htmlFor="username">Name</label>
