@@ -26,6 +26,7 @@ from routers import profile as profile_router
 from routers import task_type_config as task_type_config_router
 from routers import canvas as canvas_router
 from routers import canvas_page as canvas_page_router
+from routers import canvas_annotation as canvas_annotation_router
 from routers import task_issue as task_issue_router
 from routers import my_tasks as my_tasks_router
 from routers import ws_canvas as ws_canvas_router
@@ -130,6 +131,7 @@ app.include_router(task_type_config_router.router, prefix="/api/branches/{branch
 app.include_router(profile_router.router, prefix="/api/profile", tags=["profile"])
 app.include_router(canvas_router.router, prefix="/api/canvases", tags=["canvases"])
 app.include_router(canvas_page_router.router, prefix="/api/canvases/{canvas_id}/pages", tags=["canvas-pages"])
+app.include_router(canvas_annotation_router.router, prefix="/api/canvases/{canvas_id}/pages/{page_id}/annotations", tags=["canvas-annotations"])
 app.include_router(task_issue_router.router, prefix="/api/branches/{branch_id}/tasks/{task_id}/issues", tags=["task-issues"])
 app.include_router(my_tasks_router.router, prefix="/api/my-tasks", tags=["my-tasks"])
 app.include_router(ref_status_router.router, prefix="/api/ref-status", tags=["ref-status"])

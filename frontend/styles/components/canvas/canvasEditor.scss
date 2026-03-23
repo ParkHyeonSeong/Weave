@@ -16,6 +16,8 @@
     // TipTap ProseMirror 기본 스타일
     .tiptap {
       outline: none;
+      min-height: 360px;
+      cursor: text;
 
       > * + * {
         margin-top: 0.5em;

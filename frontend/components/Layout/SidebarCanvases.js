@@ -121,7 +121,23 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
     } catch {}
   };
 
-  // 인라인 생성 핸들러
+  // Document/Typst 즉시 생성 → 편집 모드로 이동
+  const handleQuickCreate = async (canvasId, type, parentPageId = null) => {
+    try {
+      const body = { title: 'Untitled', type };
+      if (parentPageId) body.parent_page_id = parentPageId;
+      const res = await axios.post(`/canvases/${canvasId}/pages`, body);
+      if (res.data.status) {
+        setExpandedId(canvasId);
+        if (parentPageId) setExpandedFolders((prev) => ({ ...prev, [parentPageId]: true }));
+        fetchPages(canvasId);
+        window.dispatchEvent(new CustomEvent('canvas:page_created'));
+        router.push(`/canvas/${canvasId}/${res.data.page_id}?edit=1`);
+      }
+    } catch {}
+  };
+
+  // 인라인 생성 핸들러 (폴더용)
   const handleInlineCreate = async () => {
     if (!inlineTitle.trim() || !inlineCreate) return;
     try {
@@ -250,21 +266,13 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
                   toggleExpand(canvas.canvas_id);
                   router.push(`/canvas/${canvas.canvas_id}`);
                 }}
-                onAddDocument={() => {
-                  setExpandedId(canvas.canvas_id);
-                  setInlineCreate({ canvasId: canvas.canvas_id, type: 'document' });
-                  setInlineTitle('');
-                }}
+                onAddDocument={() => handleQuickCreate(canvas.canvas_id, 'document')}
                 onAddFolder={() => {
                   setExpandedId(canvas.canvas_id);
                   setInlineCreate({ canvasId: canvas.canvas_id, type: 'folder' });
                   setInlineTitle('');
                 }}
-                onAddTypst={() => {
-                  setExpandedId(canvas.canvas_id);
-                  setInlineCreate({ canvasId: canvas.canvas_id, type: 'typst' });
-                  setInlineTitle('');
-                }}
+                onAddTypst={() => handleQuickCreate(canvas.canvas_id, 'typst')}
               />
 
               {expandedId === canvas.canvas_id && (
@@ -287,6 +295,7 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
                           getChildren={getChildren}
                           router={router}
                           onFolderAdd={startFolderInlineCreate}
+                          onQuickCreate={handleQuickCreate}
                           onDeletePage={requestDeletePage}
                           inlineCreate={inlineCreate}
                           inlineTitle={inlineTitle}
@@ -473,7 +482,7 @@ function CanvasRow({ canvas, isActive, isExpanded, onToggle, onAddDocument, onAd
 
 function SidebarPageItem({
   page, canvasId, depth, expandedFolders, toggleFolder, getChildren, router,
-  onFolderAdd, onDeletePage, inlineCreate, inlineTitle, setInlineTitle, handleInlineKeyDown, setInlineCreate,
+  onFolderAdd, onQuickCreate, onDeletePage, inlineCreate, inlineTitle, setInlineTitle, handleInlineKeyDown, setInlineCreate,
 }) {
   const {
     attributes, listeners, setNodeRef, transform, transition, isDragging,
@@ -540,13 +549,13 @@ function SidebarPageItem({
               <div className="Sidebar__AddMenu">
                 <button className="Sidebar__AddMenuItem" onClick={() => {
                   setShowMenu(false);
-                  onFolderAdd(canvasId, page.page_id, 'document');
+                  onQuickCreate(canvasId, 'document', page.page_id);
                 }}>
                   <FileText size={13} /> Document
                 </button>
                 <button className="Sidebar__AddMenuItem" onClick={() => {
                   setShowMenu(false);
-                  onFolderAdd(canvasId, page.page_id, 'typst');
+                  onQuickCreate(canvasId, 'typst', page.page_id);
                 }}>
                   <FileCode size={13} /> Typst Document
                 </button>
@@ -610,6 +619,7 @@ function SidebarPageItem({
               getChildren={getChildren}
               router={router}
               onFolderAdd={onFolderAdd}
+              onQuickCreate={onQuickCreate}
               onDeletePage={onDeletePage}
               inlineCreate={inlineCreate}
               inlineTitle={inlineTitle}

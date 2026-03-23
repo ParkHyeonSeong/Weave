@@ -1,13 +1,16 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import dynamic from 'next/dynamic';
-import { Pencil, X, Wifi, WifiOff, Loader, RefreshCw, Maximize2, Minimize2, Trash2, Download, AlertTriangle, Star } from 'lucide-react';
+import { Pencil, X, Wifi, WifiOff, Loader, RefreshCw, Maximize2, Minimize2, Trash2, Download, AlertTriangle, Star, MessageSquare } from 'lucide-react';
 import useStar from '@/hooks/useStar';
+import useAnnotations from '@/hooks/useAnnotations';
 import { axios } from '@/library/_axios';
 import ConfirmModal from '@/components/modal/ConfirmModal';
 import useCollabProvider from '@/library/useCollabProvider';
 import { sanitizeHtml } from '@/library/sanitize';
 import PresenceBar from './PresenceBar';
+import AnnotationLayer from './AnnotationLayer';
+import AnnotationSidebar from './AnnotationSidebar';
 import katex from 'katex';
 import { common, createLowlight } from 'lowlight';
 import { toHtml } from 'hast-util-to-html';
@@ -35,6 +38,16 @@ export default function CanvasPageView({ onRefClick }) {
   const [isScrolled, setIsScrolled] = useState(false);
 
   const { starred, toggle: toggleStar } = useStar('doc', pageId ? Number(pageId) : null);
+
+  // Annotation (인라인 코멘트) 상태
+  const {
+    annotations, fetchAnnotations,
+    createAnnotation, resolveAnnotation, reopenAnnotation, deleteAnnotation,
+    createReply, updateReply, deleteReply,
+  } = useAnnotations(canvasId, pageId);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [activeAnnotationId, setActiveAnnotationId] = useState(null);
+  const [newAnnotationData, setNewAnnotationData] = useState(null);
 
   // Typst 읽기 모드용 상태
   const [typstSvg, setTypstSvg] = useState(null);
@@ -86,7 +99,12 @@ export default function CanvasPageView({ onRefClick }) {
 
   useEffect(() => {
     fetchPage();
-    setIsEditing(false);
+    if (router.query.edit) {
+      setIsEditing(true);
+      router.replace(`/canvas/${canvasId}/${pageId}`, undefined, { shallow: true });
+    } else {
+      setIsEditing(false);
+    }
   }, [fetchPage]);
 
   // 연결 상태에 따른 saveStatus 업데이트
@@ -549,6 +567,20 @@ export default function CanvasPageView({ onRefClick }) {
                   PDF
                 </button>
               )}
+              {page.type !== 'typst' && (
+                <button
+                  className={`CanvasPageView__ActionBtn${sidebarOpen ? ' CanvasPageView__ActionBtn--active' : ''}`}
+                  onClick={() => setSidebarOpen((v) => !v)}
+                  title="Comments"
+                >
+                  <MessageSquare size={15} />
+                  {annotations.filter((a) => a.status === 'open').length > 0 && (
+                    <span className="CanvasPageView__Badge">
+                      {annotations.filter((a) => a.status === 'open').length}
+                    </span>
+                  )}
+                </button>
+              )}
               <button
                 className="CanvasPageView__ActionBtn"
                 onClick={() => setIsEditing(true)}
@@ -628,11 +660,28 @@ export default function CanvasPageView({ onRefClick }) {
             )}
           </div>
         ) : (
-          <div
-            ref={contentRef}
-            className="CanvasPageView__Content ProseMirror"
-            dangerouslySetInnerHTML={{ __html: sanitizeHtml(page.content) || '<p>No content yet. Click Edit to start writing.</p>' }}
-          />
+          <>
+            <div
+              ref={contentRef}
+              className="CanvasPageView__Content ProseMirror"
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(page.content) || '<p>No content yet. Click Edit to start writing.</p>' }}
+            />
+            <AnnotationLayer
+              contentRef={contentRef}
+              annotations={annotations}
+              isEditing={isEditing}
+              pageContent={page.content}
+              activeAnnotationId={activeAnnotationId}
+              onAnnotationClick={(id) => {
+                setActiveAnnotationId(id);
+                setSidebarOpen(true);
+              }}
+              onCreateAnnotation={(anchorData) => {
+                setNewAnnotationData(anchorData);
+                setSidebarOpen(true);
+              }}
+            />
+          </>
         )}
       </div>
       {updateToast && (
@@ -657,6 +706,36 @@ export default function CanvasPageView({ onRefClick }) {
           : `"${page.title}" 문서를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`}
         confirmLabel="Delete"
         variant="danger"
+      />
+      <AnnotationSidebar
+        annotations={annotations}
+        isOpen={sidebarOpen}
+        onClose={() => { setSidebarOpen(false); setActiveAnnotationId(null); }}
+        onResolve={resolveAnnotation}
+        onReopen={reopenAnnotation}
+        onDelete={deleteAnnotation}
+        onCreateReply={createReply}
+        onUpdateReply={updateReply}
+        onDeleteReply={deleteReply}
+        activeAnnotationId={activeAnnotationId}
+        onAnnotationSelect={(id) => {
+          setActiveAnnotationId(id);
+          // 해당 텍스트로 스크롤
+          const el = contentRef.current?.querySelector(
+            `.annotation-anchor[data-annotation-id="${id}"]`
+          );
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }}
+        newAnnotationData={newAnnotationData}
+        onSubmitNewAnnotation={async (html) => {
+          if (!newAnnotationData) return;
+          const annId = await createAnnotation({ ...newAnnotationData, content: html });
+          if (annId) {
+            setNewAnnotationData(null);
+            setActiveAnnotationId(annId);
+          }
+        }}
+        onCancelNewAnnotation={() => setNewAnnotationData(null)}
       />
     </div>
   );
