@@ -24,6 +24,7 @@ import MentionNode from './extensions/MentionExtension';
 import { createImageUploadPlugin } from './extensions/ImageUploadPlugin';
 import BookmarkNode from './extensions/BookmarkExtension';
 import { createBookmarkPastePlugin } from './extensions/BookmarkPastePlugin';
+import { createMarkdownPastePlugin } from './extensions/MarkdownPastePlugin';
 import CanvasEditorToolbar from './CanvasEditorToolbar';
 
 const lowlight = createLowlight(common);
@@ -47,6 +48,13 @@ export default function CanvasEditor({ content, onChange, canvasId }) {
     name: 'bookmarkPaste',
     addProseMirrorPlugins() {
       return [createBookmarkPastePlugin()];
+    },
+  });
+
+  const MarkdownPaste = Extension.create({
+    name: 'markdownPaste',
+    addProseMirrorPlugins() {
+      return [createMarkdownPastePlugin()];
     },
   });
 
@@ -85,6 +93,7 @@ export default function CanvasEditor({ content, onChange, canvasId }) {
     MentionNode,
     BookmarkNode,
     BookmarkPaste,
+    MarkdownPaste,
     Mathematics.configure({
       katexOptions: { throwOnError: false },
     }),

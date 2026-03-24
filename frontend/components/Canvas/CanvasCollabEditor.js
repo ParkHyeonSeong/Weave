@@ -27,6 +27,7 @@ import IssueRefNode from './extensions/IssueRefExtension';
 import { createImageUploadPlugin } from './extensions/ImageUploadPlugin';
 import BookmarkNode from './extensions/BookmarkExtension';
 import { createBookmarkPastePlugin } from './extensions/BookmarkPastePlugin';
+import { createMarkdownPastePlugin } from './extensions/MarkdownPastePlugin';
 import CanvasEditorToolbar from './CanvasEditorToolbar';
 import { axios } from '@/library/_axios';
 
@@ -67,6 +68,13 @@ function CollabEditorInner({
       name: 'bookmarkPaste',
       addProseMirrorPlugins() {
         return [createBookmarkPastePlugin()];
+      },
+    });
+
+    const MarkdownPaste = Extension.create({
+      name: 'markdownPaste',
+      addProseMirrorPlugins() {
+        return [createMarkdownPastePlugin()];
       },
     });
 
@@ -136,6 +144,7 @@ function CollabEditorInner({
       IssueRefNode,
       BookmarkNode,
       BookmarkPaste,
+      MarkdownPaste,
       Mathematics.configure({
         katexOptions: { throwOnError: false },
       }),

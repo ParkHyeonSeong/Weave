@@ -62,6 +62,18 @@ export default function CanvasPageView({ onRefClick }) {
     return () => scrollParent.removeEventListener('scroll', handleScroll);
   }, [page]);
 
+  // StickyHeader 높이를 CSS 변수로 전달 (에디터 툴바 sticky 위치용)
+  useEffect(() => {
+    const el = stickyRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      const h = entry.borderBoxSize?.[0]?.blockSize ?? entry.target.offsetHeight;
+      el.closest('.CanvasPageView')?.style.setProperty('--sticky-header-h', `${h}px`);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [page]);
+
   // 편집 모드에서 ref 클릭 이벤트 수신
   useEffect(() => {
     if (!onRefClick) return;

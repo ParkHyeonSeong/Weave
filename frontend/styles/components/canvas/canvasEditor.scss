@@ -541,6 +541,10 @@
   border-bottom: 1px solid $color-border;
   background: $color-surface;
   flex-wrap: wrap;
+  position: sticky;
+  top: var(--sticky-header-h, 0px);
+  z-index: 9;
+  border-radius: $radius-xl $radius-xl 0 0;
 
   &__Btn {
     display: flex;
