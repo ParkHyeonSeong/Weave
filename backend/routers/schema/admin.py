@@ -43,3 +43,14 @@ class UpdateUserStatus(BaseModel):
         if v not in ('active', 'rejected'):
             raise ValueError('status must be "active" or "rejected"')
         return v
+
+
+class ResetUserPassword(BaseModel):
+    new_password: Optional[str] = None
+
+    @field_validator('new_password')
+    @classmethod
+    def validate_password(cls, v):
+        if v is not None and len(v) < 6:
+            raise ValueError('password must be at least 6 characters')
+        return v

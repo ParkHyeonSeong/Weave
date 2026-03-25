@@ -167,6 +167,24 @@
     }
   }
 
+  &__ResetBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: $space-1;
+    padding: $space-1 $space-3;
+    border-radius: $radius-md;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    color: $color-text-secondary;
+    background: $color-surface;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: $color-border;
+      color: $color-text;
+    }
+  }
+
   // -- 역할 셀렉트 --
   &__RoleSelect {
     padding: $space-1 $space-2;

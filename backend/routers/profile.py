@@ -5,6 +5,7 @@ from .schema import profile as profile_schema
 from core.controller import profile as profile_controller
 from core.model import user as user_model
 from library.validator import require_login
+from library.rate_limiter import limiter
 import db_engine as db
 
 router = APIRouter()
@@ -25,6 +26,13 @@ async def update_username(body: profile_schema.UpdateUsername, request: Request,
 async def update_password(body: profile_schema.UpdatePassword, request: Request,
                           session: AsyncSession = Depends(db.session)):
     return await profile_controller.update_password(body, request, session)
+
+
+@router.post("/force-change-password", summary="강제 비밀번호 변경", dependencies=[Depends(require_login)])
+@limiter.limit("5/minute")
+async def force_change_password(body: profile_schema.ForceChangePassword, request: Request,
+                                session: AsyncSession = Depends(db.session)):
+    return await profile_controller.force_change_password(body, request, session)
 
 
 @router.post("/avatar", summary="아바타 업로드", dependencies=[Depends(require_login)])

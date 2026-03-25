@@ -3,9 +3,10 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import AdminLayout from '@/components/Admin/AdminLayout';
 import { axios } from '@/library/_axios';
-import { Shield, UserCheck, UserX, UserPlus } from 'lucide-react';
+import { Shield, UserCheck, UserX, UserPlus, KeyRound } from 'lucide-react';
 import Alert from '@/components/modal/Alert';
 import AddMember from '@/components/modal/AddMember';
+import ResetPassword from '@/components/modal/ResetPassword';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -13,6 +14,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [myUserId, setMyUserId] = useState(null);
   const [showAddMember, setShowAddMember] = useState(false);
+  const [resetTarget, setResetTarget] = useState(null);
 
   // Alert 상태
   const [alertOpen, setAlertOpen] = useState(false);
@@ -200,6 +202,7 @@ export default function AdminPage() {
                   <th>Role</th>
                   <th>Status</th>
                   <th>Joined</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -229,6 +232,18 @@ export default function AdminPage() {
                         </span>
                       </td>
                       <td>{formatDate(user.created_at)}</td>
+                      <td>
+                        {!isSelf && (
+                          <button
+                            className="Admin__ResetBtn"
+                            onClick={() => setResetTarget(user)}
+                            title="Reset Password"
+                          >
+                            <KeyRound size={14} />
+                            Reset Password
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
@@ -240,6 +255,10 @@ export default function AdminPage() {
 
       {showAddMember && (
         <AddMember onClose={() => setShowAddMember(false)} />
+      )}
+
+      {resetTarget && (
+        <ResetPassword user={resetTarget} onClose={() => setResetTarget(null)} />
       )}
 
       <Alert

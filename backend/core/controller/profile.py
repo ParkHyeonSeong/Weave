@@ -68,6 +68,27 @@ async def update_password(body, request: Request, db: AsyncSession):
     return {'status': True}
 
 
+async def force_change_password(body, request: Request, db: AsyncSession):
+    """임시 비밀번호 사용자의 비밀번호 강제 변경"""
+    user_id = request.state.payload.get('user_id')
+    user = await user_model.find_by_id_with_password(user_id, db)
+    if not user:
+        return {'status': False, 'message': 'USER_NOT_FOUND'}
+
+    # must_change_password 플래그가 설정된 경우에만 허용
+    # find_by_id_with_password에는 must_change_password가 없으므로 별도 조회
+    check = await user_model.find_by_email(user['email'], db)
+    if not check or not check.get('must_change_password'):
+        return {'status': False, 'message': 'NOT_ALLOWED'}
+
+    if body.new_password != body.confirm_password:
+        return {'status': False, 'message': 'PASSWORD_MISMATCH'}
+
+    new_hash = bcrypt.hashpw(body.new_password.encode('utf-8'), bcrypt.gensalt())
+    await user_model.update_password(user_id, new_hash, db)
+    return {'status': True}
+
+
 async def upload_avatar(file: UploadFile, request: Request, db: AsyncSession):
     """아바타 이미지 업로드"""
     user_id = request.state.payload.get('user_id')

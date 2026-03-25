@@ -16,7 +16,7 @@ async def create(email: str, password_hash: bytes, username: str, db: AsyncSessi
 async def find_by_email(email: str, db: AsyncSession):
     """이메일로 사용자 조회"""
     result = await db.execute(text("""
-        SELECT user_id, email, password, username, role, status, created_at
+        SELECT user_id, email, password, username, role, status, created_at, must_change_password
         FROM "user"
         WHERE email = :email
     """), {'email': email})
@@ -98,12 +98,22 @@ async def update_username(user_id: int, username: str, db: AsyncSession):
 
 
 async def update_password(user_id: int, password_hash: bytes, db: AsyncSession):
-    """비밀번호 변경"""
+    """비밀번호 변경 (must_change_password 플래그도 해제)"""
     await db.execute(text("""
         UPDATE "user"
-        SET password = :password
+        SET password = :password, must_change_password = FALSE
         WHERE user_id = :user_id
     """), {'user_id': user_id, 'password': password_hash})
+    await db.commit()
+
+
+async def set_must_change_password(user_id: int, flag: bool, db: AsyncSession):
+    """비밀번호 변경 강제 플래그 설정"""
+    await db.execute(text("""
+        UPDATE "user"
+        SET must_change_password = :flag
+        WHERE user_id = :user_id
+    """), {'user_id': user_id, 'flag': flag})
     await db.commit()
 
 

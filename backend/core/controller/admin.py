@@ -1,3 +1,4 @@
+import secrets
 import bcrypt
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -56,3 +57,25 @@ async def update_user_status(user_id: int, body, request: Request, db: AsyncSess
 
     await user_model.update_status(user_id, body.status, db)
     return {'status': True}
+
+
+async def reset_user_password(user_id: int, body, request: Request, db: AsyncSession):
+    """사용자 비밀번호 초기화"""
+    admin_id = request.state.payload.get('user_id')
+
+    # 자기 자신의 비밀번호는 초기화 불가
+    if user_id == admin_id:
+        return {'status': False, 'message': 'CANNOT_RESET_OWN_PASSWORD'}
+
+    target = await user_model.find_by_id(user_id, db)
+    if not target:
+        return {'status': False, 'message': 'USER_NOT_FOUND'}
+
+    # 비밀번호 생성 (미지정 시 자동 생성)
+    plain_password = body.new_password if body.new_password else secrets.token_urlsafe(9)
+    password_hash = bcrypt.hashpw(plain_password.encode('utf-8'), bcrypt.gensalt())
+
+    await user_model.update_password(user_id, password_hash, db)
+    await user_model.set_must_change_password(user_id, True, db)
+
+    return {'status': True, 'temporary_password': plain_password}

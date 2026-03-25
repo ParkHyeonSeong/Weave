@@ -111,15 +111,19 @@ async def login(body, request: Request, response: Response, db: AsyncSession):
     role = user.get('role', 'member')
     token = _create_token(user['user_id'], user['email'], user['username'], role)
     _set_auth_cookie(response, token)
-    return {
-        'status': True,
-        'profile': {
-            'user_id': user['user_id'],
-            'email': user['email'],
-            'username': user['username'],
-            'role': role,
-        },
+
+    profile = {
+        'user_id': user['user_id'],
+        'email': user['email'],
+        'username': user['username'],
+        'role': role,
     }
+
+    # 비밀번호 변경 강제 플래그
+    if user.get('must_change_password'):
+        profile['must_change_password'] = True
+
+    return {'status': True, 'profile': profile}
 
 
 async def me(request: Request):

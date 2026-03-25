@@ -66,6 +66,12 @@ export default function Login() {
           return;
         }
         sessionStorage.setItem('profile', JSON.stringify(response.data.profile));
+
+        // 비밀번호 변경 강제
+        if (response.data.profile.must_change_password) {
+          router.push('/auth/change-password');
+          return;
+        }
         router.push('/');
       } else {
         const messages = {

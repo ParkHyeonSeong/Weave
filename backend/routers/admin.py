@@ -30,3 +30,9 @@ async def update_user_role(user_id: int, body: admin_schema.UpdateUserRole,
 async def update_user_status(user_id: int, body: admin_schema.UpdateUserStatus,
                              request: Request, session: AsyncSession = Depends(db.session)):
     return await admin_controller.update_user_status(user_id, body, request, session)
+
+
+@router.post("/users/{user_id}/reset-password", summary="사용자 비밀번호 초기화", dependencies=[Depends(require_admin)])
+async def reset_user_password(user_id: int, body: admin_schema.ResetUserPassword,
+                              request: Request, session: AsyncSession = Depends(db.session)):
+    return await admin_controller.reset_user_password(user_id, body, request, session)

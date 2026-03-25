@@ -29,6 +29,8 @@ import "@/styles/components/messenger/issueRefCard.scss";
 import "@/styles/components/admin/admin.scss";
 import "@/styles/components/admin/adminSidebar.scss";
 import "@/styles/components/modal/addMember.scss";
+import "@/styles/components/modal/resetPassword.scss";
+import "@/styles/components/auth/changePassword.scss";
 import "@/styles/components/branch/branchDetail.scss";
 import "@/styles/components/branch/taskList.scss";
 import "@/styles/components/modal/taskModal.scss";
@@ -73,8 +75,8 @@ import "@/styles/components/branch/branchSchedule.scss";
 import "@/styles/components/modal/scheduleEventModal.scss";
 import "@/styles/components/modal/jiraMigrationModal.scss";
 
-const publicPaths = ['/auth/login', '/setup'];
-const noLayoutPaths = ['/auth/login', '/setup', '/admin'];
+const publicPaths = ['/auth/login', '/auth/change-password', '/setup'];
+const noLayoutPaths = ['/auth/login', '/auth/change-password', '/setup', '/admin'];
 
 export default function App({ Component, pageProps }) {
   const router = useRouter();
@@ -137,6 +139,17 @@ export default function App({ Component, pageProps }) {
       // 인증 상태에서 로그인 페이지 접근
       router.replace('/');
       return;
+    }
+
+    // 비밀번호 변경 강제 체크
+    if (isLoggedIn) {
+      try {
+        const profile = JSON.parse(sessionStorage.getItem('profile') || '{}');
+        if (profile.must_change_password && router.pathname !== '/auth/change-password') {
+          router.replace('/auth/change-password');
+          return;
+        }
+      } catch {}
     }
 
     setAppReady(true);

@@ -29,6 +29,18 @@ class UpdatePassword(BaseModel):
         return v
 
 
+class ForceChangePassword(BaseModel):
+    new_password: str
+    confirm_password: str
+
+    @field_validator('new_password')
+    @classmethod
+    def validate_new_password(cls, v):
+        if len(v) < 6:
+            raise ValueError('password must be at least 6 characters')
+        return v
+
+
 class UpdateSidebarOrder(BaseModel):
     branches: Optional[List[int]] = None
     canvases: Optional[List[int]] = None
