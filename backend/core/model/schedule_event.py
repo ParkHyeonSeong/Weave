@@ -28,7 +28,7 @@ async def find_by_id(schedule_event_id: int, db: AsyncSession):
     result = await db.execute(text("""
         SELECT se.schedule_event_id, se.branch_id, se.title, se.description,
                se.start_date, se.end_date, se.color, se.created_by, se.created_at,
-               u.display_name AS created_by_name
+               u.username AS created_by_name
         FROM schedule_event se
         JOIN "user" u ON se.created_by = u.user_id
         WHERE se.schedule_event_id = :schedule_event_id
@@ -43,7 +43,7 @@ async def find_by_branch_and_range(branch_id: int, range_start, range_end,
     result = await db.execute(text("""
         SELECT se.schedule_event_id, se.title, se.description,
                se.start_date, se.end_date, se.color, se.created_by, se.created_at,
-               u.display_name AS created_by_name
+               u.username AS created_by_name
         FROM schedule_event se
         JOIN "user" u ON se.created_by = u.user_id
         WHERE se.branch_id = :branch_id
