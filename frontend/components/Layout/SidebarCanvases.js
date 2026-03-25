@@ -59,9 +59,11 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
     };
     window.addEventListener('canvas:page_created', handlePageChange);
     window.addEventListener('canvas:page_deleted', handlePageChange);
+    window.addEventListener('canvas:page_updated', handlePageChange);
     return () => {
       window.removeEventListener('canvas:page_created', handlePageChange);
       window.removeEventListener('canvas:page_deleted', handlePageChange);
+      window.removeEventListener('canvas:page_updated', handlePageChange);
     };
   }, [expandedId, fetchPages]);
 

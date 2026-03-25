@@ -323,6 +323,7 @@ export default function CanvasPageView({ onRefClick }) {
       if (newTitle && newTitle !== page?.title) {
         try {
           await axios.patch(`/canvases/${canvasId}/pages/${pageId}`, { title: newTitle });
+          window.dispatchEvent(new CustomEvent('canvas:page_updated'));
         } catch {}
       }
     }, 1000);
