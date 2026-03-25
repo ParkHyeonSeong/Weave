@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from datetime import date
 from pydantic import BaseModel, field_validator
 
@@ -9,6 +9,7 @@ class ScheduleEventCreate(BaseModel):
     start_date: date
     end_date: Optional[date] = None
     color: Optional[str] = '#5E6AD2'
+    participant_ids: Optional[List[int]] = None
 
     @field_validator('end_date')
     @classmethod
@@ -24,3 +25,4 @@ class ScheduleEventUpdate(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     color: Optional[str] = None
+    participant_ids: Optional[List[int]] = None

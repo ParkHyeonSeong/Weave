@@ -694,6 +694,34 @@ async def batch_statuses(task_ids: list[int], db: AsyncSession) -> dict:
     return out
 
 
+async def find_for_calendar(branch_id: int, range_start, range_end, db: AsyncSession):
+    """캘린더 표시용 Task 목록 (start_date 또는 due_date가 범위에 포함)"""
+    result = await db.execute(text("""
+        SELECT t.task_id, t.display_number, t.title,
+               t.task_type, t.status, t.priority,
+               t.start_date, t.due_date,
+               b.key AS branch_key,
+               ws.label AS status_label, ws.color AS status_color, ws.category AS status_category
+        FROM task t
+        INNER JOIN branch b ON t.branch_id = b.branch_id
+        LEFT JOIN workflow_status ws ON ws.branch_id = t.branch_id AND ws.key = t.status
+        WHERE t.branch_id = :branch_id
+          AND t.parent_task_id IS NULL
+          AND (
+            (t.start_date IS NOT NULL AND t.start_date <= :range_end AND t.start_date >= :range_start)
+            OR (t.due_date IS NOT NULL AND t.due_date <= :range_end AND t.due_date >= :range_start)
+          )
+        ORDER BY COALESCE(t.start_date, t.due_date), t.created_at
+    """), {'branch_id': branch_id, 'range_start': range_start, 'range_end': range_end})
+    rows = result.fetchall()
+    tasks = []
+    for row in rows:
+        task = dict(row._mapping)
+        task['display_id'] = f"{task['branch_key']}-{task['display_number']}"
+        tasks.append(task)
+    return tasks
+
+
 async def set_assignees(task_id: int, main_user_id, sub_user_ids: list, db: AsyncSession):
     """Task 담당자 전체 교체 (메인 1명 + 서브 N명)"""
     await db.execute(text("""

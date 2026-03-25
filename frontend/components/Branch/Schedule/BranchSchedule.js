@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { axios } from '@/library/_axios';
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, ListTodo, Layers, CalendarRange } from 'lucide-react';
 import ScheduleEventModal from './ScheduleEventModal';
 
 const WEEK_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -132,7 +132,39 @@ function groupEventsByDate(events) {
   return map;
 }
 
-const MAX_VISIBLE_EVENTS = 3;
+// 태스크를 날짜별로 그룹핑 (start_date, due_date 각각 표시)
+function groupTasksByDate(tasks) {
+  const map = {};
+  tasks.forEach((task) => {
+    if (task.start_date) {
+      if (!map[task.start_date]) map[task.start_date] = [];
+      map[task.start_date].push({ ...task, _dateType: 'start' });
+    }
+    if (task.due_date && task.due_date !== task.start_date) {
+      if (!map[task.due_date]) map[task.due_date] = [];
+      map[task.due_date].push({ ...task, _dateType: 'due' });
+    }
+  });
+  return map;
+}
+
+// 에픽을 날짜별로 그룹핑 (start_date, due_date 각각 표시)
+function groupEpicsByDate(epics) {
+  const map = {};
+  epics.forEach((epic) => {
+    if (epic.start_date) {
+      if (!map[epic.start_date]) map[epic.start_date] = [];
+      map[epic.start_date].push({ ...epic, _dateType: 'start' });
+    }
+    if (epic.due_date && epic.due_date !== epic.start_date) {
+      if (!map[epic.due_date]) map[epic.due_date] = [];
+      map[epic.due_date].push({ ...epic, _dateType: 'due' });
+    }
+  });
+  return map;
+}
+
+const MAX_VISIBLE_ITEMS = 3;
 
 export default function BranchSchedule({ branchId }) {
   const [currentMonth, setCurrentMonth] = useState(() => {
@@ -141,6 +173,12 @@ export default function BranchSchedule({ branchId }) {
   });
   const [events, setEvents] = useState([]);
   const [sprints, setSprints] = useState([]);
+  const [calendarTasks, setCalendarTasks] = useState([]);
+  const [calendarEpics, setCalendarEpics] = useState([]);
+  const [showSprints, setShowSprints] = useState(true);
+  const [showTasks, setShowTasks] = useState(false);
+  const [showEpics, setShowEpics] = useState(false);
+  const [expandedCells, setExpandedCells] = useState({});
   const [eventModal, setEventModal] = useState({ open: false, event: null, defaultDate: '' });
 
   const year = currentMonth.getFullYear();
@@ -157,14 +195,35 @@ export default function BranchSchedule({ branchId }) {
   // 데이터 페칭
   const fetchData = useCallback(async () => {
     try {
-      const [sprintRes, eventRes] = await Promise.all([
+      const promises = [
         axios.get(`/branches/${branchId}/sprints`),
         axios.get(`/branches/${branchId}/schedule-events?range_start=${rangeStart}&range_end=${rangeEnd}`),
-      ]);
-      if (sprintRes.data.status) setSprints(sprintRes.data.sprints);
-      if (eventRes.data.status) setEvents(eventRes.data.events);
+      ];
+      if (showTasks) {
+        promises.push(axios.get(`/branches/${branchId}/schedule-events/calendar-tasks?range_start=${rangeStart}&range_end=${rangeEnd}`));
+      }
+      if (showEpics) {
+        promises.push(axios.get(`/branches/${branchId}/schedule-events/calendar-epics?range_start=${rangeStart}&range_end=${rangeEnd}`));
+      }
+
+      const results = await Promise.all(promises);
+      if (results[0].data.status) setSprints(results[0].data.sprints);
+      if (results[1].data.status) setEvents(results[1].data.events);
+
+      let idx = 2;
+      if (showTasks) {
+        if (results[idx]?.data.status) setCalendarTasks(results[idx].data.tasks);
+        idx++;
+      } else {
+        setCalendarTasks([]);
+      }
+      if (showEpics) {
+        if (results[idx]?.data.status) setCalendarEpics(results[idx].data.epics);
+      } else {
+        setCalendarEpics([]);
+      }
     } catch {}
-  }, [branchId, rangeStart, rangeEnd]);
+  }, [branchId, rangeStart, rangeEnd, showTasks, showEpics]);
 
   useEffect(() => {
     fetchData();
@@ -177,19 +236,22 @@ export default function BranchSchedule({ branchId }) {
     return () => window.removeEventListener('schedule:updated', handler);
   }, [fetchData]);
 
-  // 스프린트 세그먼트 계산
-  const sprintSegments = useMemo(() => buildSprintSegments(sprints, weeks), [sprints, weeks]);
+  // 스프린트 세그먼트 계산 (토글 OFF면 빈 배열)
+  const sprintSegments = useMemo(() => showSprints ? buildSprintSegments(sprints, weeks) : [], [sprints, weeks, showSprints]);
   const laneCountByWeek = useMemo(() => assignLanes(sprintSegments), [sprintSegments]);
 
-  // 이벤트를 날짜별 그룹핑
+  // 이벤트/태스크/에픽을 날짜별 그룹핑
   const eventsByDate = useMemo(() => groupEventsByDate(events), [events]);
+  const tasksByDate = useMemo(() => groupTasksByDate(calendarTasks), [calendarTasks]);
+  const epicsByDate = useMemo(() => groupEpicsByDate(calendarEpics), [calendarEpics]);
 
-  // 월 이동
-  const goToPrev = () => setCurrentMonth(new Date(year, month - 1, 1));
-  const goToNext = () => setCurrentMonth(new Date(year, month + 1, 1));
+  // 월 이동 시 확장 상태 리셋
+  const goToPrev = () => { setCurrentMonth(new Date(year, month - 1, 1)); setExpandedCells({}); };
+  const goToNext = () => { setCurrentMonth(new Date(year, month + 1, 1)); setExpandedCells({}); };
   const goToToday = () => {
     const now = new Date();
     setCurrentMonth(new Date(now.getFullYear(), now.getMonth(), 1));
+    setExpandedCells({});
   };
 
   // 월 라벨
@@ -223,6 +285,30 @@ export default function BranchSchedule({ branchId }) {
           </button>
         </div>
         <div className="BranchSchedule__ActionsRight">
+          <button
+            className={`BranchSchedule__ToggleBtn ${showSprints ? 'BranchSchedule__ToggleBtn--active' : ''}`}
+            onClick={() => setShowSprints((prev) => !prev)}
+            title={showSprints ? 'Hide sprints' : 'Show sprints'}
+          >
+            <CalendarRange size={14} />
+            Sprints
+          </button>
+          <button
+            className={`BranchSchedule__ToggleBtn ${showTasks ? 'BranchSchedule__ToggleBtn--active' : ''}`}
+            onClick={() => setShowTasks((prev) => !prev)}
+            title={showTasks ? 'Hide tasks' : 'Show tasks'}
+          >
+            <ListTodo size={14} />
+            Tasks
+          </button>
+          <button
+            className={`BranchSchedule__ToggleBtn ${showEpics ? 'BranchSchedule__ToggleBtn--active' : ''}`}
+            onClick={() => setShowEpics((prev) => !prev)}
+            title={showEpics ? 'Hide epics' : 'Show epics'}
+          >
+            <Layers size={14} />
+            Epics
+          </button>
           <button
             className="BranchSchedule__CreateBtn"
             onClick={() => setEventModal({ open: true, event: null, defaultDate: toDateStr(today) })}
@@ -289,7 +375,21 @@ export default function BranchSchedule({ branchId }) {
                   const isOutside = date.getMonth() !== month;
                   const isToday = isSameDay(date, today);
                   const dateStr = toDateStr(date);
+
+                  // 이벤트 > 에픽 > 태스크 순서로 머지
                   const dayEvents = eventsByDate[dateStr] || [];
+                  const dayEpics = showEpics ? (epicsByDate[dateStr] || []) : [];
+                  const dayTasks = showTasks ? (tasksByDate[dateStr] || []) : [];
+
+                  const allItems = [
+                    ...dayEvents.map((evt) => ({ ...evt, _type: 'event' })),
+                    ...dayEpics.map((ep) => ({ ...ep, _type: 'epic' })),
+                    ...dayTasks.map((t) => ({ ...t, _type: 'task' })),
+                  ];
+
+                  const isExpanded = expandedCells[dateStr];
+                  const visibleItems = isExpanded ? allItems : allItems.slice(0, MAX_VISIBLE_ITEMS);
+                  const hiddenCount = allItems.length - MAX_VISIBLE_ITEMS;
 
                   const cellClass = [
                     'BranchSchedule__Cell',
@@ -303,26 +403,67 @@ export default function BranchSchedule({ branchId }) {
                       className={cellClass}
                       onClick={() => handleCellClick(date)}
                     >
-                      <div className="BranchSchedule__DateNum" style={{ marginTop: sprintBarOffset > 0 ? sprintBarOffset : undefined }}>
+                      <div className="BranchSchedule__DateNum">
                         {date.getDate()}
                       </div>
-                      <div className="BranchSchedule__Events">
-                        {dayEvents.slice(0, MAX_VISIBLE_EVENTS).map((evt) => (
+                      <div className="BranchSchedule__Events" style={{ marginTop: sprintBarOffset > 0 ? sprintBarOffset : undefined }}>
+                        {visibleItems.map((item) => {
+                          if (item._type === 'epic') {
+                            return (
+                              <div
+                                key={`epic-${item.epic_id}-${item._dateType}`}
+                                className="BranchSchedule__EpicPill"
+                                onClick={(e) => e.stopPropagation()}
+                                title={`${item.epic_name} (${item.task_count} tasks)`}
+                              >
+                                <span
+                                  className="BranchSchedule__EventDot"
+                                  style={{ backgroundColor: item.color || '#5E6AD2' }}
+                                />
+                                <span className="BranchSchedule__EpicName">{item.epic_name}</span>
+                                {item.task_count > 0 && (
+                                  <span className="BranchSchedule__EpicBadge">{item.task_count}</span>
+                                )}
+                              </div>
+                            );
+                          }
+                          if (item._type === 'task') {
+                            return (
+                              <div
+                                key={`task-${item.task_id}-${item._dateType}`}
+                                className="BranchSchedule__TaskPill"
+                                onClick={(e) => e.stopPropagation()}
+                                title={`${item.display_id} ${item.title}`}
+                              >
+                                <span className="BranchSchedule__TaskId">{item.display_id}</span>
+                                <span className="BranchSchedule__TaskTitle">{item.title}</span>
+                              </div>
+                            );
+                          }
+                          // event
+                          return (
+                            <div
+                              key={`event-${item.schedule_event_id}`}
+                              className="BranchSchedule__EventPill"
+                              onClick={(e) => handleEventClick(e, item)}
+                            >
+                              <span
+                                className="BranchSchedule__EventDot"
+                                style={{ backgroundColor: item.color || '#5E6AD2' }}
+                              />
+                              <span className="BranchSchedule__EventTitle">{item.title}</span>
+                            </div>
+                          );
+                        })}
+                        {!isExpanded && hiddenCount > 0 && (
                           <div
-                            key={evt.schedule_event_id}
-                            className="BranchSchedule__EventPill"
-                            onClick={(e) => handleEventClick(e, evt)}
+                            className="BranchSchedule__MoreEvents"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExpandedCells((prev) => ({ ...prev, [dateStr]: true }));
+                            }}
                           >
-                            <span
-                              className="BranchSchedule__EventDot"
-                              style={{ backgroundColor: evt.color || '#5E6AD2' }}
-                            />
-                            <span className="BranchSchedule__EventTitle">{evt.title}</span>
-                          </div>
-                        ))}
-                        {dayEvents.length > MAX_VISIBLE_EVENTS && (
-                          <div className="BranchSchedule__MoreEvents">
-                            +{dayEvents.length - MAX_VISIBLE_EVENTS} more
+                            +{hiddenCount} more
                           </div>
                         )}
                       </div>

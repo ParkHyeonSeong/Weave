@@ -208,4 +208,166 @@
       cursor: not-allowed;
     }
   }
+
+  // -- 참석자 --
+  &__ParticipantWrap {
+    position: relative;
+  }
+
+  &__ParticipantToggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: $space-2 $space-3;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    font-size: $font-size-sm;
+    color: $color-text;
+    cursor: pointer;
+    transition: border-color $transition-fast;
+    text-align: left;
+
+    &:hover {
+      border-color: $color-text-tertiary;
+    }
+  }
+
+  &__ParticipantText {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    color: inherit;
+
+    &:only-child {
+      color: $color-text-tertiary;
+    }
+  }
+
+  &__ParticipantDropdown {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    margin-top: 2px;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    max-height: 180px;
+    overflow-y: auto;
+    z-index: 10;
+  }
+
+  &__ParticipantOption {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: $space-2 $space-3;
+    font-size: $font-size-sm;
+    color: $color-text;
+    cursor: pointer;
+    transition: background $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+    }
+
+    input[type='checkbox'] {
+      accent-color: $color-primary;
+      flex-shrink: 0;
+    }
+  }
+
+  // -- 연결된 태스크 --
+  &__LinkedTasks {
+    display: flex;
+    flex-direction: column;
+    gap: $space-1;
+    margin-bottom: $space-2;
+  }
+
+  &__LinkedTask {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: $space-1 $space-2;
+    background: $color-surface;
+    border-radius: $radius-md;
+    font-size: $font-size-sm;
+
+    button {
+      margin-left: auto;
+      color: $color-text-tertiary;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+
+      &:hover {
+        color: $color-error;
+      }
+    }
+  }
+
+  &__LinkedTaskId {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-semibold;
+    color: $color-primary;
+    flex-shrink: 0;
+  }
+
+  &__LinkedTaskTitle {
+    font-size: $font-size-sm;
+    color: $color-text;
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__TaskSearchWrap {
+    position: relative;
+  }
+
+  &__TaskResults {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    max-height: 180px;
+    overflow-y: auto;
+    z-index: 10;
+  }
+
+  &__TaskResult {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: $space-2 $space-3;
+    font-size: $font-size-sm;
+    cursor: pointer;
+    transition: background $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+    }
+
+    span:first-child {
+      font-weight: $font-weight-semibold;
+      color: $color-primary;
+      flex-shrink: 0;
+    }
+
+    span:last-child {
+      color: $color-text;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
 }

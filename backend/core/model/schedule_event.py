@@ -80,3 +80,28 @@ async def delete(schedule_event_id: int, db: AsyncSession):
         DELETE FROM schedule_event WHERE schedule_event_id = :schedule_event_id
     """), {'schedule_event_id': schedule_event_id})
     await db.commit()
+
+
+async def set_participants(schedule_event_id: int, user_ids: list, db: AsyncSession):
+    """이벤트 참석자 전체 교체"""
+    await db.execute(text("""
+        DELETE FROM schedule_event_participant WHERE schedule_event_id = :schedule_event_id
+    """), {'schedule_event_id': schedule_event_id})
+    for uid in user_ids:
+        await db.execute(text("""
+            INSERT INTO schedule_event_participant (schedule_event_id, user_id)
+            VALUES (:schedule_event_id, :user_id)
+        """), {'schedule_event_id': schedule_event_id, 'user_id': uid})
+    await db.commit()
+
+
+async def find_participants(schedule_event_id: int, db: AsyncSession):
+    """이벤트 참석자 목록"""
+    result = await db.execute(text("""
+        SELECT u.user_id, u.username
+        FROM schedule_event_participant sep
+        INNER JOIN "user" u ON sep.user_id = u.user_id
+        WHERE sep.schedule_event_id = :schedule_event_id
+        ORDER BY u.username
+    """), {'schedule_event_id': schedule_event_id})
+    return [dict(row._mapping) for row in result.fetchall()]

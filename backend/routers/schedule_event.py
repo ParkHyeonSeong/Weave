@@ -11,6 +11,24 @@ import db_engine as db
 router = APIRouter()
 
 
+@router.get("/calendar-tasks", summary="캘린더 표시용 Task 목록", dependencies=[Depends(require_login)])
+async def get_calendar_tasks(branch_id: int,
+                             range_start: date = Query(...),
+                             range_end: date = Query(...),
+                             request: Request = None,
+                             session: AsyncSession = Depends(db.session)):
+    return await event_controller.get_calendar_tasks(branch_id, range_start, range_end, request, session)
+
+
+@router.get("/calendar-epics", summary="캘린더 표시용 Epic 목록", dependencies=[Depends(require_login)])
+async def get_calendar_epics(branch_id: int,
+                             range_start: date = Query(...),
+                             range_end: date = Query(...),
+                             request: Request = None,
+                             session: AsyncSession = Depends(db.session)):
+    return await event_controller.get_calendar_epics(branch_id, range_start, range_end, request, session)
+
+
 @router.get("", summary="Schedule event 목록", dependencies=[Depends(require_login)])
 async def list_events(branch_id: int,
                       range_start: date = Query(...),

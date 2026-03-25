@@ -94,6 +94,26 @@ async def reorder(branch_id: int, epic_ids: list, db: AsyncSession):
     await db.commit()
 
 
+async def find_for_calendar(branch_id: int, range_start, range_end, db: AsyncSession):
+    """캘린더 표시용 Epic 목록 (start_date 또는 due_date가 범위에 포함)"""
+    result = await db.execute(text("""
+        SELECT e.epic_id, e.epic_name, e.status, e.color,
+               e.start_date, e.due_date,
+               COUNT(t.task_id) AS task_count
+        FROM epic e
+        LEFT JOIN task t ON e.epic_id = t.epic_id
+        WHERE e.branch_id = :branch_id
+          AND (
+            (e.start_date IS NOT NULL AND e.start_date <= :range_end AND e.start_date >= :range_start)
+            OR (e.due_date IS NOT NULL AND e.due_date <= :range_end AND e.due_date >= :range_start)
+          )
+        GROUP BY e.epic_id
+        ORDER BY COALESCE(e.start_date, e.due_date), e.created_at
+    """), {'branch_id': branch_id, 'range_start': range_start, 'range_end': range_end})
+    rows = result.fetchall()
+    return [dict(row._mapping) for row in rows]
+
+
 async def delete(epic_id: int, db: AsyncSession):
     """Epic 삭제 (task들의 epic_id = NULL로)"""
     await db.execute(text("""
