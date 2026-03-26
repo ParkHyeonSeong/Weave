@@ -18,7 +18,7 @@ async def find_by_email(email: str, db: AsyncSession):
     result = await db.execute(text("""
         SELECT user_id, email, password, username, role, status, created_at, must_change_password
         FROM "user"
-        WHERE email = :email
+        WHERE email = :email AND deleted_at IS NULL
     """), {'email': email})
     row = result.fetchone()
     return dict(row._mapping) if row else None
@@ -45,10 +45,11 @@ async def update_login(user_id: int, ip: str, db: AsyncSession):
 
 
 async def find_all(db: AsyncSession):
-    """전체 사용자 목록 (비밀번호 제외)"""
+    """전체 사용자 목록 (비밀번호 제외, 삭제된 사용자 제외)"""
     result = await db.execute(text("""
         SELECT user_id, email, username, role, status, avatar_url, created_at, last_login_at
         FROM "user"
+        WHERE deleted_at IS NULL
         ORDER BY created_at DESC
     """))
     rows = result.fetchall()
@@ -124,12 +125,23 @@ async def search_active(query: str, exclude_user_id: int, limit: int = 10,
         SELECT user_id, username, email
         FROM "user"
         WHERE status = 'active'
+          AND deleted_at IS NULL
           AND user_id != :exclude_user_id
           AND username ILIKE :q
         ORDER BY username
         LIMIT :limit
     """), {'exclude_user_id': exclude_user_id, 'q': f'%{query}%', 'limit': limit})
     return [dict(r._mapping) for r in result.fetchall()]
+
+
+async def soft_delete(user_id: int, db: AsyncSession):
+    """사용자 소프트 삭제"""
+    await db.execute(text("""
+        UPDATE "user"
+        SET deleted_at = NOW()
+        WHERE user_id = :user_id
+    """), {'user_id': user_id})
+    await db.commit()
 
 
 async def update_avatar(user_id: int, avatar_url: str, db: AsyncSession):

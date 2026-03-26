@@ -1,7 +1,6 @@
 @use '../../variables' as *;
 
 .Admin {
-  max-width: 900px;
   padding: $space-6;
 
   &__Header {
@@ -129,6 +128,11 @@
       background: $color-error-bg;
       color: $color-error;
     }
+
+    &--inactive {
+      background: $color-surface;
+      color: $color-text-tertiary;
+    }
   }
 
   // -- 액션 버튼 --
@@ -167,6 +171,40 @@
     }
   }
 
+  &__DeactivateBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: $space-1;
+    padding: $space-1 $space-3;
+    border-radius: $radius-md;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    color: $color-warning;
+    background: #FFFBEB;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: #FEF3C7;
+    }
+  }
+
+  &__ActivateBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: $space-1;
+    padding: $space-1 $space-3;
+    border-radius: $radius-md;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    color: $color-success;
+    background: $color-success-bg;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: #DDF5E4;
+    }
+  }
+
   &__ResetBtn {
     display: inline-flex;
     align-items: center;
@@ -182,6 +220,23 @@
     &:hover {
       background: $color-border;
       color: $color-text;
+    }
+  }
+
+  &__DeleteBtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: $radius-md;
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: $color-error-bg;
+      color: $color-error;
     }
   }
 
@@ -223,6 +278,7 @@
     display: flex;
     flex-direction: column;
     gap: $space-4;
+    max-width: 560px;
   }
 
   &__Field {
@@ -281,6 +337,54 @@
     &:disabled {
       opacity: 0.6;
       cursor: not-allowed;
+    }
+  }
+
+  // -- 버튼 행 --
+  &__BtnRow {
+    display: flex;
+    gap: $space-2;
+    margin-top: $space-2;
+  }
+
+  &__TestBtn {
+    display: inline-flex;
+    align-items: center;
+    padding: $space-2 $space-4;
+    background: transparent;
+    color: $color-text-secondary;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    transition: all $transition-fast;
+    margin-top: $space-2;
+
+    &:hover {
+      background: $color-surface;
+      color: $color-text;
+      border-color: $color-text-tertiary;
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  }
+
+  // -- 체크박스 --
+  &__CheckboxLabel {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    font-size: $font-size-sm;
+    color: $color-text-secondary;
+    cursor: pointer;
+
+    input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: $color-primary;
     }
   }
 

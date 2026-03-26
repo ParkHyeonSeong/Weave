@@ -104,6 +104,8 @@ async def login(body, request: Request, response: Response, db: AsyncSession):
         return {'status': False, 'message': 'ACCOUNT_PENDING'}
     if user.get('status') == 'rejected':
         return {'status': False, 'message': 'ACCOUNT_REJECTED'}
+    if user.get('status') == 'inactive':
+        return {'status': False, 'message': 'ACCOUNT_INACTIVE'}
 
     ip = _get_client_ip(request)
     await user_model.update_login(user['user_id'], ip, db)

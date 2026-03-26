@@ -40,9 +40,23 @@ class UpdateUserStatus(BaseModel):
     @field_validator('status')
     @classmethod
     def validate_status(cls, v):
-        if v not in ('active', 'rejected'):
-            raise ValueError('status must be "active" or "rejected"')
+        if v not in ('active', 'rejected', 'inactive'):
+            raise ValueError('status must be "active", "rejected", or "inactive"')
         return v
+
+
+class SmtpConfigUpdate(BaseModel):
+    smtp_host: str
+    smtp_port: int = 587
+    smtp_user: str
+    smtp_password: Optional[str] = None
+    sender_email: str
+    sender_name: str = ''
+    use_tls: bool = True
+
+
+class SmtpTestRequest(BaseModel):
+    test_email: str
 
 
 class ResetUserPassword(BaseModel):

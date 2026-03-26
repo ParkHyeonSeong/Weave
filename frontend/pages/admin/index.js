@@ -3,10 +3,11 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import AdminLayout from '@/components/Admin/AdminLayout';
 import { axios } from '@/library/_axios';
-import { Shield, UserCheck, UserX, UserPlus, KeyRound } from 'lucide-react';
+import { Shield, UserCheck, UserX, UserPlus, KeyRound, Ban, CircleCheck, Trash2 } from 'lucide-react';
 import Alert from '@/components/modal/Alert';
 import AddMember from '@/components/modal/AddMember';
 import ResetPassword from '@/components/modal/ResetPassword';
+import ConfirmModal from '@/components/modal/ConfirmModal';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -15,6 +16,7 @@ export default function AdminPage() {
   const [myUserId, setMyUserId] = useState(null);
   const [showAddMember, setShowAddMember] = useState(false);
   const [resetTarget, setResetTarget] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   // Alert 상태
   const [alertOpen, setAlertOpen] = useState(false);
@@ -106,6 +108,35 @@ export default function AdminPage() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      const res = await axios.delete(`/admin/users/${deleteTarget.user_id}`);
+      if (res.data.status) {
+        fetchUsers();
+        setDeleteTarget(null);
+      } else {
+        showAlert('Error', res.data.message);
+      }
+    } catch {
+      showAlert('Error', 'Failed to delete user.');
+    }
+  };
+
+  const handleToggleStatus = async (userId, currentStatus) => {
+    const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
+    try {
+      const res = await axios.patch(`/admin/users/${userId}/status`, { status: newStatus });
+      if (res.data.status) {
+        fetchUsers();
+      } else {
+        showAlert('Error', res.data.message);
+      }
+    } catch {
+      showAlert('Error', 'Failed to update status.');
+    }
+  };
+
   const pendingUsers = users.filter(u => u.status === 'pending');
   const activeUsers = users.filter(u => u.status !== 'pending');
 
@@ -114,6 +145,7 @@ export default function AdminPage() {
       case 'active': return 'Admin__Badge--active';
       case 'pending': return 'Admin__Badge--pending';
       case 'rejected': return 'Admin__Badge--rejected';
+      case 'inactive': return 'Admin__Badge--inactive';
       default: return '';
     }
   };
@@ -232,16 +264,35 @@ export default function AdminPage() {
                         </span>
                       </td>
                       <td>{formatDate(user.created_at)}</td>
-                      <td>
+                      <td className="Admin__Actions">
                         {!isSelf && (
-                          <button
-                            className="Admin__ResetBtn"
-                            onClick={() => setResetTarget(user)}
-                            title="Reset Password"
-                          >
-                            <KeyRound size={14} />
-                            Reset Password
-                          </button>
+                          <>
+                            {(user.status === 'active' || user.status === 'inactive') && (
+                              <button
+                                className={user.status === 'active' ? 'Admin__DeactivateBtn' : 'Admin__ActivateBtn'}
+                                onClick={() => handleToggleStatus(user.user_id, user.status)}
+                                title={user.status === 'active' ? 'Deactivate' : 'Activate'}
+                              >
+                                {user.status === 'active' ? <Ban size={14} /> : <CircleCheck size={14} />}
+                                {user.status === 'active' ? 'Deactivate' : 'Activate'}
+                              </button>
+                            )}
+                            <button
+                              className="Admin__ResetBtn"
+                              onClick={() => setResetTarget(user)}
+                              title="Reset Password"
+                            >
+                              <KeyRound size={14} />
+                              Reset
+                            </button>
+                            <button
+                              className="Admin__DeleteBtn"
+                              onClick={() => setDeleteTarget(user)}
+                              title="Delete"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </>
                         )}
                       </td>
                     </tr>
@@ -260,6 +311,16 @@ export default function AdminPage() {
       {resetTarget && (
         <ResetPassword user={resetTarget} onClose={() => setResetTarget(null)} />
       )}
+
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        title="Delete Member"
+        message={`Are you sure you want to delete ${deleteTarget?.username}? This action cannot be undone.`}
+        confirmLabel="Delete"
+        variant="danger"
+      />
 
       <Alert
         isOpen={alertOpen}

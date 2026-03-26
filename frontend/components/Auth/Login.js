@@ -81,6 +81,7 @@ export default function Login() {
           'NOT_INITIALIZED': 'System setup is required first.',
           'ACCOUNT_PENDING': 'Your account is awaiting admin approval.',
           'ACCOUNT_REJECTED': 'Your registration was rejected. Contact your administrator.',
+          'ACCOUNT_INACTIVE': 'Your account has been deactivated. Contact your administrator.',
         };
         showAlert('Error', messages[response.data.message] || response.data.message);
       }

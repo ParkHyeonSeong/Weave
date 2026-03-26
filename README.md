@@ -31,7 +31,11 @@ Organize work with a flexible task system inspired by Linear.
 - **Sprints** — plan iterations, activate, and track completion
 - **Epics & Timeline** — visualize long-term plans across weeks, months, or quarters
 - **Custom Task Types** — define your own task types per project
+- **Custom Fields** — add custom fields per task type for flexible tracking
+- **Workflow Statuses** — define custom status flows per project
 - **Labels & Priorities** — categorize and prioritize with visual tags
+- **Task Dependencies** — set blocking/blocked-by relationships between tasks
+- **Task Filtering** — filter tasks by status, assignee, label, priority, and more
 - **Issue Threads** — discuss specific tasks with threaded comments
 - **My Tasks** — personal dashboard with filters across all projects
 
@@ -39,6 +43,9 @@ Organize work with a flexible task system inspired by Linear.
 A rich knowledge base built on TipTap, replacing Confluence.
 
 - **Rich Text Editor** — headings, tables, code blocks with syntax highlighting, math (KaTeX), callouts
+- **Markdown Paste** — paste markdown content and it auto-converts to rich text
+- **Inline Annotations** — leave comments on specific parts of a document
+- **Typst Editor** — write and render Typst documents alongside rich text pages
 - **Page Hierarchy** — nested documents with drag-and-drop reordering
 - **Image Support** — paste, drag-and-drop, or upload images directly
 - **Task References** — link tasks inline with live preview popups
@@ -47,21 +54,36 @@ A rich knowledge base built on TipTap, replacing Confluence.
 Built-in team communication via WebSocket.
 
 - **Direct & Group Messages** — 1:1 or group conversations
+- **File Attachments** — share files and images in conversations
 - **Task References in Chat** — search and link tasks with `/` commands
+- **Picture-in-Picture** — pop out the messenger into a floating window
 - **Read Receipts** — see who's read your messages
 - **Persistent History** — full message history with pagination
+
+### 📅 Schedule
+Project-level calendar for planning and tracking events.
+
+- **Calendar View** — visualize events on a monthly/weekly calendar
+- **Event-Task Linking** — connect schedule events to tasks for cross-referencing
 
 ### 🔧 Administration
 - **Setup Wizard** — guided initial configuration (workspace name, registration policy, admin account)
 - **User Management** — approve/reject registrations, assign roles
+- **Forced Password Change** — admin can require users to reset their password on next login
 - **Registration Policies** — public or invite-only signup
+- **AI Integration** — configure AI providers (API key, model) from admin settings
 
 ### ⚡ Productivity
 - **PWA (Progressive Web App)** — install Weave as a native app on desktop and mobile
+- **Mobile Responsive** — fully responsive UI that adapts to phones and tablets
 - **Background Push Notifications** — receive alerts even when the browser is closed
+- **In-app Notifications** — real-time notification feed with read/unread tracking
+- **Online Presence** — see who's online with real-time status indicators
 - **Command Palette** — `⌘K` to quickly navigate or create resources
+- **Starring & Recent Views** — bookmark items and quickly access recent activity
 - **Resizable Panels** — sidebar and messenger widths persist across sessions
 - **Browse & Discover** — find and join public projects and canvases
+- **Jira Migration** — import projects from Jira via CSV export
 
 ## Quick Start
 
@@ -166,7 +188,7 @@ make prod-ps      # Show production service status
 
 | Layer        | Technology                                         |
 |--------------|----------------------------------------------------|
-| Frontend     | Next.js 16, React 19, SCSS, TipTap, dnd-kit        |
+| Frontend     | Next.js 16, React 19, SCSS, TipTap, Typst, dnd-kit |
 | Backend      | Python 3.13, FastAPI, SQLAlchemy (async), Alembic   |
 | Database     | PostgreSQL 17                                       |
 | Auth         | JWT (httpOnly cookie) + bcrypt                      |

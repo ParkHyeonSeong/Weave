@@ -31,7 +31,7 @@ from routers import task_issue as task_issue_router
 from routers import my_tasks as my_tasks_router
 from routers import ws_canvas as ws_canvas_router
 from routers import ref_status as ref_status_router
-# from routers import ai as ai_router
+from routers import ai as ai_router
 from routers import recent_view as recent_view_router
 from routers import workflow_status as workflow_status_router
 from routers import custom_field as custom_field_router
@@ -136,7 +136,7 @@ app.include_router(canvas_annotation_router.router, prefix="/api/canvases/{canva
 app.include_router(task_issue_router.router, prefix="/api/branches/{branch_id}/tasks/{task_id}/issues", tags=["task-issues"])
 app.include_router(my_tasks_router.router, prefix="/api/my-tasks", tags=["my-tasks"])
 app.include_router(ref_status_router.router, prefix="/api/ref-status", tags=["ref-status"])
-# app.include_router(ai_router.router, prefix="/api/ai", tags=["ai"])
+app.include_router(ai_router.router, prefix="/api/ai", tags=["ai"])
 app.include_router(recent_view_router.router, prefix="/api/recent-views", tags=["recent-views"])
 app.include_router(workflow_status_router.router, prefix="/api/branches/{branch_id}/workflow-statuses", tags=["workflow-statuses"])
 app.include_router(custom_field_router.router, prefix="/api/branches/{branch_id}/task-types/{type_id}/custom-fields", tags=["custom-fields"])

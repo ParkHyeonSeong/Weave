@@ -32,7 +32,31 @@ async def update_user_status(user_id: int, body: admin_schema.UpdateUserStatus,
     return await admin_controller.update_user_status(user_id, body, request, session)
 
 
+@router.delete("/users/{user_id}", summary="사용자 삭제", dependencies=[Depends(require_admin)])
+async def delete_user(user_id: int, request: Request, session: AsyncSession = Depends(db.session)):
+    return await admin_controller.delete_user(user_id, request, session)
+
+
 @router.post("/users/{user_id}/reset-password", summary="사용자 비밀번호 초기화", dependencies=[Depends(require_admin)])
 async def reset_user_password(user_id: int, body: admin_schema.ResetUserPassword,
                               request: Request, session: AsyncSession = Depends(db.session)):
     return await admin_controller.reset_user_password(user_id, body, request, session)
+
+
+# ── SMTP 설정 ────────────────────────────────────────────────────────────
+
+@router.get("/smtp-config", summary="SMTP 설정 조회", dependencies=[Depends(require_admin)])
+async def get_smtp_config(request: Request, session: AsyncSession = Depends(db.session)):
+    return await admin_controller.get_smtp_config(request, session)
+
+
+@router.put("/smtp-config", summary="SMTP 설정 변경", dependencies=[Depends(require_admin)])
+async def update_smtp_config(body: admin_schema.SmtpConfigUpdate, request: Request,
+                             session: AsyncSession = Depends(db.session)):
+    return await admin_controller.save_smtp_config(body, request, session)
+
+
+@router.post("/smtp-config/test", summary="SMTP 테스트 발송", dependencies=[Depends(require_admin)])
+async def test_smtp(body: admin_schema.SmtpTestRequest, request: Request,
+                    session: AsyncSession = Depends(db.session)):
+    return await admin_controller.test_smtp(body, request, session)
