@@ -29,6 +29,7 @@ import BookmarkNode from './extensions/BookmarkExtension';
 import { createBookmarkPastePlugin } from './extensions/BookmarkPastePlugin';
 import { createMarkdownPastePlugin } from './extensions/MarkdownPastePlugin';
 import CanvasEditorToolbar from './CanvasEditorToolbar';
+import TableBubbleMenu from './TableBubbleMenu';
 import { axios } from '@/library/_axios';
 
 const lowlight = createLowlight(common);
@@ -237,6 +238,7 @@ function CollabEditorInner({
   return (
     <div className="CanvasEditor">
       <CanvasEditorToolbar editor={editor} />
+      <TableBubbleMenu editor={editor} />
       <EditorContent editor={editor} className="CanvasEditor__Content" />
       <div className={`CanvasEditor__Counter ${isOverLimit ? 'CanvasEditor__Counter--over' : ''}`}>
         {charCount.toLocaleString()} / {MAX_PLAIN_TEXT_LENGTH.toLocaleString()}

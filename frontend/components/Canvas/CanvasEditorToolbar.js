@@ -88,6 +88,7 @@ export default function CanvasEditorToolbar({ editor }) {
   };
 
   const [tableSize, setTableSize] = useState({ rows: 0, cols: 0 });
+  const [customTableSize, setCustomTableSize] = useState({ rows: '', cols: '' });
 
   const addTable = (rows, cols) => {
     editor.chain().focus().insertTable({ rows, cols, withHeaderRow: true }).run();
@@ -349,6 +350,41 @@ export default function CanvasEditorToolbar({ editor }) {
               </div>
               <div className="CanvasEditorToolbar__TableLabel">
                 {tableSize.rows > 0 ? `${tableSize.rows} × ${tableSize.cols}` : 'Select size'}
+              </div>
+              {/* 커스텀 크기 입력 */}
+              <div className="CanvasEditorToolbar__TableCustom">
+                <input
+                  type="number"
+                  className="CanvasEditorToolbar__TableCustomInput"
+                  min={1}
+                  max={50}
+                  placeholder="Rows"
+                  value={customTableSize.rows}
+                  onChange={(e) => setCustomTableSize({ ...customTableSize, rows: e.target.value })}
+                  onMouseDown={(e) => e.stopPropagation()}
+                />
+                <span className="CanvasEditorToolbar__TableCustomX">×</span>
+                <input
+                  type="number"
+                  className="CanvasEditorToolbar__TableCustomInput"
+                  min={1}
+                  max={50}
+                  placeholder="Cols"
+                  value={customTableSize.cols}
+                  onChange={(e) => setCustomTableSize({ ...customTableSize, cols: e.target.value })}
+                  onMouseDown={(e) => e.stopPropagation()}
+                />
+                <button
+                  className="CanvasEditorToolbar__TableCustomBtn"
+                  onClick={() => {
+                    const r = Math.min(50, Math.max(1, parseInt(customTableSize.rows) || 1));
+                    const c = Math.min(50, Math.max(1, parseInt(customTableSize.cols) || 1));
+                    addTable(r, c);
+                    setCustomTableSize({ rows: '', cols: '' });
+                  }}
+                >
+                  Insert
+                </button>
               </div>
             </div>
           )}

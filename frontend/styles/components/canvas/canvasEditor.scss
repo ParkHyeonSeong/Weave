@@ -671,6 +671,62 @@
     color: $color-text-secondary;
   }
 
+  // 커스텀 테이블 크기 입력
+  &__TableCustom {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    margin-top: $space-2;
+    padding-top: $space-2;
+    border-top: 1px solid $color-border;
+  }
+
+  &__TableCustomInput {
+    width: 52px;
+    padding: $space-1 $space-2;
+    border: 1px solid $color-border;
+    border-radius: $radius-sm;
+    font-size: $font-size-sm;
+    text-align: center;
+    background: $color-bg;
+    color: $color-text;
+    outline: none;
+
+    &:focus {
+      border-color: $color-primary;
+    }
+
+    // 스피너 버튼 숨김
+    &::-webkit-inner-spin-button,
+    &::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+
+    -moz-appearance: textfield;
+  }
+
+  &__TableCustomX {
+    font-size: $font-size-sm;
+    color: $color-text-secondary;
+  }
+
+  &__TableCustomBtn {
+    padding: $space-1 $space-2;
+    border: none;
+    border-radius: $radius-sm;
+    background: $color-primary;
+    color: #fff;
+    font-size: $font-size-xs;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: opacity $transition-fast;
+
+    &:hover {
+      opacity: 0.85;
+    }
+  }
+
   // 코드 블록 언어 메뉴
   &__CodeMenu {
     max-height: 280px;
@@ -1067,5 +1123,54 @@
     text-align: center;
     font-size: $font-size-sm;
     color: $color-text-tertiary;
+  }
+}
+
+// 테이블 버블 메뉴 (포커스된 셀 아래 중앙에 플로팅)
+.TableBubbleMenu {
+  position: absolute;
+  z-index: 10;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 4px;
+  background: $color-bg;
+  border: 1px solid $color-border;
+  border-radius: $radius-md;
+  box-shadow: $shadow-md;
+  white-space: nowrap;
+
+  &__Btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: $radius-sm;
+    background: transparent;
+    color: $color-text-secondary;
+    cursor: pointer;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+      color: $color-text;
+    }
+
+    &--danger {
+      &:hover {
+        background: $color-error-bg;
+        color: $color-error;
+      }
+    }
+  }
+
+  &__Sep {
+    width: 1px;
+    height: 14px;
+    background: $color-border;
+    margin: 0 1px;
   }
 }
