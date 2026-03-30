@@ -5,7 +5,18 @@ import {
   TableRowsSplit, TableColumnsSplit, Trash2,
 } from 'lucide-react';
 
-// 테이블 셀에 커서가 있을 때 해당 테이블 위에 표시되는 행/열 조작 툴바
+const Btn = ({ onClick, children, title, danger }) => (
+  <button
+    type="button"
+    className={`TableBubbleMenu__Btn ${danger ? 'TableBubbleMenu__Btn--danger' : ''}`}
+    onClick={onClick}
+    title={title}
+  >
+    {children}
+  </button>
+);
+
+// 포커스된 셀 아래 중앙에 표시되는 행/열 조작 툴바
 export default function TableBubbleMenu({ editor }) {
   const [pos, setPos] = useState(null);
 
@@ -41,26 +52,13 @@ export default function TableBubbleMenu({ editor }) {
 
   useEffect(() => {
     if (!editor) return;
-    editor.on('selectionUpdate', updatePosition);
     editor.on('transaction', updatePosition);
     return () => {
-      editor.off('selectionUpdate', updatePosition);
       editor.off('transaction', updatePosition);
     };
   }, [editor, updatePosition]);
 
   if (!pos) return null;
-
-  const Btn = ({ onClick, children, title, danger }) => (
-    <button
-      type="button"
-      className={`TableBubbleMenu__Btn ${danger ? 'TableBubbleMenu__Btn--danger' : ''}`}
-      onClick={onClick}
-      title={title}
-    >
-      {children}
-    </button>
-  );
 
   return (
     <div
