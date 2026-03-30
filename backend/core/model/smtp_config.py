@@ -1,6 +1,8 @@
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from library.crypto import encrypt, decrypt
+
 
 async def get_config(db: AsyncSession):
     """활성 SMTP 설정 조회 (password 마스킹)"""
@@ -18,10 +20,8 @@ async def get_config(db: AsyncSession):
     config = dict(row._mapping)
     # API 응답용 마스킹
     pw = config.get('smtp_password', '')
-    if pw and len(pw) > 4:
-        config['smtp_password'] = '****' + pw[-4:]
-    elif pw:
-        config['smtp_password'] = '****'
+    if pw:
+        config['smtp_password'] = '********'
     return config
 
 
@@ -38,7 +38,9 @@ async def get_config_for_sending(db: AsyncSession):
     row = result.fetchone()
     if not row:
         return None
-    return dict(row._mapping)
+    config = dict(row._mapping)
+    config['smtp_password'] = decrypt(config['smtp_password'])
+    return config
 
 
 async def upsert_config(smtp_host: str, smtp_port: int, smtp_user: str,
@@ -47,8 +49,11 @@ async def upsert_config(smtp_host: str, smtp_port: int, smtp_user: str,
     """SMTP 설정 upsert"""
     existing = await get_config_for_sending(db)
     if existing:
-        # password가 None이면 기존 값 유지
-        actual_password = smtp_password if smtp_password else existing['smtp_password']
+        # password가 None이면 기존 값 유지, 새 값이면 암호화
+        if smtp_password:
+            actual_password = encrypt(smtp_password)
+        else:
+            actual_password = encrypt(existing['smtp_password'])
         result = await db.execute(text("""
             UPDATE smtp_config
             SET smtp_host = :smtp_host, smtp_port = :smtp_port, smtp_user = :smtp_user,
@@ -67,6 +72,7 @@ async def upsert_config(smtp_host: str, smtp_port: int, smtp_user: str,
     else:
         if not smtp_password:
             return None
+        actual_password = encrypt(smtp_password)
         result = await db.execute(text("""
             INSERT INTO smtp_config (smtp_host, smtp_port, smtp_user, smtp_password,
                                       sender_email, sender_name, use_tls, updated_by)
@@ -76,7 +82,7 @@ async def upsert_config(smtp_host: str, smtp_port: int, smtp_user: str,
                       sender_name, use_tls, is_active, updated_by, updated_at
         """), {
             'smtp_host': smtp_host, 'smtp_port': smtp_port, 'smtp_user': smtp_user,
-            'smtp_password': smtp_password, 'sender_email': sender_email,
+            'smtp_password': actual_password, 'sender_email': sender_email,
             'sender_name': sender_name, 'use_tls': use_tls, 'updated_by': updated_by,
         })
     await db.commit()

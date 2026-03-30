@@ -25,6 +25,9 @@ COOKIE_SECURE = not DEBUG
 COOKIE_SAMESITE = "lax"
 COOKIE_HTTPONLY = True
 
+# Encryption (SMTP 비밀번호 등 민감 데이터 암호화)
+ENCRYPT_KEY = os.getenv("ENCRYPT_KEY", "")
+
 # Web Push (VAPID)
 VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
 VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
