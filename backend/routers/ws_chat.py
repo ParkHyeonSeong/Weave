@@ -128,11 +128,12 @@ async def websocket_chat(ws: WebSocket):
                                 'status': issue['status'],
                             }
 
-                    # 첨부파일 저장
+                    # 첨부파일 저장 (서버 업로드 경로만 허용)
                     saved_attachments = []
                     if attachments:
                         valid = [a for a in attachments[:10]
-                                 if a.get('url') and a.get('file_name')]
+                                 if a.get('url') and a.get('file_name')
+                                 and a['url'].startswith('/api/uploads/')]
                         if valid:
                             att_list = [{
                                 'file_url': a['url'],

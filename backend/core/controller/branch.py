@@ -62,9 +62,29 @@ async def get_detail(branch_id: int, request: Request, db: AsyncSession):
 
     user_id = request.state.payload.get('user_id')
     my_role = await member_model.get_role(branch_id, user_id, db)
+
+    # private branch는 멤버만 조회 가능
+    if branch['visibility'] == 'private' and not my_role:
+        return {'status': False, 'message': 'ACCESS_DENIED'}
+
     branch['my_role'] = my_role
 
     return {'status': True, 'branch': branch}
+
+
+async def get_members(branch_id: int, request: Request, db: AsyncSession):
+    """Branch 멤버 목록 (private branch는 멤버만 조회 가능)"""
+    branch = await branch_model.find_by_id(branch_id, db)
+    if not branch:
+        return {'status': False, 'message': 'BRANCH_NOT_FOUND'}
+
+    user_id = request.state.payload.get('user_id')
+    if branch['visibility'] == 'private':
+        if not await member_model.is_member(branch_id, user_id, db):
+            return {'status': False, 'message': 'ACCESS_DENIED'}
+
+    members = await member_model.find_by_branch(branch_id, db)
+    return {'status': True, 'members': members}
 
 
 async def update(branch_id: int, body, request: Request, db: AsyncSession):

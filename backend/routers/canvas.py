@@ -3,7 +3,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .schema import canvas as canvas_schema
 from core.controller import canvas as canvas_controller
-from core.model import canvas_member as member_model
 from library.validator import require_login
 import db_engine as db
 
@@ -60,8 +59,7 @@ async def join_canvas(canvas_id: int, request: Request,
 @router.get("/{canvas_id}/members", summary="Canvas 멤버 목록", dependencies=[Depends(require_login)])
 async def list_canvas_members(canvas_id: int, request: Request,
                               session: AsyncSession = Depends(db.session)):
-    members = await member_model.find_by_canvas(canvas_id, session)
-    return {'status': True, 'members': members}
+    return await canvas_controller.get_members(canvas_id, request, session)
 
 
 @router.get("/{canvas_id}/members/search", summary="초대 가능 사용자 검색", dependencies=[Depends(require_login)])

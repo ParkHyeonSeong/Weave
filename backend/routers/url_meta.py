@@ -28,11 +28,27 @@ async def fetch_url_meta(request: Request, body: URLMetaRequest):
     try:
         async with httpx.AsyncClient(
             timeout=5.0,
-            follow_redirects=True,
-            max_redirects=3,
+            follow_redirects=False,
             headers={'User-Agent': 'Mozilla/5.0 (compatible; Weave/1.0)'},
         ) as client:
-            resp = await client.get(body.url)
+            # 리다이렉트를 수동으로 따라가며 매 hop마다 SSRF 재검증
+            url = body.url
+            resp = None
+            for _ in range(4):  # 최초 요청 + 최대 3회 리다이렉트
+                resp = await client.get(url)
+                if resp.is_redirect:
+                    location = resp.headers.get('location', '')
+                    if not location:
+                        return {'status': False, 'message': 'Invalid redirect'}
+                    url = urljoin(url, location)
+                    ssrf_error = validate_url_for_ssrf(url)
+                    if ssrf_error:
+                        return {'status': False, 'message': ssrf_error}
+                    continue
+                break
+
+        if resp.is_redirect:
+            return {'status': False, 'message': 'Too many redirects'}
 
         content_type = resp.headers.get('content-type', '')
         if 'text/html' not in content_type:

@@ -671,17 +671,18 @@ async def set_labels(task_id: int, label_ids: list, db: AsyncSession):
     await db.commit()
 
 
-async def batch_statuses(task_ids: list[int], db: AsyncSession) -> dict:
-    """Ref 상태 배치 조회 (task_id → status + workflow info)"""
+async def batch_statuses(task_ids: list[int], user_id: int, db: AsyncSession) -> dict:
+    """Ref 상태 배치 조회 (task_id → status + workflow info), 멤버인 branch만"""
     if not task_ids:
         return {}
     result = await db.execute(text("""
         SELECT t.task_id, t.status,
                ws.label AS status_label, ws.color AS status_color, ws.category AS status_category
         FROM task t
+        INNER JOIN branch_member bm ON bm.branch_id = t.branch_id AND bm.user_id = :user_id
         LEFT JOIN workflow_status ws ON ws.branch_id = t.branch_id AND ws.key = t.status
         WHERE t.task_id = ANY(:ids)
-    """), {'ids': task_ids})
+    """), {'ids': task_ids, 'user_id': user_id})
     out = {}
     for r in result.fetchall():
         row = dict(r._mapping)

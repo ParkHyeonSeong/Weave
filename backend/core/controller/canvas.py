@@ -61,9 +61,29 @@ async def get_detail(canvas_id: int, request: Request, db: AsyncSession):
 
     user_id = request.state.payload.get('user_id')
     my_role = await member_model.get_role(canvas_id, user_id, db)
+
+    # private canvas는 멤버만 조회 가능
+    if canvas['visibility'] == 'private' and not my_role:
+        return {'status': False, 'message': 'ACCESS_DENIED'}
+
     canvas['my_role'] = my_role
 
     return {'status': True, 'canvas': canvas}
+
+
+async def get_members(canvas_id: int, request: Request, db: AsyncSession):
+    """Canvas 멤버 목록 (private canvas는 멤버만 조회 가능)"""
+    canvas = await canvas_model.find_by_id(canvas_id, db)
+    if not canvas:
+        return {'status': False, 'message': 'CANVAS_NOT_FOUND'}
+
+    user_id = request.state.payload.get('user_id')
+    if canvas['visibility'] == 'private':
+        if not await member_model.is_member(canvas_id, user_id, db):
+            return {'status': False, 'message': 'ACCESS_DENIED'}
+
+    members = await member_model.find_by_canvas(canvas_id, db)
+    return {'status': True, 'members': members}
 
 
 async def update(canvas_id: int, body, request: Request, db: AsyncSession):

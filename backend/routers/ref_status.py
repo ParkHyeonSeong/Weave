@@ -1,6 +1,6 @@
 from typing import List
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,8 +27,10 @@ class RefStatusRequest(BaseModel):
 @router.post("", summary="Ref 상태 배치 조회", dependencies=[Depends(require_login)])
 async def batch_ref_status(
     body: RefStatusRequest,
+    request: Request,
     session: AsyncSession = Depends(db.session),
 ):
-    tasks = await task_model.batch_statuses(body.task_ids, session)
-    issues = await issue_model.batch_statuses(body.issue_ids, session)
+    user_id = request.state.payload.get('user_id')
+    tasks = await task_model.batch_statuses(body.task_ids, user_id, session)
+    issues = await issue_model.batch_statuses(body.issue_ids, user_id, session)
     return {'status': True, 'tasks': tasks, 'issues': issues}
