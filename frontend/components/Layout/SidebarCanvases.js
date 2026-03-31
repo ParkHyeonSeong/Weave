@@ -457,6 +457,7 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
         onConfirm={executeMovePage}
         pages={pages}
         currentPageId={moveTarget?.page.page_id}
+        canvasName={canvases.find((c) => c.canvas_id === moveTarget?.canvasId)?.canvas_name}
       />
 
       {/* 우클릭 컨텍스트 메뉴 */}

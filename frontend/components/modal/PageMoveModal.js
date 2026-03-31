@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { X, Folder, FolderOpen, ChevronDown, ChevronRight } from 'lucide-react';
 
 // 페이지 이동 대상 폴더 선택 모달
-export default function PageMoveModal({ isOpen, onClose, onConfirm, pages, currentPageId }) {
+export default function PageMoveModal({ isOpen, onClose, onConfirm, pages, currentPageId, canvasName }) {
   const [selected, setSelected] = useState(null); // null = root
   const [expanded, setExpanded] = useState({});
 
@@ -88,9 +88,9 @@ export default function PageMoveModal({ isOpen, onClose, onConfirm, pages, curre
           >
             <span className="PageMoveModal__Expand" />
             <Folder size={14} />
-            <span>Root</span>
+            <span>{canvasName || 'Canvas'}</span>
           </button>
-          {rootFolders.map((folder) => renderFolder(folder))}
+          {rootFolders.map((folder) => renderFolder(folder, 1))}
         </div>
         <div className="PageMoveModal__Footer">
           <button className="PageMoveModal__CancelBtn" onClick={onClose}>Cancel</button>

@@ -406,13 +406,18 @@ export default function CanvasPageView({ onRefClick }) {
   // 이동
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [movePages, setMovePages] = useState([]);
+  const [moveCanvasName, setMoveCanvasName] = useState('');
 
   const handleOpenMove = async () => {
     setShowMoreMenu(false);
     try {
-      const res = await axios.get(`/canvases/${canvasId}/pages`);
-      if (res.data.status) {
-        setMovePages(res.data.pages);
+      const [treeRes, canvasRes] = await Promise.all([
+        axios.get(`/canvases/${canvasId}/pages`),
+        axios.get(`/canvases/${canvasId}`),
+      ]);
+      if (treeRes.data.status) {
+        setMovePages(treeRes.data.pages);
+        setMoveCanvasName(canvasRes.data?.canvas?.canvas_name || 'Canvas');
         setShowMoveModal(true);
       }
     } catch {}
@@ -812,6 +817,7 @@ export default function CanvasPageView({ onRefClick }) {
         onConfirm={handleMove}
         pages={movePages}
         currentPageId={pageId ? Number(pageId) : null}
+        canvasName={moveCanvasName}
       />
       <AnnotationSidebar
         annotations={annotations}
