@@ -510,23 +510,32 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
 function CanvasRow({ canvas, isActive, isExpanded, onToggle, onAddDocument, onAddFolder, onAddTypst }) {
   const router = useRouter();
   const [showAddMenu, setShowAddMenu] = useState(false);
+  const [addMenuPos, setAddMenuPos] = useState(null);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [moreMenuPos, setMoreMenuPos] = useState(null);
   const addMenuRef = useRef(null);
+  const addBtnRef = useRef(null);
   const moreMenuRef = useRef(null);
+  const moreBtnRef = useRef(null);
 
   const {
     attributes, listeners, setNodeRef, transform, transition, isDragging,
   } = useSortable({ id: canvas.canvas_id });
 
-  // 외부 클릭 시 메뉴 닫기
+  // 외부 클릭 또는 스크롤 시 메뉴 닫기
   useEffect(() => {
     if (!showAddMenu && !showMoreMenu) return;
     const handleClick = (e) => {
       if (showAddMenu && addMenuRef.current && !addMenuRef.current.contains(e.target)) setShowAddMenu(false);
       if (showMoreMenu && moreMenuRef.current && !moreMenuRef.current.contains(e.target)) setShowMoreMenu(false);
     };
+    const handleScroll = () => { setShowAddMenu(false); setShowMoreMenu(false); };
     document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    document.addEventListener('scroll', handleScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('scroll', handleScroll, true);
+    };
   }, [showAddMenu, showMoreMenu]);
 
   const rowStyle = {
@@ -559,16 +568,25 @@ function CanvasRow({ canvas, isActive, isExpanded, onToggle, onAddDocument, onAd
 
       <div className="Sidebar__BranchActions">
         {/* 더보기 메뉴 */}
-        <div ref={moreMenuRef} style={{ position: 'relative' }}>
+        <div ref={moreMenuRef}>
           <button
+            ref={moreBtnRef}
             className="Sidebar__BranchAddBtn"
-            onClick={(e) => { e.stopPropagation(); setShowMoreMenu(!showMoreMenu); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!showMoreMenu && moreBtnRef.current) {
+                const rect = moreBtnRef.current.getBoundingClientRect();
+                const top = Math.min(rect.top, window.innerHeight - 60);
+                setMoreMenuPos({ top, left: rect.right + 4 });
+              }
+              setShowMoreMenu(!showMoreMenu);
+            }}
             title="More"
           >
             <MoreHorizontal size={13} />
           </button>
-          {showMoreMenu && (
-            <div className="Sidebar__AddMenu">
+          {showMoreMenu && moreMenuPos && (
+            <div className="Sidebar__FixedMenu" style={{ top: moreMenuPos.top, left: moreMenuPos.left }}>
               <button
                 className="Sidebar__AddMenuItem"
                 onClick={() => { setShowMoreMenu(false); router.push(`/canvas/${canvas.canvas_id}/settings`); }}
@@ -581,16 +599,25 @@ function CanvasRow({ canvas, isActive, isExpanded, onToggle, onAddDocument, onAd
         </div>
 
         {/* 추가 메뉴 */}
-        <div ref={addMenuRef} style={{ position: 'relative' }}>
+        <div ref={addMenuRef}>
           <button
+            ref={addBtnRef}
             className="Sidebar__BranchAddBtn"
-            onClick={(e) => { e.stopPropagation(); setShowAddMenu(!showAddMenu); }}
-            title="Add page"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!showAddMenu && addBtnRef.current) {
+                const rect = addBtnRef.current.getBoundingClientRect();
+                const top = Math.min(rect.top, window.innerHeight - 140);
+                setAddMenuPos({ top, left: rect.right + 4 });
+              }
+              setShowAddMenu(!showAddMenu);
+            }}
+            title="Add"
           >
             <Plus size={13} />
           </button>
-          {showAddMenu && (
-            <div className="Sidebar__AddMenu">
+          {showAddMenu && addMenuPos && (
+            <div className="Sidebar__FixedMenu" style={{ top: addMenuPos.top, left: addMenuPos.left }}>
               <button className="Sidebar__AddMenuItem" onClick={() => { setShowAddMenu(false); onAddDocument(); }}>
                 <FileText size={13} />
                 Document
@@ -623,8 +650,10 @@ function SidebarPageItem({
     attributes, listeners, setNodeRef, transform, transition, isDragging,
   } = useSortable({ id: page.page_id });
   const [showMenu, setShowMenu] = useState(false);
+  const [menuPos, setMenuPos] = useState(null);
   const [renameTitle, setRenameTitle] = useState('');
   const menuRef = useRef(null);
+  const moreBtnRef = useRef(null);
 
   const isFolder = page.type === 'folder';
   const isExpanded = expandedFolders[page.page_id];
@@ -636,14 +665,19 @@ function SidebarPageItem({
     if (isRenaming) setRenameTitle(page.title);
   }, [isRenaming, page.title]);
 
-  // 메뉴 외부 클릭 닫기
+  // 메뉴 외부 클릭 또는 스크롤 시 닫기
   useEffect(() => {
     if (!showMenu) return;
     const handleClick = (e) => {
       if (menuRef.current && !menuRef.current.contains(e.target)) setShowMenu(false);
     };
+    const handleScroll = () => setShowMenu(false);
     document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    document.addEventListener('scroll', handleScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('scroll', handleScroll, true);
+    };
   }, [showMenu]);
 
   // 이름변경 키 핸들러
@@ -775,14 +809,24 @@ function SidebarPageItem({
         {page.type !== 'overview' && !isRenaming && (
           <div className="Sidebar__PageActions" ref={menuRef}>
             <button
+              ref={moreBtnRef}
               className="Sidebar__PageMoreBtn"
-              onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!showMenu && moreBtnRef.current) {
+                  const rect = moreBtnRef.current.getBoundingClientRect();
+                  const menuH = isFolder ? 280 : 220;
+                  const top = Math.min(rect.top, window.innerHeight - menuH);
+                  setMenuPos({ top, left: rect.right + 4 });
+                }
+                setShowMenu(!showMenu);
+              }}
               title="More"
             >
               <MoreHorizontal size={12} />
             </button>
-            {showMenu && (
-              <div className="Sidebar__AddMenu">
+            {showMenu && menuPos && (
+              <div className="Sidebar__FixedMenu" style={{ top: menuPos.top, left: menuPos.left }}>
                 {renderMenuItems()}
               </div>
             )}

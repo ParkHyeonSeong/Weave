@@ -226,6 +226,20 @@
     flex-direction: column;
   }
 
+  // -- Fixed dropdown (overflow 영역 밖에서도 표시) --
+  &__FixedMenu {
+    position: fixed;
+    z-index: 200;
+    min-width: 160px;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+    box-shadow: $shadow-md;
+    padding: $space-1;
+    display: flex;
+    flex-direction: column;
+  }
+
   &__AddMenuItem {
     display: flex;
     align-items: center;
