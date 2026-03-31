@@ -374,7 +374,8 @@
       background: $color-surface;
 
       .Sidebar__PageAddBtn,
-      .Sidebar__PageDeleteBtn {
+      .Sidebar__PageDeleteBtn,
+      .Sidebar__PageMoreBtn {
         opacity: 1;
       }
     }
@@ -408,7 +409,8 @@
   }
 
   &__PageAddBtn,
-  &__PageDeleteBtn {
+  &__PageDeleteBtn,
+  &__PageMoreBtn {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -428,6 +430,20 @@
   &__PageDeleteBtn:hover {
     color: $color-error;
     background: $color-error-bg;
+  }
+
+  // 우클릭 컨텍스트 메뉴
+  &__ContextMenu {
+    position: fixed;
+    z-index: 200;
+    min-width: 160px;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+    box-shadow: $shadow-md;
+    padding: $space-1;
+    display: flex;
+    flex-direction: column;
   }
 
   &__PageItem--input {

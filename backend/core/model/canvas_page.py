@@ -119,6 +119,30 @@ async def hard_delete(page_id: int, db: AsyncSession):
     await db.commit()
 
 
+async def copy_page(page_id: int, parent_page_id: int | None,
+                    created_by: int, db: AsyncSession) -> int:
+    """페이지 복제 (content만 복사, yjs_state 미복사)"""
+    original = await find_by_id(page_id, db)
+    if not original:
+        return None
+
+    canvas_id = original['canvas_id']
+    target_parent = parent_page_id if parent_page_id is not None else original.get('parent_page_id')
+    position = await get_next_position(canvas_id, target_parent, db)
+
+    new_title = f"{original['title']} (copy)"
+    return await create(
+        canvas_id=canvas_id,
+        title=new_title,
+        content=original.get('content') or '',
+        parent_page_id=target_parent,
+        position=position,
+        created_by=created_by,
+        page_type=original['type'],
+        db=db,
+    )
+
+
 async def get_yjs_state(page_id: int, db: AsyncSession) -> bytes | None:
     """페이지의 Yjs 바이너리 상태 조회"""
     result = await db.execute(text("""

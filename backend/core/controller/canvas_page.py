@@ -112,6 +112,25 @@ async def move(canvas_id: int, page_id: int, body, request: Request, db: AsyncSe
     return {'status': True}
 
 
+async def copy(canvas_id: int, page_id: int, body, request: Request, db: AsyncSession):
+    """페이지 복제 (단일 문서만, 폴더 불가)"""
+    user_id = request.state.payload.get('user_id')
+    if not await member_model.is_member(canvas_id, user_id, db):
+        return {'status': False, 'message': 'NOT_CANVAS_MEMBER'}
+
+    page = await page_model.find_by_id(page_id, db)
+    if not page or page['canvas_id'] != canvas_id:
+        return {'status': False, 'message': 'PAGE_NOT_FOUND'}
+
+    if page['type'] in ('overview', 'folder'):
+        return {'status': False, 'message': 'CANNOT_COPY_THIS_TYPE'}
+
+    new_page_id = await page_model.copy_page(
+        page_id, body.parent_page_id, user_id, db
+    )
+    return {'status': True, 'page_id': new_page_id}
+
+
 async def delete(canvas_id: int, page_id: int, request: Request, db: AsyncSession):
     """페이지 아카이브 (하위 페이지 포함)"""
     user_id = request.state.payload.get('user_id')

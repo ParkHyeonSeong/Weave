@@ -50,6 +50,13 @@ async def upload_image(canvas_id: int, request: Request,
     return await canvas_upload.upload_image(canvas_id, file, request, session)
 
 
+@router.post("/{page_id}/copy", summary="페이지 복제", dependencies=[Depends(require_login)])
+async def copy_page(canvas_id: int, page_id: int, request: Request,
+                    body: page_schema.CanvasPageCopy,
+                    session: AsyncSession = Depends(db.session)):
+    return await page_controller.copy(canvas_id, page_id, body, request, session)
+
+
 @router.delete("/{page_id}", summary="페이지 삭제", dependencies=[Depends(require_login)])
 async def delete_page(canvas_id: int, page_id: int, request: Request,
                       session: AsyncSession = Depends(db.session)):

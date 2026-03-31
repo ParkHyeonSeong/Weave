@@ -39,3 +39,6 @@ logs/
 
 # Uploads
 backend/uploads/
+
+# Custom
+docs/

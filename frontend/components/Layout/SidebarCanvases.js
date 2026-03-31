@@ -3,9 +3,10 @@ import { useRouter } from 'next/router';
 import {
   Plus, ChevronRight, ChevronDown,
   FileText, FileCode, Folder, FolderOpen, FolderPlus, MoreHorizontal, Settings,
-  Trash2,
+  Trash2, Pencil, Copy, Link, FolderInput,
 } from 'lucide-react';
 import ConfirmModal from '@/components/modal/ConfirmModal';
+import PageMoveModal from '@/components/modal/PageMoveModal';
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
   DragOverlay,
@@ -197,6 +198,74 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
     setDeleteTarget(null);
   };
 
+  // 이름변경
+  const [renamingPage, setRenamingPage] = useState(null); // { canvasId, pageId, title }
+
+  const requestRenamePage = (canvasId, page) => {
+    setRenamingPage({ canvasId, pageId: page.page_id, title: page.title });
+  };
+
+  const executeRenamePage = async (newTitle) => {
+    if (!renamingPage || !newTitle.trim()) { setRenamingPage(null); return; }
+    try {
+      await axios.patch(`/canvases/${renamingPage.canvasId}/pages/${renamingPage.pageId}`, { title: newTitle.trim() });
+      window.dispatchEvent(new CustomEvent('canvas:page_updated'));
+      fetchPages(renamingPage.canvasId);
+    } catch {}
+    setRenamingPage(null);
+  };
+
+  // 복제
+  const handleCopyPage = async (canvasId, page) => {
+    try {
+      const res = await axios.post(`/canvases/${canvasId}/pages/${page.page_id}/copy`, {});
+      if (res.data.status) {
+        window.dispatchEvent(new CustomEvent('canvas:page_created'));
+        fetchPages(canvasId);
+      }
+    } catch {}
+  };
+
+  // 링크 복사
+  const handleCopyLink = (canvasId, page) => {
+    const url = `${window.location.origin}/canvas/${canvasId}/${page.page_id}`;
+    navigator.clipboard.writeText(url).catch(() => {});
+  };
+
+  // 이동
+  const [moveTarget, setMoveTarget] = useState(null); // { canvasId, page }
+
+  const requestMovePage = (canvasId, page) => {
+    setMoveTarget({ canvasId, page });
+  };
+
+  const executeMovePage = async (targetParentId) => {
+    if (!moveTarget) return;
+    const { canvasId, page } = moveTarget;
+    try {
+      const siblings = pages.filter((p) =>
+        targetParentId ? p.parent_page_id === targetParentId : !p.parent_page_id
+      );
+      await axios.patch(`/canvases/${canvasId}/pages/${page.page_id}/move`, {
+        parent_page_id: targetParentId,
+        position: siblings.length,
+      });
+      window.dispatchEvent(new CustomEvent('canvas:page_updated'));
+      fetchPages(canvasId);
+    } catch {}
+    setMoveTarget(null);
+  };
+
+  // 우클릭 컨텍스트 메뉴
+  const [contextMenu, setContextMenu] = useState(null); // { x, y, canvasId, page }
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handleClick = () => setContextMenu(null);
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [contextMenu]);
+
   // 캔버스 목록 DnD
   const [activeCanvas, setActiveCanvas] = useState(null);
   const canvasSensors = useSensors(
@@ -299,6 +368,14 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
                           onFolderAdd={startFolderInlineCreate}
                           onQuickCreate={handleQuickCreate}
                           onDeletePage={requestDeletePage}
+                          onRenamePage={requestRenamePage}
+                          onCopyPage={handleCopyPage}
+                          onCopyLink={handleCopyLink}
+                          onMovePage={requestMovePage}
+                          renamingPage={renamingPage}
+                          onRenameSubmit={executeRenamePage}
+                          onRenameCancel={() => setRenamingPage(null)}
+                          onContextMenu={setContextMenu}
                           inlineCreate={inlineCreate}
                           inlineTitle={inlineTitle}
                           setInlineTitle={setInlineTitle}
@@ -373,6 +450,57 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
         confirmLabel="Delete"
         variant="danger"
       />
+
+      <PageMoveModal
+        isOpen={!!moveTarget}
+        onClose={() => setMoveTarget(null)}
+        onConfirm={executeMovePage}
+        pages={pages}
+        currentPageId={moveTarget?.page.page_id}
+      />
+
+      {/* 우클릭 컨텍스트 메뉴 */}
+      {contextMenu && (
+        <div
+          className="Sidebar__ContextMenu"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <button className="Sidebar__AddMenuItem" onClick={() => {
+            requestRenamePage(contextMenu.canvasId, contextMenu.page);
+            setContextMenu(null);
+          }}>
+            <Pencil size={13} /> Rename
+          </button>
+          {contextMenu.page.type !== 'folder' && (
+            <button className="Sidebar__AddMenuItem" onClick={() => {
+              handleCopyPage(contextMenu.canvasId, contextMenu.page);
+              setContextMenu(null);
+            }}>
+              <Copy size={13} /> Duplicate
+            </button>
+          )}
+          <button className="Sidebar__AddMenuItem" onClick={() => {
+            handleCopyLink(contextMenu.canvasId, contextMenu.page);
+            setContextMenu(null);
+          }}>
+            <Link size={13} /> Copy link
+          </button>
+          <button className="Sidebar__AddMenuItem" onClick={() => {
+            requestMovePage(contextMenu.canvasId, contextMenu.page);
+            setContextMenu(null);
+          }}>
+            <FolderInput size={13} /> Move
+          </button>
+          <div className="Sidebar__AddMenuDivider" />
+          <button className="Sidebar__AddMenuItem Sidebar__AddMenuItem--danger" onClick={() => {
+            requestDeletePage(contextMenu.canvasId, contextMenu.page);
+            setContextMenu(null);
+          }}>
+            <Trash2 size={13} /> Delete
+          </button>
+        </div>
+      )}
     </>
   );
 }
@@ -484,26 +612,30 @@ function CanvasRow({ canvas, isActive, isExpanded, onToggle, onAddDocument, onAd
 
 function SidebarPageItem({
   page, canvasId, depth, expandedFolders, toggleFolder, getChildren, router,
-  onFolderAdd, onQuickCreate, onDeletePage, inlineCreate, inlineTitle, setInlineTitle, handleInlineKeyDown, setInlineCreate,
+  onFolderAdd, onQuickCreate, onDeletePage,
+  onRenamePage, onCopyPage, onCopyLink, onMovePage,
+  renamingPage, onRenameSubmit, onRenameCancel,
+  onContextMenu,
+  inlineCreate, inlineTitle, setInlineTitle, handleInlineKeyDown, setInlineCreate,
 }) {
   const {
     attributes, listeners, setNodeRef, transform, transition, isDragging,
   } = useSortable({ id: page.page_id });
   const [showMenu, setShowMenu] = useState(false);
+  const [renameTitle, setRenameTitle] = useState('');
   const menuRef = useRef(null);
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.4 : 1,
-    paddingLeft: `${40 + depth * 14}px`,
-  };
 
   const isFolder = page.type === 'folder';
   const isExpanded = expandedFolders[page.page_id];
   const children = isFolder ? getChildren(page.page_id) : [];
+  const isRenaming = renamingPage?.pageId === page.page_id;
 
-  // 폴더 메뉴 외부 클릭 닫기
+  // 이름변경 모드 진입 시 title 세팅
+  useEffect(() => {
+    if (isRenaming) setRenameTitle(page.title);
+  }, [isRenaming, page.title]);
+
+  // 메뉴 외부 클릭 닫기
   useEffect(() => {
     if (!showMenu) return;
     const handleClick = (e) => {
@@ -513,100 +645,149 @@ function SidebarPageItem({
     return () => document.removeEventListener('mousedown', handleClick);
   }, [showMenu]);
 
+  // 이름변경 키 핸들러
+  const handleRenameKeyDown = (e) => {
+    if (e.nativeEvent.isComposing) return;
+    if (e.key === 'Enter') onRenameSubmit(renameTitle);
+    if (e.key === 'Escape') onRenameCancel();
+  };
+
+  // 우클릭 핸들러
+  const handleContextMenu = (e) => {
+    if (page.type === 'overview') return;
+    e.preventDefault();
+    e.stopPropagation();
+    const menuW = 170, menuH = 220;
+    const x = Math.min(e.clientX, window.innerWidth - menuW);
+    const y = Math.min(e.clientY, window.innerHeight - menuH);
+    onContextMenu({ x, y, canvasId, page });
+  };
+
   // 이 폴더 안에 인라인 생성 중인지
   const isInlineInThisFolder = inlineCreate
     && inlineCreate.parentPageId === page.page_id
     && inlineCreate.canvasId === canvasId;
 
+  // 더보기 메뉴 내용 (폴더/문서 공용)
+  const renderMenuItems = () => (
+    <>
+      {/* 폴더인 경우 추가 메뉴 */}
+      {isFolder && (
+        <>
+          <button className="Sidebar__AddMenuItem" onClick={() => {
+            setShowMenu(false);
+            onQuickCreate(canvasId, 'document', page.page_id);
+          }}>
+            <FileText size={13} /> Document
+          </button>
+          <button className="Sidebar__AddMenuItem" onClick={() => {
+            setShowMenu(false);
+            onQuickCreate(canvasId, 'typst', page.page_id);
+          }}>
+            <FileCode size={13} /> Typst Document
+          </button>
+          <button className="Sidebar__AddMenuItem" onClick={() => {
+            setShowMenu(false);
+            onFolderAdd(canvasId, page.page_id, 'folder');
+          }}>
+            <FolderPlus size={13} /> Folder
+          </button>
+          <div className="Sidebar__AddMenuDivider" />
+        </>
+      )}
+      <button className="Sidebar__AddMenuItem" onClick={() => {
+        setShowMenu(false);
+        onRenamePage(canvasId, page);
+      }}>
+        <Pencil size={13} /> Rename
+      </button>
+      {!isFolder && (
+        <button className="Sidebar__AddMenuItem" onClick={() => {
+          setShowMenu(false);
+          onCopyPage(canvasId, page);
+        }}>
+          <Copy size={13} /> Duplicate
+        </button>
+      )}
+      <button className="Sidebar__AddMenuItem" onClick={() => {
+        setShowMenu(false);
+        onCopyLink(canvasId, page);
+      }}>
+        <Link size={13} /> Copy link
+      </button>
+      <button className="Sidebar__AddMenuItem" onClick={() => {
+        setShowMenu(false);
+        onMovePage(canvasId, page);
+      }}>
+        <FolderInput size={13} /> Move
+      </button>
+      <div className="Sidebar__AddMenuDivider" />
+      <button className="Sidebar__AddMenuItem Sidebar__AddMenuItem--danger" onClick={() => {
+        setShowMenu(false);
+        onDeletePage(canvasId, page);
+      }}>
+        <Trash2 size={13} /> Delete
+      </button>
+    </>
+  );
+
   return (
     <>
-      {isFolder ? (
-        <div className={`Sidebar__PageRow ${router.query.pageId == page.page_id ? 'Sidebar__PageRow--active' : ''}`} style={{ paddingLeft: `${40 + depth * 14}px` }}>
-          <button
-            ref={setNodeRef}
-            {...attributes}
-            {...listeners}
-            style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
-            className="Sidebar__PageItem Sidebar__PageItem--inRow"
-            onClick={() => toggleFolder(page.page_id)}
-          >
+      <div
+        className={`Sidebar__PageRow ${router.query.pageId == page.page_id ? 'Sidebar__PageRow--active' : ''}`}
+        style={{ paddingLeft: `${40 + depth * 14}px` }}
+        onContextMenu={handleContextMenu}
+      >
+        <button
+          ref={setNodeRef}
+          {...attributes}
+          {...listeners}
+          style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
+          className="Sidebar__PageItem Sidebar__PageItem--inRow"
+          onClick={() => isFolder ? toggleFolder(page.page_id) : router.push(`/canvas/${canvasId}/${page.page_id}`)}
+        >
+          {isFolder && (
             <span className="Sidebar__ExpandIcon">
               {isExpanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
             </span>
-            {isExpanded
-              ? <FolderOpen size={13} className="Sidebar__PageIcon" />
-              : <Folder size={13} className="Sidebar__PageIcon" />}
+          )}
+          {isFolder
+            ? (isExpanded ? <FolderOpen size={13} className="Sidebar__PageIcon" /> : <Folder size={13} className="Sidebar__PageIcon" />)
+            : page.type === 'typst'
+              ? <FileCode size={13} className="Sidebar__PageIcon" />
+              : <FileText size={13} className="Sidebar__PageIcon" />}
+          {isRenaming ? (
+            <input
+              autoFocus
+              className="Sidebar__InlineInput"
+              value={renameTitle}
+              onChange={(e) => setRenameTitle(e.target.value)}
+              onKeyDown={handleRenameKeyDown}
+              onBlur={() => onRenameSubmit(renameTitle)}
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
             <span className="Sidebar__BranchName">{page.title}</span>
-          </button>
+          )}
+        </button>
 
+        {page.type !== 'overview' && !isRenaming && (
           <div className="Sidebar__PageActions" ref={menuRef}>
             <button
-              className="Sidebar__PageAddBtn"
+              className="Sidebar__PageMoreBtn"
               onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
-              title="Add to folder"
+              title="More"
             >
-              <Plus size={12} />
+              <MoreHorizontal size={12} />
             </button>
             {showMenu && (
               <div className="Sidebar__AddMenu">
-                <button className="Sidebar__AddMenuItem" onClick={() => {
-                  setShowMenu(false);
-                  onQuickCreate(canvasId, 'document', page.page_id);
-                }}>
-                  <FileText size={13} /> Document
-                </button>
-                <button className="Sidebar__AddMenuItem" onClick={() => {
-                  setShowMenu(false);
-                  onQuickCreate(canvasId, 'typst', page.page_id);
-                }}>
-                  <FileCode size={13} /> Typst Document
-                </button>
-                <button className="Sidebar__AddMenuItem" onClick={() => {
-                  setShowMenu(false);
-                  onFolderAdd(canvasId, page.page_id, 'folder');
-                }}>
-                  <FolderPlus size={13} /> Folder
-                </button>
-                <div className="Sidebar__AddMenuDivider" />
-                <button className="Sidebar__AddMenuItem Sidebar__AddMenuItem--danger" onClick={() => {
-                  setShowMenu(false);
-                  onDeletePage(canvasId, page);
-                }}>
-                  <Trash2 size={13} /> Delete
-                </button>
+                {renderMenuItems()}
               </div>
             )}
           </div>
-        </div>
-      ) : (
-        <div className={`Sidebar__PageRow ${router.query.pageId == page.page_id ? 'Sidebar__PageRow--active' : ''}`} style={{ paddingLeft: `${40 + depth * 14}px` }}>
-          <button
-            ref={setNodeRef}
-            style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
-            {...attributes}
-            {...listeners}
-            className="Sidebar__PageItem Sidebar__PageItem--inRow"
-            onClick={() => router.push(`/canvas/${canvasId}/${page.page_id}`)}
-          >
-            {page.type === 'typst'
-              ? <FileCode size={13} className="Sidebar__PageIcon" />
-              : <FileText size={13} className="Sidebar__PageIcon" />}
-            <span className="Sidebar__BranchName">{page.title}</span>
-          </button>
-          <div className="Sidebar__PageActions">
-            <button
-              className="Sidebar__PageDeleteBtn"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDeletePage(canvasId, page);
-              }}
-              title="Delete"
-            >
-              <Trash2 size={12} />
-            </button>
-          </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {isFolder && isExpanded && (
         <>
@@ -623,6 +804,14 @@ function SidebarPageItem({
               onFolderAdd={onFolderAdd}
               onQuickCreate={onQuickCreate}
               onDeletePage={onDeletePage}
+              onRenamePage={onRenamePage}
+              onCopyPage={onCopyPage}
+              onCopyLink={onCopyLink}
+              onMovePage={onMovePage}
+              renamingPage={renamingPage}
+              onRenameSubmit={onRenameSubmit}
+              onRenameCancel={onRenameCancel}
+              onContextMenu={onContextMenu}
               inlineCreate={inlineCreate}
               inlineTitle={inlineTitle}
               setInlineTitle={setInlineTitle}

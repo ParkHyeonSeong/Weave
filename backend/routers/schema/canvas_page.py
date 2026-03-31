@@ -43,3 +43,7 @@ class CanvasPageUpdate(BaseModel):
 class CanvasPageMove(BaseModel):
     parent_page_id: Optional[int] = None
     position: int
+
+
+class CanvasPageCopy(BaseModel):
+    parent_page_id: Optional[int] = None

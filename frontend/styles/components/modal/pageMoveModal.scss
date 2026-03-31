@@ -1,0 +1,138 @@
+@use '../../variables' as *;
+
+.PageMoveModal__Backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.PageMoveModal {
+  background: $color-bg;
+  border-radius: $radius-xl;
+  box-shadow: $shadow-lg;
+  width: 100%;
+  max-width: 360px;
+  overflow: hidden;
+
+  @include mobile {
+    max-width: calc(100vw - 32px);
+  }
+
+  &__Header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: $space-4 $space-5;
+    border-bottom: 1px solid $color-border;
+  }
+
+  &__Title {
+    font-size: $font-size-md;
+    font-weight: $font-weight-semibold;
+    color: $color-text;
+  }
+
+  &__CloseBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: $radius-md;
+    color: $color-text-secondary;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+      color: $color-text;
+    }
+  }
+
+  &__Body {
+    padding: $space-2;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+
+  &__Item {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    width: 100%;
+    padding: 6px $space-3;
+    border-radius: $radius-md;
+    font-size: $font-size-sm;
+    color: $color-text;
+    cursor: pointer;
+    transition: background $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+    }
+
+    &--selected {
+      background: $color-primary-subtle;
+      color: $color-primary;
+    }
+
+    &--disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+
+      &:hover {
+        background: transparent;
+      }
+    }
+  }
+
+  &__Expand {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    color: $color-text-tertiary;
+  }
+
+  &__Footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: $space-2;
+    padding: $space-3 $space-5;
+    border-top: 1px solid $color-border;
+  }
+
+  &__CancelBtn {
+    padding: $space-2 $space-4;
+    background: $color-surface;
+    color: $color-text-secondary;
+    border-radius: $radius-md;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: $color-border;
+      color: $color-text;
+    }
+  }
+
+  &__ConfirmBtn {
+    padding: $space-2 $space-4;
+    border-radius: $radius-md;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    background: $color-primary;
+    color: $color-text-inverse;
+    transition: background $transition-fast;
+
+    &:hover {
+      background: $color-primary-hover;
+    }
+  }
+}

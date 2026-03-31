@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import dynamic from 'next/dynamic';
-import { Pencil, X, Wifi, WifiOff, Loader, RefreshCw, Maximize2, Minimize2, Trash2, Download, AlertTriangle, Star, MessageSquare } from 'lucide-react';
+import { Pencil, X, Wifi, WifiOff, Loader, RefreshCw, Maximize2, Minimize2, Trash2, Download, AlertTriangle, Star, MessageSquare, MoreHorizontal, Copy, Link, FolderInput } from 'lucide-react';
 import useStar from '@/hooks/useStar';
 import useAnnotations from '@/hooks/useAnnotations';
 import { axios } from '@/library/_axios';
 import ConfirmModal from '@/components/modal/ConfirmModal';
+import PageMoveModal from '@/components/modal/PageMoveModal';
 import useCollabProvider from '@/library/useCollabProvider';
 import { sanitizeHtml } from '@/library/sanitize';
 import PresenceBar from './PresenceBar';
@@ -370,6 +371,67 @@ export default function CanvasPageView({ onRefClick }) {
     }
   };
 
+  // 더보기 메뉴
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const moreMenuRef = useRef(null);
+
+  useEffect(() => {
+    if (!showMoreMenu) return;
+    const handleClick = (e) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target)) setShowMoreMenu(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showMoreMenu]);
+
+  // 복제
+  const handleDuplicate = async () => {
+    setShowMoreMenu(false);
+    try {
+      const res = await axios.post(`/canvases/${canvasId}/pages/${pageId}/copy`, {});
+      if (res.data.status) {
+        window.dispatchEvent(new CustomEvent('canvas:page_created'));
+        router.push(`/canvas/${canvasId}/${res.data.page_id}`);
+      }
+    } catch {}
+  };
+
+  // 링크 복사
+  const handleCopyLink = () => {
+    setShowMoreMenu(false);
+    const url = `${window.location.origin}/canvas/${canvasId}/${pageId}`;
+    navigator.clipboard.writeText(url).catch(() => {});
+  };
+
+  // 이동
+  const [showMoveModal, setShowMoveModal] = useState(false);
+  const [movePages, setMovePages] = useState([]);
+
+  const handleOpenMove = async () => {
+    setShowMoreMenu(false);
+    try {
+      const res = await axios.get(`/canvases/${canvasId}/pages`);
+      if (res.data.status) {
+        setMovePages(res.data.pages);
+        setShowMoveModal(true);
+      }
+    } catch {}
+  };
+
+  const handleMove = async (targetParentId) => {
+    const siblings = movePages.filter((p) =>
+      targetParentId ? p.parent_page_id === targetParentId : !p.parent_page_id
+    );
+    try {
+      await axios.patch(`/canvases/${canvasId}/pages/${pageId}/move`, {
+        parent_page_id: targetParentId,
+        position: siblings.length,
+      });
+      window.dispatchEvent(new CustomEvent('canvas:page_updated'));
+    } catch {}
+    setShowMoveModal(false);
+  };
+
   // 삭제
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -554,13 +616,37 @@ export default function CanvasPageView({ onRefClick }) {
                 <Star size={15} fill={starred ? 'currentColor' : 'none'} />
               </button>
               {page.type !== 'overview' && (
-                <button
-                  className="CanvasPageView__ActionBtn CanvasPageView__ActionBtn--danger"
-                  onClick={() => setShowDeleteConfirm(true)}
-                  title="Delete page"
-                >
-                  <Trash2 size={15} />
-                </button>
+                <div ref={moreMenuRef} className="CanvasPageView__MoreWrap">
+                  <button
+                    className="CanvasPageView__ActionBtn"
+                    onClick={() => setShowMoreMenu(!showMoreMenu)}
+                    title="More actions"
+                  >
+                    <MoreHorizontal size={15} />
+                  </button>
+                  {showMoreMenu && (
+                    <div className="CanvasPageView__MoreMenu">
+                      <button className="CanvasPageView__MoreMenuItem" onClick={() => { setShowMoreMenu(false); setIsEditing(true); }}>
+                        <Pencil size={13} /> Rename
+                      </button>
+                      {page.type !== 'folder' && (
+                        <button className="CanvasPageView__MoreMenuItem" onClick={handleDuplicate}>
+                          <Copy size={13} /> Duplicate
+                        </button>
+                      )}
+                      <button className="CanvasPageView__MoreMenuItem" onClick={handleCopyLink}>
+                        <Link size={13} /> Copy link
+                      </button>
+                      <button className="CanvasPageView__MoreMenuItem" onClick={handleOpenMove}>
+                        <FolderInput size={13} /> Move
+                      </button>
+                      <div className="CanvasPageView__MoreMenuDivider" />
+                      <button className="CanvasPageView__MoreMenuItem CanvasPageView__MoreMenuItem--danger" onClick={() => { setShowMoreMenu(false); setShowDeleteConfirm(true); }}>
+                        <Trash2 size={13} /> Delete
+                      </button>
+                    </div>
+                  )}
+                </div>
               )}
               <button
                 className="CanvasPageView__ActionBtn"
@@ -719,6 +805,13 @@ export default function CanvasPageView({ onRefClick }) {
           : `"${page.title}" 문서를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`}
         confirmLabel="Delete"
         variant="danger"
+      />
+      <PageMoveModal
+        isOpen={showMoveModal}
+        onClose={() => setShowMoveModal(false)}
+        onConfirm={handleMove}
+        pages={movePages}
+        currentPageId={pageId ? Number(pageId) : null}
       />
       <AnnotationSidebar
         annotations={annotations}

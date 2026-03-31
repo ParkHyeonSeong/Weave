@@ -144,6 +144,59 @@
     }
   }
 
+  &__MoreWrap {
+    position: relative;
+  }
+
+  // 더보기 드롭다운 메뉴
+  &__MoreMenu {
+    position: absolute;
+    right: 0;
+    top: 100%;
+    z-index: 100;
+    min-width: 160px;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+    box-shadow: $shadow-md;
+    padding: $space-1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  &__MoreMenuItem {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: 6px $space-3;
+    border-radius: $radius-md;
+    font-size: $font-size-xs;
+    color: $color-text-secondary;
+    cursor: pointer;
+    transition: all $transition-fast;
+    white-space: nowrap;
+
+    &:hover {
+      background: $color-surface;
+      color: $color-text;
+    }
+
+    &--danger {
+      color: $color-error;
+
+      &:hover {
+        background: $color-error-bg;
+        color: $color-error;
+      }
+    }
+  }
+
+  &__MoreMenuDivider {
+    height: 1px;
+    background: $color-border;
+    margin: $space-1 0;
+  }
+
   &__Kbd {
     font-size: 10px;
     font-family: inherit;
