@@ -8,14 +8,21 @@ import {
 import ConfirmModal from '@/components/modal/ConfirmModal';
 import PageMoveModal from '@/components/modal/PageMoveModal';
 import {
-  DndContext, closestCenter, PointerSensor, useSensor, useSensors,
-  DragOverlay,
+  DndContext, closestCenter, pointerWithin, PointerSensor, useSensor, useSensors,
+  DragOverlay, useDraggable, useDroppable,
 } from '@dnd-kit/core';
 import {
   SortableContext, verticalListSortingStrategy, useSortable, arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { axios } from '@/library/_axios';
+
+// 포인터가 아이템 위에 있으면 pointerWithin, 아이템 사이(갭)이면 closestCenter 폴백
+const treeCollisionDetection = (args) => {
+  const pointer = pointerWithin(args);
+  if (pointer.length > 0) return pointer;
+  return closestCenter(args);
+};
 
 export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderChange }) {
   const router = useRouter();
@@ -24,6 +31,9 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
   const [pages, setPages] = useState([]);
   const [expandedFolders, setExpandedFolders] = useState({});
   const [activeItem, setActiveItem] = useState(null);
+  // 드롭 위치 인디케이터: { targetId, position: 'before'|'after'|'inside' }
+  const [dropIndicator, setDropIndicator] = useState(null);
+  const dropIndicatorRef = useRef(null);
   // 인라인 생성: { canvasId, type: 'document'|'folder' }
   const [inlineCreate, setInlineCreate] = useState(null);
   const [inlineTitle, setInlineTitle] = useState('');
@@ -31,6 +41,16 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
+
+  // 드래그 중 실제 포인터 위치 추적
+  const pointerRef = useRef({ x: 0, y: 0 });
+  useEffect(() => {
+    const handlePointerMove = (e) => {
+      pointerRef.current = { x: e.clientX, y: e.clientY };
+    };
+    window.addEventListener('pointermove', handlePointerMove);
+    return () => window.removeEventListener('pointermove', handlePointerMove);
+  }, []);
 
   const fetchCanvases = async () => {
     try {
@@ -92,28 +112,119 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
       .sort((a, b) => a.position - b.position);
   };
 
+  // 자기 자신의 하위 폴더로 이동 방지
+  const isDescendantOf = useCallback((parentId, targetId) => {
+    let current = pages.find((p) => p.page_id === targetId);
+    while (current) {
+      if (current.page_id === parentId) return true;
+      if (!current.parent_page_id) break;
+      current = pages.find((p) => p.page_id === current.parent_page_id);
+    }
+    return false;
+  }, [pages]);
+
+  // 인디케이터 업데이트 (ref + state 동기화, 변경 없으면 리렌더 스킵)
+  const updateIndicator = useCallback((value) => {
+    dropIndicatorRef.current = value;
+    setDropIndicator((prev) => {
+      if (!value && !prev) return prev;
+      if (prev?.targetId === value?.targetId && prev?.position === value?.position) return prev;
+      return value;
+    });
+  }, []);
+
   // DnD
   const handleDragStart = (event) => {
     const item = pages.find((p) => p.page_id === event.active.id);
     setActiveItem(item || null);
+    updateIndicator(null);
+  };
+
+  // onDragMove: 포인터가 움직일 때마다 호출 (onDragOver는 over가 바뀔 때만 호출되므로 부적합)
+  const handleDragMove = (event) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) {
+      updateIndicator(null);
+      return;
+    }
+
+    const overPage = pages.find((p) => p.page_id === over.id);
+    if (!overPage || overPage.type === 'overview') {
+      updateIndicator(null);
+      return;
+    }
+
+    // 자기 하위에 넣으려는 경우 차단
+    if (isDescendantOf(active.id, over.id)) {
+      updateIndicator(null);
+      return;
+    }
+
+    // 실제 포인터 Y 위치로 판단
+    const pointerY = pointerRef.current.y;
+    const overRect = over.rect;
+    const relativeY = pointerY - overRect.top;
+    const ratio = Math.max(0, Math.min(1, relativeY / overRect.height));
+
+    let position;
+    let targetId = over.id;
+    if (overPage.type === 'folder') {
+      // 폴더: 상단 25% = before, 하단 25% = after, 가운데 50% = inside
+      if (ratio < 0.25) position = 'before';
+      else if (ratio > 0.75) position = 'after';
+      else position = 'inside';
+    } else {
+      // 문서: 상단 50% = before, 하단 50% = after
+      if (ratio < 0.5) position = 'before';
+      else position = 'after';
+    }
+
+    // "after X"를 "before (다음 형제)"로 정규화
+    // → 같은 삽입 지점이 항상 동일한 아이템에 표시되어 경계에서 선 깜빡임 방지
+    if (position === 'after') {
+      const siblings = getChildren(overPage.parent_page_id)
+        .filter((s) => s.page_id !== active.id);
+      const idx = siblings.findIndex((s) => s.page_id === over.id);
+      if (idx >= 0 && idx < siblings.length - 1) {
+        targetId = siblings[idx + 1].page_id;
+        position = 'before';
+      }
+    }
+
+    updateIndicator({ targetId, position });
   };
 
   const handleDragEnd = async (event) => {
+    // ref에서 읽어야 최신 값 보장 (state는 렌더 사이클 때문에 스테일할 수 있음)
+    const indicator = dropIndicatorRef.current;
     setActiveItem(null);
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
+    updateIndicator(null);
+
+    const { active } = event;
+    if (!indicator || !active) return;
 
     const draggedPage = pages.find((p) => p.page_id === active.id);
-    const overPage = pages.find((p) => p.page_id === over.id);
-    if (!draggedPage || !overPage) return;
-    if (draggedPage.type === 'overview') return;
+    if (!draggedPage || draggedPage.type === 'overview') return;
 
-    const targetParent = overPage.type === 'folder'
-      ? overPage.page_id
-      : overPage.parent_page_id;
-    const siblings = getChildren(targetParent);
-    const overIndex = siblings.findIndex((s) => s.page_id === over.id);
-    const newPosition = overIndex >= 0 ? overIndex : siblings.length;
+    const targetPage = pages.find((p) => p.page_id === indicator.targetId);
+    if (!targetPage) return;
+
+    let targetParent, newPosition;
+
+    if (indicator.position === 'inside') {
+      // 폴더 안에 넣기 (마지막 위치)
+      targetParent = indicator.targetId;
+      const siblings = getChildren(targetParent)
+        .filter((s) => s.page_id !== active.id);
+      newPosition = siblings.length;
+    } else {
+      // before/after - 같은 부모 내 위치 조정
+      targetParent = targetPage.parent_page_id;
+      const siblings = getChildren(targetParent)
+        .filter((s) => s.page_id !== active.id);
+      const overIndex = siblings.findIndex((s) => s.page_id === indicator.targetId);
+      newPosition = indicator.position === 'before' ? overIndex : overIndex + 1;
+    }
 
     try {
       await axios.patch(
@@ -122,6 +233,11 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
       );
       fetchPages(expandedId);
     } catch {}
+  };
+
+  const handleDragCancel = () => {
+    setActiveItem(null);
+    updateIndicator(null);
   };
 
   // Document/Typst 즉시 생성 → 편집 모드로 이동
@@ -304,9 +420,6 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
   };
 
   const rootChildren = getChildren(null);
-  const sortableIds = pages
-    .filter((p) => p.type !== 'overview')
-    .map((p) => p.page_id);
 
   return (
     <>
@@ -350,42 +463,43 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
                 <div className="Sidebar__PageList">
                   <DndContext
                     sensors={sensors}
-                    collisionDetection={closestCenter}
+                    collisionDetection={treeCollisionDetection}
                     onDragStart={handleDragStart}
+                    onDragMove={handleDragMove}
                     onDragEnd={handleDragEnd}
+                    onDragCancel={handleDragCancel}
                   >
-                    <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
-                      {rootChildren.map((page) => (
-                        <SidebarPageItem
-                          key={page.page_id}
-                          page={page}
-                          canvasId={canvas.canvas_id}
-                          depth={0}
-                          expandedFolders={expandedFolders}
-                          toggleFolder={toggleFolder}
-                          getChildren={getChildren}
-                          router={router}
-                          onFolderAdd={startFolderInlineCreate}
-                          onQuickCreate={handleQuickCreate}
-                          onDeletePage={requestDeletePage}
-                          onRenamePage={requestRenamePage}
-                          onCopyPage={handleCopyPage}
-                          onCopyLink={handleCopyLink}
-                          onMovePage={requestMovePage}
-                          renamingPage={renamingPage}
-                          onRenameSubmit={executeRenamePage}
-                          onRenameCancel={() => setRenamingPage(null)}
-                          onContextMenu={setContextMenu}
-                          inlineCreate={inlineCreate}
-                          inlineTitle={inlineTitle}
-                          setInlineTitle={setInlineTitle}
-                          handleInlineKeyDown={handleInlineKeyDown}
-                          setInlineCreate={setInlineCreate}
-                        />
-                      ))}
-                    </SortableContext>
+                    {rootChildren.map((page) => (
+                      <SidebarPageItem
+                        key={page.page_id}
+                        page={page}
+                        canvasId={canvas.canvas_id}
+                        depth={0}
+                        expandedFolders={expandedFolders}
+                        toggleFolder={toggleFolder}
+                        getChildren={getChildren}
+                        router={router}
+                        onFolderAdd={startFolderInlineCreate}
+                        onQuickCreate={handleQuickCreate}
+                        onDeletePage={requestDeletePage}
+                        onRenamePage={requestRenamePage}
+                        onCopyPage={handleCopyPage}
+                        onCopyLink={handleCopyLink}
+                        onMovePage={requestMovePage}
+                        renamingPage={renamingPage}
+                        onRenameSubmit={executeRenamePage}
+                        onRenameCancel={() => setRenamingPage(null)}
+                        onContextMenu={setContextMenu}
+                        inlineCreate={inlineCreate}
+                        inlineTitle={inlineTitle}
+                        setInlineTitle={setInlineTitle}
+                        handleInlineKeyDown={handleInlineKeyDown}
+                        setInlineCreate={setInlineCreate}
+                        dropIndicator={dropIndicator}
+                      />
+                    ))}
 
-                    <DragOverlay>
+                    <DragOverlay dropAnimation={null}>
                       {activeItem && (
                         <div className="Sidebar__PageItem Sidebar__PageItem--dragging">
                           {activeItem.type === 'folder'
@@ -645,10 +759,14 @@ function SidebarPageItem({
   renamingPage, onRenameSubmit, onRenameCancel,
   onContextMenu,
   inlineCreate, inlineTitle, setInlineTitle, handleInlineKeyDown, setInlineCreate,
+  dropIndicator,
 }) {
   const {
-    attributes, listeners, setNodeRef, transform, transition, isDragging,
-  } = useSortable({ id: page.page_id });
+    attributes, listeners, setNodeRef: setDragRef, isDragging,
+  } = useDraggable({ id: page.page_id });
+  // 드래그 중인 아이템은 droppable 해제 → 자기 자신이 over 타겟이 되는 것 방지
+  const { setNodeRef: setDropRef } = useDroppable({ id: page.page_id, disabled: isDragging });
+  const setNodeRef = useCallback((node) => { setDragRef(node); setDropRef(node); }, [setDragRef, setDropRef]);
   const [showMenu, setShowMenu] = useState(false);
   const [menuPos, setMenuPos] = useState(null);
   const [renameTitle, setRenameTitle] = useState('');
@@ -766,10 +884,23 @@ function SidebarPageItem({
     </>
   );
 
+  // 드롭 인디케이터 상태
+  const isDropBefore = dropIndicator?.targetId === page.page_id && dropIndicator?.position === 'before';
+  const isDropAfter = dropIndicator?.targetId === page.page_id && dropIndicator?.position === 'after';
+  const isDropInside = dropIndicator?.targetId === page.page_id && dropIndicator?.position === 'inside';
+
+  const pageRowClass = [
+    'Sidebar__PageRow',
+    router.query.pageId == page.page_id && 'Sidebar__PageRow--active',
+    isDropBefore && 'Sidebar__PageRow--dropBefore',
+    isDropAfter && 'Sidebar__PageRow--dropAfter',
+    isDropInside && 'Sidebar__PageRow--dropInside',
+  ].filter(Boolean).join(' ');
+
   return (
     <>
       <div
-        className={`Sidebar__PageRow ${router.query.pageId == page.page_id ? 'Sidebar__PageRow--active' : ''}`}
+        className={pageRowClass}
         style={{ paddingLeft: `${40 + depth * 14}px` }}
         onContextMenu={handleContextMenu}
       >
@@ -777,7 +908,7 @@ function SidebarPageItem({
           ref={setNodeRef}
           {...attributes}
           {...listeners}
-          style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
+          style={{ opacity: isDragging ? 0.3 : 1 }}
           className="Sidebar__PageItem Sidebar__PageItem--inRow"
           onClick={() => isFolder ? toggleFolder(page.page_id) : router.push(`/canvas/${canvasId}/${page.page_id}`)}
         >
@@ -862,6 +993,7 @@ function SidebarPageItem({
               setInlineTitle={setInlineTitle}
               handleInlineKeyDown={handleInlineKeyDown}
               setInlineCreate={setInlineCreate}
+              dropIndicator={dropIndicator}
             />
           ))}
           {/* 폴더 내 인라인 생성 입력 */}

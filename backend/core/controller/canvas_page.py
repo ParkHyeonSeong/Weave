@@ -105,10 +105,9 @@ async def move(canvas_id: int, page_id: int, body, request: Request, db: AsyncSe
     if page['type'] == 'overview':
         return {'status': False, 'message': 'CANNOT_MOVE_OVERVIEW'}
 
-    await page_model.update(page_id, {
-        'parent_page_id': body.parent_page_id,
-        'position': body.position,
-    }, user_id, db)
+    await page_model.move_page(
+        page_id, canvas_id, body.parent_page_id, body.position, user_id, db
+    )
     return {'status': True}
 
 

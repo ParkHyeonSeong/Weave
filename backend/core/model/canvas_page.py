@@ -83,6 +83,66 @@ async def update(page_id: int, fields: dict, updated_by: int, db: AsyncSession):
     await db.commit()
 
 
+async def move_page(page_id: int, canvas_id: int, new_parent_id, new_position: int,
+                    updated_by: int, db: AsyncSession):
+    """페이지 이동 (형제 position 자동 재정렬)"""
+    # 현재 페이지 정보
+    row = await db.execute(text("""
+        SELECT parent_page_id, position FROM canvas_page
+        WHERE page_id = :page_id AND is_archived = FALSE
+    """), {'page_id': page_id})
+    current = row.fetchone()
+    if not current:
+        return
+    old_parent_id = current.parent_page_id
+    old_position = current.position
+
+    # 1. 기존 부모에서 갭 정리 (이동 아이템 뒤 형제들 position-1)
+    await db.execute(text("""
+        UPDATE canvas_page SET position = position - 1
+        WHERE canvas_id = :canvas_id
+          AND parent_page_id IS NOT DISTINCT FROM :old_parent_id
+          AND position > :old_position
+          AND page_id != :page_id
+          AND is_archived = FALSE
+    """), {
+        'canvas_id': canvas_id,
+        'old_parent_id': old_parent_id,
+        'old_position': old_position,
+        'page_id': page_id,
+    })
+
+    # 2. 새 부모에서 공간 확보 (삽입 위치 이후 형제들 position+1)
+    await db.execute(text("""
+        UPDATE canvas_page SET position = position + 1
+        WHERE canvas_id = :canvas_id
+          AND parent_page_id IS NOT DISTINCT FROM :new_parent_id
+          AND position >= :new_position
+          AND page_id != :page_id
+          AND is_archived = FALSE
+    """), {
+        'canvas_id': canvas_id,
+        'new_parent_id': new_parent_id,
+        'new_position': new_position,
+        'page_id': page_id,
+    })
+
+    # 3. 페이지 이동
+    await db.execute(text("""
+        UPDATE canvas_page
+        SET parent_page_id = :new_parent_id, position = :new_position,
+            updated_by = :updated_by, updated_at = NOW()
+        WHERE page_id = :page_id
+    """), {
+        'new_parent_id': new_parent_id,
+        'new_position': new_position,
+        'updated_by': updated_by,
+        'page_id': page_id,
+    })
+
+    await db.commit()
+
+
 async def hard_delete(page_id: int, db: AsyncSession):
     """페이지 영구 삭제 (하위 페이지 포함)"""
     # 하위 페이지 포함 recent_view, user_star 정리

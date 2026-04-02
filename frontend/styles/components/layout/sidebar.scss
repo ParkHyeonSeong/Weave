@@ -405,6 +405,43 @@
         background: $color-primary-subtle;
       }
     }
+
+    // 드롭 인디케이터: 아이템 위에 삽입
+    &--dropBefore::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 12px;
+      right: 8px;
+      height: 2px;
+      background: $color-primary;
+      border-radius: 1px;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    // 드롭 인디케이터: 아이템 아래에 삽입
+    &--dropAfter::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 12px;
+      right: 8px;
+      height: 2px;
+      background: $color-primary;
+      border-radius: 1px;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    // 드롭 인디케이터: 폴더 안에 넣기
+    &--dropInside {
+      background: $color-primary-subtle;
+
+      .Sidebar__PageItem--inRow {
+        color: $color-primary;
+      }
+    }
   }
 
   &__PageItem--inRow {
