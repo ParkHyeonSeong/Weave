@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import re
 import uuid
 
 from fastapi import Request, UploadFile
@@ -62,6 +63,10 @@ async def execute(branch_id: int, body, request: Request, db: AsyncSession):
     role = await member_model.get_role(branch_id, user_id, db)
     if role != 'admin':
         return {'status': False, 'message': 'ADMIN_ONLY'}
+
+    # migration_id 검증 (경로 순회 방지)
+    if not re.match(r'^[0-9a-f]{16}$', body.migration_id):
+        return {'status': False, 'message': 'INVALID_MIGRATION_ID'}
 
     # 임시 파일 확인
     temp_path = os.path.join(TEMP_DIR, f'{body.migration_id}.csv')

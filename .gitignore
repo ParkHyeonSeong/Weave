@@ -42,3 +42,4 @@ backend/uploads/
 
 # Custom
 docs/
+.mcp.json

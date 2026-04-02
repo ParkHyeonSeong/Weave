@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Download, AlertTriangle, Loader } from 'lucide-react';
 import { compileToSvg, downloadPdf } from '@/library/typstCompiler';
+import { sanitizeHtml } from '@/library/sanitize';
 
 // CodeMirror + Yjs (동적 로드)
 let cmModulesPromise = null;
@@ -137,7 +138,6 @@ function TypstEditorInner({
           ytext.insert(0, initialContent);
         }
 
-        // ytext 내용을 doc으로 전달하여 에디터와 yjs 상태 일치시킴
         view = new cmView.EditorView({
           state: state.EditorState.create({
             doc: ytext.toString(),
@@ -230,7 +230,7 @@ function TypstEditorInner({
           {svgContent ? (
             <div
               className="TypstEditor__Page"
-              dangerouslySetInnerHTML={{ __html: svgContent }}
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(svgContent) }}
             />
           ) : !compileErrors.length && (
             <div className="TypstEditor__Empty">

@@ -748,7 +748,7 @@ export default function CanvasPageView({ onRefClick }) {
         ) : page.type === 'typst' ? (
           <div className="CanvasPageView__TypstPreview">
             {typstSvg ? (
-              <div className="CanvasPageView__TypstPage" dangerouslySetInnerHTML={{ __html: typstSvg }} />
+              <div className="CanvasPageView__TypstPage" dangerouslySetInnerHTML={{ __html: sanitizeHtml(typstSvg) }} />
             ) : typstError ? (
               <div className="CanvasPageView__TypstError">
                 <AlertTriangle size={14} />

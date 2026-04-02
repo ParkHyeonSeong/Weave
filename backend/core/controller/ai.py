@@ -32,8 +32,9 @@ async def save_config(body, request: Request, db: AsyncSession):
         updated_by=user_id,
         db=db,
     )
+    # 원본 키 기준 마스킹 (DB 반환값은 암호화된 값이므로 body.api_key 사용)
     masked = {**config}
-    key = masked.get('api_key', '')
+    key = body.api_key
     masked['api_key'] = f"****{key[-4:]}" if len(key) >= 4 else '****'
     return {'status': True, 'config': masked}
 
