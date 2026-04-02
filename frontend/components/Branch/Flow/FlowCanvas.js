@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useMemo } from 'react';
+import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import {
   ReactFlow,
   Background,
@@ -68,6 +68,31 @@ export default function FlowCanvas({
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+
+  // props 변경 시 edges 동기화 (백그라운드 refetch 반영)
+  useEffect(() => {
+    setEdges(initialEdges);
+  }, [initialEdges, setEdges]);
+
+  // props 변경 시 nodes 동기화 (로컬 위치 보존, data만 업데이트)
+  useEffect(() => {
+    setNodes((currentNodes) => {
+      return initialNodes.map((newNode) => {
+        const existing = currentNodes.find((n) => n.id === newNode.id);
+        if (existing) {
+          return { ...newNode, position: existing.position };
+        }
+        return newNode;
+      });
+    });
+  }, [initialNodes, setNodes]);
+
+  // saveTimer cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, []);
 
   // 노드 위치 저장 (debounce)
   const savePositions = useCallback((updatedNodes) => {

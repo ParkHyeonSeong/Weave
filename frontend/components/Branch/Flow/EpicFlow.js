@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { axios } from '@/library/_axios';
 import { Workflow } from 'lucide-react';
 import FlowCanvas from './FlowCanvas';
@@ -9,35 +9,35 @@ export default function EpicFlow({ branchId, workflowStatuses, onSelectTask }) {
   const [tasks, setTasks] = useState([]);
   const [dependencies, setDependencies] = useState([]);
   const [flowPositions, setFlowPositions] = useState({});
-  const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(false);
+  const loadedEpicRef = useRef(null);
 
   // 에픽 목록 로드
   useEffect(() => {
-    fetchEpics();
-  }, [branchId]);
-
-  const fetchEpics = async () => {
-    try {
-      const res = await axios.get(`/branches/${branchId}/epics`);
-      if (res.data.status) {
-        const filtered = res.data.epics.filter((e) => e.status !== 'done');
-        setEpics(filtered);
-        // 첫 에픽 자동 선택
-        if (filtered.length > 0 && !selectedEpicId) {
-          setSelectedEpicId(filtered[0].epic_id);
+    const load = async () => {
+      try {
+        const res = await axios.get(`/branches/${branchId}/epics`);
+        if (res.data.status) {
+          const filtered = res.data.epics.filter((e) => e.status !== 'done');
+          setEpics(filtered);
+          if (filtered.length > 0 && !selectedEpicId) {
+            setSelectedEpicId(filtered[0].epic_id);
+          }
         }
-      }
-    } catch {}
-  };
+      } catch {}
+    };
+    load();
+  }, [branchId]);
 
   // 에픽 선택 시 데이터 로드
   useEffect(() => {
     if (!selectedEpicId) return;
-    fetchFlowData();
+    fetchFlowData(true);
   }, [selectedEpicId]);
 
-  const fetchFlowData = async () => {
-    setLoading(true);
+  const fetchFlowData = async (isInitial = false) => {
+    // 최초 로드 시에만 loading 표시 (FlowCanvas unmount 방지)
+    if (isInitial) setInitialLoading(true);
     try {
       const [taskRes, depRes, epicRes] = await Promise.all([
         axios.get(`/branches/${branchId}/epics/${selectedEpicId}/tasks`),
@@ -49,8 +49,9 @@ export default function EpicFlow({ branchId, workflowStatuses, onSelectTask }) {
       if (epicRes.data.status) {
         setFlowPositions(epicRes.data.epic?.flow_positions || {});
       }
+      loadedEpicRef.current = selectedEpicId;
     } catch {}
-    setLoading(false);
+    if (isInitial) setInitialLoading(false);
   };
 
   return (
@@ -83,7 +84,7 @@ export default function EpicFlow({ branchId, workflowStatuses, onSelectTask }) {
             <Workflow size={40} strokeWidth={1} />
             <p>Select an epic to view its task flow</p>
           </div>
-        ) : loading ? (
+        ) : initialLoading ? (
           <div className="EpicFlow__Empty">
             <p>Loading...</p>
           </div>
@@ -103,7 +104,7 @@ export default function EpicFlow({ branchId, workflowStatuses, onSelectTask }) {
             flowPositions={flowPositions}
             workflowStatuses={workflowStatuses}
             onSelectTask={onSelectTask}
-            onDataChange={fetchFlowData}
+            onDataChange={() => fetchFlowData(false)}
           />
         )}
       </div>
