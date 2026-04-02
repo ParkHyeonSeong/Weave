@@ -1,11 +1,13 @@
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from library.crypto import encrypt, decrypt
+
 
 # ── ai_config ────────────────────────────────────────────────────────────
 
 async def get_config(db: AsyncSession):
-    """활성 AI 설정 조회"""
+    """활성 AI 설정 조회 (api_key 복호화 포함)"""
     result = await db.execute(text("""
         SELECT config_id, provider, api_key, model, is_active, updated_by, updated_at
         FROM ai_config
@@ -16,7 +18,10 @@ async def get_config(db: AsyncSession):
     row = result.fetchone()
     if not row:
         return None
-    return dict(row._mapping)
+    data = dict(row._mapping)
+    if data.get('api_key'):
+        data['api_key'] = decrypt(data['api_key'])
+    return data
 
 
 async def upsert_config(provider: str, api_key: str, model: str,
@@ -31,7 +36,7 @@ async def upsert_config(provider: str, api_key: str, model: str,
             WHERE config_id = :config_id
             RETURNING config_id, provider, api_key, model, is_active, updated_by, updated_at
         """), {
-            'provider': provider, 'api_key': api_key, 'model': model,
+            'provider': provider, 'api_key': encrypt(api_key), 'model': model,
             'updated_by': updated_by, 'config_id': existing['config_id'],
         })
     else:
@@ -40,7 +45,7 @@ async def upsert_config(provider: str, api_key: str, model: str,
             VALUES (:provider, :api_key, :model, :updated_by)
             RETURNING config_id, provider, api_key, model, is_active, updated_by, updated_at
         """), {
-            'provider': provider, 'api_key': api_key, 'model': model,
+            'provider': provider, 'api_key': encrypt(api_key), 'model': model,
             'updated_by': updated_by,
         })
     await db.commit()
