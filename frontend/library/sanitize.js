@@ -7,7 +7,7 @@ import DOMPurify from 'isomorphic-dompurify';
 export function sanitizeHtml(html) {
   if (!html) return html;
   return DOMPurify.sanitize(html, {
-    USE_PROFILES: { html: true, svg: true, svgFilters: true },
+    USE_PROFILES: { html: true },
     ADD_ATTR: ['target'],
   });
 }

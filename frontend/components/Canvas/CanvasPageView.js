@@ -110,6 +110,13 @@ export default function CanvasPageView({ onRefClick }) {
     } catch {}
   }, [canvasId, pageId]);
 
+  // pageId 변경 시 상태 초기화
+  useEffect(() => {
+    setPage(null);
+    setTypstSvg(null);
+    setSaveStatus('saved');
+  }, [pageId]);
+
   useEffect(() => {
     fetchPage();
     if (router.query.edit) {
@@ -748,7 +755,7 @@ export default function CanvasPageView({ onRefClick }) {
         ) : page.type === 'typst' ? (
           <div className="CanvasPageView__TypstPreview">
             {typstSvg ? (
-              <div className="CanvasPageView__TypstPage" dangerouslySetInnerHTML={{ __html: sanitizeHtml(typstSvg) }} />
+              <div className="CanvasPageView__TypstPage" dangerouslySetInnerHTML={{ __html: typstSvg }} />
             ) : typstError ? (
               <div className="CanvasPageView__TypstError">
                 <AlertTriangle size={14} />
