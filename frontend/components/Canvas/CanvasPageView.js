@@ -127,6 +127,15 @@ export default function CanvasPageView({ onRefClick }) {
     }
   }, [fetchPage]);
 
+  // 외부(사이드바 등)에서 페이지가 변경되면 데이터 갱신
+  useEffect(() => {
+    const handlePageUpdate = () => {
+      if (!isEditing) fetchPage();
+    };
+    window.addEventListener('canvas:page_updated', handlePageUpdate);
+    return () => window.removeEventListener('canvas:page_updated', handlePageUpdate);
+  }, [fetchPage, isEditing]);
+
   // 연결 상태에 따른 saveStatus 업데이트
   useEffect(() => {
     if (!isEditing) return;
@@ -331,6 +340,7 @@ export default function CanvasPageView({ onRefClick }) {
       if (newTitle && newTitle !== page?.title) {
         try {
           await axios.patch(`/canvases/${canvasId}/pages/${pageId}`, { title: newTitle });
+          setPage((prev) => prev ? { ...prev, title: newTitle } : prev);
           window.dispatchEvent(new CustomEvent('canvas:page_updated'));
         } catch {}
       }

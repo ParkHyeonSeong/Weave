@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { axios } from '@/library/_axios';
 import { Workflow } from 'lucide-react';
 import FlowCanvas from './FlowCanvas';
@@ -10,7 +10,6 @@ export default function EpicFlow({ branchId, workflowStatuses, onSelectTask }) {
   const [dependencies, setDependencies] = useState([]);
   const [flowPositions, setFlowPositions] = useState({});
   const [initialLoading, setInitialLoading] = useState(false);
-  const loadedEpicRef = useRef(null);
 
   // 에픽 목록 로드
   useEffect(() => {
@@ -35,7 +34,7 @@ export default function EpicFlow({ branchId, workflowStatuses, onSelectTask }) {
     fetchFlowData(true);
   }, [selectedEpicId]);
 
-  const fetchFlowData = async (isInitial = false) => {
+  const fetchFlowData = useCallback(async (isInitial = false) => {
     // 최초 로드 시에만 loading 표시 (FlowCanvas unmount 방지)
     if (isInitial) setInitialLoading(true);
     try {
@@ -49,10 +48,9 @@ export default function EpicFlow({ branchId, workflowStatuses, onSelectTask }) {
       if (epicRes.data.status) {
         setFlowPositions(epicRes.data.epic?.flow_positions || {});
       }
-      loadedEpicRef.current = selectedEpicId;
     } catch {}
     if (isInitial) setInitialLoading(false);
-  };
+  }, [branchId, selectedEpicId]);
 
   return (
     <div className="EpicFlow">

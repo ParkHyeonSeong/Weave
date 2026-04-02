@@ -77,12 +77,10 @@ export default function FlowCanvas({
   // props 변경 시 nodes 동기화 (로컬 위치 보존, data만 업데이트)
   useEffect(() => {
     setNodes((currentNodes) => {
+      const posMap = new Map(currentNodes.map((n) => [n.id, n.position]));
       return initialNodes.map((newNode) => {
-        const existing = currentNodes.find((n) => n.id === newNode.id);
-        if (existing) {
-          return { ...newNode, position: existing.position };
-        }
-        return newNode;
+        const pos = posMap.get(newNode.id);
+        return pos ? { ...newNode, position: pos } : newNode;
       });
     });
   }, [initialNodes, setNodes]);
