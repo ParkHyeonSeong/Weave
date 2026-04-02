@@ -288,6 +288,7 @@ export default function TaskIssueDetail() {
                   content={issue.body || ''}
                   placeholder="Describe the issue..."
                   minHeight={150}
+                  branchId={branchId}
                 />
                 <div className="IssueDetail__CardEditActions">
                   <button className="IssueDetail__SaveBtn" onClick={saveBody}>Update</button>
@@ -343,6 +344,7 @@ export default function TaskIssueDetail() {
                       content={comment.content}
                       placeholder="Edit comment..."
                       minHeight={100}
+                      branchId={branchId}
                     />
                     <div className="IssueDetail__CardEditActions">
                       <button className="IssueDetail__SaveBtn" onClick={() => saveComment(comment.comment_id)}>Update</button>
@@ -370,6 +372,7 @@ export default function TaskIssueDetail() {
             ref={newCommentRef}
             placeholder="Leave a comment..."
             minHeight={100}
+            branchId={branchId}
           />
           <div className="IssueDetail__ReplyActions">
             <button

@@ -172,6 +172,7 @@ export default function TaskFullPage() {
               <TaskDescriptionEditor
                 content={task.description}
                 onSave={saveDesc}
+                branchId={branchId}
               />
             ) : (
               <div

@@ -157,6 +157,7 @@ app.include_router(jira_migrate_router.router, prefix="/api/branches/{branch_id}
 uploads_dir = os.path.join(os.path.dirname(__file__), 'uploads')
 os.makedirs(os.path.join(uploads_dir, 'avatars'), exist_ok=True)
 os.makedirs(os.path.join(uploads_dir, 'chat'), exist_ok=True)
+os.makedirs(os.path.join(uploads_dir, 'task'), exist_ok=True)
 app.mount("/api/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
 

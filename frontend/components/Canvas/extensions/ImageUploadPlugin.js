@@ -1,7 +1,7 @@
 import { Plugin } from '@tiptap/pm/state';
 import { axios } from '@/library/_axios';
 
-export function createImageUploadPlugin(canvasId) {
+export function createImageUploadPlugin({ canvasId, branchId }) {
   return new Plugin({
     props: {
       handlePaste(view, event) {
@@ -11,7 +11,7 @@ export function createImageUploadPlugin(canvasId) {
 
         event.preventDefault();
         const file = imageItem.getAsFile();
-        if (file) uploadAndInsert(file, canvasId, view);
+        if (file) uploadAndInsert(file, { canvasId, branchId }, view);
         return true;
       },
 
@@ -22,25 +22,32 @@ export function createImageUploadPlugin(canvasId) {
 
         event.preventDefault();
         const pos = view.posAtCoords({ left: event.clientX, top: event.clientY });
-        uploadAndInsert(imageFile, canvasId, view, pos?.pos);
+        uploadAndInsert(imageFile, { canvasId, branchId }, view, pos?.pos);
         return true;
       },
     },
   });
 }
 
-async function uploadAndInsert(file, canvasId, view, insertPos) {
+function getUploadUrl({ canvasId, branchId }) {
+  if (canvasId) return `/canvases/${canvasId}/pages/upload-image`;
+  if (branchId) return `/branches/${branchId}/tasks/upload-image`;
+  return null;
+}
+
+async function uploadAndInsert(file, context, view, insertPos) {
   if (file.size > 5 * 1024 * 1024) return;
+
+  const url = getUploadUrl(context);
+  if (!url) return;
 
   const formData = new FormData();
   formData.append('file', file);
 
   try {
-    const res = await axios.post(
-      `/canvases/${canvasId}/pages/upload-image`,
-      formData,
-      { headers: { 'Content-Type': 'multipart/form-data' } }
-    );
+    const res = await axios.post(url, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
 
     if (res.data.status && res.data.url) {
       const { schema } = view.state;

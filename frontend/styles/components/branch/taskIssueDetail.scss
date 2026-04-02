@@ -279,6 +279,7 @@
     color: $color-text;
     line-height: 1.7;
     min-height: 48px;
+    overflow: hidden;
 
     &--empty {
       color: $color-text-tertiary;

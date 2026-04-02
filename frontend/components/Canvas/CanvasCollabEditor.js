@@ -60,7 +60,7 @@ function CollabEditorInner({
       ? Extension.create({
           name: 'imageUpload',
           addProseMirrorPlugins() {
-            return [createImageUploadPlugin(canvasId)];
+            return [createImageUploadPlugin({ canvasId })];
           },
         })
       : null;

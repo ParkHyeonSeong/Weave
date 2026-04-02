@@ -73,6 +73,7 @@ export default function CreateIssuePage() {
           ref={editorRef}
           placeholder="Describe the issue..."
           minHeight={200}
+          branchId={branchId}
         />
       </div>
 

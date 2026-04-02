@@ -1,9 +1,10 @@
 from typing import Optional
-from fastapi import APIRouter, Request, Depends, Query
+from fastapi import APIRouter, Request, Depends, Query, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .schema import task as task_schema
 from core.controller import task as task_controller
+from core.controller import task_upload
 from library.validator import require_login
 import db_engine as db
 
@@ -40,6 +41,13 @@ async def get_board(branch_id: int, request: Request,
 async def reorder_tasks(branch_id: int, body: task_schema.TaskReorder,
                         request: Request, session: AsyncSession = Depends(db.session)):
     return await task_controller.reorder(body, branch_id, request, session)
+
+
+@router.post("/upload-image", summary="Task 이미지 업로드", dependencies=[Depends(require_login)])
+async def upload_task_image(branch_id: int, request: Request,
+                            file: UploadFile = File(...),
+                            session: AsyncSession = Depends(db.session)):
+    return await task_upload.upload_image(branch_id, file, request, session)
 
 
 @router.get("/{task_id}", summary="Task 상세", dependencies=[Depends(require_login)])

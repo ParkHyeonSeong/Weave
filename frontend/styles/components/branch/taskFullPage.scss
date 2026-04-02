@@ -220,6 +220,7 @@
     cursor: pointer;
     transition: background $transition-fast;
     white-space: pre-wrap;
+    overflow: hidden;
 
     &:hover {
       background: $color-surface;

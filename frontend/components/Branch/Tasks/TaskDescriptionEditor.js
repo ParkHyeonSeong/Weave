@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useMemo } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
+import { Extension } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -12,11 +13,13 @@ import { common, createLowlight } from 'lowlight';
 import CalloutExtension from '@/components/Canvas/extensions/CalloutExtension';
 import TaskRefNode from '@/components/Canvas/extensions/TaskRefExtension';
 import MentionNode from '@/components/Canvas/extensions/MentionExtension';
+import { ResizableImage } from '@/components/Canvas/extensions/ResizableImageExtension';
+import { createImageUploadPlugin } from '@/components/Canvas/extensions/ImageUploadPlugin';
 import CanvasEditorToolbar from '@/components/Canvas/CanvasEditorToolbar';
 
 const lowlight = createLowlight(common);
 
-const extensions = [
+const baseExtensions = [
   StarterKit.configure({ codeBlock: false }),
   Link.configure({
     openOnClick: false,
@@ -31,10 +34,26 @@ const extensions = [
   CalloutExtension,
   TaskRefNode,
   MentionNode,
+  ResizableImage,
 ];
 
-export default function TaskDescriptionEditor({ content, onSave }) {
+export default function TaskDescriptionEditor({ content, onSave, branchId }) {
   const savedRef = useRef(false);
+
+  const extensions = useMemo(() => {
+    const ext = [...baseExtensions];
+    if (branchId) {
+      ext.push(
+        Extension.create({
+          name: 'imageUpload',
+          addProseMirrorPlugins() {
+            return [createImageUploadPlugin({ branchId })];
+          },
+        })
+      );
+    }
+    return ext;
+  }, [branchId]);
 
   const editor = useEditor({
     immediatelyRender: false,

@@ -148,6 +148,7 @@
   // -- 상태 --
   &__StatusWrap {
     display: flex;
+    margin-top: $space-2;
   }
 
   &__StatusSelect {
@@ -211,6 +212,7 @@
     cursor: pointer;
     transition: background $transition-fast;
     white-space: pre-wrap;
+    overflow: hidden;
 
     &:hover {
       background: $color-surface;
@@ -518,6 +520,52 @@
       mark { border-radius: 2px; padding: 1px 2px; }
       u { text-decoration: underline; }
 
+      img {
+        max-width: 100%;
+        height: auto;
+        border-radius: $radius-lg;
+      }
+
+      .ResizableImage {
+        display: inline-block;
+        line-height: 0;
+
+        &__Wrap {
+          position: relative;
+          display: inline-block;
+          max-width: 100%;
+          border: 2px solid transparent;
+          border-radius: $radius-lg;
+          transition: border-color 0.15s;
+
+          &--selected { border-color: $color-primary; }
+          &--resizing { user-select: none; }
+          img { border-radius: $radius-lg; }
+        }
+
+        &__Handle {
+          position: absolute;
+          background: $color-primary;
+          border: 2px solid white;
+          border-radius: 50%;
+          width: 12px;
+          height: 12px;
+          z-index: 10;
+
+          &--right {
+            top: 50%;
+            right: -6px;
+            transform: translateY(-50%);
+            cursor: ew-resize;
+          }
+          &--bottomRight {
+            bottom: -6px;
+            right: -6px;
+            cursor: nwse-resize;
+          }
+        }
+      }
+
       ul[data-type="taskList"] {
         list-style: none;
         padding-left: 0;
@@ -602,6 +650,13 @@
   font-size: $font-size-sm;
   line-height: 1.6;
   color: $color-text;
+  overflow: hidden;
+
+  img {
+    max-width: 100%;
+    height: auto;
+    border-radius: $radius-lg;
+  }
 
   > * + * { margin-top: 0.4em; }
 

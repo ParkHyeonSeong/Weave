@@ -155,6 +155,7 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
             <TaskDescriptionEditor
               content={task.description}
               onSave={saveDesc}
+              branchId={branchId}
             />
           ) : (
             <div
