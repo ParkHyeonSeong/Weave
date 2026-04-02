@@ -119,11 +119,12 @@ async def upload_avatar(file: UploadFile, request: Request, db: AsyncSession):
     if user.get('avatar_url'):
         # URL 경로(/api/uploads/...)에서 실제 파일 경로(uploads/...)로 변환
         rel = user['avatar_url'].replace('/api/uploads/', 'uploads/').lstrip('/')
-        old_path = os.path.join(
+        old_path = os.path.normpath(os.path.join(
             os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
             rel
-        )
-        if os.path.exists(old_path):
+        ))
+        uploads_base = os.path.normpath(UPLOAD_DIR)
+        if old_path.startswith(uploads_base) and os.path.exists(old_path):
             os.remove(old_path)
 
     # 고유 파일명 생성 및 저장

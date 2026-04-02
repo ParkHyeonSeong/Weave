@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Download, AlertTriangle, Loader } from 'lucide-react';
 import { compileToSvg, downloadPdf } from '@/library/typstCompiler';
 import { sanitizeHtml } from '@/library/sanitize';
+import { yCollab, patchYSync } from '@/library/yCollabPatched';
 
 // CodeMirror + Yjs (동적 로드)
 let cmModulesPromise = null;
@@ -13,9 +14,8 @@ function loadCmModules() {
     import('@codemirror/commands'),
     import('@codemirror/language'),
     import('@codemirror/lang-markdown'),
-    import('y-codemirror.next'),
-  ]).then(([state, view, commands, lang, markdown, ycm]) => ({
-    state, view, commands, lang, markdown, ycm,
+  ]).then(([state, view, commands, lang, markdown]) => ({
+    state, view, commands, lang, markdown,
   }));
   return cmModulesPromise;
 }
@@ -86,7 +86,7 @@ function TypstEditorInner({
     let destroyed = false;
 
     (async () => {
-      const { state, view: cmView, commands, lang, markdown, ycm } = await loadCmModules();
+      const { state, view: cmView, commands, lang, markdown } = await loadCmModules();
       if (destroyed) return;
 
       const ytext = ydoc.getText('typst');
@@ -111,7 +111,7 @@ function TypstEditorInner({
         commands.history(),
         markdown.markdown(),
         // Yjs 바인딩
-        ycm.yCollab(ytext, provider.awareness),
+        yCollab(ytext, provider.awareness),
         // 내용 변경 시 콜백
         cmView.EditorView.updateListener.of((update) => {
           if (update.docChanged) {
@@ -145,6 +145,9 @@ function TypstEditorInner({
           }),
           parent: editorRef.current,
         });
+
+        // 한글 IME composition 중 ySync dispatch 충돌 방지 패치
+        patchYSync(view, ytext);
 
         editorViewRef.current = view;
 

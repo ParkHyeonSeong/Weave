@@ -14,7 +14,11 @@ def validate_login(request: Request):
     try:
         token = request.cookies.get(COOKIE_NAME, '')
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
-    except Exception:
+    except jwt.ExpiredSignatureError:
+        payload = {'user_id': 0, 'error': 'TOKEN_EXPIRED'}
+    except jwt.InvalidSignatureError:
+        payload = {'user_id': 0, 'error': 'INVALID_SIGNATURE'}
+    except (jwt.DecodeError, jwt.InvalidTokenError, Exception):
         payload = {'user_id': 0}
     return payload
 

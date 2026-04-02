@@ -89,22 +89,25 @@ else:
         f"http://127.0.0.1:{FRONTEND_PORT}",
     ]
 
+_CORS_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+_CORS_HEADERS = ["Content-Type", "Authorization", "X-Requested-With"]
+
 if DEBUG and not ALLOWED_ORIGINS:
     # 개발 모드: LAN 범위 origin 허용 + credentials 지원
     app.add_middleware(
         CORSMiddleware,
         allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(:\d+)?",
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=_CORS_METHODS,
+        allow_headers=_CORS_HEADERS,
     )
 else:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=_CORS_METHODS,
+        allow_headers=_CORS_HEADERS,
     )
 
 
