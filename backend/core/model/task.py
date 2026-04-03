@@ -36,7 +36,6 @@ async def create(branch_id: int, display_number: int, title: str,
         FROM task
         WHERE branch_id = :branch_id
           AND sprint_id IS NOT DISTINCT FROM :sprint_id
-          AND is_archived = FALSE
     """), {'branch_id': branch_id, 'sprint_id': sprint_id})
     next_sort = max_row.scalar_one() + 1
 
