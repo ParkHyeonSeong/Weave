@@ -29,13 +29,26 @@ async def create(branch_id: int, display_number: int, title: str,
     """Task 생성"""
     import json
     cf_json = json.dumps(custom_fields) if custom_fields else '{}'
+
+    # 같은 컨테이너(sprint/backlog) 내 마지막 sort_order 조회
+    max_row = await db.execute(text("""
+        SELECT COALESCE(MAX(sort_order), -1) AS max_sort
+        FROM task
+        WHERE branch_id = :branch_id
+          AND sprint_id IS NOT DISTINCT FROM :sprint_id
+          AND is_archived = FALSE
+    """), {'branch_id': branch_id, 'sprint_id': sprint_id})
+    next_sort = max_row.scalar_one() + 1
+
     result = await db.execute(text("""
         INSERT INTO task (branch_id, display_number, title, description,
                           task_type, status, priority, epic_id, sprint_id,
-                          parent_task_id, start_date, due_date, created_by, custom_fields)
+                          parent_task_id, start_date, due_date, created_by,
+                          custom_fields, sort_order)
         VALUES (:branch_id, :display_number, :title, :description,
                 :task_type, :status, :priority, :epic_id, :sprint_id,
-                :parent_task_id, :start_date, :due_date, :created_by, :custom_fields)
+                :parent_task_id, :start_date, :due_date, :created_by,
+                :custom_fields, :sort_order)
         RETURNING task_id
     """), {
         'branch_id': branch_id,
@@ -52,6 +65,7 @@ async def create(branch_id: int, display_number: int, title: str,
         'due_date': due_date,
         'created_by': created_by,
         'custom_fields': cf_json,
+        'sort_order': next_sort,
     })
     await db.commit()
     return result.scalar_one()
