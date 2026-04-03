@@ -169,14 +169,22 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
     let position;
     let targetId = over.id;
     if (overPage.type === 'folder') {
-      // 폴더: 상단 25% = before, 하단 25% = after, 가운데 50% = inside
-      if (ratio < 0.25) position = 'before';
-      else if (ratio > 0.75) position = 'after';
+      // 폴더: 상단 20% = before, 하단 20% = after, 가운데 60% = inside
+      if (ratio < 0.2) position = 'before';
+      else if (ratio > 0.8) position = 'after';
       else position = 'inside';
     } else {
-      // 문서: 상단 50% = before, 하단 50% = after
-      if (ratio < 0.5) position = 'before';
+      // 문서: 상단 30% = before, 하단 70% = after (아래로 드래그 시 after 도달 용이)
+      if (ratio < 0.3) position = 'before';
       else position = 'after';
+    }
+
+    // 자기 부모 폴더가 over로 잡히는 경우: 이미 그 폴더 안에 있으므로
+    // 'inside'(끝으로 점프) / 'after'(자식 영역 오감지) 차단, 'before'만 허용(폴더 밖으로 빼기)
+    const draggedPage = pages.find((p) => p.page_id === active.id);
+    if (draggedPage && draggedPage.parent_page_id === over.id && position !== 'before') {
+      updateIndicator(null);
+      return;
     }
 
     // "after X"를 "before (다음 형제)"로 정규화
