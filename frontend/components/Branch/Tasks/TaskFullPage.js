@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
-import { ArrowLeft, Trash2, ChevronDown, ShieldAlert, Star } from 'lucide-react';
+import { ArrowLeft, Trash2, ChevronDown, ShieldAlert, Star, Pencil } from 'lucide-react';
 import useStar from '@/hooks/useStar';
 import LabelTagInput from '@/components/common/LabelTagInput';
 import { axios } from '@/library/_axios';
@@ -168,7 +168,14 @@ export default function TaskFullPage() {
 
           {/* 설명 */}
           <div className="TaskFullPage__Section">
-            <div className="TaskFullPage__SectionLabel">Description</div>
+            <div className="TaskFullPage__SectionLabel">
+              Description
+              {!editingDesc && task.description && (
+                <button className="TaskFullPage__DescEditBtn" onClick={() => setEditingDesc(true)}>
+                  <Pencil size={11} />
+                </button>
+              )}
+            </div>
             {editingDesc ? (
               <TaskDescriptionEditor
                 content={task.description}
@@ -178,10 +185,21 @@ export default function TaskFullPage() {
             ) : (
               <div
                 className={`TaskFullPage__DescText ${!task.description ? 'TaskFullPage__DescText--empty' : ''}`}
-                onClick={() => setEditingDesc(true)}
+                {...(!task.description && { onClick: () => setEditingDesc(true) })}
               >
                 {task.description ? (
-                  <div className="TaskDescReadonly" dangerouslySetInnerHTML={{ __html: sanitizeHtml(task.description) }} />
+                  <div
+                    className="TaskDescReadonly"
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(task.description) }}
+                    onClick={(e) => {
+                      const ref = e.target.closest('.task-ref');
+                      if (ref) {
+                        e.stopPropagation();
+                        const taskId = ref.dataset.taskId;
+                        if (taskId) router.push(`/branch/${branchId}/task/${taskId}`);
+                      }
+                    }}
+                  />
                 ) : (
                   'Add description...'
                 )}

@@ -4,7 +4,8 @@
   position: relative;
   border: 1px solid $color-border;
   border-radius: $radius-xl;
-  overflow: visible;
+  overflow: hidden;
+  max-width: 100%;
 
   &__Content {
     padding: $space-6;

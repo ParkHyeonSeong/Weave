@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
-import { X, Maximize2, Trash2, ChevronDown, Star } from 'lucide-react';
+import { X, Maximize2, Trash2, ChevronDown, Star, Pencil } from 'lucide-react';
 import useStar from '@/hooks/useStar';
 import LabelTagInput from '@/components/common/LabelTagInput';
 import CustomSelect from '@/components/common/CustomSelect';
@@ -149,7 +149,14 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
 
         {/* 설명 */}
         <div className="TaskDetailPanel__Section">
-          <div className="TaskDetailPanel__SectionLabel">Description</div>
+          <div className="TaskDetailPanel__SectionLabel">
+            Description
+            {!editingDesc && task.description && (
+              <button className="TaskDetailPanel__DescEditBtn" onClick={() => setEditingDesc(true)}>
+                <Pencil size={11} />
+              </button>
+            )}
+          </div>
           {editingDesc ? (
             <TaskDescriptionEditor
               content={task.description}
@@ -159,10 +166,22 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
           ) : (
             <div
               className={`TaskDetailPanel__DescText ${!task.description ? 'TaskDetailPanel__DescText--empty' : ''}`}
-              onClick={() => setEditingDesc(true)}
+              {...(!task.description && { onClick: () => setEditingDesc(true) })}
             >
               {task.description ? (
-                <div className="TaskDescReadonly" dangerouslySetInnerHTML={{ __html: sanitizeHtml(task.description) }} />
+                <div
+                  className="TaskDescReadonly"
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(task.description) }}
+                  onClick={(e) => {
+                    // task-ref 클릭 → 해당 task로 이동
+                    const ref = e.target.closest('.task-ref');
+                    if (ref) {
+                      e.stopPropagation();
+                      const taskId = ref.dataset.taskId;
+                      if (taskId && onSelectTask) onSelectTask({ task_id: Number(taskId) });
+                    }
+                  }}
+                />
               ) : (
                 'Add description...'
               )}

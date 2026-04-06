@@ -198,6 +198,25 @@
     color: $color-text-secondary;
     text-transform: uppercase;
     letter-spacing: 0.3px;
+    display: flex;
+    align-items: center;
+    gap: $space-1;
+  }
+
+  &__DescEditBtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: $radius-sm;
+    color: $color-text-tertiary;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+      color: $color-text;
+    }
   }
 
   &__Divider {
@@ -217,18 +236,19 @@
     line-height: 1.6;
     padding: $space-2;
     border-radius: $radius-md;
-    cursor: pointer;
-    transition: background $transition-fast;
+    cursor: default;
     white-space: pre-wrap;
     overflow: hidden;
-
-    &:hover {
-      background: $color-surface;
-    }
+    max-width: 100%;
 
     &--empty {
       color: $color-text-tertiary;
       font-style: italic;
+      cursor: pointer;
+
+      &:hover {
+        background: $color-surface;
+      }
     }
   }
 
