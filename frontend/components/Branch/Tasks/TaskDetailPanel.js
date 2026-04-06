@@ -12,6 +12,7 @@ import TaskDependencySection from './TaskDependencySection';
 import TaskPageLinkSection from './TaskPageLinkSection';
 import TaskDescriptionEditor from './TaskDescriptionEditor';
 import ConfirmModal from '@/components/modal/ConfirmModal';
+import ActivityTimeline from '@/components/common/ActivityTimeline';
 
 export default function TaskDetailPanel({ branchId, branchKey, taskTypes: externalTaskTypes, workflowStatuses: externalStatuses, taskSummary, onClose, onSelectTask }) {
   const router = useRouter();
@@ -342,6 +343,14 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
 
         {/* 이슈 섹션 */}
         <TaskIssueSection branchId={branchId} taskId={task.task_id} />
+
+        <div className="TaskDetailPanel__Divider" />
+
+        {/* 활동 이력 */}
+        <ActivityTimeline
+          entityType="task"
+          apiUrl={`/branches/${branchId}/tasks/${task.task_id}/activity`}
+        />
 
         <div className="TaskDetailPanel__Divider" />
 

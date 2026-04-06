@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import dynamic from 'next/dynamic';
-import { Pencil, X, Wifi, WifiOff, Loader, RefreshCw, Maximize2, Minimize2, Trash2, Download, AlertTriangle, Star, MessageSquare, MoreHorizontal, Copy, Link, FolderInput } from 'lucide-react';
+import { Pencil, X, Wifi, WifiOff, Loader, RefreshCw, Maximize2, Minimize2, Trash2, Download, AlertTriangle, Star, MessageSquare, MoreHorizontal, Copy, Link, FolderInput, Clock } from 'lucide-react';
 import useStar from '@/hooks/useStar';
 import useAnnotations from '@/hooks/useAnnotations';
 import { axios } from '@/library/_axios';
@@ -12,6 +12,7 @@ import { sanitizeHtml } from '@/library/sanitize';
 import PresenceBar from './PresenceBar';
 import AnnotationLayer from './AnnotationLayer';
 import AnnotationSidebar from './AnnotationSidebar';
+import ActivityTimeline from '@/components/common/ActivityTimeline';
 import katex from 'katex';
 import { common, createLowlight } from 'lowlight';
 import { toHtml } from 'hast-util-to-html';
@@ -47,6 +48,7 @@ export default function CanvasPageView({ onRefClick }) {
     createReply, updateReply, deleteReply,
   } = useAnnotations(canvasId, pageId);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [activeAnnotationId, setActiveAnnotationId] = useState(null);
   const [newAnnotationData, setNewAnnotationData] = useState(null);
 
@@ -703,6 +705,13 @@ export default function CanvasPageView({ onRefClick }) {
                 </button>
               )}
               <button
+                className={`CanvasPageView__ActionBtn${historyOpen ? ' CanvasPageView__ActionBtn--active' : ''}`}
+                onClick={() => { setHistoryOpen((v) => !v); if (!historyOpen) setSidebarOpen(false); }}
+                title="History"
+              >
+                <Clock size={15} />
+              </button>
+              <button
                 className="CanvasPageView__ActionBtn"
                 onClick={() => setIsEditing(true)}
               >
@@ -866,6 +875,23 @@ export default function CanvasPageView({ onRefClick }) {
         }}
         onCancelNewAnnotation={() => setNewAnnotationData(null)}
       />
+
+      {/* 활동 이력 사이드바 */}
+      {historyOpen && (
+        <div className="CanvasPageView__HistorySidebar">
+          <div className="CanvasPageView__HistorySidebarHeader">
+            <span>History</span>
+            <button onClick={() => setHistoryOpen(false)}><X size={14} /></button>
+          </div>
+          <div className="CanvasPageView__HistorySidebarContent">
+            <ActivityTimeline
+              entityType="canvas_page"
+              apiUrl={`/canvases/${canvasId}/pages/${pageId}/activity`}
+              expanded
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

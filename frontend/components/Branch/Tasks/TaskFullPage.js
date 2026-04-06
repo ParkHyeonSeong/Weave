@@ -13,6 +13,7 @@ import TaskDependencySection from './TaskDependencySection';
 import TaskPageLinkSection from './TaskPageLinkSection';
 import TaskDescriptionEditor from './TaskDescriptionEditor';
 import ConfirmModal from '@/components/modal/ConfirmModal';
+import ActivityTimeline from '@/components/common/ActivityTimeline';
 
 export default function TaskFullPage() {
   const router = useRouter();
@@ -206,6 +207,15 @@ export default function TaskFullPage() {
 
           {/* 이슈 */}
           <TaskIssueSection branchId={branchId} taskId={task.task_id} expanded />
+
+          <div className="TaskFullPage__Divider" />
+
+          {/* 활동 이력 */}
+          <ActivityTimeline
+            entityType="task"
+            apiUrl={`/branches/${branchId}/tasks/${task.task_id}/activity`}
+            expanded
+          />
         </div>
 
         {/* 오른쪽: 세부 사항 */}

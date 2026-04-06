@@ -696,4 +696,52 @@
       }
     }
   }
+
+  // History sidebar
+  &__HistorySidebar {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 340px;
+    height: 100vh;
+    background: $color-bg;
+    border-left: 1px solid $color-border;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    box-shadow: $shadow-lg;
+  }
+
+  &__HistorySidebarHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: $space-3 $space-4;
+    border-bottom: 1px solid $color-border;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-semibold;
+    color: $color-text;
+
+    button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: $radius-md;
+      color: $color-text-tertiary;
+      transition: all $transition-fast;
+
+      &:hover {
+        background: $color-surface;
+        color: $color-text;
+      }
+    }
+  }
+
+  &__HistorySidebarContent {
+    flex: 1;
+    overflow-y: auto;
+    padding: $space-3 $space-4;
+  }
 }

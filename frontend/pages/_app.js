@@ -75,6 +75,7 @@ import "@/styles/components/branch/branchSchedule.scss";
 import "@/styles/components/modal/scheduleEventModal.scss";
 import "@/styles/components/modal/jiraMigrationModal.scss";
 import "@/styles/components/modal/pageMoveModal.scss";
+import "@/styles/components/common/activityTimeline.scss";
 
 const publicPaths = ['/auth/login', '/auth/change-password', '/setup'];
 const noLayoutPaths = ['/auth/login', '/auth/change-password', '/setup', '/admin'];
