@@ -19,7 +19,6 @@ async def create(branch_id: int, title: str, description: str,
         'color': color,
         'created_by': created_by,
     })
-    await db.commit()
     return result.scalar_one()
 
 
@@ -71,7 +70,6 @@ async def update(schedule_event_id: int, fields: dict, db: AsyncSession):
     await db.execute(text(f"""
         UPDATE schedule_event SET {set_clause} WHERE schedule_event_id = :schedule_event_id
     """), updates)
-    await db.commit()
 
 
 async def delete(schedule_event_id: int, db: AsyncSession):
@@ -79,7 +77,6 @@ async def delete(schedule_event_id: int, db: AsyncSession):
     await db.execute(text("""
         DELETE FROM schedule_event WHERE schedule_event_id = :schedule_event_id
     """), {'schedule_event_id': schedule_event_id})
-    await db.commit()
 
 
 async def set_participants(schedule_event_id: int, user_ids: list, db: AsyncSession):
@@ -92,7 +89,6 @@ async def set_participants(schedule_event_id: int, user_ids: list, db: AsyncSess
             INSERT INTO schedule_event_participant (schedule_event_id, user_id)
             VALUES (:schedule_event_id, :user_id)
         """), {'schedule_event_id': schedule_event_id, 'user_id': uid})
-    await db.commit()
 
 
 async def find_participants(schedule_event_id: int, db: AsyncSession):

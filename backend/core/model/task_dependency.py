@@ -16,7 +16,6 @@ async def create(branch_id: int, source_task_id: int, target_task_id: int,
         'dep_type': dep_type,
         'created_by': created_by,
     })
-    await db.commit()
     return result.scalar_one()
 
 
@@ -62,7 +61,6 @@ async def delete(dependency_id: int, branch_id: int, db: AsyncSession):
         DELETE FROM task_dependency
         WHERE dependency_id = :dependency_id AND branch_id = :branch_id
     """), {'dependency_id': dependency_id, 'branch_id': branch_id})
-    await db.commit()
 
 
 async def check_circular(source_task_id: int, target_task_id: int,

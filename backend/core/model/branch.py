@@ -16,7 +16,6 @@ async def create(branch_name: str, key: str, description: str,
         'visibility': visibility,
         'created_by': created_by,
     })
-    await db.commit()
     return result.scalar_one()
 
 
@@ -56,7 +55,6 @@ async def update(branch_id: int, fields: dict, db: AsyncSession):
         UPDATE branch SET {set_clauses}, updated_at = NOW()
         WHERE branch_id = :branch_id
     """), params)
-    await db.commit()
 
 
 async def find_by_key(key: str, db: AsyncSession):
@@ -73,7 +71,6 @@ async def archive(branch_id: int, db: AsyncSession):
         UPDATE branch SET is_archived = TRUE, updated_at = NOW()
         WHERE branch_id = :branch_id
     """), {'branch_id': branch_id})
-    await db.commit()
 
 
 async def find_public(user_id: int, query: str, db: AsyncSession):

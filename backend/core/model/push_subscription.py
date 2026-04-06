@@ -14,7 +14,6 @@ async def upsert(user_id: int, endpoint: str, p256dh: str, auth: str,
         'user_id': user_id, 'endpoint': endpoint,
         'p256dh': p256dh, 'auth': auth,
     })
-    await db.commit()
 
 
 async def find_by_user(user_id: int, db: AsyncSession) -> list[dict]:
@@ -32,4 +31,3 @@ async def delete_by_endpoint(endpoint: str, db: AsyncSession):
     await db.execute(text("""
         DELETE FROM push_subscription WHERE endpoint = :endpoint
     """), {'endpoint': endpoint})
-    await db.commit()

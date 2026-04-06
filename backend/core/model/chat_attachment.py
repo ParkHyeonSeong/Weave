@@ -15,7 +15,6 @@ async def bulk_create(message_id: int, attachments: list[dict], db: AsyncSession
             'file_type': att['file_type'],
             'file_size': att['file_size'],
         })
-    await db.commit()
 
 
 async def find_by_message_ids(message_ids: list[int], db: AsyncSession) -> dict:

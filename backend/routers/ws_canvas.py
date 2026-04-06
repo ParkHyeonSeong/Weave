@@ -36,7 +36,7 @@ async def websocket_canvas_collab(ws: WebSocket, canvas_id: int, page_id: int):
     user_id = payload['user_id']
 
     # 멤버십 + 페이지 소속 확인
-    async with db.AsyncSessionLocal() as session:
+    async with db.transactional_session() as session:
         if not await member_model.is_member(canvas_id, user_id, session):
             await ws.close(code=4003, reason="Not a member")
             return
@@ -49,7 +49,7 @@ async def websocket_canvas_collab(ws: WebSocket, canvas_id: int, page_id: int):
     await ws.accept()
 
     # 방 입장
-    async with db.AsyncSessionLocal() as session:
+    async with db.transactional_session() as session:
         await collab_manager.join(page_id, user_id, ws, session)
 
     try:

@@ -9,7 +9,6 @@ async def create(schedule_event_id: int, task_id: int, created_by: int, db: Asyn
         VALUES (:schedule_event_id, :task_id, :created_by)
         RETURNING link_id
     """), {'schedule_event_id': schedule_event_id, 'task_id': task_id, 'created_by': created_by})
-    await db.commit()
     return result.scalar_one()
 
 
@@ -40,7 +39,6 @@ async def delete(link_id: int, db: AsyncSession):
     await db.execute(text("""
         DELETE FROM schedule_event_task WHERE link_id = :link_id
     """), {'link_id': link_id})
-    await db.commit()
 
 
 async def search_tasks(branch_id: int, keyword: str, exclude_event_id: int, db: AsyncSession):

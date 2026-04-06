@@ -25,4 +25,3 @@ async def create_settings(workspace_name: str, registration_policy: str,
         'registration_policy': registration_policy,
         'admin_user_id': admin_user_id,
     })
-    await db.commit()

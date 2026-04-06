@@ -66,7 +66,6 @@ async def create(branch_id: int, display_number: int, title: str,
         'custom_fields': cf_json,
         'sort_order': next_sort,
     })
-    await db.commit()
     return result.scalar_one()
 
 
@@ -433,7 +432,6 @@ async def update(task_id: int, fields: dict, db: AsyncSession):
     await db.execute(text(f"""
         UPDATE task SET {set_clause} WHERE task_id = :task_id
     """), updates)
-    await db.commit()
 
 
 async def delete(task_id: int, db: AsyncSession):
@@ -441,7 +439,6 @@ async def delete(task_id: int, db: AsyncSession):
     await db.execute(text("""
         DELETE FROM task WHERE task_id = :task_id
     """), {'task_id': task_id})
-    await db.commit()
 
 
 async def reorder(branch_id: int, task_ids: list, sprint_id, after_task_id, db: AsyncSession):
@@ -492,7 +489,6 @@ async def reorder(branch_id: int, task_ids: list, sprint_id, after_task_id, db: 
             WHERE task_id = :task_id AND branch_id = :branch_id
         """), {'sprint_id': sprint_id, 'task_id': tid, 'branch_id': branch_id})
 
-    await db.commit()
 
 
 async def move_incomplete(from_sprint_id: int, to_sprint_id, db: AsyncSession) -> int:
@@ -505,7 +501,6 @@ async def move_incomplete(from_sprint_id: int, to_sprint_id, db: AsyncSession) -
               WHERE ws.branch_id = t.branch_id AND ws.key = t.status AND ws.category = 'done'
           )
     """), {'from_sprint_id': from_sprint_id, 'to_sprint_id': to_sprint_id})
-    await db.commit()
     return result.rowcount
 
 
@@ -675,7 +670,6 @@ async def set_labels(task_id: int, label_ids: list, db: AsyncSession):
         await db.execute(text("""
             INSERT INTO task_label (task_id, label_id) VALUES (:task_id, :label_id)
         """), {'task_id': task_id, 'label_id': label_id})
-    await db.commit()
 
 
 async def batch_statuses(task_ids: list[int], user_id: int, db: AsyncSession) -> dict:
@@ -743,4 +737,3 @@ async def set_assignees(task_id: int, main_user_id, sub_user_ids: list, db: Asyn
         await db.execute(text("""
             INSERT INTO task_assignee (task_id, user_id, role) VALUES (:task_id, :user_id, 'sub')
         """), {'task_id': task_id, 'user_id': sub_id})
-    await db.commit()

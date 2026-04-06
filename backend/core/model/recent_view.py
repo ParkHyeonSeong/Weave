@@ -10,7 +10,6 @@ async def upsert(user_id: int, item_type: str, item_id: int, db: AsyncSession):
         ON CONFLICT (user_id, item_type, item_id)
         DO UPDATE SET viewed_at = NOW()
     """), {'user_id': user_id, 'item_type': item_type, 'item_id': item_id})
-    await db.commit()
 
 
 async def find_recent(user_id: int, limit: int, db: AsyncSession, item_type: str | None = None):

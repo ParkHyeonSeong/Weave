@@ -17,7 +17,6 @@ async def create(canvas_name: str, key: str, description: str,
         'created_by': created_by,
         'branch_id': branch_id,
     })
-    await db.commit()
     return result.scalar_one()
 
 
@@ -57,7 +56,6 @@ async def update(canvas_id: int, fields: dict, db: AsyncSession):
         UPDATE canvas SET {set_clauses}, updated_at = NOW()
         WHERE canvas_id = :canvas_id
     """), params)
-    await db.commit()
 
 
 async def find_by_key(key: str, db: AsyncSession):
@@ -86,7 +84,6 @@ async def hard_delete(canvas_id: int, db: AsyncSession):
     await db.execute(text("""
         DELETE FROM canvas WHERE canvas_id = :canvas_id
     """), {'canvas_id': canvas_id})
-    await db.commit()
 
 
 async def find_public(user_id: int, query: str, db: AsyncSession):

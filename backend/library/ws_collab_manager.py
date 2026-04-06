@@ -116,7 +116,7 @@ class CollabManager:
                 room.persist_task.cancel()
 
             if room.dirty:
-                async with db.AsyncSessionLocal() as session:
+                async with db.transactional_session() as session:
                     await self._persist(room, session)
 
             del self.rooms[page_id]
@@ -228,7 +228,7 @@ class CollabManager:
     async def _debounced_persist(self, room: Room):
         try:
             await asyncio.sleep(PERSIST_DEBOUNCE_SECS)
-            async with db.AsyncSessionLocal() as session:
+            async with db.transactional_session() as session:
                 await self._persist(room, session)
         except asyncio.CancelledError:
             pass
@@ -251,7 +251,7 @@ class CollabManager:
         for page_id, room in list(self.rooms.items()):
             if room.dirty:
                 try:
-                    async with db.AsyncSessionLocal() as session:
+                    async with db.transactional_session() as session:
                         await self._persist(room, session)
                 except Exception as e:
                     logger.error("Shutdown persist failed for page %d: %s",

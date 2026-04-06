@@ -17,7 +17,6 @@ async def create(branch_id: int, type_key: str, type_name: str,
         'color': color,
         'sort_order': sort_order,
     })
-    await db.commit()
     return result.scalar_one()
 
 
@@ -51,7 +50,6 @@ async def update(type_id: int, fields: dict, db: AsyncSession):
     await db.execute(text(f"""
         UPDATE task_type_config SET {sets} WHERE type_id = :type_id
     """), fields)
-    await db.commit()
 
 
 async def delete(type_id: int, db: AsyncSession):
@@ -59,7 +57,6 @@ async def delete(type_id: int, db: AsyncSession):
     await db.execute(text("""
         DELETE FROM task_type_config WHERE type_id = :type_id
     """), {'type_id': type_id})
-    await db.commit()
 
 
 async def seed_defaults(branch_id: int, db: AsyncSession):
@@ -81,7 +78,6 @@ async def seed_defaults(branch_id: int, db: AsyncSession):
             'color': color,
             'sort_order': sort_order,
         })
-    await db.commit()
 
 
 async def count_tasks_by_type(branch_id: int, type_key: str, db: AsyncSession) -> int:

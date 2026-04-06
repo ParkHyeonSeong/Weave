@@ -9,7 +9,6 @@ async def create(email: str, password_hash: bytes, username: str, db: AsyncSessi
         VALUES (:email, :password, :username, :status)
         RETURNING user_id
     """), {'email': email, 'password': password_hash, 'username': username, 'status': status})
-    await db.commit()
     return result.scalar_one()
 
 
@@ -31,7 +30,6 @@ async def update_role(user_id: int, role: str, db: AsyncSession):
         SET role = :role
         WHERE user_id = :user_id
     """), {'user_id': user_id, 'role': role})
-    await db.commit()
 
 
 async def update_login(user_id: int, ip: str, db: AsyncSession):
@@ -41,7 +39,6 @@ async def update_login(user_id: int, ip: str, db: AsyncSession):
         SET last_login_at = NOW(), last_login_ip = :ip
         WHERE user_id = :user_id
     """), {'user_id': user_id, 'ip': ip})
-    await db.commit()
 
 
 async def find_all(db: AsyncSession):
@@ -85,7 +82,6 @@ async def update_status(user_id: int, status: str, db: AsyncSession):
         SET status = :status
         WHERE user_id = :user_id
     """), {'user_id': user_id, 'status': status})
-    await db.commit()
 
 
 async def update_username(user_id: int, username: str, db: AsyncSession):
@@ -95,7 +91,6 @@ async def update_username(user_id: int, username: str, db: AsyncSession):
         SET username = :username
         WHERE user_id = :user_id
     """), {'user_id': user_id, 'username': username})
-    await db.commit()
 
 
 async def update_password(user_id: int, password_hash: bytes, db: AsyncSession):
@@ -105,7 +100,6 @@ async def update_password(user_id: int, password_hash: bytes, db: AsyncSession):
         SET password = :password, must_change_password = FALSE
         WHERE user_id = :user_id
     """), {'user_id': user_id, 'password': password_hash})
-    await db.commit()
 
 
 async def set_must_change_password(user_id: int, flag: bool, db: AsyncSession):
@@ -115,7 +109,6 @@ async def set_must_change_password(user_id: int, flag: bool, db: AsyncSession):
         SET must_change_password = :flag
         WHERE user_id = :user_id
     """), {'user_id': user_id, 'flag': flag})
-    await db.commit()
 
 
 async def search_active(query: str, exclude_user_id: int, limit: int = 10,
@@ -141,7 +134,6 @@ async def soft_delete(user_id: int, db: AsyncSession):
         SET deleted_at = NOW()
         WHERE user_id = :user_id
     """), {'user_id': user_id})
-    await db.commit()
 
 
 async def update_avatar(user_id: int, avatar_url: str, db: AsyncSession):
@@ -151,7 +143,6 @@ async def update_avatar(user_id: int, avatar_url: str, db: AsyncSession):
         SET avatar_url = :avatar_url
         WHERE user_id = :user_id
     """), {'user_id': user_id, 'avatar_url': avatar_url})
-    await db.commit()
 
 
 async def get_sidebar_order(user_id: int, db: AsyncSession):
@@ -170,4 +161,3 @@ async def update_sidebar_order(user_id: int, sidebar_order: dict, db: AsyncSessi
         SET sidebar_order = CAST(:sidebar_order AS jsonb)
         WHERE user_id = :user_id
     """), {'user_id': user_id, 'sidebar_order': __import__('json').dumps(sidebar_order)})
-    await db.commit()

@@ -42,7 +42,6 @@ async def create(branch_id: int, key: str, label: str, color: str,
         'sort_order': sort_order,
         'is_default': is_default,
     })
-    await db.commit()
     return result.scalar_one()
 
 
@@ -53,7 +52,6 @@ async def update(workflow_status_id: int, fields: dict, db: AsyncSession):
     await db.execute(text(f"""
         UPDATE workflow_status SET {sets} WHERE workflow_status_id = :workflow_status_id
     """), fields)
-    await db.commit()
 
 
 async def delete(workflow_status_id: int, db: AsyncSession):
@@ -61,7 +59,6 @@ async def delete(workflow_status_id: int, db: AsyncSession):
     await db.execute(text("""
         DELETE FROM workflow_status WHERE workflow_status_id = :workflow_status_id
     """), {'workflow_status_id': workflow_status_id})
-    await db.commit()
 
 
 async def reorder(items: list, db: AsyncSession):
@@ -71,7 +68,6 @@ async def reorder(items: list, db: AsyncSession):
             UPDATE workflow_status SET sort_order = :sort_order
             WHERE workflow_status_id = :id
         """), item)
-    await db.commit()
 
 
 async def clear_default(branch_id: int, db: AsyncSession):
@@ -80,7 +76,6 @@ async def clear_default(branch_id: int, db: AsyncSession):
         UPDATE workflow_status SET is_default = FALSE
         WHERE branch_id = :branch_id
     """), {'branch_id': branch_id})
-    await db.commit()
 
 
 async def seed_defaults(branch_id: int, db: AsyncSession):
@@ -99,7 +94,6 @@ async def seed_defaults(branch_id: int, db: AsyncSession):
             'color': color, 'category': category,
             'sort_order': sort_order, 'is_default': is_default,
         })
-    await db.commit()
 
 
 async def count_tasks_with_status(branch_id: int, key: str, db: AsyncSession) -> int:

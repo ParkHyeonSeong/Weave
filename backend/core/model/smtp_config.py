@@ -85,6 +85,5 @@ async def upsert_config(smtp_host: str, smtp_port: int, smtp_user: str,
             'smtp_password': actual_password, 'sender_email': sender_email,
             'sender_name': sender_name, 'use_tls': use_tls, 'updated_by': updated_by,
         })
-    await db.commit()
     row = result.fetchone()
     return dict(row._mapping)

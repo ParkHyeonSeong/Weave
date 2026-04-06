@@ -45,7 +45,6 @@ async def create(type_id: int, field_name: str, field_type: str,
         'is_required': is_required,
         'sort_order': sort_order,
     })
-    await db.commit()
     return result.scalar_one()
 
 
@@ -58,7 +57,6 @@ async def update(custom_field_id: int, fields: dict, db: AsyncSession):
     await db.execute(text(f"""
         UPDATE custom_field SET {sets} WHERE custom_field_id = :custom_field_id
     """), fields)
-    await db.commit()
 
 
 async def delete(custom_field_id: int, db: AsyncSession):
@@ -66,7 +64,6 @@ async def delete(custom_field_id: int, db: AsyncSession):
     await db.execute(text("""
         DELETE FROM custom_field WHERE custom_field_id = :custom_field_id
     """), {'custom_field_id': custom_field_id})
-    await db.commit()
 
 
 async def reorder(items: list, db: AsyncSession):
@@ -76,4 +73,3 @@ async def reorder(items: list, db: AsyncSession):
             UPDATE custom_field SET sort_order = :sort_order
             WHERE custom_field_id = :id
         """), item)
-    await db.commit()

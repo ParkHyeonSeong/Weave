@@ -8,7 +8,6 @@ async def add(branch_id: int, user_id: int, role: str, db: AsyncSession):
         INSERT INTO branch_member (branch_id, user_id, role)
         VALUES (:branch_id, :user_id, :role)
     """), {'branch_id': branch_id, 'user_id': user_id, 'role': role})
-    await db.commit()
 
 
 async def is_member(branch_id: int, user_id: int, db: AsyncSession) -> bool:
@@ -50,7 +49,6 @@ async def update_role(branch_id: int, user_id: int, role: str, db: AsyncSession)
         UPDATE branch_member SET role = :role
         WHERE branch_id = :branch_id AND user_id = :user_id
     """), {'branch_id': branch_id, 'user_id': user_id, 'role': role})
-    await db.commit()
 
 
 async def remove(branch_id: int, user_id: int, db: AsyncSession):
@@ -59,7 +57,6 @@ async def remove(branch_id: int, user_id: int, db: AsyncSession):
         DELETE FROM branch_member
         WHERE branch_id = :branch_id AND user_id = :user_id
     """), {'branch_id': branch_id, 'user_id': user_id})
-    await db.commit()
 
 
 async def count_admins(branch_id: int, db: AsyncSession) -> int:

@@ -13,7 +13,6 @@ async def create(branch_id: int, label_name: str, color: str, db: AsyncSession) 
         'label_name': label_name,
         'color': color,
     })
-    await db.commit()
     return result.scalar_one()
 
 
@@ -46,7 +45,6 @@ async def update(label_id: int, label_name: str, color: str, db: AsyncSession):
         UPDATE label SET label_name = :label_name, color = :color
         WHERE label_id = :label_id
     """), {'label_id': label_id, 'label_name': label_name, 'color': color})
-    await db.commit()
 
 
 async def delete(label_id: int, db: AsyncSession):
@@ -54,4 +52,3 @@ async def delete(label_id: int, db: AsyncSession):
     await db.execute(text("""
         DELETE FROM label WHERE label_id = :label_id
     """), {'label_id': label_id})
-    await db.commit()

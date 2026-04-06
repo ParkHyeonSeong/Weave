@@ -19,7 +19,6 @@ async def create(canvas_id: int, title: str, content: str,
         'created_by': created_by,
         'type': page_type,
     })
-    await db.commit()
     return result.scalar_one()
 
 
@@ -80,7 +79,6 @@ async def update(page_id: int, fields: dict, updated_by: int, db: AsyncSession):
         UPDATE canvas_page SET {set_clauses}, updated_at = NOW()
         WHERE page_id = :page_id
     """), params)
-    await db.commit()
 
 
 async def move_page(page_id: int, canvas_id: int, new_parent_id, new_position: int,
@@ -140,7 +138,6 @@ async def move_page(page_id: int, canvas_id: int, new_parent_id, new_position: i
         'page_id': page_id,
     })
 
-    await db.commit()
 
 
 async def hard_delete(page_id: int, db: AsyncSession):
@@ -176,7 +173,6 @@ async def hard_delete(page_id: int, db: AsyncSession):
         DELETE FROM canvas_page
         WHERE page_id IN (SELECT page_id FROM descendants)
     """), {'page_id': page_id})
-    await db.commit()
 
 
 async def copy_page(page_id: int, parent_page_id: int | None,
@@ -228,7 +224,6 @@ async def save_yjs_state(page_id: int, yjs_state: bytes,
             SET yjs_state = :yjs_state, yjs_updated_at = NOW(), updated_at = NOW()
             WHERE page_id = :page_id
         """), {'page_id': page_id, 'yjs_state': yjs_state})
-    await db.commit()
 
 
 async def search_for_chat(user_id: int, keyword: str, db: AsyncSession):

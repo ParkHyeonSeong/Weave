@@ -8,7 +8,6 @@ async def add(canvas_id: int, user_id: int, role: str, db: AsyncSession):
         INSERT INTO canvas_member (canvas_id, user_id, role)
         VALUES (:canvas_id, :user_id, :role)
     """), {'canvas_id': canvas_id, 'user_id': user_id, 'role': role})
-    await db.commit()
 
 
 async def is_member(canvas_id: int, user_id: int, db: AsyncSession) -> bool:
@@ -50,7 +49,6 @@ async def update_role(canvas_id: int, user_id: int, role: str, db: AsyncSession)
         UPDATE canvas_member SET role = :role
         WHERE canvas_id = :canvas_id AND user_id = :user_id
     """), {'canvas_id': canvas_id, 'user_id': user_id, 'role': role})
-    await db.commit()
 
 
 async def remove(canvas_id: int, user_id: int, db: AsyncSession):
@@ -59,7 +57,6 @@ async def remove(canvas_id: int, user_id: int, db: AsyncSession):
         DELETE FROM canvas_member
         WHERE canvas_id = :canvas_id AND user_id = :user_id
     """), {'canvas_id': canvas_id, 'user_id': user_id})
-    await db.commit()
 
 
 async def count_admins(canvas_id: int, db: AsyncSession) -> int:

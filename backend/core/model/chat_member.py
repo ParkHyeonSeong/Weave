@@ -9,7 +9,6 @@ async def add(room_id: int, user_id: int, db: AsyncSession):
         VALUES (:room_id, :user_id)
         ON CONFLICT DO NOTHING
     """), {'room_id': room_id, 'user_id': user_id})
-    await db.commit()
 
 
 async def find_by_room(room_id: int, db: AsyncSession):
@@ -59,4 +58,3 @@ async def update_last_read(room_id: int, user_id: int, db: AsyncSession):
         SET last_read_at = NOW()
         WHERE room_id = :room_id AND user_id = :user_id
     """), {'room_id': room_id, 'user_id': user_id})
-    await db.commit()

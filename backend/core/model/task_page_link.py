@@ -9,7 +9,6 @@ async def create(task_id: int, page_id: int, created_by: int, db: AsyncSession) 
         VALUES (:task_id, :page_id, :created_by)
         RETURNING link_id
     """), {'task_id': task_id, 'page_id': page_id, 'created_by': created_by})
-    await db.commit()
     return result.scalar_one()
 
 
@@ -32,7 +31,6 @@ async def delete(link_id: int, db: AsyncSession):
     await db.execute(text("""
         DELETE FROM task_page_link WHERE link_id = :link_id
     """), {'link_id': link_id})
-    await db.commit()
 
 
 async def search_pages(user_id: int, keyword: str, exclude_task_id: int, db: AsyncSession):

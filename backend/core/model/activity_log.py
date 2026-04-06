@@ -38,7 +38,6 @@ async def create(entity_type: str, entity_id: int, actor_id: int, action: str,
         'changes': json.dumps(safe_changes, ensure_ascii=False),
         'summary': summary,
     })
-    await db.commit()
     return result.scalar_one()
 
 

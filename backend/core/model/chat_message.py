@@ -14,7 +14,6 @@ async def create(room_id: int, sender_id: int, content: str, db: AsyncSession,
         RETURNING message_id, room_id, sender_id, content, task_id, canvas_page_id, issue_id, created_at
     """), {'room_id': room_id, 'sender_id': sender_id, 'content': content,
            'task_id': task_id, 'canvas_page_id': canvas_page_id, 'issue_id': issue_id})
-    await db.commit()
     row = result.fetchone()
     return dict(row._mapping)
 

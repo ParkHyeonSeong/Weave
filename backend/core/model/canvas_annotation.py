@@ -26,7 +26,6 @@ async def create_annotation(
         'anchor_node_path': anchor_node_path,
         'anchor_offset': anchor_offset, 'anchor_length': anchor_length,
     })
-    await db.commit()
     return result.scalar_one()
 
 
@@ -85,7 +84,6 @@ async def update_status(annotation_id: int, status: str, resolved_by: int | None
             SET status = 'open', resolved_by = NULL, resolved_at = NULL, updated_at = NOW()
             WHERE annotation_id = :annotation_id
         """), {'annotation_id': annotation_id})
-    await db.commit()
 
 
 async def delete_annotation(annotation_id: int, db: AsyncSession):
@@ -93,7 +91,6 @@ async def delete_annotation(annotation_id: int, db: AsyncSession):
     await db.execute(text("""
         DELETE FROM canvas_annotation WHERE annotation_id = :annotation_id
     """), {'annotation_id': annotation_id})
-    await db.commit()
 
 
 async def get_page_id(annotation_id: int, db: AsyncSession):
@@ -114,7 +111,6 @@ async def create_reply(annotation_id: int, author_id: int, content: str, db: Asy
         VALUES (:annotation_id, :author_id, :content)
         RETURNING reply_id
     """), {'annotation_id': annotation_id, 'author_id': author_id, 'content': content})
-    await db.commit()
     return result.scalar_one()
 
 
@@ -149,7 +145,6 @@ async def update_reply(reply_id: int, content: str, db: AsyncSession):
         UPDATE canvas_annotation_reply SET content = :content, updated_at = NOW()
         WHERE reply_id = :reply_id
     """), {'reply_id': reply_id, 'content': content})
-    await db.commit()
 
 
 async def delete_reply(reply_id: int, db: AsyncSession):
@@ -157,7 +152,6 @@ async def delete_reply(reply_id: int, db: AsyncSession):
     await db.execute(text("""
         DELETE FROM canvas_annotation_reply WHERE reply_id = :reply_id
     """), {'reply_id': reply_id})
-    await db.commit()
 
 
 async def find_replier_ids(annotation_id: int, db: AsyncSession) -> list[int]:

@@ -17,7 +17,6 @@ async def create(branch_id: int, sprint_name: str, goal: str,
         'end_date': end_date,
         'created_by': created_by,
     })
-    await db.commit()
     return result.scalar_one()
 
 
@@ -75,7 +74,6 @@ async def update(sprint_id: int, fields: dict, db: AsyncSession):
     await db.execute(text(f"""
         UPDATE sprint SET {set_clause} WHERE sprint_id = :sprint_id
     """), updates)
-    await db.commit()
 
 
 async def reorder(branch_id: int, sprint_ids: list, db: AsyncSession):
@@ -85,7 +83,6 @@ async def reorder(branch_id: int, sprint_ids: list, db: AsyncSession):
             UPDATE sprint SET sort_order = :sort_order
             WHERE sprint_id = :sprint_id AND branch_id = :branch_id
         """), {'sort_order': idx, 'sprint_id': sid, 'branch_id': branch_id})
-    await db.commit()
 
 
 async def delete(sprint_id: int, db: AsyncSession):
@@ -96,4 +93,3 @@ async def delete(sprint_id: int, db: AsyncSession):
     await db.execute(text("""
         DELETE FROM sprint WHERE sprint_id = :sprint_id
     """), {'sprint_id': sprint_id})
-    await db.commit()

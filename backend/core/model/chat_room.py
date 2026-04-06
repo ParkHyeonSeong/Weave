@@ -10,7 +10,6 @@ async def create(room_type: str, room_name: str | None, created_by: int,
         VALUES (:room_type, :room_name, :created_by)
         RETURNING room_id
     """), {'room_type': room_type, 'room_name': room_name, 'created_by': created_by})
-    await db.commit()
     return result.scalar_one()
 
 
@@ -79,7 +78,6 @@ async def update_room_name(room_id: int, room_name: str, db: AsyncSession):
     await db.execute(text("""
         UPDATE chat_room SET room_name = :room_name WHERE room_id = :room_id
     """), {'room_id': room_id, 'room_name': room_name})
-    await db.commit()
 
 
 async def find_dm_room(user_id_1: int, user_id_2: int, db: AsyncSession):

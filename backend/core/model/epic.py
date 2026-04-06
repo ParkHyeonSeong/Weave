@@ -23,7 +23,6 @@ async def create(branch_id: int, epic_name: str, description: str,
         'due_date': due_date,
         'created_by': created_by,
     })
-    await db.commit()
     return result.scalar_one()
 
 
@@ -81,7 +80,6 @@ async def update(epic_id: int, fields: dict, db: AsyncSession):
     await db.execute(text(f"""
         UPDATE epic SET {set_clause} WHERE epic_id = :epic_id
     """), params)
-    await db.commit()
 
 
 async def reorder(branch_id: int, epic_ids: list, db: AsyncSession):
@@ -91,7 +89,6 @@ async def reorder(branch_id: int, epic_ids: list, db: AsyncSession):
             UPDATE epic SET sort_order = :sort_order
             WHERE epic_id = :epic_id AND branch_id = :branch_id
         """), {'sort_order': idx, 'epic_id': eid, 'branch_id': branch_id})
-    await db.commit()
 
 
 async def find_for_calendar(branch_id: int, range_start, range_end, db: AsyncSession):
@@ -122,4 +119,3 @@ async def delete(epic_id: int, db: AsyncSession):
     await db.execute(text("""
         DELETE FROM epic WHERE epic_id = :epic_id
     """), {'epic_id': epic_id})
-    await db.commit()

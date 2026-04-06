@@ -48,7 +48,6 @@ async def upsert_config(provider: str, api_key: str, model: str,
             'provider': provider, 'api_key': encrypt(api_key), 'model': model,
             'updated_by': updated_by,
         })
-    await db.commit()
     row = result.fetchone()
     return dict(row._mapping)
 
@@ -62,7 +61,6 @@ async def create_conversation(user_id: int, title: str, db: AsyncSession) -> dic
         VALUES (:user_id, :title)
         RETURNING conversation_id, user_id, title, created_at, updated_at
     """), {'user_id': user_id, 'title': title})
-    await db.commit()
     row = result.fetchone()
     return dict(row._mapping)
 
@@ -97,7 +95,6 @@ async def delete_conversation(conversation_id: int, user_id: int, db: AsyncSessi
         DELETE FROM ai_conversation
         WHERE conversation_id = :conversation_id AND user_id = :user_id
     """), {'conversation_id': conversation_id, 'user_id': user_id})
-    await db.commit()
     return result.rowcount > 0
 
 
@@ -107,7 +104,6 @@ async def update_conversation_title(conversation_id: int, title: str, db: AsyncS
         UPDATE ai_conversation SET title = :title, updated_at = NOW()
         WHERE conversation_id = :conversation_id
     """), {'conversation_id': conversation_id, 'title': title})
-    await db.commit()
 
 
 async def update_conversation_timestamp(conversation_id: int, db: AsyncSession):
@@ -116,7 +112,6 @@ async def update_conversation_timestamp(conversation_id: int, db: AsyncSession):
         UPDATE ai_conversation SET updated_at = NOW()
         WHERE conversation_id = :conversation_id
     """), {'conversation_id': conversation_id})
-    await db.commit()
 
 
 # ── ai_message ───────────────────────────────────────────────────────────
@@ -129,7 +124,6 @@ async def create_message(conversation_id: int, role: str, content: str,
         VALUES (:conversation_id, :role, :content)
         RETURNING message_id, conversation_id, role, content, is_pinned, created_at
     """), {'conversation_id': conversation_id, 'role': role, 'content': content})
-    await db.commit()
     row = result.fetchone()
     return dict(row._mapping)
 
@@ -152,7 +146,6 @@ async def toggle_pin(message_id: int, db: AsyncSession):
         WHERE message_id = :message_id
         RETURNING message_id, is_pinned
     """), {'message_id': message_id})
-    await db.commit()
     row = result.fetchone()
     if not row:
         return None

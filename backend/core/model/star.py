@@ -11,13 +11,11 @@ async def toggle(user_id: int, item_type: str, item_id: int, db: AsyncSession):
     """), {'user_id': user_id, 'item_type': item_type, 'item_id': item_id})
     deleted = result.fetchone()
     if deleted:
-        await db.commit()
         return {'starred': False}
     await db.execute(text("""
         INSERT INTO user_star (user_id, item_type, item_id)
         VALUES (:user_id, :item_type, :item_id)
     """), {'user_id': user_id, 'item_type': item_type, 'item_id': item_id})
-    await db.commit()
     return {'starred': True}
 
 

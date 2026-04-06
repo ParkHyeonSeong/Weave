@@ -19,6 +19,11 @@
     overflow-y: auto;
     min-width: 0;
 
+    // BranchDetail: 패널이 뷰포트 높이에 고정되어야 하므로 스크롤을 자식에게 위임
+    &:has(.BranchDetail) {
+      overflow: hidden;
+    }
+
     // Typst 편집 모드: 내부 에디터가 자체 스크롤 처리
     &:has(.CanvasPageView--typst-editing) {
       overflow: hidden;

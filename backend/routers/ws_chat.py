@@ -75,7 +75,7 @@ async def websocket_chat(ws: WebSocket):
                     continue
 
                 # DB 세션 생성 (WebSocket은 Depends 사용 불가)
-                async with db.AsyncSessionLocal() as session:
+                async with db.transactional_session() as session:
                     # 멤버 확인
                     if not await member_model.is_member(room_id, user_id, session):
                         continue
@@ -186,7 +186,7 @@ async def websocket_chat(ws: WebSocket):
                 if not room_id:
                     continue
 
-                async with db.AsyncSessionLocal() as session:
+                async with db.transactional_session() as session:
                     await member_model.update_last_read(room_id, user_id, session)
 
                     # 상대방에게 읽음 알림 전송

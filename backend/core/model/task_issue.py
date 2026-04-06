@@ -9,7 +9,6 @@ async def create_issue(task_id: int, title: str, body: str, created_by: int, db:
         VALUES (:task_id, :title, :body, :created_by)
         RETURNING issue_id
     """), {'task_id': task_id, 'title': title, 'body': body, 'created_by': created_by})
-    await db.commit()
     return result.scalar_one()
 
 
@@ -53,7 +52,6 @@ async def update_issue(issue_id: int, fields: dict, db: AsyncSession):
     await db.execute(text(f"""
         UPDATE task_issue SET {', '.join(set_parts)} WHERE issue_id = :issue_id
     """), updates)
-    await db.commit()
 
 
 async def delete_issue(issue_id: int, db: AsyncSession):
@@ -61,7 +59,6 @@ async def delete_issue(issue_id: int, db: AsyncSession):
     await db.execute(text("""
         DELETE FROM task_issue WHERE issue_id = :issue_id
     """), {'issue_id': issue_id})
-    await db.commit()
 
 
 async def find_by_id_simple(issue_id: int, db: AsyncSession):
@@ -139,7 +136,6 @@ async def create_comment(issue_id: int, author_id: int, content: str, db: AsyncS
         VALUES (:issue_id, :author_id, :content)
         RETURNING comment_id
     """), {'issue_id': issue_id, 'author_id': author_id, 'content': content})
-    await db.commit()
     return result.scalar_one()
 
 
@@ -174,7 +170,6 @@ async def update_comment(comment_id: int, content: str, db: AsyncSession):
         UPDATE task_issue_comment SET content = :content, updated_at = NOW()
         WHERE comment_id = :comment_id
     """), {'comment_id': comment_id, 'content': content})
-    await db.commit()
 
 
 async def find_commenter_ids(issue_id: int, db: AsyncSession) -> list[int]:
@@ -191,4 +186,3 @@ async def delete_comment(comment_id: int, db: AsyncSession):
     await db.execute(text("""
         DELETE FROM task_issue_comment WHERE comment_id = :comment_id
     """), {'comment_id': comment_id})
-    await db.commit()

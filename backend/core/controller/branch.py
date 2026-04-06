@@ -32,7 +32,6 @@ async def create(body, request: Request, db: AsyncSession):
     await db.execute(text("""
         INSERT INTO task_sequence (branch_id, last_number) VALUES (:branch_id, 0)
     """), {'branch_id': branch_id})
-    await db.commit()
 
     # 기본 task type 시딩
     await type_model.seed_defaults(branch_id, db)
