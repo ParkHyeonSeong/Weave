@@ -12,8 +12,10 @@ import {
 import '@xyflow/react/dist/style.css';
 import { axios } from '@/library/_axios';
 import TaskNode from './TaskNode';
+import DeletableEdge from './DeletableEdge';
 
 const nodeTypes = { task: TaskNode };
+const edgeTypes = { deletable: DeletableEdge };
 
 // 엣지 스타일
 const EDGE_STYLES = {
@@ -33,6 +35,7 @@ export default function FlowCanvas({
   workflowStatuses, onSelectTask, onDataChange,
 }) {
   const saveTimerRef = useRef(null);
+  const deleteEdgeRef = useRef(null);
   const [edgeType, setEdgeType] = useState('finish_to_start');
 
   // 태스크 -> 노드 변환
@@ -49,21 +52,44 @@ export default function FlowCanvas({
           title: task.title,
           taskType: task.task_type,
           statusColor: ws?.color || '#9CA3AF',
+          statusLabel: ws?.label || '',
+          dueDate: task.due_date || null,
           assignee: task.assignees?.[0] || null,
         },
       };
     });
   }, [tasks, flowPositions, workflowStatuses]);
 
+  // 엣지 삭제 (ref로 stale closure 방지)
+  const handleDeleteEdge = useCallback(async (edgeId, dependencyId) => {
+    if (!dependencyId) return;
+    try {
+      const res = await axios.delete(`/branches/${branchId}/dependencies/${dependencyId}`);
+      if (res.data.status) {
+        setEdges((eds) => eds.filter((e) => e.id !== edgeId));
+        if (onDataChange) onDataChange();
+      }
+    } catch {}
+  }, [branchId, setEdges, onDataChange]);
+  deleteEdgeRef.current = handleDeleteEdge;
+
   // 의존관계 -> 엣지 변환
   const initialEdges = useMemo(() => {
-    return dependencies.map((dep) => ({
-      id: `dep-${dep.dependency_id}`,
-      source: String(dep.source_task_id),
-      target: String(dep.target_task_id),
-      ...EDGE_STYLES[dep.dep_type] || EDGE_STYLES.finish_to_start,
-      data: { dependencyId: dep.dependency_id, depType: dep.dep_type },
-    }));
+    return dependencies.map((dep) => {
+      const baseStyle = EDGE_STYLES[dep.dep_type] || EDGE_STYLES.finish_to_start;
+      return {
+        id: `dep-${dep.dependency_id}`,
+        source: String(dep.source_task_id),
+        target: String(dep.target_task_id),
+        ...baseStyle,
+        type: 'deletable',
+        data: {
+          dependencyId: dep.dependency_id,
+          depType: dep.dep_type,
+          onDelete: (edgeId, depId) => deleteEdgeRef.current?.(edgeId, depId),
+        },
+      };
+    });
   }, [dependencies]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
@@ -134,7 +160,12 @@ export default function FlowCanvas({
           source: connection.source,
           target: connection.target,
           ...EDGE_STYLES[edgeType],
-          data: { dependencyId: res.data.dependency_id, depType: edgeType },
+          type: 'deletable',
+          data: {
+            dependencyId: res.data.dependency_id,
+            depType: edgeType,
+            onDelete: (edgeId, depId) => deleteEdgeRef.current?.(edgeId, depId),
+          },
         };
         setEdges((eds) => addEdge(newEdge, eds));
         if (onDataChange) onDataChange();
@@ -147,19 +178,6 @@ export default function FlowCanvas({
       }
     } catch {}
   }, [branchId, edgeType, setEdges, onDataChange]);
-
-  // 엣지 클릭 -> 삭제
-  const handleEdgeClick = useCallback(async (_event, edge) => {
-    const depId = edge.data?.dependencyId;
-    if (!depId) return;
-    try {
-      const res = await axios.delete(`/branches/${branchId}/dependencies/${depId}`);
-      if (res.data.status) {
-        setEdges((eds) => eds.filter((e) => e.id !== edge.id));
-        if (onDataChange) onDataChange();
-      }
-    } catch {}
-  }, [branchId, setEdges, onDataChange]);
 
   // 노드 더블클릭 -> 태스크 상세
   const handleNodeDoubleClick = useCallback((_event, node) => {
@@ -175,9 +193,9 @@ export default function FlowCanvas({
         onNodesChange={handleNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={handleConnect}
-        onEdgeClick={handleEdgeClick}
         onNodeDoubleClick={handleNodeDoubleClick}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         fitView
         fitViewOptions={{ padding: 0.2 }}
         deleteKeyCode={null}

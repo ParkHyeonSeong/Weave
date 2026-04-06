@@ -110,8 +110,11 @@
     gap: $space-4;
   }
 
-  // -- 제목 --
+  // -- 제목 + 상태 --
   &__TitleWrap {
+    display: flex;
+    flex-direction: column;
+    gap: $space-2;
     min-height: 32px;
   }
 

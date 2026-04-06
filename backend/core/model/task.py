@@ -279,7 +279,7 @@ async def find_by_epic(epic_id: int, branch_id: int, db: AsyncSession):
     result = await db.execute(text("""
         SELECT t.task_id, t.display_number, t.title,
                t.task_type, t.status, t.priority,
-               t.sort_order, t.created_at,
+               t.sort_order, t.created_at, t.due_date,
                b.key AS branch_key
         FROM task t
         INNER JOIN branch b ON t.branch_id = b.branch_id
