@@ -109,6 +109,11 @@
     display: flex;
     flex-direction: column;
     gap: $space-4;
+
+    // 자식 압축 방지 — Body가 스크롤 처리
+    > * {
+      flex-shrink: 0;
+    }
   }
 
   // -- 제목 + 상태 --
