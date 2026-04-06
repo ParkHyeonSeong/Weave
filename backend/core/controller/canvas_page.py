@@ -5,6 +5,7 @@ from core.model import canvas_page as page_model
 from core.model import canvas_member as member_model
 from core.model import recent_view
 from library import notification_service
+from library import activity_service
 from library.mention_parser import extract_mention_user_ids
 
 
@@ -27,6 +28,9 @@ async def create(canvas_id: int, body, request: Request, db: AsyncSession):
         page_type=body.type,
         db=db,
     )
+
+    # 활동 로그
+    await activity_service.log_canvas_page_created(page_id, canvas_id, user_id, body.title, db)
 
     return {'status': True, 'page_id': page_id}
 
@@ -73,6 +77,9 @@ async def update(canvas_id: int, page_id: int, body, request: Request, db: Async
 
     await page_model.update(page_id, fields, user_id, db)
 
+    # 활동 로그
+    await activity_service.log_canvas_page_change(page_id, canvas_id, user_id, page, fields, db)
+
     # content 멘션 알림 (새로 추가된 멘션만)
     if 'content' in fields and fields['content']:
         old_mentions = set(extract_mention_user_ids(page.get('content') or ''))
@@ -108,6 +115,10 @@ async def move(canvas_id: int, page_id: int, body, request: Request, db: AsyncSe
     await page_model.move_page(
         page_id, canvas_id, body.parent_page_id, body.position, user_id, db
     )
+
+    # 활동 로그
+    await activity_service.log_canvas_page_moved(page_id, canvas_id, user_id, db)
+
     return {'status': True}
 
 
@@ -143,6 +154,9 @@ async def delete(canvas_id: int, page_id: int, request: Request, db: AsyncSessio
     # overview 페이지는 삭제 불가
     if page['type'] == 'overview':
         return {'status': False, 'message': 'CANNOT_DELETE_OVERVIEW'}
+
+    # 활동 로그 (삭제 전 기록)
+    await activity_service.log_canvas_page_deleted(page_id, canvas_id, user_id, page.get('title', ''), db)
 
     await page_model.hard_delete(page_id, db)
     return {'status': True}

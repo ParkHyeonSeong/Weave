@@ -1,0 +1,147 @@
+@use '../../variables' as *;
+
+.ActivityTimeline {
+  display: flex;
+  flex-direction: column;
+  gap: $space-2;
+
+  &__Header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  &__Label {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-semibold;
+    color: $color-text-secondary;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    display: flex;
+    align-items: center;
+    gap: $space-1;
+  }
+
+  &__Count {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    color: $color-text-tertiary;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  &__Empty {
+    font-size: $font-size-sm;
+    color: $color-text-tertiary;
+    padding: $space-2 0;
+  }
+
+  &__List {
+    display: flex;
+    flex-direction: column;
+    gap: $space-3;
+  }
+
+  &__Group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__DateLabel {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-semibold;
+    color: $color-text-tertiary;
+    padding: $space-1 0;
+  }
+
+  &__Item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: $space-2 $space-3;
+    border-radius: $radius-md;
+    transition: background $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+    }
+  }
+
+  &__ItemHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $space-2;
+  }
+
+  &__Author {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-semibold;
+    color: $color-text;
+  }
+
+  &__Time {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+    flex-shrink: 0;
+  }
+
+  &__Summary {
+    font-size: $font-size-sm;
+    color: $color-text-secondary;
+    line-height: 1.4;
+  }
+
+  &__Changes {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 2px;
+  }
+
+  &__ChangeRow {
+    display: flex;
+    align-items: center;
+    gap: $space-1;
+    font-size: $font-size-xs;
+  }
+
+  &__ChangeOld {
+    color: $color-text-tertiary;
+    text-decoration: line-through;
+  }
+
+  &__ChangeArrow {
+    color: $color-text-tertiary;
+    flex-shrink: 0;
+  }
+
+  &__ChangeNew {
+    color: $color-text;
+    font-weight: $font-weight-medium;
+  }
+
+  &__ChangeAdded {
+    color: $color-success;
+    font-weight: $font-weight-medium;
+  }
+
+  &__ChangeRemoved {
+    color: $color-error;
+    font-weight: $font-weight-medium;
+  }
+
+  &__More {
+    font-size: $font-size-xs;
+    color: $color-primary;
+    padding: $space-1 $space-2;
+    border-radius: $radius-md;
+    transition: background $transition-fast;
+    align-self: flex-start;
+
+    &:hover {
+      background: rgba($color-primary, 0.08);
+    }
+  }
+}

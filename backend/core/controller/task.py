@@ -7,6 +7,7 @@ from core.model import task_type_config as type_model
 from core.model import workflow_status as ws_model
 from core.model import recent_view
 from library import notification_service
+from library import activity_service
 from library.mention_parser import extract_mention_user_ids
 
 
@@ -66,6 +67,9 @@ async def create(body, branch_id: int, request: Request, db: AsyncSession):
             f'{username}님이 {prefix} {body.title}에서 회원님을 멘션했습니다',
             link, 'task', task_id, db,
         )
+
+    # 활동 로그
+    await activity_service.log_task_created(task_id, branch_id, user_id, db)
 
     return {'status': True, 'task_id': task_id, 'display_number': display_number}
 
@@ -153,6 +157,8 @@ async def update(task_id: int, body, branch_id: int, request: Request, db: Async
 
     if fields:
         await task_model.update(task_id, fields, db)
+        # 필드 변경 활동 로그
+        await activity_service.log_task_change(task_id, branch_id, user_id, task, fields, db)
 
     # description 멘션 알림 (새로 추가된 멘션만)
     if 'description' in fields and fields['description']:
@@ -171,16 +177,29 @@ async def update(task_id: int, body, branch_id: int, request: Request, db: Async
 
     # 라벨 업데이트
     if body.label_ids is not None:
+        old_labels = task.get('labels') or []
         await task_model.set_labels(task_id, body.label_ids, db)
+        # 새 라벨 목록 조회 후 diff 로깅
+        updated_task = await task_model.find_by_id(task_id, db)
+        new_labels = updated_task.get('labels') or []
+        await activity_service.log_task_label_change(task_id, branch_id, user_id, old_labels, new_labels, db)
 
     # 담당자 업데이트 + 알림
     if body.assignees is not None:
         # 이전 담당자 목록
+        old_assignees_list = task.get('assignees') or []
         old_assignee_ids = set()
-        for a in (task.get('assignees') or []):
+        for a in old_assignees_list:
             old_assignee_ids.add(a['user_id'])
 
         await task_model.set_assignees(task_id, body.assignees.main, body.assignees.sub or [], db)
+
+        # 담당자 변경 활동 로그
+        updated_task_for_assignees = await task_model.find_by_id(task_id, db)
+        new_assignees_list = updated_task_for_assignees.get('assignees') or []
+        await activity_service.log_task_assignee_change(
+            task_id, branch_id, user_id, old_assignees_list, new_assignees_list, db
+        )
 
         # 새로 추가된 담당자에게 알림
         new_assignee_ids = set()
@@ -224,5 +243,6 @@ async def delete(task_id: int, branch_id: int, request: Request, db: AsyncSessio
     if not task or task['branch_id'] != branch_id:
         return {'status': False, 'message': 'TASK_NOT_FOUND'}
 
+    await activity_service.log_task_deleted(task_id, branch_id, user_id, db)
     await task_model.delete(task_id, db)
     return {'status': True}

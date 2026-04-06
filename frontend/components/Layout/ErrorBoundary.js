@@ -33,7 +33,7 @@ export default class ErrorBoundary extends Component {
             문제가 발생했습니다
           </h2>
           <p style={{ fontSize: '14px' }}>
-            예상치 못한 오류가 발생했습니다. 페이지를 새로고침해 주세요.
+            예상치 못한 오류가 발생했습니다. 페이지를 새로고침해 주시거나, 문제가 계속되면 관리자에게 문의해 주세요.
           </p>
           <button
             onClick={() => window.location.reload()}

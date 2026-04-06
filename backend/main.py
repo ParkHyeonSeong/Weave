@@ -36,6 +36,7 @@ from routers import recent_view as recent_view_router
 from routers import workflow_status as workflow_status_router
 from routers import custom_field as custom_field_router
 from routers import notification as notification_router
+from routers import activity_log as activity_log_router
 from routers import task_dependency as task_dependency_router
 from routers import task_page_link as task_page_link_router
 from routers import url_meta as url_meta_router
@@ -144,6 +145,7 @@ app.include_router(recent_view_router.router, prefix="/api/recent-views", tags=[
 app.include_router(workflow_status_router.router, prefix="/api/branches/{branch_id}/workflow-statuses", tags=["workflow-statuses"])
 app.include_router(custom_field_router.router, prefix="/api/branches/{branch_id}/task-types/{type_id}/custom-fields", tags=["custom-fields"])
 app.include_router(notification_router.router, prefix="/api/notifications", tags=["notifications"])
+app.include_router(activity_log_router.router, prefix="/api", tags=["activity-log"])
 app.include_router(task_dependency_router.router, prefix="/api/branches/{branch_id}/dependencies", tags=["dependencies"])
 app.include_router(task_page_link_router.router, prefix="/api/branches/{branch_id}/tasks/{task_id}/pages", tags=["task-pages"])
 app.include_router(url_meta_router.router, prefix="/api/url-meta", tags=["url-meta"])
