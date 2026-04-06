@@ -8,6 +8,7 @@
   background: $color-bg;
   border-bottom: 1px solid $color-border;
   z-index: 100;
+  -webkit-app-region: no-drag;
 
   // -- Left section --
   &__Left {

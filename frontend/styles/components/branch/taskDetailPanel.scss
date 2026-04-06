@@ -30,6 +30,7 @@
     padding: $space-3 $space-4;
     border-bottom: 1px solid $color-border;
     flex-shrink: 0;
+    -webkit-app-region: no-drag;
   }
 
   &__HeaderLeft {

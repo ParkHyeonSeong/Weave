@@ -38,6 +38,12 @@ button {
   background: none;
   font-family: inherit;
   font-size: inherit;
+  -webkit-app-region: no-drag;
+}
+
+// PWA standalone: 모든 인터랙티브 요소에서 타이틀바 드래그 방지
+a, input, select, textarea, [role="button"] {
+  -webkit-app-region: no-drag;
 }
 
 input {
