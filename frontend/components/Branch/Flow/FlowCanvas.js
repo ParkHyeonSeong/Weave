@@ -60,19 +60,6 @@ export default function FlowCanvas({
     });
   }, [tasks, flowPositions, workflowStatuses]);
 
-  // 엣지 삭제 (ref로 stale closure 방지)
-  const handleDeleteEdge = useCallback(async (edgeId, dependencyId) => {
-    if (!dependencyId) return;
-    try {
-      const res = await axios.delete(`/branches/${branchId}/dependencies/${dependencyId}`);
-      if (res.data.status) {
-        setEdges((eds) => eds.filter((e) => e.id !== edgeId));
-        if (onDataChange) onDataChange();
-      }
-    } catch {}
-  }, [branchId, setEdges, onDataChange]);
-  deleteEdgeRef.current = handleDeleteEdge;
-
   // 의존관계 -> 엣지 변환
   const initialEdges = useMemo(() => {
     return dependencies.map((dep) => {
@@ -94,6 +81,19 @@ export default function FlowCanvas({
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+
+  // 엣지 삭제 (ref로 stale closure 방지)
+  const handleDeleteEdge = useCallback(async (edgeId, dependencyId) => {
+    if (!dependencyId) return;
+    try {
+      const res = await axios.delete(`/branches/${branchId}/dependencies/${dependencyId}`);
+      if (res.data.status) {
+        setEdges((eds) => eds.filter((e) => e.id !== edgeId));
+        if (onDataChange) onDataChange();
+      }
+    } catch {}
+  }, [branchId, setEdges, onDataChange]);
+  deleteEdgeRef.current = handleDeleteEdge;
 
   // props 변경 시 edges 동기화 (백그라운드 refetch 반영)
   useEffect(() => {
