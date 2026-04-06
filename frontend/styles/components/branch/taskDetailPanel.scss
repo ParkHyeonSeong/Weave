@@ -598,10 +598,6 @@
         cursor: pointer;
         vertical-align: baseline;
         line-height: 1.6;
-        white-space: nowrap;
-        max-width: 100%;
-        overflow: hidden;
-        text-overflow: ellipsis;
 
         &::before {
           content: '';
@@ -729,10 +725,6 @@
     cursor: pointer;
     vertical-align: baseline;
     line-height: 1.6;
-    white-space: nowrap;
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
 
     &::before {
       content: '';

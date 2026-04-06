@@ -110,7 +110,7 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
       </div>
 
       <div className="TaskDetailPanel__Body">
-        {/* 제목 */}
+        {/* 제목 + 상태 */}
         <div className="TaskDetailPanel__TitleWrap">
           {editingTitle ? (
             <input
@@ -130,22 +130,20 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
               {task.title}
             </h2>
           )}
-        </div>
-
-        {/* 상태 버튼 */}
-        <div className="TaskDetailPanel__StatusWrap">
-          <CustomSelect
-            value={task.status}
-            options={workflowStatuses.length > 0
-              ? workflowStatuses.map((ws) => ({ value: ws.key, label: ws.label, color: ws.color }))
-              : [
-                { value: 'todo', label: 'To Do', color: '#9CA3AF' },
-                { value: 'in_progress', label: 'In Progress', color: '#2563EB' },
-                { value: 'done', label: 'Done', color: '#16A34A' },
-              ]
-            }
-            onChange={(val) => updateField('status', val)}
-          />
+          <div className="TaskDetailPanel__StatusWrap">
+            <CustomSelect
+              value={task.status}
+              options={workflowStatuses.length > 0
+                ? workflowStatuses.map((ws) => ({ value: ws.key, label: ws.label, color: ws.color }))
+                : [
+                  { value: 'todo', label: 'To Do', color: '#9CA3AF' },
+                  { value: 'in_progress', label: 'In Progress', color: '#2563EB' },
+                  { value: 'done', label: 'Done', color: '#16A34A' },
+                ]
+              }
+              onChange={(val) => updateField('status', val)}
+            />
+          </div>
         </div>
 
         {/* 설명 */}
