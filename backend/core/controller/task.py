@@ -157,8 +157,9 @@ async def update(task_id: int, body, branch_id: int, request: Request, db: Async
 
     if fields:
         await task_model.update(task_id, fields, db)
-        # 필드 변경 활동 로그
-        await activity_service.log_task_change(task_id, branch_id, user_id, task, fields, db)
+        # 필드 변경 활동 로그 (update 후 새 task 조회하여 new_label 보강)
+        updated = await task_model.find_by_id(task_id, db)
+        await activity_service.log_task_change(task_id, branch_id, user_id, task, fields, updated, db)
 
     # description 멘션 알림 (새로 추가된 멘션만)
     if 'description' in fields and fields['description']:

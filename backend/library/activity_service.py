@@ -1,10 +1,8 @@
 """활동 이력 서비스 - diff 계산 + 요약 생성 + activity_log 기록"""
-import logging
+from datetime import date, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.model import activity_log as log_model
-
-logger = logging.getLogger(__name__)
 
 # Task에서 추적할 스칼라 필드
 TASK_TRACKED_FIELDS = [
@@ -29,6 +27,15 @@ FIELD_LABELS = {
 }
 
 
+def _normalize_value(val):
+    """비교용 값 정규화 (date/datetime → str, 나머지는 그대로)"""
+    if isinstance(val, datetime):
+        return val.isoformat()
+    if isinstance(val, date):
+        return val.isoformat()
+    return val
+
+
 def _compute_diffs(old: dict, new: dict, tracked_fields: list) -> list[dict]:
     """old와 new를 비교해서 변경된 필드만 반환"""
     changes = []
@@ -40,13 +47,17 @@ def _compute_diffs(old: dict, new: dict, tracked_fields: list) -> list[dict]:
         # 둘 다 None이면 변경 아님
         if old_val is None and new_val is None:
             continue
-        # str 비교 시 빈문자열/None 정규화
-        if isinstance(old_val, str) and isinstance(new_val, str):
-            if old_val.strip() == new_val.strip():
+        # 비교 전 타입 정규화 (date vs str 문제 방지)
+        norm_old = _normalize_value(old_val)
+        norm_new = _normalize_value(new_val)
+        # str 비교 시 빈문자열 정규화
+        if isinstance(norm_old, str) and isinstance(norm_new, str):
+            if norm_old.strip() == norm_new.strip():
                 continue
-        elif old_val == new_val:
+        elif norm_old == norm_new:
             continue
-        changes.append({'field': field, 'old': old_val, 'new': new_val})
+        # 저장 시에도 정규화된 값 사용 (JSON 직렬화 안전)
+        changes.append({'field': field, 'old': norm_old, 'new': norm_new})
     return changes
 
 
@@ -102,8 +113,10 @@ def _generate_summary(action: str, changes: list, entity_label: str = '') -> str
         elif field == 'description' or field == 'content':
             parts.append(f'{label} 수정')
         else:
-            old_v = ch.get('old_label') or ch.get('old') or '-'
-            new_v = ch.get('new_label') or ch.get('new') or '-'
+            old_v = ch.get('old_label') if ch.get('old_label') is not None else ch.get('old')
+            new_v = ch.get('new_label') if ch.get('new_label') is not None else ch.get('new')
+            old_v = '-' if old_v is None else old_v
+            new_v = '-' if new_v is None else new_v
             parts.append(f'{label} {old_v} -> {new_v}')
 
     return ', '.join(parts) if parts else f'{entity_label} 수정'
@@ -121,16 +134,19 @@ async def log_task_created(task_id: int, branch_id: int, actor_id: int,
 
 
 async def log_task_change(task_id: int, branch_id: int, actor_id: int,
-                          old_task: dict, new_fields: dict, db: AsyncSession):
+                          old_task: dict, new_fields: dict,
+                          updated_task: dict, db: AsyncSession):
     """Task 필드 변경 로그"""
     changes = _compute_diffs(old_task, new_fields, TASK_TRACKED_FIELDS)
 
-    # sprint 이름 보강
+    # sprint/epic 이름 보강
     for ch in changes:
         if ch['field'] == 'sprint_id':
             ch['old_label'] = old_task.get('sprint_name')
+            ch['new_label'] = updated_task.get('sprint_name')
         elif ch['field'] == 'epic_id':
             ch['old_label'] = old_task.get('epic_name')
+            ch['new_label'] = updated_task.get('epic_name')
 
     if not changes:
         return

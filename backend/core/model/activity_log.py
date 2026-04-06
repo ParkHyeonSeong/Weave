@@ -1,6 +1,18 @@
 import json
+from datetime import date, datetime
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+
+def _sanitize_for_json(obj):
+    """JSONB 저장 전 date/datetime 등 직렬화 불가 타입을 str로 변환"""
+    if isinstance(obj, dict):
+        return {k: _sanitize_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize_for_json(v) for v in obj]
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    return obj
 
 
 async def create(entity_type: str, entity_id: int, actor_id: int, action: str,
@@ -8,6 +20,8 @@ async def create(entity_type: str, entity_id: int, actor_id: int, action: str,
                  branch_id: int | None = None, canvas_id: int | None = None,
                  db: AsyncSession = None) -> int:
     """활동 로그 생성, log_id 반환"""
+    # date/datetime → str 변환 후 json.dumps로 JSONB 저장
+    safe_changes = _sanitize_for_json(changes)
     result = await db.execute(text("""
         INSERT INTO activity_log
             (entity_type, entity_id, branch_id, canvas_id, actor_id, action, changes, summary)
@@ -21,7 +35,7 @@ async def create(entity_type: str, entity_id: int, actor_id: int, action: str,
         'canvas_id': canvas_id,
         'actor_id': actor_id,
         'action': action,
-        'changes': json.dumps(changes, ensure_ascii=False, default=str),
+        'changes': json.dumps(safe_changes, ensure_ascii=False),
         'summary': summary,
     })
     await db.commit()

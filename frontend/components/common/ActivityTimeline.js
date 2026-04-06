@@ -1,24 +1,23 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Clock, ArrowRight } from 'lucide-react';
 import { axios } from '@/library/_axios';
 
 /**
  * ActivityTimeline - Task/Canvas 페이지의 활동 이력 타임라인
  *
- * @param {'task'|'canvas_page'} entityType
  * @param {string} apiUrl - activity API 경로 (예: /branches/1/tasks/2/activity)
  * @param {boolean} expanded - 전체 표시 여부 (false면 최근 5개만)
  */
-export default function ActivityTimeline({ entityType, apiUrl, expanded = false }) {
+export default function ActivityTimeline({ apiUrl, expanded = false }) {
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(false);
+  const offsetRef = useRef(0);
   const LIMIT = 20;
 
   const fetchActivities = useCallback(async (append = false) => {
     if (!apiUrl) return;
-    const currentOffset = append ? offset : 0;
+    const currentOffset = append ? offsetRef.current : 0;
     try {
       const res = await axios.get(apiUrl, {
         params: { limit: LIMIT, offset: currentOffset },
@@ -31,22 +30,22 @@ export default function ActivityTimeline({ entityType, apiUrl, expanded = false 
           setActivities(items);
         }
         setHasMore(items.length >= LIMIT);
-        setOffset(currentOffset + items.length);
+        offsetRef.current = currentOffset + items.length;
       }
     } catch {}
     setLoading(false);
-  }, [apiUrl, offset]);
+  }, [apiUrl]);
 
   useEffect(() => {
     setLoading(true);
-    setOffset(0);
+    offsetRef.current = 0;
     fetchActivities(false);
-  }, [apiUrl]);
+  }, [fetchActivities]);
 
   // 외부 이벤트로 갱신
   useEffect(() => {
     const handler = () => {
-      setOffset(0);
+      offsetRef.current = 0;
       fetchActivities(false);
     };
     window.addEventListener('task:updated', handler);
@@ -55,7 +54,7 @@ export default function ActivityTimeline({ entityType, apiUrl, expanded = false 
       window.removeEventListener('task:updated', handler);
       window.removeEventListener('canvas_page:updated', handler);
     };
-  }, [apiUrl]);
+  }, [fetchActivities]);
 
   const displayActivities = expanded ? activities : activities.slice(0, 5);
 
@@ -117,7 +116,7 @@ export default function ActivityTimeline({ entityType, apiUrl, expanded = false 
 
 
 function ActivityItem({ activity }) {
-  const { actor_name, action, summary, changes, created_at } = activity;
+  const { actor_name, summary, changes, created_at } = activity;
 
   return (
     <div className="ActivityTimeline__Item">
@@ -126,7 +125,7 @@ function ActivityItem({ activity }) {
         <span className="ActivityTimeline__Time">{timeAgo(created_at)}</span>
       </div>
       <div className="ActivityTimeline__Summary">{summary}</div>
-      {changes && changes.length > 0 && (
+      {Array.isArray(changes) && changes.length > 0 && (
         <div className="ActivityTimeline__Changes">
           {changes.map((ch, i) => (
             <ChangeDetail key={i} change={ch} />

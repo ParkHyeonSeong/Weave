@@ -885,7 +885,6 @@ export default function CanvasPageView({ onRefClick }) {
           </div>
           <div className="CanvasPageView__HistorySidebarContent">
             <ActivityTimeline
-              entityType="canvas_page"
               apiUrl={`/canvases/${canvasId}/pages/${pageId}/activity`}
               expanded
             />

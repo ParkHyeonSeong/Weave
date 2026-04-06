@@ -212,7 +212,6 @@ export default function TaskFullPage() {
 
           {/* 활동 이력 */}
           <ActivityTimeline
-            entityType="task"
             apiUrl={`/branches/${branchId}/tasks/${task.task_id}/activity`}
             expanded
           />
