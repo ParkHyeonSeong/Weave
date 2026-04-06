@@ -110,7 +110,7 @@ def _generate_summary(action: str, changes: list, entity_label: str = '') -> str
 
 
 async def log_task_created(task_id: int, branch_id: int, actor_id: int,
-                           fields: dict, db: AsyncSession):
+                           db: AsyncSession):
     """Task 생성 로그"""
     summary = _generate_summary('created', [], 'Task')
     await log_model.create(
