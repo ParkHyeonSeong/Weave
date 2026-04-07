@@ -996,6 +996,10 @@
       color: #16A34A;
       background: rgba(22, 163, 74, 0.1);
     }
+    &--cancelled {
+      color: #DC2626;
+      background: rgba(220, 38, 38, 0.1);
+    }
   }
 
   &__Default {

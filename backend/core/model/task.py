@@ -125,14 +125,14 @@ async def find_by_branch(branch_id: int, sprint_id, db: AsyncSession):
         # active sprint이면 done 포함, 아니면 done 제외
         done_filter = ("AND (NOT EXISTS ("
                        "  SELECT 1 FROM workflow_status ws"
-                       "  WHERE ws.branch_id = t.branch_id AND ws.key = t.status AND ws.category = 'done'"
+                       "  WHERE ws.branch_id = t.branch_id AND ws.key = t.status AND ws.category IN ('done', 'cancelled')"
                        ") OR (SELECT status FROM sprint WHERE sprint_id = :sprint_id) = 'active')")
         params = {'branch_id': branch_id, 'sprint_id': sprint_id}
     else:
         where_sprint = "AND t.sprint_id IS NULL"
         done_filter = ("AND NOT EXISTS ("
                        "  SELECT 1 FROM workflow_status ws"
-                       "  WHERE ws.branch_id = t.branch_id AND ws.key = t.status AND ws.category = 'done'"
+                       "  WHERE ws.branch_id = t.branch_id AND ws.key = t.status AND ws.category IN ('done', 'cancelled')"
                        ")")
         params = {'branch_id': branch_id}
 
@@ -315,7 +315,7 @@ async def find_archived(branch_id: int, db: AsyncSession):
         WHERE t.branch_id = :branch_id AND t.parent_task_id IS NULL
               AND EXISTS (
                   SELECT 1 FROM workflow_status ws
-                  WHERE ws.branch_id = t.branch_id AND ws.key = t.status AND ws.category = 'done'
+                  WHERE ws.branch_id = t.branch_id AND ws.key = t.status AND ws.category IN ('done', 'cancelled')
               )
         ORDER BY t.updated_at DESC NULLS LAST, t.created_at DESC
     """), params)
@@ -498,7 +498,7 @@ async def move_incomplete(from_sprint_id: int, to_sprint_id, db: AsyncSession) -
         WHERE t.sprint_id = :from_sprint_id
           AND NOT EXISTS (
               SELECT 1 FROM workflow_status ws
-              WHERE ws.branch_id = t.branch_id AND ws.key = t.status AND ws.category = 'done'
+              WHERE ws.branch_id = t.branch_id AND ws.key = t.status AND ws.category IN ('done', 'cancelled')
           )
     """), {'from_sprint_id': from_sprint_id, 'to_sprint_id': to_sprint_id})
     return result.rowcount
@@ -508,8 +508,8 @@ async def count_by_sprint_status(sprint_id: int, db: AsyncSession):
     """Sprint 내 완료/미완료 task 수 (workflow_status category 기반)"""
     result = await db.execute(text("""
         SELECT
-            COUNT(*) FILTER (WHERE COALESCE(ws.category, 'done') = 'done') AS done_count,
-            COUNT(*) FILTER (WHERE COALESCE(ws.category, 'done') != 'done') AS incomplete_count
+            COUNT(*) FILTER (WHERE COALESCE(ws.category, 'done') IN ('done', 'cancelled')) AS done_count,
+            COUNT(*) FILTER (WHERE COALESCE(ws.category, 'done') NOT IN ('done', 'cancelled')) AS incomplete_count
         FROM task t
         LEFT JOIN workflow_status ws ON t.branch_id = ws.branch_id AND t.status = ws.key
         WHERE t.sprint_id = :sprint_id

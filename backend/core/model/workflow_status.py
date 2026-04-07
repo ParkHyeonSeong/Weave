@@ -84,6 +84,7 @@ async def seed_defaults(branch_id: int, db: AsyncSession):
         ('todo', 'To Do', '#9CA3AF', 'todo', 0, True),
         ('in_progress', 'In Progress', '#2563EB', 'in_progress', 1, False),
         ('done', 'Done', '#16A34A', 'done', 2, False),
+        ('cancelled', 'Cancelled', '#DC2626', 'cancelled', 3, False),
     ]
     for key, label, color, category, sort_order, is_default in defaults:
         await db.execute(text("""

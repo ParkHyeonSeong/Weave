@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { axios } from '@/library/_axios';
-import { Circle, Loader, CheckCircle2, ListTodo } from 'lucide-react';
+import { Circle, Loader, CheckCircle2, XCircle, ListTodo } from 'lucide-react';
 
 export default function TaskSummary() {
   const router = useRouter();
-  const [counts, setCounts] = useState({ todo: 0, in_progress: 0, done: 0 });
+  const [counts, setCounts] = useState({ todo: 0, in_progress: 0, done: 0, cancelled: 0 });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -18,10 +18,11 @@ export default function TaskSummary() {
       if (res.data.status) {
         const tasks = res.data.tasks;
         // category 기반 집계: task에 status_category가 있으면 사용, 없으면 status 기반 fallback
-        const catCounts = { todo: 0, in_progress: 0, done: 0 };
+        const catCounts = { todo: 0, in_progress: 0, done: 0, cancelled: 0 };
         tasks.forEach((t) => {
           const cat = t.status_category || t.status;
           if (cat === 'done') catCounts.done++;
+          else if (cat === 'cancelled') catCounts.cancelled++;
           else if (cat === 'in_progress') catCounts.in_progress++;
           else catCounts.todo++;
         });
@@ -74,6 +75,11 @@ export default function TaskSummary() {
             <CheckCircle2 size={18} color="#16A34A" />
             <span className="TaskSummary__StatCount">{counts.done}</span>
             <span className="TaskSummary__StatLabel">Done</span>
+          </div>
+          <div className="TaskSummary__Stat" onClick={handleClick}>
+            <XCircle size={18} color="#DC2626" />
+            <span className="TaskSummary__StatCount">{counts.cancelled}</span>
+            <span className="TaskSummary__StatLabel">Cancelled</span>
           </div>
         </div>
       </div>

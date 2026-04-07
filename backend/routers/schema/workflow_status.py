@@ -20,8 +20,8 @@ class WorkflowStatusCreate(BaseModel):
     @field_validator('category')
     @classmethod
     def validate_category(cls, v):
-        if v not in ('todo', 'in_progress', 'done'):
-            raise ValueError('category must be "todo", "in_progress", or "done"')
+        if v not in ('todo', 'in_progress', 'done', 'cancelled'):
+            raise ValueError('category must be "todo", "in_progress", "done", or "cancelled"')
         return v
 
 
@@ -34,8 +34,8 @@ class WorkflowStatusUpdate(BaseModel):
     @field_validator('category')
     @classmethod
     def validate_category(cls, v):
-        if v is not None and v not in ('todo', 'in_progress', 'done'):
-            raise ValueError('category must be "todo", "in_progress", or "done"')
+        if v is not None and v not in ('todo', 'in_progress', 'done', 'cancelled'):
+            raise ValueError('category must be "todo", "in_progress", "done", or "cancelled"')
         return v
 
 

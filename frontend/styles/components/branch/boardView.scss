@@ -152,6 +152,10 @@
     &--done {
       background: $color-success;
     }
+
+    &--cancelled {
+      background: #DC2626;
+    }
   }
 
   &__Label {

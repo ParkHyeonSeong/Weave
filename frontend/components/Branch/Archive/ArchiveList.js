@@ -74,9 +74,9 @@ export default function ArchiveList({ branchId, branchKey, taskTypes, workflowSt
       <div className="ArchiveList">
         <div className="ArchiveList__Empty">
           <Archive size={40} />
-          <p className="ArchiveList__EmptyTitle">No completed tasks</p>
+          <p className="ArchiveList__EmptyTitle">No archived tasks</p>
           <p className="ArchiveList__EmptyDesc">
-            Tasks marked as done will appear here.
+            Done and cancelled tasks will appear here.
           </p>
         </div>
       </div>

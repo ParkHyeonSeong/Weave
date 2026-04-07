@@ -17,6 +17,7 @@ const DEFAULT_STATUS_OPTIONS = [
   { value: 'todo', label: 'To Do', color: '#9CA3AF' },
   { value: 'in_progress', label: 'In Progress', color: '#2563EB' },
   { value: 'done', label: 'Done', color: '#16A34A' },
+  { value: 'cancelled', label: 'Cancelled', color: '#DC2626' },
 ];
 
 export default function TaskListRow({ task, branchId, taskTypes, workflowStatuses, epics, members, onClick, isSelected, isOverlay }) {

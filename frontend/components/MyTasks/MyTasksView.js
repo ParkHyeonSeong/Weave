@@ -9,6 +9,7 @@ const STATUS_CATEGORY_OPTIONS = [
   { value: 'todo', label: 'To Do' },
   { value: 'in_progress', label: 'In Progress' },
   { value: 'done', label: 'Done' },
+  { value: 'cancelled', label: 'Cancelled' },
 ];
 
 const priorityOptions = [
@@ -167,7 +168,7 @@ function MyTasksRow({ task, onRefresh }) {
   };
 
   const category = task.status_category || task.status;
-  const isOverdue = task.due_date && category !== 'done' && new Date(task.due_date) < new Date();
+  const isOverdue = task.due_date && category !== 'done' && category !== 'cancelled' && new Date(task.due_date) < new Date();
 
   return (
     <div
