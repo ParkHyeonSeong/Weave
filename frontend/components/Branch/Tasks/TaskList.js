@@ -17,6 +17,26 @@ import CompleteSprintModal from '@/components/modal/CompleteSprintModal';
 import TaskFilterBar from '../TaskFilterBar';
 import TaskListRow from './TaskListRow';
 
+// localStorage 키 헬퍼
+const storageKey = (branchId, type) => `weave_tasks_${branchId}_${type}`;
+
+// Set <-> Array 변환
+const setToArray = (s) => [...(s || [])];
+const arrayToSet = (a) => new Set(a || []);
+
+// localStorage 안전 읽기
+function loadJSON(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+// 우선순위 정렬용 가중치
+const PRIORITY_WEIGHT = { urgent: 0, high: 1, medium: 2, low: 3 };
+
 export default function TaskList({ branchId, branchKey, taskTypes, workflowStatuses, onSelectTask }) {
   const [sprints, setSprints] = useState([]);
   const [backlogTasks, setBacklogTasks] = useState([]);
@@ -25,7 +45,7 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
   const [labels, setLabels] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // 필터 상태
+  // 필터 상태 (localStorage에서 복원)
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedUserIds, setSelectedUserIds] = useState(new Set());
   const [filters, setFilters] = useState({
@@ -35,6 +55,12 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
     typeKeys: new Set(),
     statusKeys: new Set(),
   });
+
+  // 정렬 상태 (localStorage에서 복원)
+  const [sortConfig, setSortConfig] = useState({ field: null, direction: 'asc' });
+
+  // 스프린트 접힘 상태 (localStorage에서 복원)
+  const [collapsedSprints, setCollapsedSprints] = useState(new Set());
 
   // 모달 상태
   const [sprintModal, setSprintModal] = useState({ open: false, sprint: null });
@@ -46,10 +72,70 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
   const [selectedTaskIds, setSelectedTaskIds] = useState(new Set());
   const [dragOverContainerId, setDragOverContainerId] = useState(null);
 
+  const sortActive = sortConfig.field !== null;
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor),
   );
+
+  // localStorage에서 필터/정렬/접힘 상태 복원 (branchId 변경 시)
+  useEffect(() => {
+    // 필터 복원
+    const saved = loadJSON(storageKey(branchId, 'filters'), null);
+    if (saved) {
+      setSearchQuery(saved.searchQuery || '');
+      setSelectedUserIds(arrayToSet(saved.selectedUserIds));
+      setFilters({
+        priorities: arrayToSet(saved.filters?.priorities),
+        labelIds: arrayToSet(saved.filters?.labelIds),
+        epicIds: arrayToSet(saved.filters?.epicIds),
+        typeKeys: arrayToSet(saved.filters?.typeKeys),
+        statusKeys: arrayToSet(saved.filters?.statusKeys),
+      });
+    } else {
+      setSearchQuery('');
+      setSelectedUserIds(new Set());
+      setFilters({
+        priorities: new Set(), labelIds: new Set(),
+        epicIds: new Set(), typeKeys: new Set(), statusKeys: new Set(),
+      });
+    }
+
+    // 정렬 복원
+    const savedSort = loadJSON(storageKey(branchId, 'sort'), { field: null, direction: 'asc' });
+    setSortConfig(savedSort);
+
+    // 접힘 복원
+    const savedCollapsed = loadJSON(storageKey(branchId, 'collapsed'), []);
+    setCollapsedSprints(new Set(savedCollapsed));
+  }, [branchId]);
+
+  // 필터 변경 시 localStorage 저장
+  useEffect(() => {
+    const data = {
+      searchQuery,
+      selectedUserIds: setToArray(selectedUserIds),
+      filters: {
+        priorities: setToArray(filters.priorities),
+        labelIds: setToArray(filters.labelIds),
+        epicIds: setToArray(filters.epicIds),
+        typeKeys: setToArray(filters.typeKeys),
+        statusKeys: setToArray(filters.statusKeys),
+      },
+    };
+    localStorage.setItem(storageKey(branchId, 'filters'), JSON.stringify(data));
+  }, [branchId, searchQuery, selectedUserIds, filters]);
+
+  // 정렬 변경 시 localStorage 저장
+  useEffect(() => {
+    localStorage.setItem(storageKey(branchId, 'sort'), JSON.stringify(sortConfig));
+  }, [branchId, sortConfig]);
+
+  // 접힘 변경 시 localStorage 저장
+  useEffect(() => {
+    localStorage.setItem(storageKey(branchId, 'collapsed'), JSON.stringify(setToArray(collapsedSprints)));
+  }, [branchId, collapsedSprints]);
 
   useEffect(() => {
     fetchData();
@@ -155,6 +241,69 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
     return true;
   });
 
+  // 정렬
+  const sortTasks = useCallback((tasks) => {
+    if (!sortConfig.field) return tasks;
+    const { field, direction } = sortConfig;
+    const dir = direction === 'asc' ? 1 : -1;
+
+    // workflow status sort_order 매핑
+    const statusOrderMap = {};
+    (workflowStatuses || []).forEach((ws, i) => {
+      statusOrderMap[ws.key] = i;
+    });
+
+    return [...tasks].sort((a, b) => {
+      let cmp = 0;
+      switch (field) {
+        case 'priority':
+          cmp = (PRIORITY_WEIGHT[a.priority] ?? 4) - (PRIORITY_WEIGHT[b.priority] ?? 4);
+          break;
+        case 'due_date': {
+          const da = a.due_date ? new Date(a.due_date).getTime() : Infinity;
+          const db = b.due_date ? new Date(b.due_date).getTime() : Infinity;
+          cmp = da - db;
+          break;
+        }
+        case 'status':
+          cmp = (statusOrderMap[a.status] ?? 999) - (statusOrderMap[b.status] ?? 999);
+          break;
+        case 'created':
+          cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+          break;
+        default:
+          break;
+      }
+      return cmp * dir;
+    });
+  }, [sortConfig, workflowStatuses]);
+
+  // 필터 + 정렬 적용
+  const applyFilterAndSort = (tasks) => sortTasks(filterTasks(tasks));
+
+  // 정렬 변경 핸들러 (null=해제, 3-state: null -> asc -> desc -> null)
+  const handleSortChange = (field) => {
+    if (field === null) {
+      setSortConfig({ field: null, direction: 'asc' });
+      return;
+    }
+    setSortConfig((prev) => {
+      if (prev.field !== field) return { field, direction: 'asc' };
+      if (prev.direction === 'asc') return { field, direction: 'desc' };
+      return { field: null, direction: 'asc' };
+    });
+  };
+
+  // 스프린트 접힘 토글
+  const handleToggleCollapse = useCallback((sprintKey) => {
+    setCollapsedSprints((prev) => {
+      const next = new Set(prev);
+      if (next.has(sprintKey)) next.delete(sprintKey);
+      else next.add(sprintKey);
+      return next;
+    });
+  }, []);
+
   // 태스크 선택 핸들러
   const handleTaskClick = useCallback((task, e) => {
     if (e.metaKey || e.ctrlKey) {
@@ -196,6 +345,7 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
 
   // DnD 핸들러
   const handleDragStart = (event) => {
+    if (sortActive) return; // 정렬 중에는 드래그 비활성
     const { active } = event;
     const id = active.id;
 
@@ -422,6 +572,8 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
           filters={filters}
           onToggleFilter={handleToggleFilter}
           onClearFilters={handleClearFilters}
+          sortConfig={sortConfig}
+          onSortChange={handleSortChange}
         />
         <button className="TaskList__SprintBtn" onClick={() => setSprintModal({ open: true, sprint: null })}>
           <Plus size={14} />
@@ -430,7 +582,7 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
       </div>
 
       <DndContext
-        sensors={sensors}
+        sensors={sortActive ? [] : sensors}
         collisionDetection={closestCorners}
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
@@ -441,7 +593,7 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
           {sprints.map((sprint) => (
             <TaskListSprint
               key={sprint.sprint_id}
-              sprint={{ ...sprint, tasks: filterTasks(sprint.tasks) }}
+              sprint={{ ...sprint, tasks: applyFilterAndSort(sprint.tasks) }}
               branchId={branchId}
               branchKey={branchKey}
               taskTypes={taskTypes}
@@ -454,13 +606,16 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
               onCompleteSprint={(s) => setCompleteSprint(s)}
               selectedTaskIds={selectedTaskIds}
               dragOverContainerId={dragOverContainerId}
+              sortActive={sortActive}
+              collapsed={collapsedSprints.has(sprint.sprint_id)}
+              onToggleCollapse={() => handleToggleCollapse(sprint.sprint_id)}
             />
           ))}
         </SortableContext>
 
         {/* Backlog 섹션 (sortable 아님, droppable만) */}
         <TaskListSprint
-          sprint={{ sprint_name: 'Backlog', status: 'backlog', tasks: filterTasks(backlogTasks) }}
+          sprint={{ sprint_name: 'Backlog', status: 'backlog', tasks: applyFilterAndSort(backlogTasks) }}
           branchId={branchId}
           branchKey={branchKey}
           taskTypes={taskTypes}
@@ -471,6 +626,9 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
           isBacklog
           selectedTaskIds={selectedTaskIds}
           dragOverContainerId={dragOverContainerId}
+          sortActive={sortActive}
+          collapsed={collapsedSprints.has('backlog')}
+          onToggleCollapse={() => handleToggleCollapse('backlog')}
         />
 
         {/* 드래그 오버레이 */}

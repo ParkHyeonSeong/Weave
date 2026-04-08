@@ -1,9 +1,16 @@
-import { useMemo } from 'react';
-import { Search, User, X } from 'lucide-react';
+import { useMemo, useState, useRef, useEffect } from 'react';
+import { Search, User, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import MultiSelect from '@/components/common/MultiSelect';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 
 const MAX_VISIBLE = 5;
+
+const SORT_OPTIONS = [
+  { value: 'priority', label: 'Priority' },
+  { value: 'due_date', label: 'Due Date' },
+  { value: 'status', label: 'Status' },
+  { value: 'created', label: 'Created' },
+];
 
 const PRIORITY_OPTIONS = [
   { value: 'urgent', label: 'Urgent', color: '#DC2626' },
@@ -16,7 +23,20 @@ export default function TaskFilterBar({
   members, searchQuery, onSearchChange, selectedUserIds, onToggleUser,
   labels = [], epics = [], taskTypes = [], workflowStatuses = [],
   filters = {}, onToggleFilter, onClearFilters,
+  sortConfig, onSortChange,
 }) {
+  const [sortOpen, setSortOpen] = useState(false);
+  const sortRef = useRef(null);
+
+  // 외부 클릭 닫기
+  useEffect(() => {
+    if (!sortOpen) return;
+    const handleClick = (e) => {
+      if (sortRef.current && !sortRef.current.contains(e.target)) setSortOpen(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [sortOpen]);
   const visibleMembers = members.slice(0, MAX_VISIBLE);
   const remaining = members.length - MAX_VISIBLE;
 
@@ -127,6 +147,61 @@ export default function TaskFilterBar({
               <X size={12} />
               Clear
             </button>
+          )}
+        </div>
+      )}
+
+      {/* Sort 드롭다운 */}
+      {onSortChange && (
+        <div className="TaskFilterBar__Sort" ref={sortRef}>
+          <button
+            type="button"
+            className={`TaskFilterBar__SortBtn ${sortConfig?.field ? 'TaskFilterBar__SortBtn--active' : ''}`}
+            onClick={() => setSortOpen((prev) => !prev)}
+          >
+            <ArrowUpDown size={13} />
+            {sortConfig?.field
+              ? `${SORT_OPTIONS.find((o) => o.value === sortConfig.field)?.label || 'Sort'}`
+              : 'Sort'}
+            {sortConfig?.field && (
+              sortConfig.direction === 'asc'
+                ? <ArrowUp size={11} />
+                : <ArrowDown size={11} />
+            )}
+          </button>
+          {sortConfig?.field && (
+            <button
+              type="button"
+              className="TaskFilterBar__SortClear"
+              onClick={() => onSortChange(null)}
+              title="Clear sort"
+            >
+              <X size={12} />
+            </button>
+          )}
+          {sortOpen && (
+            <div className="TaskFilterBar__SortDropdown">
+              {SORT_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  className={`TaskFilterBar__SortOption ${sortConfig?.field === opt.value ? 'TaskFilterBar__SortOption--active' : ''}`}
+                  onClick={() => {
+                    onSortChange(opt.value);
+                    if (sortConfig?.field === opt.value && sortConfig?.direction === 'desc') {
+                      setSortOpen(false);
+                    }
+                  }}
+                >
+                  <span>{opt.label}</span>
+                  {sortConfig?.field === opt.value && (
+                    sortConfig.direction === 'asc'
+                      ? <ArrowUp size={12} />
+                      : <ArrowDown size={12} />
+                  )}
+                </button>
+              ))}
+            </div>
           )}
         </div>
       )}

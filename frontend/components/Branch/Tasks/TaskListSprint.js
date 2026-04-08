@@ -22,9 +22,9 @@ function formatSprintDate(start, end) {
 export default function TaskListSprint({
   sprint, branchKey, branchId, taskTypes, workflowStatuses, epics, members, sprints,
   onEditTask, onEditSprint, onCompleteSprint, isBacklog,
-  selectedTaskIds, dragOverContainerId,
+  selectedTaskIds, dragOverContainerId, sortActive,
+  collapsed, onToggleCollapse,
 }) {
-  const [collapsed, setCollapsed] = useState(false);
   const [inlineTitle, setInlineTitle] = useState('');
   const [inlineType, setInlineType] = useState('task');
   const [showInline, setShowInline] = useState(false);
@@ -49,7 +49,7 @@ export default function TaskListSprint({
     isDragging: isSprintDragging,
   } = useSortable({
     id: containerId,
-    disabled: isBacklog,
+    disabled: isBacklog || sortActive,
   });
 
   const sprintStyle = {
@@ -153,10 +153,10 @@ export default function TaskListSprint({
       style={sprintStyle}
     >
       {/* Sprint 헤더 */}
-      <div className="TaskList__SprintHeader" onClick={() => setCollapsed(!collapsed)}>
+      <div className="TaskList__SprintHeader" onClick={onToggleCollapse}>
         <div className="TaskList__SprintLeft">
-          {/* 드래그 핸들 (백로그 제외) */}
-          {!isBacklog && (
+          {/* 드래그 핸들 (백로그/정렬 중 제외) */}
+          {!isBacklog && !sortActive && (
             <span
               className="TaskList__DragHandle"
               {...sprintAttributes}

@@ -489,6 +489,94 @@
     }
   }
 
+  // -- Sort --
+  &__Sort {
+    position: relative;
+  }
+
+  &__SortBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 10px;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    color: $color-text-secondary;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all $transition-fast;
+
+    &:hover {
+      border-color: $color-text-tertiary;
+    }
+
+    &--active {
+      color: $color-primary;
+      border-color: $color-primary;
+      background: rgba($color-primary, 0.05);
+    }
+  }
+
+  &__SortClear {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    color: $color-text-tertiary;
+    background: none;
+    border: none;
+    border-radius: $radius-sm;
+    cursor: pointer;
+    transition: all $transition-fast;
+
+    &:hover {
+      color: $color-error;
+      background: $color-error-bg;
+    }
+  }
+
+  &__SortDropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    min-width: 150px;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    box-shadow: $shadow-lg;
+    z-index: 50;
+    padding: 4px;
+  }
+
+  &__SortOption {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 6px 10px;
+    font-size: $font-size-sm;
+    color: $color-text;
+    background: none;
+    border: none;
+    border-radius: $radius-sm;
+    cursor: pointer;
+    transition: background $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+    }
+
+    &--active {
+      color: $color-primary;
+      font-weight: $font-weight-medium;
+    }
+  }
+
   // -- 활성 필터 칩 --
   &__ActiveFilters {
     display: flex;
