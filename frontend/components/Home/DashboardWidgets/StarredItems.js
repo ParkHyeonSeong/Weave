@@ -65,7 +65,14 @@ export default function StarredItems() {
                 onClick={() => handleClick(item)}
               >
                 {item.type === 'task' ? (
-                  <div className={`StarredItems__StatusDot StarredItems__StatusDot--${item.status}`} />
+                  <div
+                    className="StarredItems__StatusDot"
+                    style={item.status_color
+                      ? (item.status_category === 'todo'
+                        ? { border: `1.5px solid ${item.status_color}`, background: 'transparent' }
+                        : { backgroundColor: item.status_color })
+                      : undefined}
+                  />
                 ) : (
                   <FileText size={12} className="StarredItems__DocIcon" />
                 )}

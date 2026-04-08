@@ -14,7 +14,7 @@ export default function RecentItems() {
 
   const fetchRecent = async () => {
     try {
-      const res = await axios.get('/recent-views', { params: { limit: 8 } });
+      const res = await axios.get('/recent-views', { params: { limit: 20 } });
       if (res.data.status) {
         setItems(res.data.items);
       }
@@ -76,7 +76,14 @@ export default function RecentItems() {
                 onClick={() => handleClick(item)}
               >
                 {item.type === 'task' ? (
-                  <div className={`RecentItems__StatusDot RecentItems__StatusDot--${item.status}`} />
+                  <div
+                    className="RecentItems__StatusDot"
+                    style={item.status_color
+                      ? (item.status_category === 'todo'
+                        ? { border: `1.5px solid ${item.status_color}`, background: 'transparent' }
+                        : { backgroundColor: item.status_color })
+                      : undefined}
+                  />
                 ) : (
                   <FileText size={12} className="RecentItems__DocIcon" />
                 )}

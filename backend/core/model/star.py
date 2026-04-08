@@ -40,12 +40,14 @@ async def find_starred(user_id: int, limit: int, db: AsyncSession, item_type: st
         SELECT us.item_type, us.item_id, us.created_at,
                t.task_id, t.branch_id, t.display_number, t.title AS task_title,
                t.status AS task_status,
+               ws.color AS status_color, ws.category AS status_category,
                b.key AS branch_key,
                cp.page_id, cp.canvas_id, cp.title AS page_title,
                c.canvas_name
         FROM user_star us
         LEFT JOIN task t ON us.item_type = 'task' AND us.item_id = t.task_id
         LEFT JOIN branch b ON t.branch_id = b.branch_id
+        LEFT JOIN workflow_status ws ON ws.branch_id = t.branch_id AND ws.key = t.status
         LEFT JOIN canvas_page cp ON us.item_type = 'doc' AND us.item_id = cp.page_id
             AND cp.is_archived = FALSE
         LEFT JOIN canvas c ON cp.canvas_id = c.canvas_id
@@ -66,6 +68,8 @@ async def find_starred(user_id: int, limit: int, db: AsyncSession, item_type: st
                 'display_number': f"{r['branch_key']}-{r['display_number']}",
                 'title': r['task_title'],
                 'status': r['task_status'],
+                'status_color': r['status_color'],
+                'status_category': r['status_category'],
                 'starred_at': r['created_at'],
             })
         elif r['item_type'] == 'doc' and r['page_id']:

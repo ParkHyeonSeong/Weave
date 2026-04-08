@@ -65,7 +65,7 @@
   &__WidgetGrid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    grid-template-rows: auto 1fr;
+    grid-template-rows: auto auto;
     gap: $space-4;
     height: 100%;
     min-height: 0;
