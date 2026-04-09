@@ -115,6 +115,7 @@
     // 자식 압축 방지 — Body가 스크롤 처리
     > * {
       flex-shrink: 0;
+      min-width: 0;
     }
   }
 
@@ -245,6 +246,7 @@
     overflow-wrap: break-word;
     overflow: hidden;
     max-width: 100%;
+    min-width: 0;
 
     &--empty {
       color: $color-text-tertiary;
@@ -541,7 +543,9 @@
         border: 1px solid $color-border;
         border-radius: $radius-md;
         padding: $space-3;
-        overflow-x: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+        overflow-wrap: break-word;
         code { background: none; padding: 0; color: inherit; font-size: $font-size-sm; }
       }
 
@@ -687,6 +691,7 @@
   color: $color-text;
   overflow: hidden;
   max-width: 100%;
+  min-width: 0;
   word-break: break-word;
   overflow-wrap: break-word;
 
@@ -729,7 +734,9 @@
     border: 1px solid $color-border;
     border-radius: $radius-md;
     padding: $space-3;
-    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: break-word;
     code { background: none; padding: 0; color: inherit; font-size: $font-size-sm; }
   }
 
