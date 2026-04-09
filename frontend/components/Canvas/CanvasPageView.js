@@ -373,11 +373,22 @@ export default function CanvasPageView({ onRefClick }) {
       } catch {}
     }
     if (contentTimerRef.current) clearTimeout(contentTimerRef.current);
-    if (titleTimerRef.current) clearTimeout(titleTimerRef.current);
+
+    // 남은 title 즉시 저장
+    if (titleTimerRef.current) {
+      clearTimeout(titleTimerRef.current);
+      if (editTitle && editTitle !== page?.title) {
+        try {
+          await axios.patch(`/canvases/${canvasId}/pages/${pageId}`, { title: editTitle });
+          window.dispatchEvent(new CustomEvent('canvas:page_updated'));
+        } catch {}
+      }
+    }
+
     htmlRef.current = '';
     setIsEditing(false);
     fetchPage();
-  }, [canvasId, pageId, fetchPage]);
+  }, [canvasId, pageId, editTitle, page?.title, fetchPage]);
 
   // 너비 모드 토글
   const toggleWideMode = async () => {
