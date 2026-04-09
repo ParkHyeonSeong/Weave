@@ -15,6 +15,7 @@ import TaskRefNode from '@/components/Canvas/extensions/TaskRefExtension';
 import MentionNode from '@/components/Canvas/extensions/MentionExtension';
 import { ResizableImage } from '@/components/Canvas/extensions/ResizableImageExtension';
 import { createImageUploadPlugin } from '@/components/Canvas/extensions/ImageUploadPlugin';
+import { createMarkdownPastePlugin } from '@/components/Canvas/extensions/MarkdownPastePlugin';
 import CanvasEditorToolbar from '@/components/Canvas/CanvasEditorToolbar';
 
 const lowlight = createLowlight(common);
@@ -42,6 +43,14 @@ export default function TaskDescriptionEditor({ content, onSave, branchId }) {
 
   const extensions = useMemo(() => {
     const ext = [...baseExtensions];
+    ext.push(
+      Extension.create({
+        name: 'markdownPaste',
+        addProseMirrorPlugins() {
+          return [createMarkdownPastePlugin()];
+        },
+      })
+    );
     if (branchId) {
       ext.push(
         Extension.create({

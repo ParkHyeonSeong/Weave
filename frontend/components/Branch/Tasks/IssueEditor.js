@@ -15,6 +15,7 @@ import TaskRefNode from '@/components/Canvas/extensions/TaskRefExtension';
 import MentionNode from '@/components/Canvas/extensions/MentionExtension';
 import { ResizableImage } from '@/components/Canvas/extensions/ResizableImageExtension';
 import { createImageUploadPlugin } from '@/components/Canvas/extensions/ImageUploadPlugin';
+import { createMarkdownPastePlugin } from '@/components/Canvas/extensions/MarkdownPastePlugin';
 import CanvasEditorToolbar from '@/components/Canvas/CanvasEditorToolbar';
 
 const lowlight = createLowlight(common);
@@ -40,6 +41,14 @@ const makeBaseExtensions = (placeholder) => [
 const IssueEditor = forwardRef(({ content, placeholder, minHeight = 150, branchId }, ref) => {
   const extensions = useMemo(() => {
     const ext = makeBaseExtensions(placeholder);
+    ext.push(
+      Extension.create({
+        name: 'markdownPaste',
+        addProseMirrorPlugins() {
+          return [createMarkdownPastePlugin()];
+        },
+      })
+    );
     if (branchId) {
       ext.push(
         Extension.create({
