@@ -106,6 +106,7 @@
   &__Body {
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: $space-4;
     display: flex;
     flex-direction: column;
@@ -240,6 +241,8 @@
     border-radius: $radius-md;
     cursor: default;
     white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: break-word;
     overflow: hidden;
     max-width: 100%;
 
@@ -492,6 +495,8 @@
 
     .tiptap {
       outline: none;
+      word-break: break-word;
+      overflow-wrap: break-word;
 
       > * + * {
         margin-top: 0.4em;
@@ -683,6 +688,7 @@
   overflow: hidden;
   max-width: 100%;
   word-break: break-word;
+  overflow-wrap: break-word;
 
   img {
     max-width: 100%;

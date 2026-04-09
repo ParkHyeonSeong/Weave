@@ -24,8 +24,9 @@ const storageKey = (branchId, type) => `weave_tasks_${branchId}_${type}`;
 const setToArray = (s) => [...(s || [])];
 const arrayToSet = (a) => new Set(a || []);
 
-// localStorage 안전 읽기
+// localStorage 안전 읽기 (SSR 대응)
 function loadJSON(key, fallback) {
+  if (typeof window === 'undefined') return fallback;
   try {
     const raw = localStorage.getItem(key);
     return raw ? JSON.parse(raw) : fallback;
@@ -61,6 +62,9 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
 
   // 스프린트 접힘 상태 (localStorage에서 복원)
   const [collapsedSprints, setCollapsedSprints] = useState(new Set());
+
+  // localStorage 초기화 완료 여부 (마운트 시 불필요한 write 방지)
+  const [initialized, setInitialized] = useState(false);
 
   // 모달 상태
   const [sprintModal, setSprintModal] = useState({ open: false, sprint: null });
@@ -109,10 +113,13 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
     // 접힘 복원
     const savedCollapsed = loadJSON(storageKey(branchId, 'collapsed'), []);
     setCollapsedSprints(new Set(savedCollapsed));
+
+    setInitialized(true);
   }, [branchId]);
 
   // 필터 변경 시 localStorage 저장
   useEffect(() => {
+    if (!initialized) return;
     const data = {
       searchQuery,
       selectedUserIds: setToArray(selectedUserIds),
@@ -125,17 +132,19 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
       },
     };
     localStorage.setItem(storageKey(branchId, 'filters'), JSON.stringify(data));
-  }, [branchId, searchQuery, selectedUserIds, filters]);
+  }, [branchId, searchQuery, selectedUserIds, filters, initialized]);
 
   // 정렬 변경 시 localStorage 저장
   useEffect(() => {
+    if (!initialized) return;
     localStorage.setItem(storageKey(branchId, 'sort'), JSON.stringify(sortConfig));
-  }, [branchId, sortConfig]);
+  }, [branchId, sortConfig, initialized]);
 
   // 접힘 변경 시 localStorage 저장
   useEffect(() => {
+    if (!initialized) return;
     localStorage.setItem(storageKey(branchId, 'collapsed'), JSON.stringify(setToArray(collapsedSprints)));
-  }, [branchId, collapsedSprints]);
+  }, [branchId, collapsedSprints, initialized]);
 
   useEffect(() => {
     fetchData();

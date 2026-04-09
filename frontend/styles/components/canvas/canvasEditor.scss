@@ -4,7 +4,6 @@
   position: relative;
   border: 1px solid $color-border;
   border-radius: $radius-xl;
-  overflow: hidden;
   max-width: 100%;
 
   &__Content {
@@ -525,6 +524,8 @@
     font-size: $font-size-xs;
     color: $color-text-tertiary;
     border-top: 1px solid $color-border;
+    border-radius: 0 0 $radius-xl $radius-xl;
+    background: $color-bg;
 
     &--over {
       color: $color-error;

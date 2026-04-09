@@ -280,6 +280,8 @@
     line-height: 1.7;
     min-height: 48px;
     overflow: hidden;
+    word-break: break-word;
+    overflow-wrap: break-word;
 
     &--empty {
       color: $color-text-tertiary;
