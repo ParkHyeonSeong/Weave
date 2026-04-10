@@ -4,7 +4,7 @@ import {
   List, ListOrdered, ListChecks,
   Quote, Minus, CodeSquare,
   Link as LinkIcon, Image as ImageIcon, Table as TableIcon,
-  Undo2, Redo2, Sigma,
+  Undo2, Redo2, Sigma, Workflow,
   AlignLeft, AlignCenter, AlignRight,
   ChevronDown, Highlighter, Palette,
   Info, AlertTriangle, CheckCircle2, XCircle,
@@ -437,6 +437,11 @@ export default function CanvasEditorToolbar({ editor }) {
       {editor.extensionManager.extensions.some(e => e.name === 'mathematics') && (
         <Btn onClick={() => editor.chain().focus().insertContent({ type: 'inlineMath', attrs: { latex: 'E=mc^2' } }).run()} title="Math Equation">
           <Sigma size={16} />
+        </Btn>
+      )}
+      {editor.extensionManager.extensions.some(e => e.name === 'mermaid') && (
+        <Btn onClick={() => editor.chain().focus().insertMermaid().run()} title="Mermaid Diagram">
+          <Workflow size={16} />
         </Btn>
       )}
 

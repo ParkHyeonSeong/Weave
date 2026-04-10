@@ -16,6 +16,7 @@ import MentionNode from '@/components/Canvas/extensions/MentionExtension';
 import { ResizableImage } from '@/components/Canvas/extensions/ResizableImageExtension';
 import { createImageUploadPlugin } from '@/components/Canvas/extensions/ImageUploadPlugin';
 import { createMarkdownPastePlugin } from '@/components/Canvas/extensions/MarkdownPastePlugin';
+import MermaidExtension from '@/components/Canvas/extensions/MermaidExtension';
 import CanvasEditorToolbar from '@/components/Canvas/CanvasEditorToolbar';
 
 const lowlight = createLowlight(common);
@@ -36,6 +37,7 @@ const baseExtensions = [
   TaskRefNode,
   MentionNode,
   ResizableImage,
+  MermaidExtension,
 ];
 
 export default function TaskDescriptionEditor({ content, onSave, branchId }) {

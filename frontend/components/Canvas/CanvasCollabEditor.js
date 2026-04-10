@@ -28,6 +28,7 @@ import { createImageUploadPlugin } from './extensions/ImageUploadPlugin';
 import BookmarkNode from './extensions/BookmarkExtension';
 import { createBookmarkPastePlugin } from './extensions/BookmarkPastePlugin';
 import { createMarkdownPastePlugin } from './extensions/MarkdownPastePlugin';
+import MermaidExtension from './extensions/MermaidExtension';
 import CanvasEditorToolbar from './CanvasEditorToolbar';
 import TableBubbleMenu from './TableBubbleMenu';
 import { axios } from '@/library/_axios';
@@ -149,6 +150,7 @@ function CollabEditorInner({
       Mathematics.configure({
         katexOptions: { throwOnError: false },
       }),
+      MermaidExtension,
       ...(ImageUpload ? [ImageUpload] : []),
       YjsExtension,
     ];

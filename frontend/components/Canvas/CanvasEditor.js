@@ -25,6 +25,7 @@ import { createImageUploadPlugin } from './extensions/ImageUploadPlugin';
 import BookmarkNode from './extensions/BookmarkExtension';
 import { createBookmarkPastePlugin } from './extensions/BookmarkPastePlugin';
 import { createMarkdownPastePlugin } from './extensions/MarkdownPastePlugin';
+import MermaidExtension from './extensions/MermaidExtension';
 import CanvasEditorToolbar from './CanvasEditorToolbar';
 import TableBubbleMenu from './TableBubbleMenu';
 
@@ -98,6 +99,7 @@ export default function CanvasEditor({ content, onChange, canvasId }) {
     Mathematics.configure({
       katexOptions: { throwOnError: false },
     }),
+    MermaidExtension,
     ...(ImageUpload ? [ImageUpload] : []),
   ];
 
