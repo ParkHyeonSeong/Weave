@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { Mail, Lock, User, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { axios } from '@/library/_axios';
@@ -16,16 +16,32 @@ export default function Login() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [username, setUsername] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const passwordInputRef = useRef(null);
 
   // Alert 상태
   const [alertOpen, setAlertOpen] = useState(false);
   const [alertTitle, setAlertTitle] = useState('');
   const [alertMessage, setAlertMessage] = useState('');
+  // 로그인 실패 알림 여부 (모달 닫힘 시 password 초기화/포커스 처리용)
+  const [isLoginFailure, setIsLoginFailure] = useState(false);
 
-  const showAlert = (title, message) => {
+  const showAlert = (title, message, loginFailure = false) => {
     setAlertTitle(title);
     setAlertMessage(message);
+    setIsLoginFailure(loginFailure);
     setAlertOpen(true);
+  };
+
+  const handleAlertClose = () => {
+    setAlertOpen(false);
+    if (isLoginFailure) {
+      setPassword('');
+      // 모달 언마운트 후 포커스 이동 (requestAnimationFrame으로 DOM 업데이트 후 실행)
+      requestAnimationFrame(() => {
+        passwordInputRef.current?.focus();
+      });
+      setIsLoginFailure(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -83,10 +99,11 @@ export default function Login() {
           'ACCOUNT_REJECTED': 'Your registration was rejected. Contact your administrator.',
           'ACCOUNT_INACTIVE': 'Your account has been deactivated. Contact your administrator.',
         };
-        showAlert('Error', messages[response.data.message] || response.data.message);
+        const isLoginAttempt = mode === 'login';
+        showAlert('Error', messages[response.data.message] || response.data.message, isLoginAttempt);
       }
     } catch (error) {
-      showAlert('Error', 'An unexpected error occurred. Please try again.');
+      showAlert('Error', 'An unexpected error occurred. Please try again.', mode === 'login');
     } finally {
       setLoading(false);
     }
@@ -152,6 +169,7 @@ export default function Login() {
               <Lock size={16} className="Login__InputIcon" />
               <input
                 id="password"
+                ref={passwordInputRef}
                 type={showPassword ? 'text' : 'password'}
                 className="Login__Input"
                 placeholder="Enter password"
@@ -212,7 +230,7 @@ export default function Login() {
         isOpen={alertOpen}
         title={alertTitle}
         contents={alertMessage}
-        onClose={() => setAlertOpen(false)}
+        onClose={handleAlertClose}
       />
     </div>
   );
