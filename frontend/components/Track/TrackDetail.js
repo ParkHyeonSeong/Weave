@@ -66,7 +66,7 @@ export default function TrackDetail() {
   const [notFound, setNotFound] = useState(false);
 
   const [items, setItems] = useState([]);
-  const [links, setLinks] = useState([]);  // v1.2에서 활성
+  const [links, setLinks] = useState([]);
 
   const [selectedItemId, setSelectedItemId] = useState(null);
   const [viewMode, setViewMode] = useState('flow');
@@ -85,11 +85,12 @@ export default function TrackDetail() {
   const fetchTrack = useCallback(async () => {
     if (!router.isReady || !trackId) return;
     try {
-      const [trackRes, membersRes, branchesRes, itemsRes] = await Promise.all([
+      const [trackRes, membersRes, branchesRes, itemsRes, linksRes] = await Promise.all([
         axios.get(`/tracks/${trackId}`),
         axios.get(`/tracks/${trackId}/members`),
         axios.get('/branches'),
         axios.get(`/tracks/${trackId}/items`),
+        axios.get(`/tracks/${trackId}/links`),
       ]);
       if (trackRes.data.status) {
         setTrack(trackRes.data.track);
@@ -102,6 +103,7 @@ export default function TrackDetail() {
       if (itemsRes.data.status) {
         setItems(itemsRes.data.items.map(normalizeItem));
       }
+      if (linksRes.data.status) setLinks(linksRes.data.links);
     } catch {
       setNotFound(true);
     }
@@ -304,9 +306,66 @@ export default function TrackDetail() {
     }
   }, [trackId, selectedItemId]);
 
-  // v1.2에서 활성. 지금은 no-op.
-  const handleLinkCreate = useCallback(() => {}, []);
-  const handleLinkDelete = useCallback(() => {}, []);
+  const handleLinkCreate = useCallback(async (sourceItemId, targetItemId) => {
+    if (sourceItemId === targetItemId) return;
+    // 같은 페어 이미 있으면 skip (canvas onConnect는 reactflow가 자체 처리)
+    const exists = links.some((l) =>
+      l.source_item_id === sourceItemId
+      && l.target_item_id === targetItemId
+      && l.link_type === edgeType
+    );
+    if (exists) return;
+
+    try {
+      const res = await axios.post(`/tracks/${trackId}/links`, {
+        source_item_id: sourceItemId,
+        target_item_id: targetItemId,
+        link_type: edgeType,
+        materialize: edgeType === 'flow_to' ? materializeOnCreate : false,
+      });
+      if (!res.data.status) {
+        window.dispatchEvent(new CustomEvent('toast', {
+          detail: {
+            message: res.data.message === 'SELF_LINK' ? '자기 자신과 연결할 수 없어요'
+              : `Failed: ${res.data.message}`,
+            type: 'error',
+          },
+        }));
+        return;
+      }
+      // 권위 있는 상태 재로드
+      const linksRes = await axios.get(`/tracks/${trackId}/links`);
+      if (linksRes.data.status) setLinks(linksRes.data.links);
+      // materialize 요청했는데 서버에서 skip된 경우 사유별 안내
+      if (materializeOnCreate && edgeType === 'flow_to' && !res.data.materialized && res.data.created) {
+        const reasonText = {
+          CIRCULAR: '순환 의존 가능성 — draft link로 저장됨',
+          BRANCH_PERMISSION: 'source/target branch 비멤버 — draft link로 저장됨',
+          NOT_TASK_REF: 'task 참조가 아닌 item은 의존성으로 만들 수 없어요',
+        }[res.data.skip_reason] || 'Materialize 안 됨 — draft link';
+        window.dispatchEvent(new CustomEvent('toast', {
+          detail: { message: reasonText, type: 'info' },
+        }));
+      }
+    } catch {}
+  }, [trackId, links, edgeType, materializeOnCreate]);
+
+  const handleLinkDelete = useCallback(async (linkId) => {
+    let snapshot;
+    setLinks((prev) => {
+      snapshot = prev;
+      return prev.filter((l) => l.link_id !== linkId);
+    });
+    try {
+      const res = await axios.delete(`/tracks/${trackId}/links/${linkId}`);
+      if (!res.data?.status) throw new Error(res.data?.message);
+    } catch {
+      if (snapshot) setLinks(snapshot);
+      window.dispatchEvent(new CustomEvent('toast', {
+        detail: { message: 'Link 삭제 실패', type: 'error' },
+      }));
+    }
+  }, [trackId]);
 
   // -- 렌더 ----------------------------------------------------------------
   if (loading) {
