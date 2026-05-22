@@ -2,12 +2,12 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
-async def create(branch_id: int, source_task_id: int, target_task_id: int,
+async def create(branch_id, source_task_id: int, target_task_id: int,
                  dep_type: str, created_by: int, db: AsyncSession) -> int:
-    """의존관계 생성"""
+    """의존관계 생성. branch_id=None 이면 cross-branch (045 migration)."""
     result = await db.execute(text("""
         INSERT INTO task_dependency (branch_id, source_task_id, target_task_id, dep_type, created_by)
-        VALUES (:branch_id, :source_task_id, :target_task_id, :dep_type, :created_by)
+        VALUES (CAST(:branch_id AS INTEGER), :source_task_id, :target_task_id, :dep_type, :created_by)
         RETURNING dependency_id
     """), {
         'branch_id': branch_id,
@@ -17,6 +17,13 @@ async def create(branch_id: int, source_task_id: int, target_task_id: int,
         'created_by': created_by,
     })
     return result.scalar_one()
+
+
+async def delete_by_id(dependency_id: int, db: AsyncSession):
+    """branch_id 가드 없이 dependency_id로만 삭제 (cross-branch dep 정리용)."""
+    await db.execute(text("""
+        DELETE FROM task_dependency WHERE dependency_id = :dependency_id
+    """), {'dependency_id': dependency_id})
 
 
 async def find_by_epic(epic_id: int, branch_id: int, db: AsyncSession):
@@ -64,21 +71,25 @@ async def delete(dependency_id: int, branch_id: int, db: AsyncSession):
 
 
 async def check_circular(source_task_id: int, target_task_id: int,
-                          branch_id: int, db: AsyncSession) -> bool:
-    """finish_to_start 순환 참조 체크 (True = 순환 발생)"""
+                          branch_id, db: AsyncSession) -> bool:
+    """finish_to_start 순환 참조 체크 (True = 순환 발생).
+    branch_id=None 이면 cross-branch 전체 의존 그래프 탐색.
+    """
     result = await db.execute(text("""
         WITH RECURSIVE chain AS (
             SELECT target_task_id AS tid
             FROM task_dependency
             WHERE source_task_id = :target
               AND dep_type = 'finish_to_start'
-              AND branch_id = :branch_id
+              AND (CAST(:branch_id AS INTEGER) IS NULL
+                   OR branch_id = CAST(:branch_id AS INTEGER))
             UNION
             SELECT td.target_task_id
             FROM task_dependency td
             INNER JOIN chain c ON td.source_task_id = c.tid
             WHERE td.dep_type = 'finish_to_start'
-              AND td.branch_id = :branch_id
+              AND (CAST(:branch_id AS INTEGER) IS NULL
+                   OR td.branch_id = CAST(:branch_id AS INTEGER))
         )
         SELECT EXISTS (SELECT 1 FROM chain WHERE tid = :source)
     """), {

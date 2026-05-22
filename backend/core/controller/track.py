@@ -5,9 +5,11 @@ from core.model import track as track_model
 from core.model import track_member as member_model
 from core.model import track_branch as track_branch_model
 from core.model import track_item as track_item_model
+from core.model import track_link as track_link_model
 from core.model import branch_member as branch_member_model
 from core.model import branch as branch_model
 from core.model import task as task_model
+from core.model import task_dependency as dep_model
 
 
 # =========================================================================
@@ -336,3 +338,99 @@ async def search_sources(track_id: int, request: Request, db: AsyncSession):
     tasks = await track_item_model.search_sources(
         track_id, user_id, q, branch_id, limit, db)
     return {'status': True, 'tasks': tasks}
+
+
+# =========================================================================
+# Links (Track 내 edge — flow_to / relates_to, 선택적으로 materialize)
+# =========================================================================
+
+async def get_links(track_id: int, request: Request, db: AsyncSession):
+    """Track의 모든 link — viewer 이상"""
+    user_id = request.state.payload.get('user_id')
+    if not await _can_view(track_id, user_id, db):
+        return {'status': False, 'message': 'ACCESS_DENIED'}
+    links = await track_link_model.find_by_track(track_id, db)
+    return {'status': True, 'links': links}
+
+
+async def _try_materialize_flow_dep(items_info: dict, user_id: int, db: AsyncSession):
+    """flow_to link에 대해 task_dependency를 만들 수 있으면 만들고 (dep_id, None) 반환.
+    조건 미달이면 (None, skip_reason) 반환. caller는 skip_reason을 사용자 안내에 사용.
+    """
+    s_task = items_info.get('s_task')
+    t_task = items_info.get('t_task')
+    if not (s_task and t_task):
+        return None, 'NOT_TASK_REF'
+
+    s_branch = items_info.get('s_branch')
+    t_branch = items_info.get('t_branch')
+    accessible = await branch_member_model.filter_member_branch_ids(
+        user_id, {s_branch, t_branch}, db)
+    if s_branch not in accessible or t_branch not in accessible:
+        return None, 'BRANCH_PERMISSION'
+
+    # cross-branch면 branch_id=NULL, 동일 branch면 해당 branch_id로 scope.
+    dep_branch_id = s_branch if s_branch == t_branch else None
+    if await dep_model.check_circular(s_task, t_task, dep_branch_id, db):
+        return None, 'CIRCULAR'
+
+    dep_id = await dep_model.create(
+        dep_branch_id, s_task, t_task, 'finish_to_start', user_id, db)
+    return dep_id, None
+
+
+async def add_link(track_id: int, body, request: Request, db: AsyncSession):
+    """edge 생성 — editor 이상.
+    body.materialize=True 이고 link_type='flow_to' 면 원본 task_dependency도 함께 생성.
+    cross-branch dep 허용(045 migration). 순환 발생 시 link 자체는 만들되 dep는 skip."""
+    err = await _require_role(track_id, request, 'editor', db)
+    if err:
+        return err
+
+    if body.source_item_id == body.target_item_id:
+        return {'status': False, 'message': 'SELF_LINK'}
+
+    user_id = request.state.payload.get('user_id')
+    items_info = await track_link_model.find_source_target_tasks(
+        body.source_item_id, body.target_item_id, track_id, db)
+    if not items_info:
+        return {'status': False, 'message': 'ITEM_NOT_FOUND'}
+
+    # link 먼저 만들기 — 충돌이면 materialize 시도 자체를 skip해서 wasted INSERT 방지
+    link_id, created = await track_link_model.create(
+        track_id, body.source_item_id, body.target_item_id,
+        body.link_type, user_id, db,
+    )
+
+    materialized_dep_id = None
+    skip_reason = None
+    if created and body.materialize and body.link_type == 'flow_to':
+        materialized_dep_id, skip_reason = await _try_materialize_flow_dep(
+            items_info, user_id, db)
+        if materialized_dep_id is not None:
+            await track_link_model.set_materialized_dep(link_id, materialized_dep_id, db)
+
+    return {
+        'status': True,
+        'link_id': link_id,
+        'created': created,
+        'materialized': materialized_dep_id is not None,
+        'skip_reason': skip_reason,
+    }
+
+
+async def delete_link(track_id: int, link_id: int, request: Request,
+                      db: AsyncSession):
+    """edge 삭제 — editor 이상. materialize된 dep도 함께 정리."""
+    err = await _require_role(track_id, request, 'editor', db)
+    if err:
+        return err
+
+    link = await track_link_model.find_by_id(link_id, db)
+    if not link or link['track_id'] != track_id:
+        return {'status': True}  # idempotent
+    dep_id = link.get('materialized_dependency_id')
+    await track_link_model.delete(link_id, track_id, db)
+    if dep_id:
+        await dep_model.delete_by_id(dep_id, db)
+    return {'status': True}

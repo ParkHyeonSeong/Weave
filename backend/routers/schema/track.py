@@ -110,3 +110,20 @@ class _PositionEntry(BaseModel):
 
 class TrackItemPositionsUpdate(BaseModel):
     positions: List[_PositionEntry] = Field(min_length=1, max_length=500)
+
+
+VALID_LINK_TYPES = ('flow_to', 'relates_to')
+
+
+class TrackLinkAdd(BaseModel):
+    source_item_id: int
+    target_item_id: int
+    link_type: str = 'flow_to'
+    materialize: bool = False
+
+    @field_validator('link_type')
+    @classmethod
+    def validate_type(cls, v):
+        if v not in VALID_LINK_TYPES:
+            raise ValueError(f'link_type must be one of {VALID_LINK_TYPES}')
+        return v

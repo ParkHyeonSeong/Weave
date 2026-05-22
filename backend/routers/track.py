@@ -160,3 +160,29 @@ async def delete_item(track_id: int, item_id: int, request: Request,
 async def search_sources(track_id: int, request: Request,
                          session: AsyncSession = Depends(db.session)):
     return await track_controller.search_sources(track_id, request, session)
+
+
+# =========================================================================
+# Links (Track 내부 edge)
+# =========================================================================
+
+@router.get("/{track_id}/links", summary="Track link 목록",
+            dependencies=[Depends(require_login)])
+async def list_links(track_id: int, request: Request,
+                     session: AsyncSession = Depends(db.session)):
+    return await track_controller.get_links(track_id, request, session)
+
+
+@router.post("/{track_id}/links", summary="edge 생성 (옵션: materialize)",
+             dependencies=[Depends(require_login)])
+async def add_link(track_id: int, body: track_schema.TrackLinkAdd,
+                   request: Request,
+                   session: AsyncSession = Depends(db.session)):
+    return await track_controller.add_link(track_id, body, request, session)
+
+
+@router.delete("/{track_id}/links/{link_id}", summary="edge 삭제",
+               dependencies=[Depends(require_login)])
+async def delete_link(track_id: int, link_id: int, request: Request,
+                      session: AsyncSession = Depends(db.session)):
+    return await track_controller.delete_link(track_id, link_id, request, session)
