@@ -130,14 +130,20 @@ async def find_by_track(track_id: int, user_id: int, db: AsyncSession):
 async def update_positions(track_id: int, positions: list, db: AsyncSession):
     """[{item_id, position_x, position_y}] bulk 업데이트 (단일 쿼리). track_id 가드.
     f-string은 placeholder 이름만(:i0,:x0,...) 만들고 모든 값은 bind parameter로 전달.
-    SQL injection 안전 (사용자 입력은 params dict로만 들어감).
+    첫 row 에만 CAST를 박아 asyncpg가 VALUES의 컬럼 타입을 추론하게 함
+    (없으면 'operator does not exist: integer = text' 에러).
     """
     if not positions:
         return
     placeholders = []
     params = {'track_id': track_id}
     for i, p in enumerate(positions):
-        placeholders.append(f'(:i{i}, :x{i}, :y{i})')
+        if i == 0:
+            placeholders.append(
+                f'(CAST(:i{i} AS INTEGER), CAST(:x{i} AS DOUBLE PRECISION), CAST(:y{i} AS DOUBLE PRECISION))'
+            )
+        else:
+            placeholders.append(f'(:i{i}, :x{i}, :y{i})')
         params[f'i{i}'] = p['item_id']
         params[f'x{i}'] = p['position_x']
         params[f'y{i}'] = p['position_y']

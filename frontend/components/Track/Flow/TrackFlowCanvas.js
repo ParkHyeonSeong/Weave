@@ -144,8 +144,11 @@ function CanvasInner({
 
   const handleNodesChange = useCallback((changes) => {
     onNodesChange(changes);
+    // drag 종료 시점만 ( dragging === false ). drag 중 매 frame에 발화시키면
+    // items state가 매번 변경되며 initialNodes useMemo가 재계산되고 setNodes로
+    // reactflow 내부 drag state가 덮어써져 drag 자체가 끊김.
     changes.forEach((c) => {
-      if (c.type === 'position' && !c.dragging && c.position) {
+      if (c.type === 'position' && c.dragging === false && c.position) {
         onItemPositionChange(Number(c.id), c.position);
       }
     });

@@ -984,14 +984,13 @@ $track-border-soft: #EFEEE8;
 // =========================================================================
 // Edge — halo + 노드 위로 띄우기
 // =========================================================================
+// edges layer 전체를 노드 위로 (각 .react-flow__edge에 z-index 주는 건 SVG <g>
+// stacking context 한계로 안 먹음 — 컨테이너 자체를 위로)
+.react-flow__edges {
+  z-index: 1001 !important;
+}
 .react-flow__edge {
-  // edge를 nodes보다 위로 띄워서 노드 위로 지나가도 보이게
-  // (halo와 함께 노드 컨텍스트 안에서도 선이 살아남음)
-  z-index: 5 !important;
-
-  &-path {
-    pointer-events: stroke;
-  }
+  &-path { pointer-events: stroke; }
 }
 .TrackEdge__Halo {
   pointer-events: none;
@@ -1011,26 +1010,31 @@ $track-border-soft: #EFEEE8;
     display: inline-flex;
     align-items: center;
     gap: 3px;
-    padding: 2px 6px;
+    padding: 3px 7px;
     border-radius: 9px;
-    background: rgba(94,106,210,0.1);
+    // 선을 가리도록 불투명 배경 + 컬러 border + 살짝 그림자
+    background: #FFFFFF;
     color: $color-primary;
     font-size: 9.5px;
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
     line-height: 1.2;
-    box-shadow: 0 0 0 1px rgba(94,106,210,0.18);
+    box-shadow:
+      0 0 0 1px rgba(94,106,210,0.45),
+      0 1px 2px rgba(0,0,0,0.08);
 
     &--draft {
-      background: rgba(0,0,0,0.04);
-      color: $track-ink-mute;
-      box-shadow: 0 0 0 1px rgba(0,0,0,0.04);
+      color: $track-ink-soft;
+      box-shadow:
+        0 0 0 1px rgba(0,0,0,0.12),
+        0 1px 2px rgba(0,0,0,0.06);
     }
     &--rel {
-      background: rgba(0,0,0,0.04);
       color: $track-ink-soft;
-      box-shadow: 0 0 0 1px rgba(0,0,0,0.04);
+      box-shadow:
+        0 0 0 1px rgba(0,0,0,0.12),
+        0 1px 2px rgba(0,0,0,0.06);
     }
   }
 
@@ -1043,16 +1047,24 @@ $track-border-soft: #EFEEE8;
     display: flex; align-items: center; justify-content: center;
     box-shadow: 0 1px 2px rgba(0,0,0,0.06);
     opacity: 0;
-    transition: opacity 150ms, color 150ms, background 150ms;
+    pointer-events: none;
+    transition: opacity 150ms, color 150ms, background 150ms, border-color 150ms;
 
     &:hover {
       color: $color-error;
       border-color: $color-error;
     }
   }
+
+  // edge label에 hover하거나 edge가 selected면 X 버튼 노출.
+  // (EdgeLabelRenderer는 portal로 viewport에 렌더되어 .react-flow__edge.selected
+  //  자손 셀렉터가 닿지 않으므로 TrackEdge.js의 selected prop으로 직접 토글)
+  &:hover &__DeleteBtn,
+  &--selected &__DeleteBtn {
+    opacity: 1;
+    pointer-events: all;
+  }
 }
-.react-flow__edge:hover .TrackEdgeLabel__DeleteBtn { opacity: 1; }
-.react-flow__edge.selected .TrackEdgeLabel__DeleteBtn { opacity: 1; }
 
 
 // =========================================================================

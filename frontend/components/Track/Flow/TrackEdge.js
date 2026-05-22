@@ -8,6 +8,7 @@ export default function TrackEdge({
   // sourceX < targetX: 정방향. 두 노드 가로 거리가 충분하면 표준 smoothstep,
   // 가깝거나 역방향이면 offset 크게 줘서 우회.
   const dx = targetX - sourceX;
+  const dy = targetY - sourceY;
   const isBackward = dx < 80;
   const offset = isBackward ? 60 : 20;
 
@@ -16,6 +17,12 @@ export default function TrackEdge({
     borderRadius: 14,
     offset,
   });
+
+  // edge 방향에 따라 라벨을 선 옆으로 빼서 선이 라벨 위를 가로지르지 않게.
+  // 가로 우세 → 위쪽으로, 세로 우세 → 오른쪽으로.
+  const isHorizontalDominant = Math.abs(dx) >= Math.abs(dy);
+  const labelOffsetX = isHorizontalDominant ? 0 : 20;
+  const labelOffsetY = isHorizontalDominant ? -14 : 0;
 
   const isMaterialized = data?.materialized;
   const isRelates = data?.linkType === 'relates_to';
@@ -48,9 +55,10 @@ export default function TrackEdge({
       />
       <EdgeLabelRenderer>
         <div
-          className="TrackEdgeLabel"
+          className={`TrackEdgeLabel ${selected ? 'TrackEdgeLabel--selected' : ''}`}
+          // edge 방향에 따라 라벨을 선 옆으로 빼서 선이 라벨을 가리지 않게.
           style={{
-            transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+            transform: `translate(-50%, -50%) translate(${labelX + labelOffsetX}px, ${labelY + labelOffsetY}px)`,
           }}
         >
           {isMaterialized && !isRelates && (
