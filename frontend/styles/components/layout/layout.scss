@@ -28,6 +28,11 @@
     &:has(.CanvasPageView--typst-editing) {
       overflow: hidden;
     }
+
+    // Track: 캔버스/패널이 뷰포트 높이에 고정
+    &:has(.Track) {
+      overflow: hidden;
+    }
   }
 
   // 메신저 리사이즈 핸들

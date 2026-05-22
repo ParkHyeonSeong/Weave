@@ -1,0 +1,2404 @@
+@use 'sass:color';
+@use '../../variables' as *;
+
+// ============================================================================
+// Track — 여러 Branch를 가로지르는 설계 캔버스
+//   디자인 POV: drafting table. 실행용 Branch와 톤이 살짝 다른 "조망 모드".
+//   distinctive moves: serif display title, brand-glow nodes, weave bar.
+// ============================================================================
+
+$track-paper: #FAFAF7;            // 약간 따뜻한 종이톤 - 일반 surface보다 1단 따뜻
+$track-paper-edge: #F2F1EB;
+$track-ink: #1C1C1C;
+$track-ink-soft: #4B5563;
+$track-ink-mute: #9CA3AF;
+$track-border: #E5E5E0;
+$track-border-soft: #EFEEE8;
+
+// =========================================================================
+// 루트 컨테이너
+// =========================================================================
+.Track {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: $track-paper;
+  color: $track-ink;
+  position: relative;
+
+  // 미세 종이 텍스처 - SVG noise overlay
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.35;
+    mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 240 240' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.08 0 0 0 0 0.08 0 0 0 0 0.08 0 0 0 0.04 0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  &__Body {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    z-index: 1;
+  }
+
+  &__CanvasWrap {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+    display: flex;
+  }
+
+  &__ViewPlaceholder {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    color: $track-ink-mute;
+
+    &Label { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+    &Hint  { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.7; }
+  }
+}
+
+// =========================================================================
+// Header
+// =========================================================================
+.TrackHeader {
+  flex-shrink: 0;
+  padding: 28px 32px 0;
+  border-bottom: 1px solid $track-border-soft;
+  background: linear-gradient(180deg, $track-paper 0%, color.adjust($track-paper, $lightness: 1%) 100%);
+  position: relative;
+
+  &__Top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+  }
+
+  &__TitleBlock {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__Eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    color: $track-ink-soft;
+    margin-bottom: 8px;
+  }
+  &__EyebrowDot {
+    width: 6px; height: 6px; border-radius: 50%;
+  }
+  &__EyebrowText { line-height: 1; }
+
+  &__Title {
+    font-weight: 700;
+    font-size: 28px;
+    line-height: 1.12;
+    letter-spacing: -0.022em;
+    color: $track-ink;
+    margin: 0 0 6px 0;
+  }
+
+  &__Subtitle {
+    font-size: 13px;
+    color: $track-ink-soft;
+    max-width: 560px;
+    line-height: 1.5;
+  }
+
+  &__Actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    padding-top: 4px;
+  }
+
+  &__MemberStack {
+    display: flex;
+    align-items: center;
+    padding-right: 6px;
+    border-right: 1px solid $track-border;
+    margin-right: 4px;
+  }
+
+  &__Member {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    border: 2px solid $track-paper;
+    color: #FFFFFF;
+    font-size: 11px;
+    font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+    margin-left: -7px;
+    transition: transform 150ms ease;
+    cursor: pointer;
+    &:first-child { margin-left: 0; }
+    &:hover { transform: translateY(-2px); }
+  }
+  &__MemberMore {
+    height: 26px;
+    min-width: 26px;
+    padding: 0 6px;
+    border-radius: 13px;
+    background: $track-border-soft;
+    color: $track-ink-soft;
+    font-size: 10.5px;
+    font-weight: 500;
+    display: flex; align-items: center; justify-content: center;
+    margin-left: -7px;
+    border: 2px solid $track-paper;
+  }
+
+  &__IconBtn {
+    width: 30px; height: 30px;
+    border-radius: $radius-md;
+    color: $track-ink-soft;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 120ms, color 120ms;
+    &:hover {
+      background: $track-border-soft;
+      color: $track-ink;
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // 시그니처 - Weave Bar + View Toggle 행
+  // -----------------------------------------------------------------------
+  &__Meta {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 32px;
+    margin-top: 20px;
+    padding-bottom: 0;
+  }
+
+  &__WeaveBlock {
+    flex: 1;
+    min-width: 0;
+    max-width: 680px;
+  }
+
+  &__WeaveLabel {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  &__WeaveCaption {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: $track-ink-mute;
+  }
+  &__WeaveCount {
+    font-size: 11.5px;
+    font-weight: 500;
+    color: $track-ink-soft;
+    em { font-style: normal; font-weight: 400; color: $track-ink-mute; }
+  }
+
+  &__WeaveBar {
+    display: flex;
+    height: 22px;
+    border-radius: 2px;
+    overflow: hidden;
+    border: 1px solid rgba(0,0,0,0.04);
+    box-shadow: 0 1px 0 rgba(0,0,0,0.02);
+  }
+
+  &__WeaveSeg {
+    position: relative;
+    min-width: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 8px;
+    color: rgba(255,255,255,0.96);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    overflow: hidden;
+    transition: filter 150ms;
+
+    &:hover { filter: brightness(1.06); }
+
+    // 첫번째와 마지막을 살짝 inset
+    & + & { box-shadow: inset 1px 0 0 rgba(255,255,255,0.18); }
+  }
+
+  &__WeaveSegLabel { letter-spacing: 0.06em; }
+  &__WeaveSegCount {
+    font-weight: 500;
+    opacity: 0.85;
+    background: rgba(0,0,0,0.18);
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-size: 10px;
+  }
+
+  &__WeaveLegend {
+    display: flex;
+    gap: 16px;
+    margin-top: 8px;
+    margin-bottom: 14px;
+  }
+  &__WeaveLegendItem {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: $track-ink-soft;
+  }
+  &__WeaveLegendDot {
+    width: 8px; height: 8px;
+    border-radius: 2px;
+  }
+
+  &__ViewToggle {
+    display: inline-flex;
+    background: $track-border-soft;
+    border-radius: 8px;
+    padding: 3px;
+    gap: 1px;
+    margin-bottom: 14px;
+  }
+
+  &__ViewBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    color: $track-ink-soft;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    transition: background 150ms, color 150ms, box-shadow 150ms;
+    background: transparent;
+
+    &:hover { color: $track-ink; }
+
+    &--active {
+      background: #FFFFFF;
+      color: $track-ink;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.03);
+    }
+  }
+}
+
+// =========================================================================
+// SourcePicker (왼쪽 사이드바)
+// =========================================================================
+.SourcePicker {
+  width: 280px;
+  flex-shrink: 0;
+  border-right: 1px solid $track-border-soft;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: linear-gradient(180deg, color.adjust($track-paper, $lightness: 0.5%) 0%, $track-paper 100%);
+
+  &__Head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 18px 18px 8px;
+  }
+  &__HeadLabel {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: $track-ink;
+  }
+  &__HeadHint {
+    font-size: 11px;
+    color: $track-ink-mute;
+  }
+
+  &__SearchWrap {
+    position: relative;
+    margin: 0 14px 12px;
+  }
+  &__SearchIcon {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: $track-ink-mute;
+  }
+  &__SearchInput {
+    width: 100%;
+    padding: 7px 10px 7px 30px;
+    background: #FFFFFF;
+    border: 1px solid $track-border;
+    border-radius: $radius-md;
+    font-size: 12.5px;
+    color: $track-ink;
+    transition: border-color 120ms, box-shadow 120ms;
+    &:focus {
+      outline: none;
+      border-color: $color-primary;
+      box-shadow: 0 0 0 3px rgba(94,106,210,0.1);
+    }
+    &::placeholder { color: $track-ink-mute; }
+  }
+
+  &__Tree {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0 8px 8px;
+  }
+
+  &__Empty {
+    padding: 24px 14px;
+    text-align: center;
+    color: $track-ink-mute;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+  &__EmptyTitle {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: $track-ink-soft;
+    margin-bottom: 4px;
+  }
+  &__EmptyHint {
+    font-size: 11.5px;
+    color: $track-ink-mute;
+  }
+
+  &__Branch {
+    margin-bottom: 4px;
+  }
+
+  &__BranchRow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 6px 8px;
+    border-radius: 5px;
+    text-align: left;
+    transition: background 120ms;
+    &:hover { background: rgba(0,0,0,0.03); }
+  }
+
+  &__Chevron {
+    color: $track-ink-mute;
+    display: inline-flex;
+    width: 12px;
+  }
+
+  &__BranchDot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  &__BranchName {
+    flex: 1;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: $track-ink;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  &__BranchKey {
+    font-size: 10px;
+    font-weight: 600;
+    color: $track-ink-mute;
+    background: rgba(0,0,0,0.04);
+    padding: 2px 6px;
+    border-radius: 3px;
+    letter-spacing: 0.04em;
+  }
+
+  &__Epic {
+    margin-left: 6px;
+    border-left: 1px dashed rgba(0,0,0,0.08);
+    padding-left: 4px;
+    margin-bottom: 2px;
+  }
+
+  &__EpicRow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 4px 6px;
+    border-radius: 4px;
+    text-align: left;
+    &:hover { background: rgba(0,0,0,0.025); }
+  }
+
+  &__EpicIcon { flex-shrink: 0; }
+
+  &__EpicName {
+    flex: 1;
+    font-size: 11.5px;
+    color: $track-ink-soft;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  &__EpicCount {
+    font-size: 10.5px;
+    color: $track-ink-mute;
+  }
+
+  &__Task {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 18px;
+    padding: 5px 6px 5px 4px;
+    border-radius: 4px;
+    cursor: grab;
+    transition: background 120ms, transform 120ms;
+    position: relative;
+
+    &:hover {
+      background: #FFFFFF;
+      box-shadow: 0 1px 0 rgba(0,0,0,0.04), 0 0 0 1px rgba(0,0,0,0.04);
+    }
+
+    &:active { cursor: grabbing; transform: scale(0.99); }
+
+    &--used {
+      cursor: not-allowed;
+      opacity: 0.45;
+      &:hover { background: transparent; box-shadow: none; }
+    }
+  }
+
+  &__TaskGrip {
+    color: $track-ink-mute;
+    opacity: 0;
+    transition: opacity 120ms;
+    .SourcePicker__Task:hover & { opacity: 1; }
+  }
+
+  &__TaskBranchBar {
+    width: 2px;
+    height: 16px;
+    border-radius: 1px;
+    flex-shrink: 0;
+  }
+
+  &__TaskId {
+    font-size: 10.5px;
+    font-weight: 500;
+    color: $track-ink-mute;
+    flex-shrink: 0;
+  }
+
+  &__TaskTitle {
+    flex: 1;
+    font-size: 11.5px;
+    color: $track-ink;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+
+  &__TaskBadge {
+    font-size: 9.5px;
+    font-weight: 500;
+    color: $track-ink-mute;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  &__Foot {
+    padding: 8px 14px 14px;
+    border-top: 1px solid $track-border-soft;
+  }
+  &__FootBtn {
+    width: 100%;
+    padding: 7px 10px;
+    background: transparent;
+    border: 1px dashed $track-border;
+    border-radius: $radius-md;
+    color: $track-ink-soft;
+    font-size: 11.5px;
+    transition: border-color 120ms, color 120ms;
+    &:hover {
+      border-color: $track-ink-soft;
+      color: $track-ink;
+    }
+  }
+
+  &__FootHint {
+    display: block;
+    text-align: center;
+    font-size: 10.5px;
+    color: $track-ink-mute;
+    letter-spacing: 0.02em;
+  }
+}
+
+// Add menu disabled state (v1.1 — Epic/Sprint/Filter는 v2 예정)
+.SourcePicker__AddMenuItem {
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    &:hover { background: transparent; }
+  }
+}
+
+// =========================================================================
+// Canvas
+// =========================================================================
+.TrackCanvas {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  background:
+    radial-gradient(ellipse at top, rgba(94,106,210,0.04) 0%, transparent 55%),
+    $track-paper;
+  overflow: hidden;
+
+  &__Defs { position: absolute; width: 0; height: 0; }
+
+  &__Bg {
+    color: currentColor;
+  }
+
+  // 페이퍼 가장자리 비네트
+  &__Vignette {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse at center, transparent 60%, rgba(28,28,28,0.04) 100%);
+    z-index: 1;
+  }
+
+  .react-flow {
+    background: transparent;
+  }
+
+  .react-flow__controls {
+    background: #FFFFFF;
+    border: 1px solid $track-border;
+    border-radius: 6px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+    overflow: hidden;
+
+    button {
+      background: #FFFFFF;
+      border-bottom: 1px solid $track-border-soft;
+      color: $track-ink-soft;
+      width: 26px; height: 26px;
+      &:hover { background: $track-border-soft; color: $track-ink; }
+      svg { fill: currentColor; }
+      &:last-child { border-bottom: none; }
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // Toolbar (top-right)
+  // -----------------------------------------------------------------------
+  &__Toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #FFFFFF;
+    border: 1px solid $track-border;
+    border-radius: 8px;
+    padding: 5px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+  }
+
+  &__ToolbarGroup {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 0 4px 0 8px;
+  }
+
+  &__ToolbarCaption {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: $track-ink-mute;
+    margin-right: 4px;
+  }
+
+  &__ToolbarBtn {
+    width: 26px; height: 24px;
+    border-radius: 4px;
+    color: $track-ink-soft;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 120ms, color 120ms;
+    &:hover { background: $track-border-soft; color: $track-ink; }
+    &--active {
+      background: rgba(94,106,210,0.1);
+      color: $color-primary;
+    }
+  }
+
+  &__ToolbarDivider {
+    width: 1px; height: 18px;
+    background: $track-border;
+    margin: 0 4px;
+  }
+
+  &__MatToggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 8px 5px 9px;
+    border-radius: 5px;
+    font-size: 11px;
+    color: $track-ink-soft;
+    background: transparent;
+    transition: background 120ms, color 120ms, opacity 120ms;
+
+    &:hover:not(:disabled) {
+      background: $track-border-soft;
+      color: $track-ink;
+    }
+    &:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    &--on { color: $color-primary; }
+  }
+
+  &__MatPill {
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    padding: 2px 6px;
+    border-radius: 3px;
+    background: $track-border-soft;
+    color: $track-ink-mute;
+    transition: background 120ms, color 120ms;
+
+    &--on {
+      background: rgba(94,106,210,0.12);
+      color: $color-primary;
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // Legend (top-left)
+  // -----------------------------------------------------------------------
+  &__Legend {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    background: rgba(255,255,255,0.86);
+    backdrop-filter: blur(6px);
+    border: 1px solid $track-border;
+    border-radius: 6px;
+    padding: 8px 10px;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.02);
+  }
+
+  &__LegendRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 10.5px;
+    color: $track-ink-soft;
+  }
+}
+
+// =========================================================================
+// Node (Cross-branch Task)
+// =========================================================================
+.TrackNode {
+  --branch-color: #5E6AD2;
+  position: relative;
+  min-width: 220px;
+  max-width: 240px;
+  padding: 11px 13px 11px 18px;
+  background: #FFFFFF;
+  border: 1px solid $track-border;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 6px 16px -8px rgba(0,0,0,0.08);
+  transition: box-shadow 180ms, border-color 180ms, transform 180ms;
+  cursor: grab;
+
+  &:active { cursor: grabbing; }
+
+  &:hover {
+    box-shadow:
+      0 2px 4px rgba(0,0,0,0.06),
+      0 12px 24px -10px rgba(0,0,0,0.14),
+      0 0 0 1px var(--branch-color);
+    transform: translateY(-1px);
+  }
+
+  // 좌측 색 띠
+  &__BranchBand {
+    position: absolute;
+    left: 0; top: 8px; bottom: 8px;
+    width: 4px;
+    border-radius: 0 2px 2px 0;
+    background: var(--branch-color);
+  }
+
+  // 좌측 색 글로우 — 정체성 시그니처
+  &__BranchGlow {
+    position: absolute;
+    left: -1px; top: 0; bottom: 0;
+    width: 24px;
+    pointer-events: none;
+    background: linear-gradient(90deg, color-mix(in srgb, var(--branch-color) 18%, transparent), transparent);
+    border-radius: 8px 0 0 8px;
+    opacity: 0.7;
+    transition: opacity 180ms;
+  }
+  &:hover &__BranchGlow { opacity: 1; }
+
+  &--selected {
+    border-color: var(--branch-color);
+    box-shadow:
+      0 0 0 1px var(--branch-color),
+      0 8px 24px -8px color-mix(in srgb, var(--branch-color) 30%, transparent),
+      0 2px 4px rgba(0,0,0,0.06);
+    .TrackNode__BranchGlow { opacity: 1; }
+  }
+
+  &__Header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+
+  &__BranchChip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px 2px 5px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    line-height: 1.4;
+  }
+  &__BranchChipDot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+  }
+
+  &__DisplayId {
+    font-size: 11px;
+    font-weight: 500;
+    color: $track-ink-mute;
+    letter-spacing: 0.02em;
+    margin-left: 2px;
+  }
+
+  &__PrioFlag {
+    margin-left: auto;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: #FEE2E2;
+    color: #DC2626;
+    font-size: 10px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  &__Title {
+    font-size: 13px;
+    line-height: 1.42;
+    color: $track-ink;
+    font-weight: 500;
+    margin-bottom: 9px;
+    word-break: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  &__Footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  &__Status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+  }
+  &__StatusDot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  &__StatusLabel {
+    font-size: 10.5px;
+    color: $track-ink-soft;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 80px;
+  }
+
+  &__Spacer { flex: 1; }
+
+  &__Due {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 10.5px;
+    font-weight: 500;
+    color: $track-ink-soft;
+    svg { opacity: 0.6; }
+  }
+
+  &__Avatar {
+    width: 19px; height: 19px;
+    border-radius: 50%;
+    color: #FFFFFF;
+    font-size: 10px;
+    font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 0 2px #FFFFFF;
+  }
+
+  &__OtherTracks {
+    margin-top: 7px;
+    padding-top: 7px;
+    border-top: 1px dashed $track-border-soft;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: $track-ink-mute;
+    text-transform: uppercase;
+    svg { opacity: 0.7; }
+  }
+
+  // ---- Handles ----
+  &__Handle {
+    width: 9px !important;
+    height: 9px !important;
+    background: #FFFFFF !important;
+    border: 1.5px solid $track-ink-mute !important;
+    transition: background 150ms, border-color 150ms, transform 150ms;
+    &:hover {
+      background: $color-primary !important;
+      border-color: $color-primary !important;
+      transform: scale(1.25);
+    }
+  }
+  &__Handle--left  { left: -5px !important; }
+  &__Handle--right { right: -5px !important; }
+  // top/bottom 핸들은 같은 위치에 in/out 둘 다 있음 (id로만 구분)
+  &__Handle--top,
+  &__Handle--top-out    { top: -5px !important; opacity: 0; }
+  &__Handle--bottom,
+  &__Handle--bottom-out { bottom: -5px !important; opacity: 0; }
+  // hover/connect 시에만 보이게
+  .TrackNode:hover .TrackNode__Handle--top,
+  .TrackNode:hover .TrackNode__Handle--top-out,
+  .TrackNode:hover .TrackNode__Handle--bottom,
+  .TrackNode:hover .TrackNode__Handle--bottom-out {
+    opacity: 0.6;
+  }
+
+  // ---- Restricted variant ----
+  &--restricted {
+    min-width: 180px;
+    max-width: 200px;
+    background:
+      repeating-linear-gradient(
+        135deg,
+        rgba(0,0,0,0.025) 0,
+        rgba(0,0,0,0.025) 6px,
+        transparent 6px,
+        transparent 12px
+      ),
+      rgba(255,255,255,0.4);
+    border: 1px dashed $track-border;
+    backdrop-filter: blur(4px);
+    cursor: default;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+
+    &:hover {
+      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+      transform: none;
+    }
+  }
+
+  &__RestrictedFrost {
+    position: absolute;
+    inset: 0;
+    border-radius: 7px;
+    pointer-events: none;
+  }
+
+  &__RestrictedContent {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 14px 8px;
+    gap: 4px;
+  }
+
+  &__RestrictedIcon {
+    color: $track-ink-mute;
+    margin-bottom: 2px;
+  }
+
+  &__RestrictedTitle {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: $track-ink-soft;
+  }
+
+  &__RestrictedHint {
+    font-size: 11.5px;
+    color: $track-ink-mute;
+  }
+}
+
+// =========================================================================
+// Edge — halo + 노드 위로 띄우기
+// =========================================================================
+.react-flow__edge {
+  // edge를 nodes보다 위로 띄워서 노드 위로 지나가도 보이게
+  // (halo와 함께 노드 컨텍스트 안에서도 선이 살아남음)
+  z-index: 5 !important;
+
+  &-path {
+    pointer-events: stroke;
+  }
+}
+.TrackEdge__Halo {
+  pointer-events: none;
+}
+
+// =========================================================================
+// Edge labels
+// =========================================================================
+.TrackEdgeLabel {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  pointer-events: all;
+
+  &__Badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 6px;
+    border-radius: 9px;
+    background: rgba(94,106,210,0.1);
+    color: $color-primary;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    line-height: 1.2;
+    box-shadow: 0 0 0 1px rgba(94,106,210,0.18);
+
+    &--draft {
+      background: rgba(0,0,0,0.04);
+      color: $track-ink-mute;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.04);
+    }
+    &--rel {
+      background: rgba(0,0,0,0.04);
+      color: $track-ink-soft;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.04);
+    }
+  }
+
+  &__DeleteBtn {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: #FFFFFF;
+    color: $track-ink-mute;
+    border: 1px solid $track-border;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+    opacity: 0;
+    transition: opacity 150ms, color 150ms, background 150ms;
+
+    &:hover {
+      color: $color-error;
+      border-color: $color-error;
+    }
+  }
+}
+.react-flow__edge:hover .TrackEdgeLabel__DeleteBtn { opacity: 1; }
+.react-flow__edge.selected .TrackEdgeLabel__DeleteBtn { opacity: 1; }
+
+
+// =========================================================================
+// Detail Panel (오른쪽)
+// =========================================================================
+.TrackDetail {
+  width: 340px;
+  flex-shrink: 0;
+  border-left: 1px solid $track-border-soft;
+  background: #FFFFFF;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  position: relative;
+
+  &--empty {
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    background: linear-gradient(180deg, $track-paper 0%, color.adjust($track-paper, $lightness: 1%) 100%);
+  }
+
+  &__EmptyIcon { margin-bottom: 14px; opacity: 0.7; }
+  &__EmptyTitle {
+    font-size: 14px;
+    font-weight: 600;
+    color: $track-ink-soft;
+    margin-bottom: 4px;
+  }
+  &__EmptyHint {
+    font-size: 12px;
+    color: $track-ink-mute;
+    max-width: 200px;
+    line-height: 1.5;
+  }
+
+  &__Head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+
+  &__Breadcrumb {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+  }
+
+  &__BranchPill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px 2px 5px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+
+  &__BcSep { color: $track-ink-mute; }
+
+  &__DisplayId {
+    font-size: 11.5px;
+    font-weight: 500;
+    color: $track-ink-soft;
+  }
+
+  &__Close {
+    width: 26px; height: 26px;
+    border-radius: $radius-md;
+    color: $track-ink-mute;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 120ms, color 120ms;
+    &:hover {
+      background: $track-border-soft;
+      color: $track-ink;
+    }
+  }
+
+  &__Title {
+    font-weight: 700;
+    font-size: 18px;
+    line-height: 1.34;
+    letter-spacing: -0.012em;
+    color: $track-ink;
+    margin: 0 0 14px 0;
+  }
+
+  &__StatusRow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 20px;
+  }
+
+  &__StatusPill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px 4px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  &__StatusDot { width: 6px; height: 6px; border-radius: 50%; }
+
+  &__PrioPill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 9px;
+    border-radius: 12px;
+    border: 1px solid;
+    font-size: 11px;
+    font-weight: 500;
+    background: rgba(255,255,255,0.5);
+  }
+
+  &__Meta {
+    margin: 0 0 22px 0;
+    padding: 14px 0;
+    border-top: 1px solid $track-border-soft;
+    border-bottom: 1px solid $track-border-soft;
+  }
+
+  &__MetaRow {
+    display: grid;
+    grid-template-columns: 88px 1fr;
+    align-items: center;
+    padding: 5px 0;
+
+    dt {
+      font-size: 10.5px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: $track-ink-mute;
+    }
+    dd {
+      font-size: 12.5px;
+      color: $track-ink;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0;
+    }
+  }
+
+  &__MetaIcon { color: $track-ink-mute; }
+  &__MetaEmpty {
+    color: $track-ink-mute;
+    font-size: 12px;
+  }
+
+  &__Assignee {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+  &__AssigneeAvatar {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    color: #FFFFFF;
+    font-size: 10.5px;
+    font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  &__OriginLink {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 7px;
+    border-radius: 9px;
+    background: rgba(0,0,0,0.03);
+    color: $track-ink-soft;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    transition: background 120ms, color 120ms;
+    &:hover {
+      background: rgba(94,106,210,0.1);
+      color: $color-primary;
+    }
+  }
+
+  &__Section { margin-bottom: 20px; }
+
+  &__SectionTitle {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: $track-ink-soft;
+    margin: 0 0 8px 0;
+    svg { opacity: 0.7; }
+  }
+
+  &__Description {
+    font-size: 13px;
+    line-height: 1.55;
+    color: $track-ink;
+    margin: 0;
+  }
+
+  &__TrackChips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  &__TrackChip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px 4px 8px;
+    border-radius: 12px;
+    background: $track-border-soft;
+    color: $track-ink;
+    font-size: 11px;
+    transition: background 120ms;
+    &:hover {
+      background: rgba(94,106,210,0.1);
+      color: $color-primary;
+    }
+  }
+  &__TrackChipMark {
+    width: 5px; height: 10px;
+    border-radius: 1px;
+    background: $color-primary;
+  }
+
+  &__Foot {
+    margin-top: auto;
+    padding-top: 20px;
+    border-top: 1px solid $track-border-soft;
+    display: flex;
+    gap: 8px;
+  }
+
+  &__FootBtn {
+    flex: 1;
+    padding: 8px 10px;
+    border-radius: $radius-md;
+    font-size: 12px;
+    font-weight: 500;
+    transition: background 120ms, color 120ms, border-color 120ms;
+
+    &--ghost {
+      background: transparent;
+      border: 1px solid $track-border;
+      color: $track-ink-soft;
+      &:hover {
+        background: $track-border-soft;
+        color: $track-ink;
+      }
+    }
+    &--primary {
+      background: $color-primary;
+      border: 1px solid $color-primary;
+      color: #FFFFFF;
+      &:hover { background: $color-primary-hover; border-color: $color-primary-hover; }
+    }
+  }
+
+  // Restricted variant
+  &--restricted {
+    align-items: stretch;
+    background: linear-gradient(180deg, $track-paper 0%, color.adjust($track-paper, $lightness: 1%) 100%);
+  }
+
+  &__RestrictedHero {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 0 16px;
+    gap: 8px;
+  }
+
+  &__RestrictedShield {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    background: $track-border-soft;
+    color: $track-ink-soft;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 8px;
+    box-shadow: 0 0 0 8px rgba(0,0,0,0.02);
+  }
+
+  &__RestrictedTitle {
+    font-size: 16px;
+    font-weight: 700;
+    color: $track-ink;
+  }
+  &__RestrictedBody {
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: $track-ink-soft;
+    max-width: 260px;
+  }
+  &__RestrictedHint {
+    margin-top: 6px;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: $track-ink-mute;
+  }
+}
+
+// =========================================================================
+// 반응형 - 좁아지면 패널 폭 줄임
+// =========================================================================
+// =========================================================================
+// Header Participating chips
+// =========================================================================
+.TrackHeader {
+  &__Participating {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+  }
+  &__ParticipatingLabel {
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: $track-ink-mute;
+  }
+  &__ParticipatingChips {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  &__ParticipatingChip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px 3px 7px;
+    border-radius: 11px;
+    border: 1px solid;
+    font-size: 11.5px;
+    font-weight: 500;
+    line-height: 1.3;
+    cursor: default;
+  }
+  &__ParticipatingDot {
+    width: 6px; height: 6px; border-radius: 50%;
+  }
+  &__ParticipatingAdd {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px 9px;
+    border-radius: 11px;
+    border: 1px dashed $track-border;
+    background: transparent;
+    color: $track-ink-mute;
+    font-size: 11px;
+    font-weight: 500;
+    transition: border-color 120ms, color 120ms, background 120ms;
+    &:hover {
+      border-color: $track-ink-soft;
+      border-style: solid;
+      color: $track-ink;
+      background: rgba(0,0,0,0.02);
+    }
+  }
+}
+
+// =========================================================================
+// SourcePicker Add-by menu
+// =========================================================================
+.SourcePicker {
+  &__HeadActions {
+    position: relative;
+  }
+  &__AddBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px 4px 6px;
+    border-radius: 5px;
+    background: transparent;
+    color: $track-ink-soft;
+    font-size: 11px;
+    font-weight: 500;
+    transition: background 120ms, color 120ms;
+    &:hover {
+      background: rgba(0,0,0,0.04);
+      color: $track-ink;
+    }
+    &--open {
+      background: rgba(94,106,210,0.1);
+      color: $color-primary;
+    }
+  }
+  &__AddCaret { opacity: 0.7; }
+
+  &__AddMenu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: 20;
+    width: 260px;
+    background: #FFFFFF;
+    border: 1px solid $track-border;
+    border-radius: $radius-md;
+    box-shadow: 0 10px 28px -8px rgba(0,0,0,0.16), 0 2px 4px rgba(0,0,0,0.04);
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  &__AddMenuItem {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 5px;
+    text-align: left;
+    color: $track-ink;
+    transition: background 120ms;
+    &:hover { background: $track-border-soft; }
+
+    svg { color: $track-ink-soft; flex-shrink: 0; }
+  }
+  &__AddMenuText {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+  }
+  &__AddMenuLabel {
+    font-size: 12.5px;
+    font-weight: 500;
+  }
+  &__AddMenuHint {
+    font-size: 10.5px;
+    color: $track-ink-mute;
+    line-height: 1.3;
+  }
+  &__AddMenuDivider {
+    height: 1px;
+    background: $track-border-soft;
+    margin: 4px 6px;
+  }
+}
+
+// =========================================================================
+// Timeline View
+// =========================================================================
+.TrackTimeline {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: $track-paper;
+  position: relative;
+
+  $lane-w: 240px;
+  $head-h: 56px;
+
+  &__HeadWrap {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    margin-left: $lane-w;
+    overflow: hidden;
+    height: $head-h;
+    border-bottom: 1px solid $track-border;
+    background: linear-gradient(180deg, color.adjust($track-paper, $lightness: 1%), $track-paper);
+  }
+
+  &__Head {
+    position: relative;
+    height: $head-h;
+  }
+
+  &__Months {
+    position: relative;
+    height: 24px;
+    border-bottom: 1px solid $track-border-soft;
+  }
+  &__MonthCell {
+    position: absolute;
+    top: 0;
+    height: 24px;
+    border-left: 1px solid $track-border;
+    display: flex;
+    align-items: center;
+    padding-left: 8px;
+  }
+  &__MonthLabel {
+    font-size: 11px;
+    font-weight: 600;
+    color: $track-ink;
+    letter-spacing: -0.005em;
+  }
+
+  &__Weeks {
+    position: relative;
+    height: 32px;
+  }
+  &__WeekCell {
+    position: absolute;
+    top: 0;
+    height: 32px;
+    border-left: 1px solid $track-border-soft;
+    padding-left: 4px;
+    display: flex;
+    align-items: center;
+  }
+  &__WeekLabel {
+    font-size: 9.5px;
+    font-weight: 500;
+    color: $track-ink-mute;
+    letter-spacing: 0.02em;
+  }
+
+  &__Body {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+    position: relative;
+  }
+
+  &__Lanes {
+    width: $lane-w;
+    flex-shrink: 0;
+    position: relative;
+    background: $track-paper;
+    border-right: 1px solid $track-border;
+    z-index: 2;
+  }
+
+  &__LaneGroup {
+    position: absolute;
+    left: 0; right: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 14px 0 12px;
+    background: color.adjust($track-paper, $lightness: -1.5%);
+    border-bottom: 1px solid $track-border-soft;
+    border-left: 3px solid transparent;
+  }
+  &__LaneGroupDot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  &__LaneGroupName {
+    flex: 1;
+    font-size: 12px;
+    font-weight: 600;
+    color: $track-ink;
+  }
+  &__LaneGroupCount {
+    font-size: 10.5px;
+    color: $track-ink-mute;
+    background: rgba(0,0,0,0.04);
+    padding: 1px 7px;
+    border-radius: 9px;
+  }
+
+  &__LaneRow {
+    position: absolute;
+    left: 0; right: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 14px 0 24px;
+    border-bottom: 1px solid $track-border-soft;
+    cursor: pointer;
+    transition: background 120ms;
+    &:hover { background: rgba(0,0,0,0.02); }
+    &--selected {
+      background: rgba(94,106,210,0.06);
+      &::before {
+        content: '';
+        position: absolute;
+        left: 0; top: 0; bottom: 0;
+        width: 2px;
+        background: $color-primary;
+      }
+    }
+  }
+  &__LaneTaskId {
+    font-size: 10.5px;
+    font-weight: 500;
+    color: $track-ink-mute;
+    flex-shrink: 0;
+  }
+  &__LaneTaskTitle {
+    flex: 1;
+    font-size: 12.5px;
+    color: $track-ink;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__Canvas {
+    flex: 1;
+    overflow-x: auto;
+    overflow-y: auto;
+    min-width: 0;
+    background: $track-paper;
+  }
+
+  &__CanvasInner {
+    position: relative;
+  }
+
+  // 주말 음영 + 주 그리드
+  &__Grid {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  &__GridWeek {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 1px;
+    background: $track-border-soft;
+  }
+
+  &__Rows {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  &__RowGroupHead {
+    position: absolute;
+    left: 0; right: 0;
+    background: color.adjust($track-paper, $lightness: -1.5%);
+    border-bottom: 1px solid $track-border-soft;
+  }
+  &__RowDivider {
+    position: absolute;
+    left: 0; right: 0;
+    height: 1px;
+    background: $track-border-soft;
+  }
+
+  // Today marker
+  &__Today {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 2px;
+    background: $color-primary;
+    z-index: 3;
+    pointer-events: none;
+  }
+  &__TodayPin {
+    position: absolute;
+    top: -28px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 2px 8px;
+    background: $color-primary;
+    color: #FFFFFF;
+    border-radius: 9px;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+  }
+
+  // 의존 화살표 — 막대보다 아래 layer (z-index=1), 막대는 z-index=2.
+  // 가늘고 흐리게, hover 또는 selected row 인접 시에만 진해짐.
+  &__Links {
+    position: absolute;
+    top: 0; left: 0;
+    pointer-events: none;
+    z-index: 1;
+    color: rgba(107, 114, 128, 0.55);
+  }
+  &__Link {
+    stroke: rgba(107, 114, 128, 0.45);
+    stroke-width: 1.1;
+    stroke-dasharray: 3 4;
+    color: rgba(107, 114, 128, 0.55);
+    fill: none;
+
+    &--mat {
+      stroke: rgba(94, 106, 210, 0.55);
+      stroke-width: 1.4;
+      stroke-dasharray: none;
+      color: rgba(94, 106, 210, 0.7);
+    }
+    &--rel {
+      stroke: rgba(156, 163, 175, 0.45);
+      stroke-dasharray: 5 4;
+      color: rgba(156, 163, 175, 0.55);
+    }
+  }
+
+  // Task 막대
+  &__Bar {
+    --branch-color: #5E6AD2;
+    --status-color: #9CA3AF;
+    position: absolute;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 8px 0 0;
+    background: #FFFFFF;
+    border: 1px solid color-mix(in srgb, var(--branch-color) 30%, $track-border);
+    border-left: 4px solid var(--branch-color);
+    border-radius: 6px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 4px 12px -6px rgba(0,0,0,0.08);
+    cursor: pointer;
+    transition: box-shadow 150ms, border-color 150ms, transform 150ms;
+    z-index: 3;
+    overflow: hidden;
+
+    &:hover {
+      box-shadow:
+        0 2px 4px rgba(0,0,0,0.06),
+        0 8px 16px -6px rgba(0,0,0,0.12),
+        0 0 0 1px var(--branch-color);
+      transform: translateY(-1px);
+    }
+
+    &--selected {
+      box-shadow:
+        0 0 0 2px var(--branch-color),
+        0 6px 14px -4px color-mix(in srgb, var(--branch-color) 30%, transparent);
+    }
+
+    &--done {
+      opacity: 0.62;
+      background: $track-border-soft;
+    }
+    &--blocked {
+      border-color: $color-error;
+      border-left-color: $color-error;
+      background:
+        repeating-linear-gradient(
+          135deg,
+          rgba(220,38,38,0.06) 0,
+          rgba(220,38,38,0.06) 4px,
+          transparent 4px,
+          transparent 9px
+        ),
+        #FFFFFF;
+    }
+  }
+
+  &__BarLeft {
+    width: 6px;
+    height: 100%;
+    background: var(--status-color);
+    flex-shrink: 0;
+  }
+  &__BarTitle {
+    flex: 1;
+    font-size: 11.5px;
+    font-weight: 500;
+    color: $track-ink;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding-left: 4px;
+  }
+  &__BarAvatar {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    color: #FFFFFF;
+    font-size: 9.5px;
+    font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 1.5px #FFFFFF;
+  }
+}
+
+
+// =========================================================================
+// Tree View
+// =========================================================================
+.TrackTree {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: $track-paper;
+  overflow: hidden;
+
+  $col-status: 130px;
+  $col-prio: 80px;
+  $col-assignee: 160px;
+  $col-due: 80px;
+  $col-narrow: 70px;
+
+  &__Head {
+    display: grid;
+    grid-template-columns:
+      minmax(0, 1fr)
+      $col-status
+      $col-prio
+      $col-assignee
+      $col-due
+      $col-narrow;
+    align-items: center;
+    padding: 0 24px;
+    height: 38px;
+    border-bottom: 1px solid $track-border;
+    background: color.adjust($track-paper, $lightness: 0.5%);
+    position: sticky;
+    top: 0;
+    z-index: 4;
+  }
+  &__HeadCell {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: $track-ink-mute;
+
+    &--main { padding-left: 36px; }
+    &--narrow { text-align: right; }
+  }
+
+  &__Body {
+    flex: 1;
+    overflow-y: auto;
+    padding-bottom: 60px;
+  }
+
+  &__Group {
+    margin-bottom: 2px;
+  }
+
+  &__GroupRow {
+    --branch-color: #9CA3AF;
+    display: grid;
+    grid-template-columns:
+      24px
+      4px
+      auto
+      auto
+      1fr;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 9px 24px;
+    background: color.adjust($track-paper, $lightness: -1%);
+    border-top: 1px solid $track-border-soft;
+    border-bottom: 1px solid $track-border-soft;
+    text-align: left;
+    transition: background 120ms;
+
+    &:hover { background: color.adjust($track-paper, $lightness: -2%); }
+  }
+  &__GroupChevron {
+    color: $track-ink-soft;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  &__GroupColorBar {
+    width: 4px;
+    height: 14px;
+    border-radius: 2px;
+    background: var(--branch-color);
+  }
+  &__GroupName {
+    font-size: 13px;
+    font-weight: 600;
+    color: $track-ink;
+  }
+  &__GroupKey {
+    font-size: 10px;
+    font-weight: 600;
+    color: $track-ink-mute;
+    background: rgba(0,0,0,0.04);
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+  &__GroupCount {
+    margin-left: auto;
+    font-size: 11px;
+    color: $track-ink-mute;
+    background: #FFFFFF;
+    padding: 2px 8px;
+    border-radius: 9px;
+    border: 1px solid $track-border-soft;
+  }
+
+  &__Row {
+    --branch-color: #9CA3AF;
+    display: grid;
+    grid-template-columns:
+      minmax(0, 1fr)
+      $col-status
+      $col-prio
+      $col-assignee
+      $col-due
+      $col-narrow;
+    align-items: center;
+    padding: 0 24px;
+    height: 40px;
+    border-bottom: 1px solid $track-border-soft;
+    cursor: pointer;
+    transition: background 120ms;
+    background: #FFFFFF;
+    position: relative;
+
+    &:hover { background: rgba(94,106,210,0.025); }
+
+    &--selected {
+      background: rgba(94,106,210,0.06);
+      &::before {
+        content: '';
+        position: absolute;
+        left: 0; top: 0; bottom: 0;
+        width: 3px;
+        background: $color-primary;
+      }
+    }
+
+    &--restricted {
+      background:
+        repeating-linear-gradient(
+          135deg,
+          rgba(0,0,0,0.025) 0,
+          rgba(0,0,0,0.025) 4px,
+          transparent 4px,
+          transparent 10px
+        ),
+        #FFFFFF;
+    }
+  }
+
+  &__Cell {
+    padding: 0 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12.5px;
+    color: $track-ink;
+
+    &--main {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding-left: 0;
+    }
+    &--narrow {
+      text-align: right;
+      padding-right: 0;
+    }
+  }
+
+  &__Indent {
+    width: 22px;
+    flex-shrink: 0;
+  }
+  &__BranchBar {
+    width: 3px;
+    height: 16px;
+    border-radius: 1.5px;
+    background: var(--branch-color);
+    flex-shrink: 0;
+  }
+  &__TaskId {
+    font-size: 11px;
+    font-weight: 500;
+    color: $track-ink-mute;
+    flex-shrink: 0;
+  }
+  &__TaskTitle {
+    flex: 1;
+    font-size: 13px;
+    color: $track-ink;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  &__UrgentFlag {
+    display: inline-flex;
+    align-items: center;
+    color: $color-error;
+    flex-shrink: 0;
+  }
+
+  &__RestrictedIcon {
+    color: $track-ink-mute;
+    margin-left: 8px;
+    flex-shrink: 0;
+  }
+  &__RestrictedTitle {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: $track-ink-soft;
+  }
+  &__RestrictedHint {
+    font-size: 11.5px;
+    color: $track-ink-mute;
+  }
+
+  &__StatusPill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px 3px 7px;
+    border-radius: 11px;
+    font-size: 11px;
+    font-weight: 600;
+    max-width: 100%;
+  }
+  &__StatusDot { width: 6px; height: 6px; border-radius: 50%; }
+
+  &__Priority {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 9px;
+    text-transform: capitalize;
+
+    &--urgent {
+      background: rgba(220,38,38,0.08);
+      color: $color-error;
+    }
+    &--high {
+      background: rgba(245,158,11,0.1);
+      color: #B45309;
+    }
+    &--medium {
+      background: rgba(94,106,210,0.08);
+      color: $color-primary;
+    }
+    &--low {
+      background: rgba(156,163,175,0.16);
+      color: $track-ink-soft;
+    }
+  }
+
+  &__Assignee {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    max-width: 100%;
+  }
+  &__AssigneeAvatar {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    color: #FFFFFF;
+    font-size: 10px;
+    font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  &__AssigneeName {
+    font-size: 12px;
+    color: $track-ink;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__Due {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11.5px;
+    font-weight: 500;
+    color: $track-ink-soft;
+    svg { opacity: 0.6; }
+  }
+
+  &__LinkCount {
+    font-size: 11.5px;
+    font-weight: 500;
+    color: $color-primary;
+  }
+
+  &__Empty {
+    color: $track-ink-mute;
+    font-size: 12px;
+  }
+}
+
+
+// =========================================================================
+// ManageBranches modal
+// =========================================================================
+.ManageBranches {
+  width: 480px;
+  max-width: calc(100vw - 32px);
+  background: #FFFFFF;
+  border-radius: 12px;
+  box-shadow: 0 24px 60px -16px rgba(0,0,0,0.28), 0 4px 12px rgba(0,0,0,0.06);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 64px);
+  overflow: hidden;
+
+  &__Backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(28,28,28,0.32);
+    backdrop-filter: blur(2px);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: ManageBranchesFade 140ms ease-out;
+  }
+
+  &__Head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 22px 14px;
+    border-bottom: 1px solid $track-border-soft;
+  }
+  &__Title {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    color: $track-ink;
+    svg { color: $track-ink-soft; }
+  }
+  &__Close {
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    color: $track-ink-mute;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 120ms, color 120ms;
+    &:hover { background: $track-border-soft; color: $track-ink; }
+  }
+
+  &__Desc {
+    padding: 12px 22px 4px;
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: $track-ink-soft;
+    margin: 0;
+  }
+
+  &__List {
+    list-style: none;
+    margin: 0;
+    padding: 10px 14px 0;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+  }
+
+  &__Item {
+    --branch-color: #9CA3AF;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: background 120ms, border-color 120ms;
+    margin-bottom: 2px;
+
+    &:hover {
+      background: $track-border-soft;
+    }
+    &--checked {
+      background: color-mix(in srgb, var(--branch-color) 6%, #FFFFFF);
+      border-color: color-mix(in srgb, var(--branch-color) 25%, transparent);
+      &:hover {
+        background: color-mix(in srgb, var(--branch-color) 10%, #FFFFFF);
+      }
+    }
+  }
+
+  &__Checkbox {
+    position: absolute;
+    opacity: 0;
+    width: 0; height: 0;
+  }
+
+  &__Mark {
+    width: 18px; height: 18px;
+    border-radius: 5px;
+    border: 1.5px solid $track-border;
+    background: #FFFFFF;
+    display: flex; align-items: center; justify-content: center;
+    color: #FFFFFF;
+    transition: background 120ms, border-color 120ms;
+    flex-shrink: 0;
+
+    .ManageBranches__Item--checked & {
+      background: var(--branch-color);
+      border-color: var(--branch-color);
+    }
+  }
+
+  &__BranchDot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--branch-color);
+    flex-shrink: 0;
+  }
+
+  &__BranchName {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 500;
+    color: $track-ink;
+  }
+  &__BranchKey {
+    font-size: 10.5px;
+    font-weight: 600;
+    color: $track-ink-mute;
+    background: rgba(0,0,0,0.04);
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+  &__ItemCount {
+    font-size: 11px;
+    color: $track-ink-soft;
+    background: #FFFFFF;
+    border: 1px solid $track-border-soft;
+    padding: 2px 8px;
+    border-radius: 9px;
+  }
+
+  &__Warn {
+    margin: 10px 22px 0;
+    padding: 10px 12px;
+    background: rgba(245,158,11,0.08);
+    border: 1px solid rgba(245,158,11,0.2);
+    border-radius: 8px;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #92400E;
+    svg { color: #D97706; flex-shrink: 0; margin-top: 2px; }
+    strong { color: #78350F; font-weight: 700; }
+  }
+
+  &__Foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 22px 18px;
+    border-top: 1px solid $track-border-soft;
+    background: color.adjust($track-paper, $lightness: 1%);
+  }
+
+  &__Diff {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    font-weight: 500;
+    color: $track-ink-mute;
+  }
+  &__DiffAdd { color: #16A34A; }
+  &__DiffRemove { color: $color-error; }
+  &__DiffSep { color: $track-ink-mute; opacity: 0.5; }
+
+  &__Actions {
+    display: inline-flex;
+    gap: 8px;
+  }
+
+  &__Btn {
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-size: 12.5px;
+    font-weight: 500;
+    transition: background 120ms, color 120ms, border-color 120ms;
+
+    &--ghost {
+      background: transparent;
+      border: 1px solid $track-border;
+      color: $track-ink-soft;
+      &:hover {
+        background: $track-border-soft;
+        color: $track-ink;
+      }
+    }
+    &--primary {
+      background: $color-primary;
+      border: 1px solid $color-primary;
+      color: #FFFFFF;
+      &:hover:not(:disabled) {
+        background: $color-primary-hover;
+        border-color: $color-primary-hover;
+      }
+      &:disabled {
+        background: $track-border-soft;
+        border-color: $track-border-soft;
+        color: $track-ink-mute;
+        cursor: not-allowed;
+      }
+    }
+  }
+}
+
+@keyframes ManageBranchesFade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+
+@media (max-width: 1280px) {
+  .SourcePicker { width: 240px; }
+  .TrackDetail  { width: 300px; }
+}
+
+@media (max-width: 1024px) {
+  .TrackHeader {
+    padding: 20px 22px 0;
+    &__Title { font-size: 22px; }
+    &__Subtitle { display: none; }
+    &__Meta { flex-direction: column; align-items: stretch; gap: 14px; }
+  }
+}

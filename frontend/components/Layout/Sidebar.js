@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
-import { LayoutDashboard, CheckSquare, Compass, GitBranch, FileEdit, X } from 'lucide-react';
+import { LayoutDashboard, CheckSquare, Compass, GitBranch, FileEdit, Workflow, X } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import SidebarBranches from './SidebarBranches';
 import SidebarCanvases from './SidebarCanvases';
@@ -84,6 +84,13 @@ export default function Sidebar({ isMobile, width, onResizeStart, onCreateBranch
           >
             <CheckSquare size={16} className="Sidebar__MenuIcon" />
             My Tasks
+          </button>
+          <button
+            className={`Sidebar__MenuItem ${router.pathname.startsWith('/tracks') ? 'Sidebar__MenuItem--active' : ''}`}
+            onClick={() => handleNavClick('/tracks')}
+          >
+            <Workflow size={16} className="Sidebar__MenuIcon" />
+            Tracks
           </button>
           <button
             className={`Sidebar__MenuItem ${router.pathname === '/browse' ? 'Sidebar__MenuItem--active' : ''}`}

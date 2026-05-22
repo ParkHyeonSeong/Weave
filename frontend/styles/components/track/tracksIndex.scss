@@ -1,0 +1,517 @@
+@use 'sass:color';
+@use '../../variables' as *;
+
+.TracksIndex {
+  padding: $space-8 $space-8 $space-12;
+  max-width: 1080px;
+  margin: 0 auto;
+
+  &__Header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: $space-2;
+  }
+
+  &__HeaderLeft {
+    display: flex;
+    align-items: center;
+    gap: $space-3;
+  }
+
+  &__HeaderIcon { color: $color-primary; }
+
+  &__Title {
+    font-size: $font-size-xl;
+    font-weight: $font-weight-bold;
+    color: $color-text;
+    margin: 0;
+  }
+
+  &__Count {
+    font-size: $font-size-xs;
+    color: $color-text-secondary;
+    background: $color-surface;
+    padding: 2px 8px;
+    border-radius: $radius-sm;
+  }
+
+  &__CreateBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    background: $color-primary;
+    color: #FFFFFF;
+    border-radius: $radius-md;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    transition: background 120ms;
+    &:hover { background: $color-primary-hover; }
+  }
+
+  &__Intro {
+    font-size: $font-size-sm;
+    color: $color-text-secondary;
+    margin: 0 0 $space-6;
+  }
+
+  &__Loading {
+    padding: $space-8;
+    text-align: center;
+    color: $color-text-secondary;
+  }
+
+  &__List {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: $space-2;
+  }
+
+  &__Card {
+    --track-color: #5E6AD2;
+    display: flex;
+    align-items: center;
+    gap: $space-4;
+    width: 100%;
+    padding: 16px 18px;
+    background: #FFFFFF;
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+    text-align: left;
+    transition: border-color 120ms, box-shadow 120ms, transform 120ms;
+    position: relative;
+    overflow: hidden;
+
+    &:hover {
+      border-color: $color-text-secondary;
+      box-shadow: 0 4px 14px -4px rgba(0,0,0,0.08);
+      transform: translateY(-1px);
+    }
+  }
+
+  &__CardAccent {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--track-color);
+  }
+
+  &__CardMain {
+    flex: 1;
+    min-width: 0;
+    padding-left: 6px;
+  }
+
+  &__CardTitleRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+
+  &__CardTitle {
+    font-size: $font-size-md;
+    font-weight: $font-weight-semibold;
+    color: $color-text;
+  }
+
+  &__CardVisibility {
+    font-size: 10px;
+    font-weight: $font-weight-semibold;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: $color-text-secondary;
+    background: $color-surface;
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+
+  &__CardDesc {
+    font-size: $font-size-sm;
+    color: $color-text-secondary;
+    line-height: 1.5;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  &__CardStats {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-shrink: 0;
+  }
+
+  &__CardStat {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: $font-size-xs;
+    color: $color-text-secondary;
+    svg { opacity: 0.7; }
+  }
+
+  &__CardDate {
+    font-size: $font-size-xs;
+    color: $color-text-secondary;
+    min-width: 70px;
+    text-align: right;
+  }
+
+  // Empty state
+  &__Empty {
+    margin-top: $space-12;
+    padding: $space-12 $space-6;
+    text-align: center;
+    background: $color-surface;
+    border: 1px dashed $color-border;
+    border-radius: $radius-xl;
+  }
+  &__EmptyIcon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    background: #FFFFFF;
+    color: $color-primary;
+    border: 1px solid $color-border;
+    margin-bottom: $space-4;
+  }
+  &__EmptyTitle {
+    font-size: $font-size-lg;
+    font-weight: $font-weight-semibold;
+    color: $color-text;
+    margin-bottom: $space-1;
+  }
+  &__EmptyHint {
+    font-size: $font-size-sm;
+    color: $color-text-secondary;
+    max-width: 360px;
+    margin: 0 auto $space-5;
+    line-height: 1.55;
+  }
+  &__EmptyBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: $color-primary;
+    color: #FFFFFF;
+    border-radius: $radius-md;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    transition: background 120ms;
+    &:hover { background: $color-primary-hover; }
+  }
+}
+
+
+// -------------------------------------------------------------------------
+// Track loading / notfound
+// -------------------------------------------------------------------------
+.Track--loading,
+.Track--notfound {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 12px;
+  color: $color-text-secondary;
+  background: $color-surface;
+}
+
+.Track__NotFoundTitle {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text;
+}
+.Track__NotFoundBack {
+  padding: 7px 14px;
+  background: #FFFFFF;
+  border: 1px solid $color-border;
+  border-radius: $radius-md;
+  font-size: $font-size-sm;
+  color: $color-text;
+  transition: background 120ms, border-color 120ms;
+  &:hover { background: $color-surface-hover; border-color: $color-text-secondary; }
+}
+
+
+// =========================================================================
+// CreateTrack modal
+// =========================================================================
+.CreateTrack {
+  width: 520px;
+  max-width: calc(100vw - 32px);
+  background: #FFFFFF;
+  border-radius: 12px;
+  box-shadow: 0 24px 60px -16px rgba(0,0,0,0.28), 0 4px 12px rgba(0,0,0,0.06);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 64px);
+  overflow: hidden;
+
+  &__Backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(28,28,28,0.32);
+    backdrop-filter: blur(2px);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  &__Head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 22px 14px;
+    border-bottom: 1px solid $color-border;
+  }
+  &__Title {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 15px;
+    font-weight: $font-weight-semibold;
+    color: $color-text;
+    svg { color: $color-primary; }
+  }
+  &__Close {
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    color: $color-text-secondary;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 120ms, color 120ms;
+    &:hover { background: $color-surface-hover; color: $color-text; }
+  }
+
+  &__Body {
+    padding: 18px 22px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: $space-5;
+  }
+
+  &__Field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  &__Label {
+    font-size: 11px;
+    font-weight: $font-weight-semibold;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: $color-text-secondary;
+  }
+  &__LabelOpt {
+    font-weight: $font-weight-regular;
+    text-transform: none;
+    letter-spacing: 0;
+    color: $color-text-tertiary;
+  }
+
+  &__Input,
+  &__Textarea {
+    width: 100%;
+    padding: 9px 12px;
+    background: #FFFFFF;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    font-size: $font-size-sm;
+    color: $color-text;
+    transition: border-color 120ms, box-shadow 120ms;
+    font-family: inherit;
+    &:focus {
+      outline: none;
+      border-color: $color-primary;
+      box-shadow: $shadow-focus;
+    }
+    &::placeholder { color: $color-text-tertiary; }
+  }
+  &__Textarea {
+    resize: vertical;
+    min-height: 60px;
+  }
+
+  &__Colors {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  &__Color {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    color: #FFFFFF;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 120ms, border-color 120ms;
+    &:hover { transform: scale(1.08); }
+    &--active {
+      border-color: $color-text;
+      transform: scale(1.08);
+    }
+  }
+
+  &__VisGroup {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  &__VisOpt {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    background: #FFFFFF;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    text-align: left;
+    transition: border-color 120ms, background 120ms;
+
+    svg { color: $color-text-secondary; flex-shrink: 0; margin-top: 2px; }
+
+    &:hover { border-color: $color-text-secondary; }
+    &--active {
+      border-color: $color-primary;
+      background: rgba(94,106,210,0.04);
+      svg { color: $color-primary; }
+    }
+  }
+  &__VisText { display: flex; flex-direction: column; gap: 1px; }
+  &__VisName { font-size: 13px; font-weight: $font-weight-medium; color: $color-text; }
+  &__VisHint { font-size: 11.5px; color: $color-text-secondary; }
+
+  &__Branches {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 4px 4px 4px 0;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+  }
+  &__BranchesLoading,
+  &__BranchesEmpty {
+    padding: 14px;
+    color: $color-text-secondary;
+    font-size: 12.5px;
+    background: $color-surface;
+    border-radius: $radius-md;
+    text-align: center;
+  }
+  &__Branch {
+    --branch-color: #5E6AD2;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    text-align: left;
+    transition: background 120ms, border-color 120ms;
+    margin: 0 4px;
+
+    &:hover { background: $color-surface-hover; }
+    &--checked {
+      background: color-mix(in srgb, var(--branch-color) 6%, #FFFFFF);
+      border-color: color-mix(in srgb, var(--branch-color) 25%, transparent);
+    }
+  }
+  &__BranchMark {
+    width: 16px; height: 16px;
+    border-radius: 4px;
+    border: 1.5px solid $color-border;
+    background: #FFFFFF;
+    color: #FFFFFF;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    transition: background 120ms, border-color 120ms;
+
+    .CreateTrack__Branch--checked & {
+      background: var(--branch-color);
+      border-color: var(--branch-color);
+    }
+  }
+  &__BranchDot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--branch-color);
+    flex-shrink: 0;
+  }
+  &__BranchName {
+    flex: 1;
+    font-size: 13px;
+    color: $color-text;
+  }
+  &__BranchKey {
+    font-size: 10.5px;
+    font-weight: $font-weight-semibold;
+    color: $color-text-secondary;
+    background: rgba(0,0,0,0.04);
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+
+  &__Error {
+    padding: 8px 12px;
+    background: $color-error-bg;
+    color: $color-error;
+    border-radius: $radius-md;
+    font-size: 12.5px;
+  }
+
+  &__Foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 14px 22px 18px;
+    border-top: 1px solid $color-border;
+    background: $color-surface;
+  }
+
+  &__Btn {
+    padding: 8px 16px;
+    border-radius: $radius-md;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    transition: background 120ms, color 120ms, border-color 120ms;
+
+    &--ghost {
+      background: transparent;
+      border: 1px solid $color-border;
+      color: $color-text-secondary;
+      &:hover {
+        background: $color-surface-hover;
+        color: $color-text;
+      }
+    }
+    &--primary {
+      background: $color-primary;
+      border: 1px solid $color-primary;
+      color: #FFFFFF;
+      &:hover:not(:disabled) {
+        background: $color-primary-hover;
+        border-color: $color-primary-hover;
+      }
+      &:disabled {
+        background: $color-surface-hover;
+        border-color: $color-surface-hover;
+        color: $color-text-tertiary;
+        cursor: not-allowed;
+      }
+    }
+  }
+}
