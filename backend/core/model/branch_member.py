@@ -19,6 +19,19 @@ async def is_member(branch_id: int, user_id: int, db: AsyncSession) -> bool:
     return result.fetchone() is not None
 
 
+async def filter_member_branch_ids(user_id: int, branch_ids,
+                                    db: AsyncSession) -> set:
+    """주어진 branch_ids 중 사용자가 멤버인 것만 추려 반환 (단일 쿼리)"""
+    ids = list(branch_ids or [])
+    if not ids:
+        return set()
+    result = await db.execute(text("""
+        SELECT branch_id FROM branch_member
+        WHERE user_id = :user_id AND branch_id = ANY(:ids)
+    """), {'user_id': user_id, 'ids': ids})
+    return {r[0] for r in result.fetchall()}
+
+
 async def find_by_branch(branch_id: int, db: AsyncSession):
     """Branch 멤버 목록"""
     result = await db.execute(text("""

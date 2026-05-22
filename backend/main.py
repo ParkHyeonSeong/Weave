@@ -45,6 +45,7 @@ from routers import push as push_router
 from routers import schedule_event as schedule_event_router
 from routers import schedule_event_task as event_task_router
 from routers import jira_migrate as jira_migrate_router
+from routers import track as track_router
 
 # -- Logging ---------------------------------------------------------------
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -154,6 +155,7 @@ app.include_router(push_router.router, prefix="/api/push", tags=["push"])
 app.include_router(schedule_event_router.router, prefix="/api/branches/{branch_id}/schedule-events", tags=["schedule-events"])
 app.include_router(event_task_router.router, prefix="/api/branches/{branch_id}/schedule-events/{event_id}/tasks", tags=["schedule-event-tasks"])
 app.include_router(jira_migrate_router.router, prefix="/api/branches/{branch_id}/jira-migrate", tags=["jira-migrate"])
+app.include_router(track_router.router, prefix="/api/tracks", tags=["tracks"])
 
 # -- Static files (업로드 파일 서빙) -----------------------------------------
 uploads_dir = os.path.join(os.path.dirname(__file__), 'uploads')
