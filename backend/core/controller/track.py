@@ -275,8 +275,8 @@ async def get_items(track_id: int, request: Request, db: AsyncSession):
 
 async def add_items_bulk(track_id: int, body, request: Request, db: AsyncSession):
     """N개의 task를 한 번에 Track에 추가 — editor 이상.
-    각 task에 대해 branch 멤버 검증 + participating 자동 합류 + 중복 무시.
-    응답에 각 task별 결과 (added | skipped_reason)."""
+    각 task에 대해 branch 멤버 검증 + 중복 무시. Participating 자동 합류는 하지 않음
+    (사용자가 명시적으로 Manage Branches로 추가해야 sidebar에 노출)."""
     err = await _require_role(track_id, request, 'editor', db)
     if err:
         return err
@@ -294,8 +294,6 @@ async def add_items_bulk(track_id: int, body, request: Request, db: AsyncSession
         if not await branch_member_model.is_member(task['branch_id'], user_id, db):
             results.append({'task_id': task_id, 'status': 'skipped', 'reason': 'NOT_BRANCH_MEMBER'})
             continue
-        if not await track_branch_model.is_participating(track_id, task['branch_id'], db):
-            await track_branch_model.add(track_id, task['branch_id'], db)
         item_id, created = await track_item_model.create_task_ref_idempotent(
             track_id, task_id, db)
         if created:
