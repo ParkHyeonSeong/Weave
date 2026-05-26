@@ -103,7 +103,9 @@ export default function BulkAddModal({
       params.exclude_done = 'true';
     } else if (mode === 'sprint' && sprintId) {
       params.sprint_id = sprintId;
-      params.exclude_done = 'true';
+      // Branch 자체 동작과 동일 — active sprint면 done까지 보여줌 (회고/이월 판단용)
+      const selectedSprint = sprints.find((s) => s.sprint_id === sprintId);
+      if (selectedSprint?.status !== 'active') params.exclude_done = 'true';
     } else if (mode === 'filter') {
       // Filter 모드는 status 선택을 사용자가 직접 — done 강제 제외 안 함
       if (filterStatusCat) params.status_category = filterStatusCat;
@@ -117,7 +119,7 @@ export default function BulkAddModal({
       if (mySeq === fetchSeqRef.current) setTasks([]);
     }
     if (mySeq === fetchSeqRef.current) setLoading(false);
-  }, [mode, trackId, branchId, epicId, sprintId, filterStatusCat, filterPriority]);
+  }, [mode, trackId, branchId, epicId, sprintId, sprints, filterStatusCat, filterPriority]);
 
   useEffect(() => {
     setTasks([]);
@@ -207,12 +209,14 @@ export default function BulkAddModal({
                   setBranchId(e.target.value ? Number(e.target.value) : null);
                   setEpicId(null);
                   setSprintId(null);
+                  setEpics([]);
+                  setSprints([]);
                 }}
               >
                 <option value="">— 선택 —</option>
                 {branchOptions.map((b) => (
                   <option key={b.branch_id} value={b.branch_id}>
-                    {b.name}{b.participating ? '' : '  · 새 branch (Track에 자동 추가됨)'}
+                    {b.name}{b.participating ? '' : '  · 비참여 branch (sidebar에는 표시 안 됨)'}
                   </option>
                 ))}
               </select>

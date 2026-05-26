@@ -139,20 +139,19 @@ export default function TrackDetail() {
     [participatingBranches]
   );
 
-  // item이 참조하는 branch가 participating에서 빠질 수 있음 (예: 사후 제거).
-  // 그 경우에도 노드가 안전히 렌더되도록 placeholder로 fallback.
+  // Bulk add는 branch를 participating으로 합류시키지 않으므로 canvas에 non-participating
+  // branch task가 있을 수 있음. 그 경우 item이 갖고 있는 branch_* 필드로 fallback.
   const branchById = useMemo(() => {
     const map = {};
     normalizedBranches.forEach((b) => { map[b.branch_id] = b; });
     items.forEach((it) => {
-      if (it.branch_id && !map[it.branch_id]) {
-        map[it.branch_id] = {
-          branch_id: it.branch_id,
-          name: 'Unknown',
-          key: '?',
-          color: '#9CA3AF',
-        };
-      }
+      if (it.restricted || !it.branch_id || map[it.branch_id]) return;
+      map[it.branch_id] = {
+        branch_id: it.branch_id,
+        name: it.branch_name || 'Unknown',
+        key: it.branch_key || '?',
+        color: it.branch_color || '#9CA3AF',
+      };
     });
     return map;
   }, [normalizedBranches, items]);
@@ -523,14 +522,10 @@ export default function TrackDetail() {
           onClose={() => setBulkAddMode(null)}
           onAdded={async () => {
             setBulkAddMode(null);
-            // bulk add는 task의 branch가 새로 참여할 수도 있어 둘 다 refetch
+            // Bulk add는 participating에 자동 합류시키지 않음 → items만 refetch
             try {
-              const [itemsRes, branchesRes] = await Promise.all([
-                axios.get(`/tracks/${trackId}/items`),
-                axios.get(`/tracks/${trackId}/branches`),
-              ]);
+              const itemsRes = await axios.get(`/tracks/${trackId}/items`);
               if (itemsRes.data.status) setItems(itemsRes.data.items.map(normalizeItem));
-              if (branchesRes.data.status) setParticipatingBranches(branchesRes.data.branches);
               setSourceReloadKey((k) => k + 1);
             } catch {}
           }}
