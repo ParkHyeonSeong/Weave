@@ -9,6 +9,7 @@ import TrackTimeline from './Timeline/TrackTimeline';
 import TrackTree from './Tree/TrackTree';
 import TrackItemDetail from './Detail/TrackItemDetail';
 import ManageBranchesModal from './ManageBranchesModal';
+import BulkAddModal from './BulkAddModal';
 import { WORKFLOW_STATUSES, getBranchDistribution } from './mockData';
 
 // 서버 hydrated item → 컴포넌트가 기대하는 형태로 정규화
@@ -73,6 +74,7 @@ export default function TrackDetail() {
   const [edgeType, setEdgeType] = useState('flow_to');
   const [materializeOnCreate, setMaterializeOnCreate] = useState(true);
   const [showManageBranches, setShowManageBranches] = useState(false);
+  const [bulkAddMode, setBulkAddMode] = useState(null);  // null | 'epic' | 'sprint' | 'filter'
 
   // debounced position save용 ref
   const positionSaveTimer = useRef(null);
@@ -414,6 +416,7 @@ export default function TrackDetail() {
           trackId={trackId}
           participatingBranchIds={participatingBranchIds}
           onManageBranches={handleManageBranches}
+          onBulkAdd={(mode) => setBulkAddMode(mode)}
           reloadKey={sourceReloadKey}
         />
 
@@ -474,6 +477,28 @@ export default function TrackDetail() {
           itemsByBranchId={itemsByBranchId}
           onClose={() => setShowManageBranches(false)}
           onConfirm={handleConfirmBranches}
+        />
+      )}
+
+      {bulkAddMode && (
+        <BulkAddModal
+          mode={bulkAddMode}
+          trackId={trackId}
+          participatingBranches={normalizedBranches}
+          onClose={() => setBulkAddMode(null)}
+          onAdded={async () => {
+            setBulkAddMode(null);
+            // bulk add는 task의 branch가 새로 참여할 수도 있어 둘 다 refetch
+            try {
+              const [itemsRes, branchesRes] = await Promise.all([
+                axios.get(`/tracks/${trackId}/items`),
+                axios.get(`/tracks/${trackId}/branches`),
+              ]);
+              if (itemsRes.data.status) setItems(itemsRes.data.items.map(normalizeItem));
+              if (branchesRes.data.status) setParticipatingBranches(branchesRes.data.branches);
+              setSourceReloadKey((k) => k + 1);
+            } catch {}
+          }}
         />
       )}
     </div>

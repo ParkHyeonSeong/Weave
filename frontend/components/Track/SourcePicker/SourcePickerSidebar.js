@@ -9,6 +9,7 @@ export default function SourcePickerSidebar({
   trackId,
   participatingBranchIds,
   onManageBranches,
+  onBulkAdd,
   reloadKey,
 }) {
   const [query, setQuery] = useState('');
@@ -114,25 +115,34 @@ export default function SourcePickerSidebar({
           </button>
           {addMenuOpen && (
             <div className="SourcePicker__AddMenu" role="menu">
-              <button className="SourcePicker__AddMenuItem" disabled>
+              <button
+                className="SourcePicker__AddMenuItem"
+                onClick={() => { setAddMenuOpen(false); onBulkAdd?.('epic'); }}
+              >
                 <Zap size={13} />
                 <div className="SourcePicker__AddMenuText">
                   <span className="SourcePicker__AddMenuLabel">Epic</span>
-                  <span className="SourcePicker__AddMenuHint">v2 — epic 단위 import</span>
+                  <span className="SourcePicker__AddMenuHint">한 epic의 모든 task</span>
                 </div>
               </button>
-              <button className="SourcePicker__AddMenuItem" disabled>
+              <button
+                className="SourcePicker__AddMenuItem"
+                onClick={() => { setAddMenuOpen(false); onBulkAdd?.('sprint'); }}
+              >
                 <Calendar size={13} />
                 <div className="SourcePicker__AddMenuText">
                   <span className="SourcePicker__AddMenuLabel">Sprint</span>
-                  <span className="SourcePicker__AddMenuHint">v2 — active sprint 통째로</span>
+                  <span className="SourcePicker__AddMenuHint">sprint의 task 일괄</span>
                 </div>
               </button>
-              <button className="SourcePicker__AddMenuItem" disabled>
+              <button
+                className="SourcePicker__AddMenuItem"
+                onClick={() => { setAddMenuOpen(false); onBulkAdd?.('filter'); }}
+              >
                 <Filter size={13} />
                 <div className="SourcePicker__AddMenuText">
                   <span className="SourcePicker__AddMenuLabel">Filter</span>
-                  <span className="SourcePicker__AddMenuHint">v2 — 조건 기반</span>
+                  <span className="SourcePicker__AddMenuHint">조건에 맞는 task</span>
                 </div>
               </button>
               <div className="SourcePicker__AddMenuDivider" />
