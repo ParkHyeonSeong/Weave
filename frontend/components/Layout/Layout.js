@@ -6,6 +6,7 @@ import Footer from './Footer';
 import Messenger from '@/components/Messenger/Messenger';
 import CreateBranch from '@/components/modal/CreateBranch';
 import CreateCanvas from '@/components/modal/CreateCanvas';
+import CreateTrack from '@/components/modal/CreateTrack';
 import CommandPalette from '@/components/modal/CommandPalette';
 import { requestNotificationPermission, showNotification, playNotificationSound } from '@/library/notification';
 import { subscribeToPush } from '@/library/pushSubscription';
@@ -23,6 +24,7 @@ export default function Layout({ children }) {
   const { isMobile } = useMobile();
   const [showCreateBranch, setShowCreateBranch] = useState(false);
   const [showCreateCanvas, setShowCreateCanvas] = useState(false);
+  const [showCreateTrack, setShowCreateTrack] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     try { return sessionStorage.getItem('sidebar_collapsed') === 'true'; }
@@ -383,6 +385,7 @@ export default function Layout({ children }) {
             onResizeStart={isMobile ? undefined : handleSidebarResizeStart}
             onCreateBranch={() => setShowCreateBranch(true)}
             onCreateCanvas={() => setShowCreateCanvas(true)}
+            onCreateTrack={() => setShowCreateTrack(true)}
             onClose={() => setIsSidebarCollapsed(true)}
           />
         )}
@@ -431,6 +434,12 @@ export default function Layout({ children }) {
 
       {showCreateBranch && (
         <CreateBranch onClose={() => setShowCreateBranch(false)} />
+      )}
+      {showCreateTrack && (
+        <CreateTrack
+          onClose={() => setShowCreateTrack(false)}
+          onCreated={() => setShowCreateTrack(false)}
+        />
       )}
       {showCreateCanvas && (
         <CreateCanvas onClose={() => setShowCreateCanvas(false)} />

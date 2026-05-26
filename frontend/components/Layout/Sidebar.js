@@ -13,7 +13,7 @@ function getAppContext(pathname) {
   return null;
 }
 
-export default function Sidebar({ isMobile, width, onResizeStart, onCreateBranch, onCreateCanvas, onClose }) {
+export default function Sidebar({ isMobile, width, onResizeStart, onCreateBranch, onCreateCanvas, onCreateTrack, onClose }) {
   const router = useRouter();
   const urlContext = getAppContext(router.pathname);
   const [activeApp, setActiveApp] = useState(urlContext);
@@ -137,6 +137,7 @@ export default function Sidebar({ isMobile, width, onResizeStart, onCreateBranch
             )}
             {activeApp === 'track' && (
               <SidebarTracks
+                onCreateTrack={onCreateTrack}
                 savedOrder={sidebarOrder?.tracks}
                 onOrderChange={(ids) => handleOrderChange('tracks', ids)}
               />

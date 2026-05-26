@@ -11,7 +11,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { axios } from '@/library/_axios';
 
-function SortableTrackItem({ track, isActive }) {
+function SortableTrackItem({ track, isActive }) {  // isActive는 boolean (caller가 계산)
   const router = useRouter();
   const {
     attributes, listeners, setNodeRef, transform, transition, isDragging,
@@ -103,11 +103,6 @@ export default function SidebarTracks({ onCreateTrack, savedOrder, onOrderChange
     onOrderChange(reordered.map((t) => t.track_id));
   };
 
-  // 현재 어떤 Track 상세 페이지에 있는지 — /tracks/[id] 패턴 매치
-  const activeTrackId = router.pathname.startsWith('/tracks/')
-    ? Number(router.query.id)
-    : null;
-
   return (
     <>
       <div className="Sidebar__SectionHeader">
@@ -136,7 +131,10 @@ export default function SidebarTracks({ onCreateTrack, savedOrder, onOrderChange
                 <SortableTrackItem
                   key={track.track_id}
                   track={track}
-                  isActive={activeTrackId === track.track_id}
+                  // /tracks/[id] 페이지일 때만 active. router.query.id는 string이라
+                  // loose 비교(SidebarBranches와 동일 컨벤션)로 number/string 모두 매치.
+                  // eslint-disable-next-line eqeqeq
+                  isActive={router.pathname.startsWith('/tracks/') && router.query.id == track.track_id}
                 />
               ))}
             </SortableContext>
