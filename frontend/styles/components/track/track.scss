@@ -451,42 +451,63 @@ $track-border-soft: #EFEEE8;
     letter-spacing: 0.04em;
   }
 
-  &__Epic {
-    margin-left: 6px;
+  &__Group {
+    margin-left: 14px;
     border-left: 1px dashed rgba(0,0,0,0.08);
     padding-left: 4px;
     margin-bottom: 2px;
   }
 
-  &__EpicRow {
+  &__GroupRow {
     display: flex;
     align-items: center;
     gap: 6px;
     width: 100%;
     padding: 4px 6px;
     border-radius: 4px;
+    cursor: pointer;
     text-align: left;
-    &:hover { background: rgba(0,0,0,0.025); }
+    &:hover { background: rgba(0,0,0,0.03); }
+    &:focus-visible { outline: 2px solid #5E6AD2; outline-offset: -2px; }
   }
 
-  &__EpicIcon { flex-shrink: 0; }
+  &__GroupIcon {
+    flex-shrink: 0;
+    color: $track-ink-mute;
+    display: inline-flex;
+  }
 
-  &__EpicName {
+  &__GroupTitle {
     flex: 1;
     font-size: 11.5px;
+    font-weight: 500;
     color: $track-ink-soft;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  &__EpicCount {
+
+  &__GroupHint {
+    font-size: 9.5px;
+    font-weight: 600;
+    color: #16A34A;
+    background: rgba(22,163,74,0.10);
+    padding: 1px 5px;
+    border-radius: 3px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  &__GroupCount {
     font-size: 10.5px;
     color: $track-ink-mute;
+    min-width: 16px;
+    text-align: right;
   }
 
   &__Task {
     display: flex;
     align-items: center;
     gap: 4px;
-    margin-left: 18px;
+    margin-left: 22px;
     padding: 5px 6px 5px 4px;
     border-radius: 4px;
     cursor: grab;
@@ -1576,11 +1597,6 @@ $track-border-soft: #EFEEE8;
     font-size: 10.5px;
     color: $track-ink-mute;
     line-height: 1.3;
-  }
-  &__AddMenuDivider {
-    height: 1px;
-    background: $track-border-soft;
-    margin: 4px 6px;
   }
 }
 

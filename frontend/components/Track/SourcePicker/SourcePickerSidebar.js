@@ -1,71 +1,55 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { Search, ChevronDown, ChevronRight, GripVertical, Plus, Filter, Layers, Calendar, Zap, X } from 'lucide-react';
+import { Search, ChevronDown, ChevronRight, GripVertical, Plus, Filter, Calendar, Zap, X } from 'lucide-react';
 import { axios } from '@/library/_axios';
 
 const PICKER_DATA_MIME = 'application/x-track-source';
-const SEARCH_DEBOUNCE_MS = 220;
+const SEARCH_DEBOUNCE_MS = 200;
 
+// 트리: branch → sprints[] + epics[] → tasks[]. 검색은 task title 클라이언트 필터.
 export default function SourcePickerSidebar({
-  trackId,
-  participatingBranchIds,
-  onManageBranches,
-  onBulkAdd,
-  onUnparticipateBranch,
-  reloadKey,
+  trackId, onBulkAdd, onUnparticipateBranch, reloadKey,
 }) {
   const [query, setQuery] = useState('');
-  const [tasks, setTasks] = useState([]);
+  const [tree, setTree] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [openBranches, setOpenBranches] = useState(() => new Set(participatingBranchIds || []));
+  const [openBranches, setOpenBranches] = useState(() => new Set());
+  const [openGroups, setOpenGroups] = useState(() => new Set());  // 'sprint:N' | 'epic:N'
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const addMenuRef = useRef(null);
-  const searchTimerRef = useRef(null);
 
-  // participating 변경 시 open 셋 동기화
-  useEffect(() => {
-    setOpenBranches(new Set(participatingBranchIds || []));
-  }, [participatingBranchIds]);
-
-  // 검색 — debounced
-  const runSearch = useCallback(async () => {
+  const fetchTree = useCallback(async () => {
     if (!trackId) return;
     setLoading(true);
     try {
-      const res = await axios.get(`/tracks/${trackId}/sources`, {
-        params: { q: query, limit: 80 },
-      });
-      if (res.data.status) setTasks(res.data.tasks);
-    } catch {}
-    setLoading(false);
-  }, [trackId, query]);
-
-  useEffect(() => {
-    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-    searchTimerRef.current = setTimeout(runSearch, SEARCH_DEBOUNCE_MS);
-    return () => {
-      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-    };
-  }, [runSearch, reloadKey]);
-
-  // task를 branch별로 group
-  const grouped = useMemo(() => {
-    const map = new Map();
-    tasks.forEach((t) => {
-      if (!map.has(t.branch_id)) {
-        map.set(t.branch_id, {
-          branch_id: t.branch_id,
-          name: t.branch_name,
-          key: t.branch_key,
-          color: t.branch_color,
-          tasks: [],
+      const res = await axios.get(`/tracks/${trackId}/sidebar-tree`);
+      if (res.data.status) {
+        const fresh = res.data.tree;
+        setTree(fresh);
+        // 새로 등장한 branch/group은 expanded, 사라진 키는 prune (사용자 collapse 의도는 유지)
+        const validBranchIds = new Set(fresh.map((b) => b.branch_id));
+        const validGroupKeys = new Set();
+        fresh.forEach((b) => {
+          b.sprints.forEach((s) => validGroupKeys.add(`sprint:${s.sprint_id}`));
+          b.epics.forEach((e) => validGroupKeys.add(`epic:${e.epic_id}`));
+        });
+        setOpenBranches((prev) => {
+          const next = new Set([...prev].filter((id) => validBranchIds.has(id)));
+          fresh.forEach((b) => { if (!prev.has(b.branch_id)) next.add(b.branch_id); });
+          return next;
+        });
+        setOpenGroups((prev) => {
+          const next = new Set([...prev].filter((k) => validGroupKeys.has(k)));
+          validGroupKeys.forEach((k) => { if (!prev.has(k)) next.add(k); });
+          return next;
         });
       }
-      map.get(t.branch_id).tasks.push(t);
-    });
-    return Array.from(map.values());
-  }, [tasks]);
+    } catch {}
+    setLoading(false);
+  }, [trackId]);
 
-  // 메뉴 외부 클릭 시 닫기
+  useEffect(() => { fetchTree(); }, [fetchTree, reloadKey]);
+
+  // 외부 클릭 시 menu 닫기
   useEffect(() => {
     if (!addMenuOpen) return;
     const handler = (e) => {
@@ -77,28 +61,63 @@ export default function SourcePickerSidebar({
     return () => document.removeEventListener('mousedown', handler);
   }, [addMenuOpen]);
 
+  // 검색은 task title client-side filter. 디바운싱은 input typing rate에 의존.
+  const debouncedQ = useDebounced(query, SEARCH_DEBOUNCE_MS);
+  const filteredTree = useMemo(() => {
+    if (!debouncedQ.trim()) return tree;
+    const needle = debouncedQ.toLowerCase();
+    const matchTask = (t) =>
+      t.title.toLowerCase().includes(needle)
+      || t.display_id.toLowerCase().includes(needle);
+    return tree.map((b) => ({
+      ...b,
+      sprints: b.sprints
+        .map((s) => ({ ...s, tasks: s.tasks.filter(matchTask) }))
+        .filter((s) => s.tasks.length > 0),
+      epics: b.epics
+        .map((e) => ({ ...e, tasks: e.tasks.filter(matchTask) }))
+        .filter((e) => e.tasks.length > 0),
+    })).filter((b) => b.sprints.length > 0 || b.epics.length > 0);
+  }, [tree, debouncedQ]);
+
   const toggleBranch = (id) => {
-    setOpenBranches((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
+    setOpenBranches((p) => {
+      const n = new Set(p);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+  };
+  const toggleGroup = (key) => {
+    setOpenGroups((p) => {
+      const n = new Set(p);
+      n.has(key) ? n.delete(key) : n.add(key);
+      return n;
     });
   };
 
   const handleDragStart = (e, task) => {
-    const payload = {
+    e.dataTransfer.setData(PICKER_DATA_MIME, JSON.stringify({
       task_id: task.task_id,
       display_id: task.display_id,
       title: task.title,
       status: task.status,
       branch_id: task.branch_id,
-    };
-    e.dataTransfer.setData(PICKER_DATA_MIME, JSON.stringify(payload));
+    }));
     e.dataTransfer.effectAllowed = 'copy';
   };
 
-  const totalAccessible = tasks.length;
-  const totalNew = tasks.filter((t) => !t.in_track).length;
+  const totalAccessible = filteredTree.reduce(
+    (sum, b) => sum + b.sprints.reduce((s, sp) => s + sp.tasks.length, 0)
+                    + b.epics.reduce((s, ep) => s + ep.tasks.length, 0),
+    0,
+  );
+  const totalNew = filteredTree.reduce(
+    (sum, b) =>
+      sum
+      + b.sprints.reduce((s, sp) => s + sp.tasks.filter((t) => !t.in_track).length, 0)
+      + b.epics.reduce((s, ep) => s + ep.tasks.filter((t) => !t.in_track).length, 0),
+    0,
+  );
 
   return (
     <aside className="SourcePicker">
@@ -146,14 +165,6 @@ export default function SourcePickerSidebar({
                   <span className="SourcePicker__AddMenuHint">조건에 맞는 task</span>
                 </div>
               </button>
-              <div className="SourcePicker__AddMenuDivider" />
-              <button className="SourcePicker__AddMenuItem" onClick={() => { setAddMenuOpen(false); onManageBranches(); }}>
-                <Layers size={13} />
-                <div className="SourcePicker__AddMenuText">
-                  <span className="SourcePicker__AddMenuLabel">Manage branches…</span>
-                  <span className="SourcePicker__AddMenuHint">참여 branch 추가/제거</span>
-                </div>
-              </button>
             </div>
           )}
         </div>
@@ -171,26 +182,22 @@ export default function SourcePickerSidebar({
       </div>
 
       <div className="SourcePicker__Tree">
-        {loading && tasks.length === 0 && (
+        {loading && tree.length === 0 && (
           <div className="SourcePicker__Empty">Loading…</div>
         )}
-        {!loading && tasks.length === 0 && (
+        {!loading && tree.length === 0 && (
           <div className="SourcePicker__Empty">
-            {(participatingBranchIds || []).length === 0 ? (
-              <>
-                <div className="SourcePicker__EmptyTitle">No branches yet</div>
-                <div className="SourcePicker__EmptyHint">
-                  먼저 참여할 branch를 추가하세요.
-                </div>
-              </>
-            ) : query.trim() ? (
-              <>No matches for &ldquo;{query}&rdquo;</>
-            ) : (
-              <>No accessible tasks</>
-            )}
+            <div className="SourcePicker__EmptyTitle">아직 비어 있어요</div>
+            <div className="SourcePicker__EmptyHint">
+              위의 <strong>Add by</strong>로 Sprint/Epic/Filter에서 가져오세요.
+            </div>
           </div>
         )}
-        {grouped.map((branch) => {
+        {!loading && tree.length > 0 && filteredTree.length === 0 && (
+          <div className="SourcePicker__Empty">No matches for &ldquo;{query}&rdquo;</div>
+        )}
+
+        {filteredTree.map((branch) => {
           const branchOpen = openBranches.has(branch.branch_id);
           return (
             <div key={branch.branch_id} className="SourcePicker__Branch">
@@ -211,18 +218,18 @@ export default function SourcePickerSidebar({
                 </span>
                 <span
                   className="SourcePicker__BranchDot"
-                  style={{ background: branch.color, boxShadow: `0 0 0 3px ${branch.color}22` }}
+                  style={{ background: branch.branch_color, boxShadow: `0 0 0 3px ${branch.branch_color}22` }}
                 />
-                <span className="SourcePicker__BranchName">{branch.name}</span>
-                <span className="SourcePicker__BranchKey">{branch.key}</span>
+                <span className="SourcePicker__BranchName">{branch.branch_name}</span>
+                <span className="SourcePicker__BranchKey">{branch.branch_key}</span>
                 {onUnparticipateBranch && (
                   <button
                     className="SourcePicker__BranchUnparticipate"
                     onClick={(e) => {
                       e.stopPropagation();
-                      onUnparticipateBranch(branch.branch_id, branch.name);
+                      onUnparticipateBranch(branch.branch_id, branch.branch_name);
                     }}
-                    title="Track에서 이 branch 빼기 (이 branch의 모든 item도 함께 제거)"
+                    title="Track에서 이 branch 통째로 빼기 (모든 item도 함께)"
                     aria-label="Remove branch from track"
                   >
                     <X size={11} />
@@ -230,26 +237,37 @@ export default function SourcePickerSidebar({
                 )}
               </div>
 
-              {branchOpen && branch.tasks.map((task) => (
-                <div
-                  key={task.task_id}
-                  className={`SourcePicker__Task ${task.in_track ? 'SourcePicker__Task--used' : ''}`}
-                  draggable={!task.in_track}
-                  onDragStart={(e) => !task.in_track && handleDragStart(e, task)}
-                  title={task.in_track ? '이미 캔버스에 있음' : '드래그하여 캔버스에 추가'}
-                >
-                  <span className="SourcePicker__TaskGrip">
-                    <GripVertical size={11} />
-                  </span>
-                  <span
-                    className="SourcePicker__TaskBranchBar"
-                    style={{ background: branch.color }}
-                  />
-                  <span className="SourcePicker__TaskId">{task.display_id}</span>
-                  <span className="SourcePicker__TaskTitle">{task.title}</span>
-                  {task.in_track && <span className="SourcePicker__TaskBadge">on canvas</span>}
-                </div>
-              ))}
+              {branchOpen && (
+                <>
+                  {branch.sprints.map((sprint) => (
+                    <ScopeGroup
+                      key={`sprint:${sprint.sprint_id}`}
+                      groupKey={`sprint:${sprint.sprint_id}`}
+                      icon={<Calendar size={11} />}
+                      title={sprint.sprint_name}
+                      hint={sprint.status === 'active' ? 'active' : null}
+                      tasks={sprint.tasks}
+                      branchColor={branch.branch_color}
+                      isOpen={openGroups.has(`sprint:${sprint.sprint_id}`)}
+                      onToggle={() => toggleGroup(`sprint:${sprint.sprint_id}`)}
+                      onDragStart={handleDragStart}
+                    />
+                  ))}
+                  {branch.epics.map((epic) => (
+                    <ScopeGroup
+                      key={`epic:${epic.epic_id}`}
+                      groupKey={`epic:${epic.epic_id}`}
+                      icon={<Zap size={11} style={{ color: epic.color }} />}
+                      title={epic.epic_name}
+                      tasks={epic.tasks}
+                      branchColor={branch.branch_color}
+                      isOpen={openGroups.has(`epic:${epic.epic_id}`)}
+                      onToggle={() => toggleGroup(`epic:${epic.epic_id}`)}
+                      onDragStart={handleDragStart}
+                    />
+                  ))}
+                </>
+              )}
             </div>
           );
         })}
@@ -264,6 +282,54 @@ export default function SourcePickerSidebar({
       )}
     </aside>
   );
+}
+
+function ScopeGroup({ groupKey, icon, title, hint, tasks, branchColor, isOpen, onToggle, onDragStart }) {
+  return (
+    <div className="SourcePicker__Group">
+      <div
+        className="SourcePicker__GroupRow"
+        onClick={onToggle}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); }
+        }}
+        role="button"
+        tabIndex={0}
+      >
+        <span className="SourcePicker__Chevron">
+          {isOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+        </span>
+        <span className="SourcePicker__GroupIcon">{icon}</span>
+        <span className="SourcePicker__GroupTitle">{title}</span>
+        {hint && <span className="SourcePicker__GroupHint">{hint}</span>}
+        <span className="SourcePicker__GroupCount">{tasks.length}</span>
+      </div>
+      {isOpen && tasks.map((task) => (
+        <div
+          key={task.task_id}
+          className={`SourcePicker__Task ${task.in_track ? 'SourcePicker__Task--used' : ''}`}
+          draggable={!task.in_track}
+          onDragStart={(e) => !task.in_track && onDragStart(e, task)}
+          title={task.in_track ? '이미 캔버스에 있음' : '드래그하여 캔버스에 추가'}
+        >
+          <span className="SourcePicker__TaskGrip"><GripVertical size={11} /></span>
+          <span className="SourcePicker__TaskBranchBar" style={{ background: branchColor }} />
+          <span className="SourcePicker__TaskId">{task.display_id}</span>
+          <span className="SourcePicker__TaskTitle">{task.title}</span>
+          {task.in_track && <span className="SourcePicker__TaskBadge">on canvas</span>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function useDebounced(value, ms) {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return v;
 }
 
 export { PICKER_DATA_MIME };

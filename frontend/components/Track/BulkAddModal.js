@@ -25,25 +25,17 @@ const PRIORITIES = [
 ];
 
 export default function BulkAddModal({
-  mode, trackId,
-  participatingBranches = [],
-  allBranches = [],
-  onClose, onAdded,
+  mode, trackId, allBranches = [], onClose, onAdded,
 }) {
   const meta = MODE_META[mode];
 
-  // 새 branch에서 가져오는 경우 backend(add_items_bulk)가 자동으로 track에 합류시킴 → 사용자의 모든 가입 branch를 선택지로
-  const participatingSet = useMemo(
-    () => new Set(participatingBranches.map((b) => b.branch_id)),
-    [participatingBranches]
-  );
+  // 선택지 = 사용자가 가입한 모든 branch. Bulk add 시 backend가 track에 자동 합류시킴.
   const branchOptions = useMemo(
     () => allBranches.map((b) => ({
       branch_id: b.branch_id,
       name: b.name || b.branch_name,
-      participating: participatingSet.has(b.branch_id),
     })),
-    [allBranches, participatingSet]
+    [allBranches]
   );
 
   const [branchId, setBranchId] = useState(
@@ -163,10 +155,18 @@ export default function BulkAddModal({
   const handleSubmit = async () => {
     if (selectedIds.size === 0 || submitting) return;
     setSubmitting(true);
+    const body = { source_task_ids: [...selectedIds] };
+    if (mode === 'sprint' && sprintId) {
+      body.scope_mode = 'sprint';
+      body.scope_id = sprintId;
+    } else if (mode === 'epic' && epicId) {
+      body.scope_mode = 'epic';
+      body.scope_id = epicId;
+    } else if (mode === 'filter') {
+      body.scope_mode = 'filter';
+    }
     try {
-      const res = await axios.post(`/tracks/${trackId}/items/bulk`, {
-        source_task_ids: [...selectedIds],
-      });
+      const res = await axios.post(`/tracks/${trackId}/items/bulk`, body);
       if (res.data.status) {
         onAdded(res.data.added);
       } else {
@@ -215,9 +215,7 @@ export default function BulkAddModal({
               >
                 <option value="">— 선택 —</option>
                 {branchOptions.map((b) => (
-                  <option key={b.branch_id} value={b.branch_id}>
-                    {b.name}{b.participating ? '' : '  · 비참여 branch (sidebar에는 표시 안 됨)'}
-                  </option>
+                  <option key={b.branch_id} value={b.branch_id}>{b.name}</option>
                 ))}
               </select>
               <ChevronDown size={12} className="BulkAdd__SelectCaret" />

@@ -8,7 +8,6 @@ import TrackFlowCanvas from './Flow/TrackFlowCanvas';
 import TrackTimeline from './Timeline/TrackTimeline';
 import TrackTree from './Tree/TrackTree';
 import TrackItemDetail from './Detail/TrackItemDetail';
-import ManageBranchesModal from './ManageBranchesModal';
 import BulkAddModal from './BulkAddModal';
 import { showToast } from '@/components/Layout/Toast';
 import { WORKFLOW_STATUSES, getBranchDistribution } from './mockData';
@@ -63,7 +62,7 @@ export default function TrackDetail() {
   const [track, setTrack] = useState(null);
   const [participatingBranches, setParticipatingBranches] = useState([]);
   const [members, setMembers] = useState([]);
-  const [allBranches, setAllBranches] = useState([]); // ManageBranches 모달용 (가입된 branch 전체)
+  const [allBranches, setAllBranches] = useState([]); // BulkAddModal branch dropdown용
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -74,7 +73,6 @@ export default function TrackDetail() {
   const [viewMode, setViewMode] = useState('flow');
   const [edgeType, setEdgeType] = useState('flow_to');
   const [materializeOnCreate, setMaterializeOnCreate] = useState(true);
-  const [showManageBranches, setShowManageBranches] = useState(false);
   const [bulkAddMode, setBulkAddMode] = useState(null);  // null | 'epic' | 'sprint' | 'filter'
 
   // debounced position save용 ref
@@ -161,11 +159,6 @@ export default function TrackDetail() {
     [items, normalizedBranches]
   );
 
-  const participatingBranchIds = useMemo(
-    () => normalizedBranches.map((b) => b.branch_id),
-    [normalizedBranches]
-  );
-
   const membersForHeader = useMemo(
     () => members.map((m) => ({
       user_id: m.user_id,
@@ -186,11 +179,7 @@ export default function TrackDetail() {
     return m;
   }, [items]);
 
-  // -- Manage branches -----------------------------------------------------
-  const handleManageBranches = useCallback(() => {
-    setShowManageBranches(true);
-  }, []);
-
+  // -- Branch unparticipate (sidebar X 버튼) --------------------------------
   const handleUnparticipateBranch = useCallback(async (branchId, branchName) => {
     const itemCount = itemsByBranchId.get(branchId) || 0;
     const msg = itemCount > 0
@@ -203,41 +192,6 @@ export default function TrackDetail() {
         showToast(`제거 실패: ${res.data.message}`, 'error');
         return;
       }
-      // 권위 있는 refetch
-      const [branchesRes, itemsRes] = await Promise.all([
-        axios.get(`/tracks/${trackId}/branches`),
-        axios.get(`/tracks/${trackId}/items`),
-      ]);
-      if (branchesRes.data.status) setParticipatingBranches(branchesRes.data.branches);
-      if (itemsRes.data.status) setItems(itemsRes.data.items.map(normalizeItem));
-      setSourceReloadKey((k) => k + 1);
-    } catch {
-      showToast('Branch 제거 실패', 'error');
-    }
-  }, [trackId, itemsByBranchId]);
-
-  const handleConfirmBranches = useCallback(async (nextIds) => {
-    const current = new Set(participatingBranches.map((b) => b.branch_id));
-    const next = new Set(nextIds);
-    const toAdd = [...next].filter((id) => !current.has(id));
-    const toRemove = [...current].filter((id) => !next.has(id));
-
-    // allSettled로 부분 실패 허용 — 성공한 변경은 살리고 실패만 보고
-    const results = await Promise.allSettled([
-      ...toAdd.map((branch_id) =>
-        axios.post(`/tracks/${trackId}/branches`, { branch_id })
-      ),
-      ...toRemove.map((branch_id) =>
-        axios.delete(`/tracks/${trackId}/branches/${branch_id}`)
-      ),
-    ]);
-    const failed = results.filter((r) =>
-      r.status === 'rejected' || (r.value?.data && r.value.data.status === false)
-    ).length;
-
-    // 서버 상태 기준으로 항상 refetch — branch 제거 시 backend가 그 branch의 item과
-    // materialized dep도 cascade로 정리하므로 items/links도 함께 refetch해야 함.
-    try {
       const [branchesRes, itemsRes, linksRes] = await Promise.all([
         axios.get(`/tracks/${trackId}/branches`),
         axios.get(`/tracks/${trackId}/items`),
@@ -247,15 +201,10 @@ export default function TrackDetail() {
       if (itemsRes.data.status) setItems(itemsRes.data.items.map(normalizeItem));
       if (linksRes.data.status) setLinks(linksRes.data.links);
       setSourceReloadKey((k) => k + 1);
-    } catch {}
-
-    if (failed > 0) {
-      showToast(`${failed}개 변경 사항이 적용되지 않았어요`, 'error');
-      // 실패가 있으면 모달은 열어둠 — 사용자가 다시 시도/취소 결정
-      return;
+    } catch {
+      showToast('Branch 제거 실패', 'error');
     }
-    setShowManageBranches(false);
-  }, [trackId, participatingBranches]);
+  }, [trackId, itemsByBranchId]);
 
   // -- Items handlers -----------------------------------------------------
 
@@ -415,7 +364,7 @@ export default function TrackDetail() {
     );
   }
 
-  // ManageBranchesModal에 넘길 branch 전체 (가입된 것만)
+  // BulkAddModal에 넘길 branch 전체 (사용자가 가입한 모든 branch)
   const allBranchesForModal = allBranches.map((b) => ({
     branch_id: b.branch_id,
     name: b.branch_name,
@@ -439,14 +388,11 @@ export default function TrackDetail() {
         totalItems={items.filter((i) => !i.restricted).length}
         totalLinks={links.length}
         participatingBranches={normalizedBranches}
-        onManageBranches={handleManageBranches}
       />
 
       <div className="Track__Body">
         <SourcePickerSidebar
           trackId={trackId}
-          participatingBranchIds={participatingBranchIds}
-          onManageBranches={handleManageBranches}
           onBulkAdd={(mode) => setBulkAddMode(mode)}
           onUnparticipateBranch={handleUnparticipateBranch}
           reloadKey={sourceReloadKey}
@@ -503,29 +449,22 @@ export default function TrackDetail() {
         />
       </div>
 
-      {showManageBranches && (
-        <ManageBranchesModal
-          allBranches={allBranchesForModal}
-          participatingBranchIds={participatingBranchIds}
-          itemsByBranchId={itemsByBranchId}
-          onClose={() => setShowManageBranches(false)}
-          onConfirm={handleConfirmBranches}
-        />
-      )}
-
       {bulkAddMode && (
         <BulkAddModal
           mode={bulkAddMode}
           trackId={trackId}
-          participatingBranches={normalizedBranches}
           allBranches={allBranchesForModal}
           onClose={() => setBulkAddMode(null)}
           onAdded={async () => {
             setBulkAddMode(null);
-            // Bulk add는 participating에 자동 합류시키지 않음 → items만 refetch
+            // Bulk add는 branch 자동 합류 + scope marker — items와 branches 모두 refetch
             try {
-              const itemsRes = await axios.get(`/tracks/${trackId}/items`);
+              const [itemsRes, branchesRes] = await Promise.all([
+                axios.get(`/tracks/${trackId}/items`),
+                axios.get(`/tracks/${trackId}/branches`),
+              ]);
               if (itemsRes.data.status) setItems(itemsRes.data.items.map(normalizeItem));
+              if (branchesRes.data.status) setParticipatingBranches(branchesRes.data.branches);
               setSourceReloadKey((k) => k + 1);
             } catch {}
           }}

@@ -1,4 +1,4 @@
-import { Workflow, Calendar, GitBranch, Settings, Share2, Star, Plus } from 'lucide-react';
+import { Workflow, Calendar, GitBranch, Settings, Share2, Star } from 'lucide-react';
 
 const VIEW_MODES = [
   { key: 'flow', label: 'Flow', icon: Workflow },
@@ -9,7 +9,7 @@ const VIEW_MODES = [
 export default function TrackHeader({
   track, members, viewMode, onViewModeChange,
   distribution, totalItems, totalLinks,
-  participatingBranches, onManageBranches,
+  participatingBranches,
 }) {
   return (
     <header className="TrackHeader">
@@ -37,14 +37,6 @@ export default function TrackHeader({
                     {b.name}
                   </span>
                 ))}
-                <button
-                  className="TrackHeader__ParticipatingAdd"
-                  onClick={onManageBranches}
-                  title="Manage participating branches"
-                >
-                  <Plus size={11} />
-                  <span>add</span>
-                </button>
               </div>
             </div>
           )}
