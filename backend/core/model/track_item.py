@@ -185,6 +185,37 @@ async def delete(item_id: int, track_id: int, db: AsyncSession):
     """), {'item_id': item_id, 'track_id': track_id})
 
 
+async def find_materialized_dep_ids_for_branch(track_id: int, branch_id: int,
+                                                 db: AsyncSession):
+    """branch unparticipate 시 정리할 task_dependency id 목록.
+    이 branch에서 온 item이 source/target인 link 중 materialize된 것."""
+    result = await db.execute(text("""
+        SELECT DISTINCT tl.materialized_dependency_id
+        FROM track_link tl
+        INNER JOIN track_item s ON tl.source_item_id = s.item_id
+        INNER JOIN track_item t ON tl.target_item_id = t.item_id
+        WHERE tl.track_id = :track_id
+          AND tl.materialized_dependency_id IS NOT NULL
+          AND (
+            s.source_task_id IN (SELECT task_id FROM task WHERE branch_id = :branch_id)
+            OR t.source_task_id IN (SELECT task_id FROM task WHERE branch_id = :branch_id)
+          )
+    """), {'track_id': track_id, 'branch_id': branch_id})
+    return [r[0] for r in result.fetchall()]
+
+
+async def delete_by_track_branch(track_id: int, branch_id: int, db: AsyncSession):
+    """Track에서 특정 branch의 task를 참조하는 모든 item 삭제 (track_link는 FK CASCADE)."""
+    await db.execute(text("""
+        DELETE FROM track_item
+        WHERE track_id = :track_id
+          AND source_type = 'task'
+          AND source_task_id IN (
+              SELECT task_id FROM task WHERE branch_id = :branch_id
+          )
+    """), {'track_id': track_id, 'branch_id': branch_id})
+
+
 async def search_sources(track_id: int, user_id: int, q: str, branch_id,
                          limit: int, db: AsyncSession,
                          status=None, priority=None,

@@ -216,10 +216,19 @@ async def add_branch(track_id: int, body, request: Request, db: AsyncSession):
 
 async def remove_branch(track_id: int, branch_id: int, request: Request,
                         db: AsyncSession):
-    """참여 branch 제거 — editor 이상"""
+    """참여 branch 제거 — editor 이상.
+    이 branch에서 온 모든 track_item 및 그에 묶인 materialized task_dependency도 함께 정리.
+    track_link는 track_item FK CASCADE로 자동 삭제.
+    """
     err = await _require_role(track_id, request, 'editor', db)
     if err:
         return err
+
+    # 정리할 dependency id 먼저 수집 — item 삭제 후엔 link도 사라져 조회 못함
+    dep_ids = await track_item_model.find_materialized_dep_ids_for_branch(
+        track_id, branch_id, db)
+    await track_item_model.delete_by_track_branch(track_id, branch_id, db)
+    await dep_model.delete_by_ids(dep_ids, db)
     await track_branch_model.remove(track_id, branch_id, db)
     return {'status': True}
 

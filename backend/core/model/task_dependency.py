@@ -26,6 +26,15 @@ async def delete_by_id(dependency_id: int, db: AsyncSession):
     """), {'dependency_id': dependency_id})
 
 
+async def delete_by_ids(dependency_ids: list, db: AsyncSession):
+    """여러 dependency를 한 번에 정리 (bulk unparticipate 등)."""
+    if not dependency_ids:
+        return
+    await db.execute(text("""
+        DELETE FROM task_dependency WHERE dependency_id = ANY(:ids)
+    """), {'ids': dependency_ids})
+
+
 async def find_by_epic(epic_id: int, branch_id: int, db: AsyncSession):
     """에픽에 속한 태스크 간 의존관계 조회"""
     result = await db.execute(text("""
