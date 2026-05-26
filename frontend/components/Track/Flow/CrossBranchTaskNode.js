@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
-import { CalendarDays, Layers } from 'lucide-react';
+import { CalendarDays, Layers, X } from 'lucide-react';
 
 function formatDue(date) {
   if (!date) return null;
@@ -15,6 +15,7 @@ const CrossBranchTaskNode = memo(function CrossBranchTaskNode({ data, selected }
     displayId, title, status, statusLabel, statusColor,
     priority, branchKey, branchName, branchColor,
     assignees, dueDate, otherTracksCount,
+    itemId, onDelete,
   } = data;
 
   return (
@@ -24,6 +25,20 @@ const CrossBranchTaskNode = memo(function CrossBranchTaskNode({ data, selected }
     >
       <span className="TrackNode__BranchBand" />
       <span className="TrackNode__BranchGlow" />
+
+      {onDelete && (
+        <button
+          className="TrackNode__DeleteBtn"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(itemId);
+          }}
+          title="Remove from track"
+          aria-label="Remove from track"
+        >
+          <X size={11} />
+        </button>
+      )}
 
       <div className="TrackNode__Header">
         <span className="TrackNode__BranchChip" style={{ background: `${branchColor}14`, color: branchColor }}>

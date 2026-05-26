@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { Search, ChevronDown, ChevronRight, GripVertical, Plus, Filter, Layers, Calendar, Zap } from 'lucide-react';
+import { Search, ChevronDown, ChevronRight, GripVertical, Plus, Filter, Layers, Calendar, Zap, X } from 'lucide-react';
 import { axios } from '@/library/_axios';
 
 const PICKER_DATA_MIME = 'application/x-track-source';
@@ -10,6 +10,7 @@ export default function SourcePickerSidebar({
   participatingBranchIds,
   onManageBranches,
   onBulkAdd,
+  onUnparticipateBranch,
   reloadKey,
 }) {
   const [query, setQuery] = useState('');
@@ -193,9 +194,17 @@ export default function SourcePickerSidebar({
           const branchOpen = openBranches.has(branch.branch_id);
           return (
             <div key={branch.branch_id} className="SourcePicker__Branch">
-              <button
+              <div
                 className="SourcePicker__BranchRow"
                 onClick={() => toggleBranch(branch.branch_id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggleBranch(branch.branch_id);
+                  }
+                }}
+                role="button"
+                tabIndex={0}
               >
                 <span className="SourcePicker__Chevron">
                   {branchOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
@@ -206,7 +215,20 @@ export default function SourcePickerSidebar({
                 />
                 <span className="SourcePicker__BranchName">{branch.name}</span>
                 <span className="SourcePicker__BranchKey">{branch.key}</span>
-              </button>
+                {onUnparticipateBranch && (
+                  <button
+                    className="SourcePicker__BranchUnparticipate"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onUnparticipateBranch(branch.branch_id, branch.name);
+                    }}
+                    title="Track에서 이 branch 빼기 (이 branch의 모든 item도 함께 제거)"
+                    aria-label="Remove branch from track"
+                  >
+                    <X size={11} />
+                  </button>
+                )}
+              </div>
 
               {branchOpen && branch.tasks.map((task) => (
                 <div

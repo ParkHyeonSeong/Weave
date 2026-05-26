@@ -8,7 +8,7 @@ function formatDateLong(date) {
   return `${m} ${d.getDate()}`;
 }
 
-export default function TrackItemDetail({ item, branch, workflowStatuses, onClose }) {
+export default function TrackItemDetail({ item, branch, workflowStatuses, onClose, onRemove }) {
   if (!item) {
     return (
       <aside className="TrackDetail TrackDetail--empty">
@@ -138,7 +138,12 @@ export default function TrackItemDetail({ item, branch, workflowStatuses, onClos
       </section>
 
       <footer className="TrackDetail__Foot">
-        <button className="TrackDetail__FootBtn TrackDetail__FootBtn--ghost">Remove from track</button>
+        <button
+          className="TrackDetail__FootBtn TrackDetail__FootBtn--ghost"
+          onClick={() => onRemove?.(item.item_id)}
+        >
+          Remove from track
+        </button>
         <button className="TrackDetail__FootBtn TrackDetail__FootBtn--primary">Open in branch ↗</button>
       </footer>
     </aside>

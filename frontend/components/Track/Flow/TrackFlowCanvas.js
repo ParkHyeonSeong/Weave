@@ -20,14 +20,14 @@ import { PICKER_DATA_MIME } from '../SourcePicker/SourcePickerSidebar';
 const nodeTypes = { task: CrossBranchTaskNode, restricted: RestrictedNode };
 const edgeTypes = { track: TrackEdge };
 
-function buildNodes(items, branchById, workflowStatuses) {
+function buildNodes(items, branchById, workflowStatuses, onItemDelete) {
   return items.map((it) => {
     if (it.restricted) {
       return {
         id: String(it.item_id),
         type: 'restricted',
         position: it.position,
-        data: { hint: it.restricted_hint },
+        data: { hint: it.restricted_hint, itemId: it.item_id, onDelete: onItemDelete },
       };
     }
     const branch = branchById[it.branch_id] || {};
@@ -50,6 +50,7 @@ function buildNodes(items, branchById, workflowStatuses) {
         assignees: it.assignees || [],
         dueDate: it.due_date,
         otherTracksCount: (it.other_tracks || []).length,
+        onDelete: onItemDelete,
       },
     };
   });
@@ -108,8 +109,8 @@ function CanvasInner({
   const { screenToFlowPosition } = useReactFlow();
 
   const initialNodes = useMemo(
-    () => buildNodes(items, branchById, workflowStatuses),
-    [items, branchById, workflowStatuses]
+    () => buildNodes(items, branchById, workflowStatuses, onItemDelete),
+    [items, branchById, workflowStatuses, onItemDelete]
   );
   const initialEdges = useMemo(
     () => buildEdges(links, items, onLinkDelete),

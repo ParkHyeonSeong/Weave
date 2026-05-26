@@ -10,6 +10,7 @@ import TrackTree from './Tree/TrackTree';
 import TrackItemDetail from './Detail/TrackItemDetail';
 import ManageBranchesModal from './ManageBranchesModal';
 import BulkAddModal from './BulkAddModal';
+import { showToast } from '@/components/Layout/Toast';
 import { WORKFLOW_STATUSES, getBranchDistribution } from './mockData';
 
 // 서버 hydrated item → 컴포넌트가 기대하는 형태로 정규화
@@ -191,6 +192,31 @@ export default function TrackDetail() {
     setShowManageBranches(true);
   }, []);
 
+  const handleUnparticipateBranch = useCallback(async (branchId, branchName) => {
+    const itemCount = itemsByBranchId.get(branchId) || 0;
+    const msg = itemCount > 0
+      ? `"${branchName}" branch를 Track에서 빼면 그 branch의 ${itemCount}개 item이 함께 제거됩니다. 계속할까요?`
+      : `"${branchName}" branch를 Track에서 빼시겠어요?`;
+    if (!window.confirm(msg)) return;
+    try {
+      const res = await axios.delete(`/tracks/${trackId}/branches/${branchId}`);
+      if (!res.data?.status) {
+        showToast(`제거 실패: ${res.data.message}`, 'error');
+        return;
+      }
+      // 권위 있는 refetch
+      const [branchesRes, itemsRes] = await Promise.all([
+        axios.get(`/tracks/${trackId}/branches`),
+        axios.get(`/tracks/${trackId}/items`),
+      ]);
+      if (branchesRes.data.status) setParticipatingBranches(branchesRes.data.branches);
+      if (itemsRes.data.status) setItems(itemsRes.data.items.map(normalizeItem));
+      setSourceReloadKey((k) => k + 1);
+    } catch {
+      showToast('Branch 제거 실패', 'error');
+    }
+  }, [trackId, itemsByBranchId]);
+
   const handleConfirmBranches = useCallback(async (nextIds) => {
     const current = new Set(participatingBranches.map((b) => b.branch_id));
     const next = new Set(nextIds);
@@ -210,16 +236,22 @@ export default function TrackDetail() {
       r.status === 'rejected' || (r.value?.data && r.value.data.status === false)
     ).length;
 
-    // 서버 상태 기준으로 항상 refetch (낙관적 갱신 안 함)
+    // 서버 상태 기준으로 항상 refetch — branch 제거 시 backend가 그 branch의 item과
+    // materialized dep도 cascade로 정리하므로 items/links도 함께 refetch해야 함.
     try {
-      const res = await axios.get(`/tracks/${trackId}/branches`);
-      if (res.data.status) setParticipatingBranches(res.data.branches);
+      const [branchesRes, itemsRes, linksRes] = await Promise.all([
+        axios.get(`/tracks/${trackId}/branches`),
+        axios.get(`/tracks/${trackId}/items`),
+        axios.get(`/tracks/${trackId}/links`),
+      ]);
+      if (branchesRes.data.status) setParticipatingBranches(branchesRes.data.branches);
+      if (itemsRes.data.status) setItems(itemsRes.data.items.map(normalizeItem));
+      if (linksRes.data.status) setLinks(linksRes.data.links);
+      setSourceReloadKey((k) => k + 1);
     } catch {}
 
     if (failed > 0) {
-      window.dispatchEvent(new CustomEvent('toast', {
-        detail: { message: `${failed}개 변경 사항이 적용되지 않았어요`, type: 'error' },
-      }));
+      showToast(`${failed}개 변경 사항이 적용되지 않았어요`, 'error');
       // 실패가 있으면 모달은 열어둠 — 사용자가 다시 시도/취소 결정
       return;
     }
@@ -417,6 +449,7 @@ export default function TrackDetail() {
           participatingBranchIds={participatingBranchIds}
           onManageBranches={handleManageBranches}
           onBulkAdd={(mode) => setBulkAddMode(mode)}
+          onUnparticipateBranch={handleUnparticipateBranch}
           reloadKey={sourceReloadKey}
         />
 
@@ -467,6 +500,7 @@ export default function TrackDetail() {
           branch={selectedItem && !selectedItem.restricted ? branchById[selectedItem.branch_id] : null}
           workflowStatuses={WORKFLOW_STATUSES}
           onClose={() => setSelectedItemId(null)}
+          onRemove={handleItemDelete}
         />
       </div>
 

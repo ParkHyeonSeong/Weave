@@ -1,11 +1,22 @@
 import { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
-import { Lock } from 'lucide-react';
+import { Lock, X } from 'lucide-react';
 
 const RestrictedNode = memo(function RestrictedNode({ data, selected }) {
+  const { itemId, onDelete } = data;
   return (
     <div className={`TrackNode TrackNode--restricted ${selected ? 'TrackNode--selected' : ''}`}>
       <div className="TrackNode__RestrictedFrost" />
+      {onDelete && (
+        <button
+          className="TrackNode__DeleteBtn"
+          onClick={(e) => { e.stopPropagation(); onDelete(itemId); }}
+          title="Remove from track"
+          aria-label="Remove from track"
+        >
+          <X size={11} />
+        </button>
+      )}
       <div className="TrackNode__RestrictedContent">
         <Lock size={14} className="TrackNode__RestrictedIcon" />
         <div className="TrackNode__RestrictedTitle">Restricted</div>
