@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 async def create_task_ref(track_id: int, task_id: int,
                            position_x: float, position_y: float,
                            db: AsyncSession) -> int:
-    """task 참조 item 생성. (track_id, source_task_id) UNIQUE 충돌 시 기존 item_id 반환."""
+    """task 참조 item 생성 (drag&drop용). 중복 시 사용자 의도 = 새 위치로 이동이라 위치 갱신."""
     result = await db.execute(text("""
         INSERT INTO track_item (track_id, source_type, source_task_id, position_x, position_y)
         VALUES (:track_id, 'task', :task_id, :px, :py)
@@ -19,6 +19,27 @@ async def create_task_ref(track_id: int, task_id: int,
         'py': position_y,
     })
     return result.scalar_one()
+
+
+async def create_task_ref_idempotent(track_id: int, task_id: int,
+                                       db: AsyncSession):
+    """Bulk add용 — 이미 있으면 기존 item 그대로 (위치 보존), 없으면 (0,0)으로 추가.
+    리턴: (item_id, created) — created=False면 이미 존재했음."""
+    result = await db.execute(text("""
+        INSERT INTO track_item (track_id, source_type, source_task_id, position_x, position_y)
+        VALUES (:track_id, 'task', :task_id, 0, 0)
+        ON CONFLICT (track_id, source_task_id) WHERE source_type = 'task' AND source_task_id IS NOT NULL
+        DO NOTHING
+        RETURNING item_id
+    """), {'track_id': track_id, 'task_id': task_id})
+    row = result.fetchone()
+    if row:
+        return row[0], True
+    existing = await db.execute(text("""
+        SELECT item_id FROM track_item
+        WHERE track_id = :track_id AND source_type = 'task' AND source_task_id = :task_id
+    """), {'track_id': track_id, 'task_id': task_id})
+    return existing.scalar_one(), False
 
 
 async def find_by_id(item_id: int, db: AsyncSession):
@@ -165,10 +186,13 @@ async def delete(item_id: int, track_id: int, db: AsyncSession):
 
 
 async def search_sources(track_id: int, user_id: int, q: str, branch_id,
-                         limit: int, db: AsyncSession):
+                         limit: int, db: AsyncSession,
+                         status=None, priority=None,
+                         assignee_user_id=None, label_id=None,
+                         status_category=None):
     """Track의 participating branches 안에서 task 검색.
     이미 Track에 들어있는 task는 in_track=True로 마킹.
-    branch_id 가 주어지면 해당 branch만, NULL로 :branch_id를 넘기면 전체.
+    branch_id / status / priority / assignee_user_id / label_id / status_category 옵션 필터 (NULL이면 전체).
     """
     keyword_like = f'%{q}%' if q else '%'
     result = await db.execute(text("""
@@ -176,7 +200,7 @@ async def search_sources(track_id: int, user_id: int, q: str, branch_id,
             t.task_id, t.title, t.display_number,
             t.status, t.priority,
             b.branch_id, b.branch_name, b.key AS branch_key, b.color AS branch_color,
-            ws.label AS status_label, ws.color AS status_color,
+            ws.label AS status_label, ws.color AS status_color, ws.category AS status_category,
             EXISTS (
                 SELECT 1 FROM track_item ti
                 WHERE ti.track_id = :track_id
@@ -193,6 +217,19 @@ async def search_sources(track_id: int, user_id: int, q: str, branch_id,
             ON ws.branch_id = t.branch_id AND ws.key = t.status
         WHERE (t.title ILIKE :q OR (b.key || '-' || t.display_number) ILIKE :q)
           AND (CAST(:branch_id AS INTEGER) IS NULL OR t.branch_id = CAST(:branch_id AS INTEGER))
+          AND (CAST(:status AS TEXT) IS NULL OR t.status = CAST(:status AS TEXT))
+          AND (CAST(:status_category AS TEXT) IS NULL OR ws.category = CAST(:status_category AS TEXT))
+          AND (CAST(:priority AS TEXT) IS NULL OR t.priority = CAST(:priority AS TEXT))
+          AND (CAST(:assignee_user_id AS INTEGER) IS NULL OR EXISTS (
+              SELECT 1 FROM task_assignee ta
+              WHERE ta.task_id = t.task_id
+                AND ta.user_id = CAST(:assignee_user_id AS INTEGER)
+          ))
+          AND (CAST(:label_id AS INTEGER) IS NULL OR EXISTS (
+              SELECT 1 FROM task_label tl
+              WHERE tl.task_id = t.task_id
+                AND tl.label_id = CAST(:label_id AS INTEGER)
+          ))
         ORDER BY t.updated_at DESC NULLS LAST, t.created_at DESC
         LIMIT :limit
     """), {
@@ -200,6 +237,11 @@ async def search_sources(track_id: int, user_id: int, q: str, branch_id,
         'user_id': user_id,
         'q': keyword_like,
         'branch_id': branch_id,
+        'status': status,
+        'status_category': status_category,
+        'priority': priority,
+        'assignee_user_id': assignee_user_id,
+        'label_id': label_id,
         'limit': limit,
     })
 

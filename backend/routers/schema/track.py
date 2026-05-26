@@ -102,6 +102,13 @@ class TrackItemAdd(BaseModel):
     position_y: Optional[float] = 0
 
 
+class TrackItemsBulkAdd(BaseModel):
+    """Epic/Sprint/Filter 모드에서 한 번에 N개의 task를 Track에 추가.
+    각 task는 sequentially 처리 (참여 branch 자동 합류 + 중복 무시).
+    """
+    source_task_ids: List[int] = Field(min_length=1, max_length=200)
+
+
 class _PositionEntry(BaseModel):
     item_id: int
     position_x: float

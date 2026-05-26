@@ -264,6 +264,46 @@ async def get_items(track_id: int, request: Request, db: AsyncSession):
     return {'status': True, 'items': items}
 
 
+async def add_items_bulk(track_id: int, body, request: Request, db: AsyncSession):
+    """N개의 task를 한 번에 Track에 추가 — editor 이상.
+    각 task에 대해 branch 멤버 검증 + participating 자동 합류 + 중복 무시.
+    응답에 각 task별 결과 (added | skipped_reason)."""
+    err = await _require_role(track_id, request, 'editor', db)
+    if err:
+        return err
+
+    user_id = request.state.payload.get('user_id')
+    results = []
+    added_count = 0
+    already_count = 0
+
+    for task_id in body.source_task_ids:
+        task = await task_model.find_by_id(task_id, db)
+        if not task:
+            results.append({'task_id': task_id, 'status': 'skipped', 'reason': 'NOT_FOUND'})
+            continue
+        if not await branch_member_model.is_member(task['branch_id'], user_id, db):
+            results.append({'task_id': task_id, 'status': 'skipped', 'reason': 'NOT_BRANCH_MEMBER'})
+            continue
+        if not await track_branch_model.is_participating(track_id, task['branch_id'], db):
+            await track_branch_model.add(track_id, task['branch_id'], db)
+        item_id, created = await track_item_model.create_task_ref_idempotent(
+            track_id, task_id, db)
+        if created:
+            results.append({'task_id': task_id, 'status': 'added', 'item_id': item_id})
+            added_count += 1
+        else:
+            results.append({'task_id': task_id, 'status': 'already_exists', 'item_id': item_id})
+            already_count += 1
+
+    return {
+        'status': True,
+        'added': added_count,
+        'already_exists': already_count,
+        'results': results,
+    }
+
+
 async def add_item(track_id: int, body, request: Request, db: AsyncSession):
     """Task를 Track에 참조로 추가 — editor 이상 + source task의 branch 멤버여야 함.
     Track의 participating에 없는 branch면 자동으로 추가.
@@ -329,14 +369,30 @@ async def search_sources(track_id: int, request: Request, db: AsyncSession):
 
     qp = request.query_params
     q = qp.get('q', '')
-    raw_branch = qp.get('branch_id')
-    branch_id = int(raw_branch) if raw_branch and raw_branch.isdigit() else None
+
+    def _int_or_none(key):
+        raw = qp.get(key)
+        return int(raw) if raw and raw.lstrip('-').isdigit() else None
+
+    branch_id = _int_or_none('branch_id')
+    assignee_user_id = _int_or_none('assignee_user_id')
+    label_id = _int_or_none('label_id')
+    status = qp.get('status') or None
+    status_category = qp.get('status_category') or None
+    priority = qp.get('priority') or None
+
     raw_limit = qp.get('limit', '50')
     limit = int(raw_limit) if raw_limit.isdigit() else 50
     limit = max(1, min(limit, 200))
 
     tasks = await track_item_model.search_sources(
-        track_id, user_id, q, branch_id, limit, db)
+        track_id, user_id, q, branch_id, limit, db,
+        status=status,
+        status_category=status_category,
+        priority=priority,
+        assignee_user_id=assignee_user_id,
+        label_id=label_id,
+    )
     return {'status': True, 'tasks': tasks}
 
 

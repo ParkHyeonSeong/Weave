@@ -135,6 +135,14 @@ async def add_item(track_id: int, body: track_schema.TrackItemAdd,
     return await track_controller.add_item(track_id, body, request, session)
 
 
+@router.post("/{track_id}/items/bulk", summary="N개의 task를 한 번에 Track에 추가",
+             dependencies=[Depends(require_login)])
+async def add_items_bulk(track_id: int, body: track_schema.TrackItemsBulkAdd,
+                         request: Request,
+                         session: AsyncSession = Depends(db.session)):
+    return await track_controller.add_items_bulk(track_id, body, request, session)
+
+
 @router.patch("/{track_id}/items/positions", summary="item 위치 bulk 저장",
               dependencies=[Depends(require_login)])
 async def update_item_positions(track_id: int,
