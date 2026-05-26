@@ -383,12 +383,20 @@ async def search_sources(track_id: int, request: Request, db: AsyncSession):
         raw = qp.get(key)
         return int(raw) if raw and raw.lstrip('-').isdigit() else None
 
+    def _bool(key):
+        return qp.get(key) == 'true'
+
     branch_id = _int_or_none('branch_id')
+    epic_id = _int_or_none('epic_id')
+    sprint_id = _int_or_none('sprint_id')
     assignee_user_id = _int_or_none('assignee_user_id')
     label_id = _int_or_none('label_id')
     status = qp.get('status') or None
     status_category = qp.get('status_category') or None
     priority = qp.get('priority') or None
+    include_non_participating = _bool('include_non_participating')
+    parent_only = _bool('parent_only')
+    exclude_done = _bool('exclude_done')
 
     raw_limit = qp.get('limit', '50')
     limit = int(raw_limit) if raw_limit.isdigit() else 50
@@ -401,6 +409,11 @@ async def search_sources(track_id: int, request: Request, db: AsyncSession):
         priority=priority,
         assignee_user_id=assignee_user_id,
         label_id=label_id,
+        include_non_participating=include_non_participating,
+        epic_id=epic_id,
+        sprint_id=sprint_id,
+        parent_only=parent_only,
+        exclude_done=exclude_done,
     )
     return {'status': True, 'tasks': tasks}
 

@@ -220,13 +220,30 @@ async def search_sources(track_id: int, user_id: int, q: str, branch_id,
                          limit: int, db: AsyncSession,
                          status=None, priority=None,
                          assignee_user_id=None, label_id=None,
-                         status_category=None):
-    """Track의 participating branches 안에서 task 검색.
-    이미 Track에 들어있는 task는 in_track=True로 마킹.
-    branch_id / status / priority / assignee_user_id / label_id / status_category 옵션 필터 (NULL이면 전체).
+                         status_category=None,
+                         include_non_participating: bool = False,
+                         epic_id=None, sprint_id=None,
+                         parent_only: bool = False,
+                         exclude_done: bool = False):
+    """Track의 task 검색.
+    기본: participating branches로 제한 (SourcePicker 자동 검색).
+    include_non_participating=True: 사용자가 멤버인 모든 branch에서 검색 (BulkAdd 모드).
+    epic_id/sprint_id: BulkAdd Epic/Sprint 모드용 필터.
+    parent_only / exclude_done: BulkAdd UX — subtask와 done/cancelled 기본 제외.
+    어느 경우든 branch_member INNER JOIN으로 접근 권한은 보장됨.
     """
     keyword_like = f'%{q}%' if q else '%'
-    result = await db.execute(text("""
+    participating_join = (
+        "INNER JOIN track_branch tb ON tb.track_id = :track_id AND tb.branch_id = t.branch_id"
+        if not include_non_participating else ""
+    )
+    parent_only_clause = "AND t.parent_task_id IS NULL" if parent_only else ""
+    # workflow_status에 매핑되지 않은 상태(ws.category IS NULL)는 "알 수 없음" — 안전하게 통과시킴
+    exclude_done_clause = (
+        "AND (ws.category IS NULL OR ws.category NOT IN ('done', 'cancelled'))"
+        if exclude_done else ""
+    )
+    result = await db.execute(text(f"""
         SELECT
             t.task_id, t.title, t.display_number,
             t.status, t.priority,
@@ -240,14 +257,15 @@ async def search_sources(track_id: int, user_id: int, q: str, branch_id,
             ) AS in_track
         FROM task t
         INNER JOIN branch b ON t.branch_id = b.branch_id
-        INNER JOIN track_branch tb
-            ON tb.track_id = :track_id AND tb.branch_id = t.branch_id
+        {participating_join}
         INNER JOIN branch_member bm
             ON bm.branch_id = t.branch_id AND bm.user_id = :user_id
         LEFT JOIN workflow_status ws
             ON ws.branch_id = t.branch_id AND ws.key = t.status
         WHERE (t.title ILIKE :q OR (b.key || '-' || t.display_number) ILIKE :q)
           AND (CAST(:branch_id AS INTEGER) IS NULL OR t.branch_id = CAST(:branch_id AS INTEGER))
+          AND (CAST(:epic_id AS INTEGER) IS NULL OR t.epic_id = CAST(:epic_id AS INTEGER))
+          AND (CAST(:sprint_id AS INTEGER) IS NULL OR t.sprint_id = CAST(:sprint_id AS INTEGER))
           AND (CAST(:status AS TEXT) IS NULL OR t.status = CAST(:status AS TEXT))
           AND (CAST(:status_category AS TEXT) IS NULL OR ws.category = CAST(:status_category AS TEXT))
           AND (CAST(:priority AS TEXT) IS NULL OR t.priority = CAST(:priority AS TEXT))
@@ -261,6 +279,8 @@ async def search_sources(track_id: int, user_id: int, q: str, branch_id,
               WHERE tl.task_id = t.task_id
                 AND tl.label_id = CAST(:label_id AS INTEGER)
           ))
+          {parent_only_clause}
+          {exclude_done_clause}
         ORDER BY t.updated_at DESC NULLS LAST, t.created_at DESC
         LIMIT :limit
     """), {
@@ -268,6 +288,8 @@ async def search_sources(track_id: int, user_id: int, q: str, branch_id,
         'user_id': user_id,
         'q': keyword_like,
         'branch_id': branch_id,
+        'epic_id': epic_id,
+        'sprint_id': sprint_id,
         'status': status,
         'status_category': status_category,
         'priority': priority,
