@@ -25,11 +25,29 @@ const PRIORITIES = [
 ];
 
 export default function BulkAddModal({
-  mode, trackId, participatingBranches, onClose, onAdded,
+  mode, trackId,
+  participatingBranches = [],
+  allBranches = [],
+  onClose, onAdded,
 }) {
   const meta = MODE_META[mode];
+
+  // 새 branch에서 가져오는 경우 backend(add_items_bulk)가 자동으로 track에 합류시킴 → 사용자의 모든 가입 branch를 선택지로
+  const participatingSet = useMemo(
+    () => new Set(participatingBranches.map((b) => b.branch_id)),
+    [participatingBranches]
+  );
+  const branchOptions = useMemo(
+    () => allBranches.map((b) => ({
+      branch_id: b.branch_id,
+      name: b.name || b.branch_name,
+      participating: participatingSet.has(b.branch_id),
+    })),
+    [allBranches, participatingSet]
+  );
+
   const [branchId, setBranchId] = useState(
-    participatingBranches.length === 1 ? participatingBranches[0].branch_id : null
+    branchOptions.length === 1 ? branchOptions[0].branch_id : null
   );
   const [epics, setEpics] = useState([]);
   const [epicId, setEpicId] = useState(null);
@@ -69,32 +87,32 @@ export default function BulkAddModal({
     }
   }, [mode, branchId]);
 
-  // 선택한 epic/sprint → tasks 미리보기. 빠른 필터 변경 시 stale 응답 무시.
+  // 모든 모드가 /tracks/{id}/sources 사용 — in_track / branch_color / done 제외 일관 보장.
+  // fetchSeqRef로 stale 응답 가드.
   const fetchTasks = useCallback(async () => {
     const mySeq = ++fetchSeqRef.current;
     setLoading(true);
+    const params = {
+      limit: 200,
+      include_non_participating: 'true',
+      parent_only: 'true',
+    };
+    if (branchId) params.branch_id = branchId;
+    if (mode === 'epic' && epicId) {
+      params.epic_id = epicId;
+      params.exclude_done = 'true';
+    } else if (mode === 'sprint' && sprintId) {
+      params.sprint_id = sprintId;
+      params.exclude_done = 'true';
+    } else if (mode === 'filter') {
+      // Filter 모드는 status 선택을 사용자가 직접 — done 강제 제외 안 함
+      if (filterStatusCat) params.status_category = filterStatusCat;
+      if (filterPriority) params.priority = filterPriority;
+    }
     try {
-      let res;
-      if (mode === 'epic' && epicId) {
-        res = await axios.get(`/branches/${branchId}/epics/${epicId}/tasks`);
-      } else if (mode === 'sprint' && sprintId) {
-        res = await axios.get(`/branches/${branchId}/tasks`, {
-          params: { sprint_id: sprintId },
-        });
-      } else if (mode === 'filter') {
-        const params = { q: '', limit: 200 };
-        if (branchId) params.branch_id = branchId;
-        if (filterStatusCat) params.status_category = filterStatusCat;
-        if (filterPriority) params.priority = filterPriority;
-        res = await axios.get(`/tracks/${trackId}/sources`, { params });
-      }
-      if (mySeq !== fetchSeqRef.current) return;  // 후속 호출이 이미 시작됨
-      if (res?.data?.status) {
-        // filter 응답은 tasks, epic/sprint 응답도 tasks
-        setTasks(res.data.tasks || []);
-      } else {
-        setTasks([]);
-      }
+      const res = await axios.get(`/tracks/${trackId}/sources`, { params });
+      if (mySeq !== fetchSeqRef.current) return;
+      setTasks(res?.data?.status ? (res.data.tasks || []) : []);
     } catch {
       if (mySeq === fetchSeqRef.current) setTasks([]);
     }
@@ -192,8 +210,10 @@ export default function BulkAddModal({
                 }}
               >
                 <option value="">— 선택 —</option>
-                {participatingBranches.map((b) => (
-                  <option key={b.branch_id} value={b.branch_id}>{b.name}</option>
+                {branchOptions.map((b) => (
+                  <option key={b.branch_id} value={b.branch_id}>
+                    {b.name}{b.participating ? '' : '  · 새 branch (Track에 자동 추가됨)'}
+                  </option>
                 ))}
               </select>
               <ChevronDown size={12} className="BulkAdd__SelectCaret" />

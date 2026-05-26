@@ -519,6 +519,7 @@ export default function TrackDetail() {
           mode={bulkAddMode}
           trackId={trackId}
           participatingBranches={normalizedBranches}
+          allBranches={allBranchesForModal}
           onClose={() => setBulkAddMode(null)}
           onAdded={async () => {
             setBulkAddMode(null);
