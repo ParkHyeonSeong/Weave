@@ -4,10 +4,12 @@ import { LayoutDashboard, CheckSquare, Compass, GitBranch, FileEdit, Workflow, X
 import { axios } from '@/library/_axios';
 import SidebarBranches from './SidebarBranches';
 import SidebarCanvases from './SidebarCanvases';
+import SidebarTracks from './SidebarTracks';
 
 function getAppContext(pathname) {
   if (pathname.startsWith('/canvas')) return 'canvas';
   if (pathname.startsWith('/branch')) return 'branch';
+  if (pathname.startsWith('/tracks')) return 'track';
   return null;
 }
 
@@ -38,7 +40,7 @@ export default function Sidebar({ isMobile, width, onResizeStart, onCreateBranch
     });
   }, []);
 
-  const APP_HOME = { branch: '/branch', canvas: '/canvas' };
+  const APP_HOME = { branch: '/branch', canvas: '/canvas', track: '/tracks' };
 
   const handleAppClick = (app) => {
     if (activeApp === app) return;
@@ -86,13 +88,6 @@ export default function Sidebar({ isMobile, width, onResizeStart, onCreateBranch
             My Tasks
           </button>
           <button
-            className={`Sidebar__MenuItem ${router.pathname.startsWith('/tracks') ? 'Sidebar__MenuItem--active' : ''}`}
-            onClick={() => handleNavClick('/tracks')}
-          >
-            <Workflow size={16} className="Sidebar__MenuIcon" />
-            Tracks
-          </button>
-          <button
             className={`Sidebar__MenuItem ${router.pathname === '/browse' ? 'Sidebar__MenuItem--active' : ''}`}
             onClick={() => handleNavClick('/browse')}
           >
@@ -113,6 +108,13 @@ export default function Sidebar({ isMobile, width, onResizeStart, onCreateBranch
             <FileEdit size={16} className="Sidebar__MenuIcon" />
             Canvas
           </button>
+          <button
+            className={`Sidebar__MenuItem ${activeApp === 'track' ? 'Sidebar__MenuItem--active' : ''}`}
+            onClick={() => handleAppClick('track')}
+          >
+            <Workflow size={16} className="Sidebar__MenuIcon" />
+            Track
+          </button>
         </nav>
 
         {/* 앱 컨텍스트별 하단 섹션 */}
@@ -131,6 +133,12 @@ export default function Sidebar({ isMobile, width, onResizeStart, onCreateBranch
                 onCreateCanvas={onCreateCanvas}
                 savedOrder={sidebarOrder?.canvases}
                 onOrderChange={(ids) => handleOrderChange('canvases', ids)}
+              />
+            )}
+            {activeApp === 'track' && (
+              <SidebarTracks
+                savedOrder={sidebarOrder?.tracks}
+                onOrderChange={(ids) => handleOrderChange('tracks', ids)}
               />
             )}
           </>

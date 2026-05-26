@@ -61,6 +61,7 @@ export default function CreateTrack({ onClose, onCreated }) {
         participating_branch_ids: [...selectedBranchIds],
       });
       if (res.data.status) {
+        window.dispatchEvent(new Event('track:created'));
         onCreated(res.data.track_id);
       } else {
         setError(res.data.message || 'Failed to create track');
