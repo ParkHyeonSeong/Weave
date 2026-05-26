@@ -6,6 +6,7 @@ from core.model import track_member as member_model
 from core.model import track_branch as track_branch_model
 from core.model import track_item as track_item_model
 from core.model import track_link as track_link_model
+from core.model import track_scope as track_scope_model
 from core.model import branch_member as branch_member_model
 from core.model import branch as branch_model
 from core.model import task as task_model
@@ -229,6 +230,7 @@ async def remove_branch(track_id: int, branch_id: int, request: Request,
         track_id, branch_id, db)
     await track_item_model.delete_by_track_branch(track_id, branch_id, db)
     await dep_model.delete_by_ids(dep_ids, db)
+    await track_scope_model.delete_by_branch(track_id, branch_id, db)
     await track_branch_model.remove(track_id, branch_id, db)
     return {'status': True}
 
@@ -275,8 +277,9 @@ async def get_items(track_id: int, request: Request, db: AsyncSession):
 
 async def add_items_bulk(track_id: int, body, request: Request, db: AsyncSession):
     """N개의 task를 한 번에 Track에 추가 — editor 이상.
-    각 task에 대해 branch 멤버 검증 + 중복 무시. Participating 자동 합류는 하지 않음
-    (사용자가 명시적으로 Manage Branches로 추가해야 sidebar에 노출)."""
+    각 task의 branch 멤버 검증 + 중복 무시 + branch participating 자동 합류.
+    body.scope_mode가 'sprint'/'epic'이면 명시적 scope marker 추가,
+    'filter' 또는 미지정이면 task의 sprint_id를 모아 자동 sprint scope 등록 (백로그 task는 skip)."""
     err = await _require_role(track_id, request, 'editor', db)
     if err:
         return err
@@ -285,6 +288,7 @@ async def add_items_bulk(track_id: int, body, request: Request, db: AsyncSession
     results = []
     added_count = 0
     already_count = 0
+    accepted_task_ids = []
 
     for task_id in body.source_task_ids:
         task = await task_model.find_by_id(task_id, db)
@@ -294,6 +298,8 @@ async def add_items_bulk(track_id: int, body, request: Request, db: AsyncSession
         if not await branch_member_model.is_member(task['branch_id'], user_id, db):
             results.append({'task_id': task_id, 'status': 'skipped', 'reason': 'NOT_BRANCH_MEMBER'})
             continue
+        if not await track_branch_model.is_participating(track_id, task['branch_id'], db):
+            await track_branch_model.add(track_id, task['branch_id'], db)
         item_id, created = await track_item_model.create_task_ref_idempotent(
             track_id, task_id, db)
         if created:
@@ -302,6 +308,19 @@ async def add_items_bulk(track_id: int, body, request: Request, db: AsyncSession
         else:
             results.append({'task_id': task_id, 'status': 'already_exists', 'item_id': item_id})
             already_count += 1
+        accepted_task_ids.append(task_id)
+
+    # Scope marker 등록 — sprint/epic FK에서 canonical branch_id를 직접 조회
+    # (accepted_task_ids[0] 사용은 cross-branch bulk add 시 잘못된 branch에 marker가 박힘)
+    if body.scope_mode in ('sprint', 'epic') and body.scope_id:
+        owner_branch_id = await track_scope_model.resolve_scope_branch(
+            body.scope_mode, body.scope_id, db)
+        if owner_branch_id:
+            await track_scope_model.add(
+                track_id, owner_branch_id, body.scope_mode, body.scope_id, db)
+    else:
+        # filter / 그 외 — 각 task의 sprint를 자동 scope로 (backlog는 skip)
+        await track_scope_model.add_sprints_for_tasks(track_id, accepted_task_ids, db)
 
     return {
         'status': True,
@@ -414,6 +433,15 @@ async def search_sources(track_id: int, request: Request, db: AsyncSession):
         exclude_done=exclude_done,
     )
     return {'status': True, 'tasks': tasks}
+
+
+async def sidebar_tree(track_id: int, request: Request, db: AsyncSession):
+    """Sidebar tree — branch → sprint/epic scope → tasks. viewer 이상."""
+    user_id = request.state.payload.get('user_id')
+    if not await _can_view(track_id, user_id, db):
+        return {'status': False, 'message': 'ACCESS_DENIED'}
+    tree = await track_scope_model.find_tree(track_id, user_id, db)
+    return {'status': True, 'tree': tree}
 
 
 # =========================================================================

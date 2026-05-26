@@ -170,6 +170,14 @@ async def search_sources(track_id: int, request: Request,
     return await track_controller.search_sources(track_id, request, session)
 
 
+@router.get("/{track_id}/sidebar-tree",
+            summary="Sidebar tree (branch → sprint/epic scope → tasks)",
+            dependencies=[Depends(require_login)])
+async def sidebar_tree(track_id: int, request: Request,
+                       session: AsyncSession = Depends(db.session)):
+    return await track_controller.sidebar_tree(track_id, request, session)
+
+
 # =========================================================================
 # Links (Track 내부 edge)
 # =========================================================================

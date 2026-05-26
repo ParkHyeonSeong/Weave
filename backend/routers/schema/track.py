@@ -1,5 +1,5 @@
-from typing import Optional, List
-from pydantic import BaseModel, Field, field_validator
+from typing import Optional, List, Literal
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 VALID_VISIBILITY = ('public', 'private')
@@ -105,8 +105,18 @@ class TrackItemAdd(BaseModel):
 class TrackItemsBulkAdd(BaseModel):
     """Epic/Sprint/Filter 모드에서 한 번에 N개의 task를 Track에 추가.
     각 task는 sequentially 처리 (참여 branch 자동 합류 + 중복 무시).
+    scope_mode='sprint'|'epic' + scope_id로 명시적 sidebar group marker 등록.
+    'filter' 또는 미지정이면 task들의 sprint를 자동 scope로 합류.
     """
     source_task_ids: List[int] = Field(min_length=1, max_length=200)
+    scope_mode: Optional[Literal['sprint', 'epic', 'filter']] = None
+    scope_id: Optional[int] = None
+
+    @model_validator(mode='after')
+    def _check_scope(self):
+        if self.scope_mode in ('sprint', 'epic') and self.scope_id is None:
+            raise ValueError("scope_id required when scope_mode is 'sprint' or 'epic'")
+        return self
 
 
 class _PositionEntry(BaseModel):
