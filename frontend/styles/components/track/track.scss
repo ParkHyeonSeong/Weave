@@ -7,13 +7,14 @@
 //   distinctive moves: serif display title, brand-glow nodes, weave bar.
 // ============================================================================
 
-$track-paper: #FAFAF7;            // 약간 따뜻한 종이톤 - 일반 surface보다 1단 따뜻
-$track-paper-edge: #F2F1EB;
-$track-ink: #1C1C1C;
+// 사이트 전역 surface 톤과 통일 — Track 전용 노란 종이톤은 폐기
+$track-paper: $color-surface;        // #F9FAFB
+$track-paper-edge: $color-surface-hover;  // #F3F4F6
+$track-ink: $color-text;
 $track-ink-soft: #4B5563;
-$track-ink-mute: #9CA3AF;
-$track-border: #E5E5E0;
-$track-border-soft: #EFEEE8;
+$track-ink-mute: $color-text-tertiary;
+$track-border: $color-border;
+$track-border-soft: color.adjust($color-border, $lightness: 5%);
 
 // =========================================================================
 // 루트 컨테이너
