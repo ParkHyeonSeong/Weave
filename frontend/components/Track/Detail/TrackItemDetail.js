@@ -1,4 +1,6 @@
+import { useRouter } from 'next/router';
 import { X, CalendarDays, Flag, ExternalLink, Lock, Layers, MessageSquare, GitBranch } from 'lucide-react';
+import { sanitizeHtml } from '@/library/sanitize';
 import { PRIORITIES } from '../mockData';
 
 function formatDateLong(date) {
@@ -9,6 +11,9 @@ function formatDateLong(date) {
 }
 
 export default function TrackItemDetail({ item, branch, workflowStatuses, onClose, onRemove }) {
+  const router = useRouter();
+  // openInBranch는 restricted/empty 분기 이후 렌더되므로 item/branch_id/task_id는 항상 존재
+  const openInBranch = () => router.push(`/branch/${item.branch_id}?task=${item.task_id}`);
   if (!item) {
     return (
       <aside className="TrackDetail TrackDetail--empty">
@@ -100,10 +105,14 @@ export default function TrackItemDetail({ item, branch, workflowStatuses, onClos
           <dt>Origin</dt>
           <dd>
             <span>{branch.name}</span>
-            <a className="TrackDetail__OriginLink" href={`/branch/${branch.branch_id}?task=${item.task_id}`}>
+            <button
+              type="button"
+              className="TrackDetail__OriginLink"
+              onClick={openInBranch}
+            >
               <ExternalLink size={11} />
               <span>open</span>
-            </a>
+            </button>
           </dd>
         </div>
       </dl>
@@ -113,9 +122,17 @@ export default function TrackItemDetail({ item, branch, workflowStatuses, onClos
           <MessageSquare size={12} />
           Description
         </h3>
-        <p className="TrackDetail__Description">
-          {item.description || <span className="TrackDetail__MetaEmpty">No description</span>}
-        </p>
+        {item.description ? (
+          <div
+            className="TrackDetail__Description"
+            // eslint-disable-next-line react/no-danger -- sanitizeHtml로 정제, Branch TaskDetailPanel과 동일 패턴
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(item.description) }}
+          />
+        ) : (
+          <p className="TrackDetail__Description">
+            <span className="TrackDetail__MetaEmpty">No description</span>
+          </p>
+        )}
       </section>
 
       <section className="TrackDetail__Section">
@@ -144,7 +161,12 @@ export default function TrackItemDetail({ item, branch, workflowStatuses, onClos
         >
           Remove from track
         </button>
-        <button className="TrackDetail__FootBtn TrackDetail__FootBtn--primary">Open in branch ↗</button>
+        <button
+          className="TrackDetail__FootBtn TrackDetail__FootBtn--primary"
+          onClick={openInBranch}
+        >
+          Open in branch ↗
+        </button>
       </footer>
     </aside>
   );

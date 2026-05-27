@@ -1319,6 +1319,7 @@ $track-border-soft: color.adjust($color-border, $lightness: 5%);
     align-items: center;
     gap: 3px;
     padding: 2px 7px;
+    border: none;
     border-radius: 9px;
     background: rgba(0,0,0,0.03);
     color: $track-ink-soft;
@@ -1326,6 +1327,8 @@ $track-border-soft: color.adjust($color-border, $lightness: 5%);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.06em;
+    cursor: pointer;
+    appearance: none;
     transition: background 120ms, color 120ms;
     &:hover {
       background: rgba(94,106,210,0.1);

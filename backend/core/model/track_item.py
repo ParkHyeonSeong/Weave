@@ -66,7 +66,7 @@ async def find_by_track(track_id: int, user_id: int, db: AsyncSession):
             ti.note_text, ti.layer_id, ti.virtual_parent_id,
             ti.position_x, ti.position_y,
             ti.color_override, ti.label_override,
-            t.task_id, t.title, t.display_number,
+            t.task_id, t.title, t.description, t.display_number,
             t.status, t.priority, t.start_date, t.due_date,
             b.branch_id, b.branch_name, b.key AS branch_key, b.color AS branch_color,
             ws.label AS status_label, ws.color AS status_color, ws.category AS status_category,
@@ -112,6 +112,7 @@ async def find_by_track(track_id: int, user_id: int, db: AsyncSession):
                 'branch_name': r['branch_name'],
                 'display_id': f"{r['branch_key']}-{r['display_number']}",
                 'title': r['label_override'] or r['title'],
+                'description': r.get('description') or '',
                 'status': r['status'],
                 'status_label': r['status_label'],
                 'status_color': r['status_color'],
@@ -144,6 +145,30 @@ async def find_by_track(track_id: int, user_id: int, db: AsyncSession):
         for item in items:
             if not item.get('restricted'):
                 item['assignees'] = assignee_map.get(item['task_id'], [])
+
+        # Other tracks — 같은 task를 참조하는 다른 track 목록 (사용자가 멤버인 것만)
+        other_result = await db.execute(text("""
+            SELECT ti.source_task_id AS task_id, t.track_id, t.track_name, t.color
+            FROM track_item ti
+            INNER JOIN track t ON ti.track_id = t.track_id
+            INNER JOIN track_member tm
+                ON tm.track_id = t.track_id AND tm.user_id = :user_id
+            WHERE ti.source_type = 'task'
+              AND ti.source_task_id = ANY(:ids)
+              AND ti.track_id != :track_id
+            ORDER BY t.track_name
+        """), {'ids': accessible_task_ids, 'user_id': user_id, 'track_id': track_id})
+        other_map = {}
+        for orow in other_result.fetchall():
+            od = dict(orow._mapping)
+            other_map.setdefault(od['task_id'], []).append({
+                'track_id': od['track_id'],
+                'track_name': od['track_name'],
+                'color': od['color'],
+            })
+        for item in items:
+            if not item.get('restricted'):
+                item['other_tracks'] = other_map.get(item['task_id'], [])
 
     return items
 

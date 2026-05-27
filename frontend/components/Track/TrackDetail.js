@@ -48,9 +48,8 @@ function normalizeItem(raw) {
       color: userColor(a.user_id),
       role: a.role,
     })),
-    // 컴포넌트가 참조하는 추가 필드 (v1.1엔 빈 값)
-    description: '',
-    other_tracks: [],
+    description: raw.description || '',
+    other_tracks: raw.other_tracks || [],
   };
 }
 
