@@ -9,7 +9,7 @@ const VIEW_MODES = [
 export default function TrackHeader({
   track, members, viewMode, onViewModeChange,
   distribution, totalItems, totalLinks,
-  participatingBranches,
+  participatingBranches, onOpenSettings,
 }) {
   return (
     <header className="TrackHeader">
@@ -64,7 +64,12 @@ export default function TrackHeader({
           <button className="TrackHeader__IconBtn" title="Share">
             <Share2 size={16} />
           </button>
-          <button className="TrackHeader__IconBtn" title="Settings">
+          <button
+            className="TrackHeader__IconBtn"
+            title="Settings"
+            onClick={onOpenSettings}
+            disabled={!onOpenSettings}
+          >
             <Settings size={16} />
           </button>
         </div>

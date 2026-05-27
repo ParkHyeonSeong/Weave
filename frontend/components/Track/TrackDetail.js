@@ -70,6 +70,7 @@ export default function TrackDetail() {
   const [links, setLinks] = useState([]);
 
   const [selectedItemId, setSelectedItemId] = useState(null);
+  // viewMode 초기값은 'flow'. trackId 결정 후 localStorage에서 복원.
   const [viewMode, setViewMode] = useState('flow');
   const [edgeType, setEdgeType] = useState('flow_to');
   const [materializeOnCreate, setMaterializeOnCreate] = useState(true);
@@ -114,6 +115,27 @@ export default function TrackDetail() {
   useEffect(() => {
     fetchTrack();
   }, [fetchTrack]);
+
+  // trackId가 결정되면 마지막으로 본 view를 localStorage에서 복원
+  useEffect(() => {
+    if (!trackId) return;
+    try {
+      const saved = localStorage.getItem(`track:${trackId}:lastView`);
+      if (saved === 'flow' || saved === 'timeline' || saved === 'tree') {
+        setViewMode(saved);
+      }
+    } catch {}
+  }, [trackId]);
+
+  const handleViewModeChange = useCallback((next) => {
+    setViewMode(next);
+    if (!trackId) return;
+    try { localStorage.setItem(`track:${trackId}:lastView`, next); } catch {}
+  }, [trackId]);
+
+  const handleOpenSettings = useCallback(() => {
+    if (trackId) router.push(`/tracks/${trackId}/settings`);
+  }, [router, trackId]);
 
   // 마운트 해제 시 pending position 즉시 flush 안 함 (다음 fetch에서 서버 상태로 덮어씀)
   useEffect(() => () => {
@@ -383,11 +405,12 @@ export default function TrackDetail() {
         }}
         members={membersForHeader}
         viewMode={viewMode}
-        onViewModeChange={setViewMode}
+        onViewModeChange={handleViewModeChange}
         distribution={distribution}
         totalItems={items.filter((i) => !i.restricted).length}
         totalLinks={links.length}
         participatingBranches={normalizedBranches}
+        onOpenSettings={handleOpenSettings}
       />
 
       <div className="Track__Body">
