@@ -38,11 +38,11 @@ async def update_track(track_id: int, body: track_schema.TrackUpdate,
     return await track_controller.update(track_id, body, request, session)
 
 
-@router.delete("/{track_id}", summary="Track 아카이브",
+@router.delete("/{track_id}", summary="Track 하드 삭제",
                dependencies=[Depends(require_login)])
-async def archive_track(track_id: int, request: Request,
-                        session: AsyncSession = Depends(db.session)):
-    return await track_controller.archive(track_id, request, session)
+async def delete_track(track_id: int, request: Request,
+                       session: AsyncSession = Depends(db.session)):
+    return await track_controller.delete(track_id, request, session)
 
 
 # =========================================================================
@@ -54,6 +54,14 @@ async def archive_track(track_id: int, request: Request,
 async def list_members(track_id: int, request: Request,
                        session: AsyncSession = Depends(db.session)):
     return await track_controller.get_members(track_id, request, session)
+
+
+@router.get("/{track_id}/members/search", summary="초대 가능 사용자 검색",
+            dependencies=[Depends(require_login)])
+async def search_invite_candidates(track_id: int, q: str = '',
+                                    request: Request = None,
+                                    session: AsyncSession = Depends(db.session)):
+    return await track_controller.search_invite_candidates(track_id, q, request, session)
 
 
 @router.post("/{track_id}/members", summary="멤버 추가",

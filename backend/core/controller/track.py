@@ -102,12 +102,17 @@ async def update(track_id: int, body, request: Request, db: AsyncSession):
     return {'status': True}
 
 
-async def archive(track_id: int, request: Request, db: AsyncSession):
-    """Track 아카이브 — owner만"""
+async def delete(track_id: int, request: Request, db: AsyncSession):
+    """Track 하드 삭제 — owner만.
+    Track이 만든 materialized task_dependency를 먼저 청소한 뒤 track 삭제.
+    track_* 자식 테이블은 ON DELETE CASCADE로 자동 정리.
+    """
     err = await _require_role(track_id, request, 'owner', db)
     if err:
         return err
-    await track_model.archive(track_id, db)
+    dep_ids = await track_model.find_materialized_dep_ids(track_id, db)
+    await dep_model.delete_by_ids(dep_ids, db)
+    await track_model.delete(track_id, db)
     return {'status': True}
 
 
@@ -158,6 +163,16 @@ async def update_member_role(track_id: int, target_user_id: int, body,
 
     await member_model.update_role(track_id, target_user_id, new_role, db)
     return {'status': True}
+
+
+async def search_invite_candidates(track_id: int, query: str, request: Request,
+                                    db: AsyncSession):
+    """초대 가능한 사용자 검색 — owner만"""
+    err = await _require_role(track_id, request, 'owner', db)
+    if err:
+        return err
+    users = await member_model.search_non_members(track_id, query, db)
+    return {'status': True, 'users': users}
 
 
 async def remove_member(track_id: int, target_user_id: int, request: Request,

@@ -69,9 +69,18 @@ async def update(track_id: int, fields: dict, db: AsyncSession):
     """), params)
 
 
-async def archive(track_id: int, db: AsyncSession):
-    """Track 아카이브 (soft delete)"""
+async def delete(track_id: int, db: AsyncSession):
+    """Track 하드 삭제 — 자식 정리는 controller가 orchestration."""
     await db.execute(text("""
-        UPDATE track SET is_archived = TRUE, updated_at = NOW()
-        WHERE track_id = :track_id
+        DELETE FROM track WHERE track_id = :track_id
     """), {'track_id': track_id})
+
+
+async def find_materialized_dep_ids(track_id: int, db: AsyncSession):
+    """Track의 모든 track_link이 만든 task_dependency id 모음 (Track 삭제 cascade용)."""
+    result = await db.execute(text("""
+        SELECT materialized_dependency_id
+        FROM track_link
+        WHERE track_id = :track_id AND materialized_dependency_id IS NOT NULL
+    """), {'track_id': track_id})
+    return [r[0] for r in result.fetchall()]

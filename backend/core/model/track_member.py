@@ -71,6 +71,22 @@ async def count_owners(track_id: int, db: AsyncSession) -> int:
     return result.scalar_one()
 
 
+async def search_non_members(track_id: int, query: str, db: AsyncSession):
+    """초대 가능한 사용자 검색 (아직 멤버가 아닌 active 유저, username/email ILIKE)"""
+    result = await db.execute(text("""
+        SELECT u.user_id, u.username, u.email
+        FROM "user" u
+        WHERE u.status = 'active'
+          AND u.user_id NOT IN (
+              SELECT user_id FROM track_member WHERE track_id = :track_id
+          )
+          AND (u.username ILIKE :q OR u.email ILIKE :q)
+        ORDER BY u.username
+        LIMIT 10
+    """), {'track_id': track_id, 'q': f'%{query}%'})
+    return [dict(r._mapping) for r in result.fetchall()]
+
+
 def has_at_least(role: str, required: str) -> bool:
     """role이 required 이상인지 (owner > editor > viewer)"""
     return ROLE_LEVELS.get(role, 0) >= ROLE_LEVELS.get(required, 0)
