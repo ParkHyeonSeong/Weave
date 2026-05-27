@@ -2483,7 +2483,7 @@ $track-border-soft: #EFEEE8;
   box-shadow: 0 24px 60px -16px rgba(0,0,0,0.28), 0 4px 12px rgba(0,0,0,0.06);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  // overflow는 자식 __Results의 scroll에 위임 — overflow:hidden을 두면 CustomSelect dropdown이 잘림
 
   &__Backdrop {
     position: fixed;
@@ -2550,31 +2550,11 @@ $track-border-soft: #EFEEE8;
     color: $track-ink-mute;
   }
 
-  &__Select {
-    position: relative;
-    select {
-      width: 100%;
-      padding: 7px 28px 7px 10px;
-      background: #FFFFFF;
-      border: 1px solid $track-border;
-      border-radius: $radius-md;
-      font-size: 12.5px;
-      color: $track-ink;
-      appearance: none;
-      cursor: pointer;
-      &:focus {
-        outline: none;
-        border-color: $color-primary;
-        box-shadow: 0 0 0 3px rgba(94,106,210,0.1);
-      }
-    }
-  }
-  &__SelectCaret {
-    position: absolute;
-    right: 10px; top: 50%;
-    transform: translateY(-50%);
-    color: $track-ink-mute;
-    pointer-events: none;
+  // CustomSelect를 BulkAdd Field 안에서 full-width로 (기본 inline-flex/콘텐츠 폭 override)
+  &__SelectControl {
+    display: flex;
+    width: 100%;
+    .CustomSelect__Trigger { width: 100%; }
   }
 
   &__Results {

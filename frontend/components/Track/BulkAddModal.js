@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { X, Zap, Calendar, Filter, ChevronDown } from 'lucide-react';
+import { X, Zap, Calendar, Filter } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import CustomSelect from '@/components/common/CustomSelect';
 
 // mode: 'epic' | 'sprint' | 'filter'
 const MODE_META = {
@@ -24,22 +25,26 @@ const PRIORITIES = [
   { value: 'low', label: 'Low' },
 ];
 
+const toIntOrNull = (v) => (v == null ? null : Number(v));
+
 export default function BulkAddModal({
   mode, trackId, allBranches = [], onClose, onAdded,
 }) {
   const meta = MODE_META[mode];
 
-  // 선택지 = 사용자가 가입한 모든 branch. Bulk add 시 backend가 track에 자동 합류시킴.
+  // CustomSelect용 {value, label, color?} 형태로 변환.
+  // 사용자가 가입한 모든 branch가 선택지 — bulk add 시 backend가 track에 자동 합류.
   const branchOptions = useMemo(
     () => allBranches.map((b) => ({
-      branch_id: b.branch_id,
-      name: b.name || b.branch_name,
+      value: b.branch_id,
+      label: b.name || b.branch_name,
+      color: b.color,
     })),
     [allBranches]
   );
 
   const [branchId, setBranchId] = useState(
-    branchOptions.length === 1 ? branchOptions[0].branch_id : null
+    branchOptions.length === 1 ? branchOptions[0].value : null
   );
   const [epics, setEpics] = useState([]);
   const [epicId, setEpicId] = useState(null);
@@ -51,6 +56,24 @@ export default function BulkAddModal({
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  const epicOptions = useMemo(
+    () => epics.map((ep) => ({
+      value: ep.epic_id,
+      label: `${ep.epic_name} (${ep.task_count || 0})`,
+      color: ep.color,
+    })),
+    [epics]
+  );
+  const sprintOptions = useMemo(
+    () => sprints.map((sp) => ({
+      value: sp.sprint_id,
+      label: sp.status === 'active'
+        ? `${sp.sprint_name}  · active`
+        : sp.sprint_name,
+    })),
+    [sprints]
+  );
   // 빠른 필터 변경 시 늦게 도착한 응답이 새 결과를 덮어쓰지 않도록 sequence id 가드
   const fetchSeqRef = useRef(0);
 
@@ -200,92 +223,69 @@ export default function BulkAddModal({
 
         {/* 조건 영역 */}
         <div className="BulkAdd__Filters">
-          <label className="BulkAdd__Field">
+          <div className="BulkAdd__Field">
             <span className="BulkAdd__FieldLabel">Branch</span>
-            <div className="BulkAdd__Select">
-              <select
-                value={branchId ?? ''}
-                onChange={(e) => {
-                  setBranchId(e.target.value ? Number(e.target.value) : null);
-                  setEpicId(null);
-                  setSprintId(null);
-                  setEpics([]);
-                  setSprints([]);
-                }}
-              >
-                <option value="">— 선택 —</option>
-                {branchOptions.map((b) => (
-                  <option key={b.branch_id} value={b.branch_id}>{b.name}</option>
-                ))}
-              </select>
-              <ChevronDown size={12} className="BulkAdd__SelectCaret" />
-            </div>
-          </label>
+            <CustomSelect
+              value={branchId}
+              options={branchOptions}
+              placeholder="Branch 선택"
+              className="BulkAdd__SelectControl"
+              onChange={(v) => {
+                setBranchId(toIntOrNull(v));
+                setEpicId(null);
+                setSprintId(null);
+                setEpics([]);
+                setSprints([]);
+              }}
+            />
+          </div>
 
           {mode === 'epic' && branchId && (
-            <label className="BulkAdd__Field">
+            <div className="BulkAdd__Field">
               <span className="BulkAdd__FieldLabel">Epic</span>
-              <div className="BulkAdd__Select">
-                <select
-                  value={epicId ?? ''}
-                  onChange={(e) => setEpicId(e.target.value ? Number(e.target.value) : null)}
-                >
-                  <option value="">— 선택 —</option>
-                  {epics.map((ep) => (
-                    <option key={ep.epic_id} value={ep.epic_id}>
-                      {ep.epic_name} ({ep.task_count || 0})
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown size={12} className="BulkAdd__SelectCaret" />
-              </div>
-            </label>
+              <CustomSelect
+                value={epicId}
+                options={epicOptions}
+                placeholder="Epic 선택"
+                className="BulkAdd__SelectControl"
+                onChange={(v) => setEpicId(toIntOrNull(v))}
+              />
+            </div>
           )}
 
           {mode === 'sprint' && branchId && (
-            <label className="BulkAdd__Field">
+            <div className="BulkAdd__Field">
               <span className="BulkAdd__FieldLabel">Sprint</span>
-              <div className="BulkAdd__Select">
-                <select
-                  value={sprintId ?? ''}
-                  onChange={(e) => setSprintId(e.target.value ? Number(e.target.value) : null)}
-                >
-                  <option value="">— 선택 —</option>
-                  {sprints.map((sp) => (
-                    <option key={sp.sprint_id} value={sp.sprint_id}>
-                      {sp.sprint_name} {sp.status === 'active' ? '(active)' : ''}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown size={12} className="BulkAdd__SelectCaret" />
-              </div>
-            </label>
+              <CustomSelect
+                value={sprintId}
+                options={sprintOptions}
+                placeholder="Sprint 선택"
+                className="BulkAdd__SelectControl"
+                onChange={(v) => setSprintId(toIntOrNull(v))}
+              />
+            </div>
           )}
 
           {mode === 'filter' && (
             <>
-              <label className="BulkAdd__Field">
+              <div className="BulkAdd__Field">
                 <span className="BulkAdd__FieldLabel">Status</span>
-                <div className="BulkAdd__Select">
-                  <select value={filterStatusCat} onChange={(e) => setFilterStatusCat(e.target.value)}>
-                    {STATUS_CATEGORIES.map((s) => (
-                      <option key={s.value} value={s.value}>{s.label}</option>
-                    ))}
-                  </select>
-                  <ChevronDown size={12} className="BulkAdd__SelectCaret" />
-                </div>
-              </label>
-              <label className="BulkAdd__Field">
+                <CustomSelect
+                  value={filterStatusCat}
+                  options={STATUS_CATEGORIES}
+                  className="BulkAdd__SelectControl"
+                  onChange={setFilterStatusCat}
+                />
+              </div>
+              <div className="BulkAdd__Field">
                 <span className="BulkAdd__FieldLabel">Priority</span>
-                <div className="BulkAdd__Select">
-                  <select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)}>
-                    {PRIORITIES.map((p) => (
-                      <option key={p.value} value={p.value}>{p.label}</option>
-                    ))}
-                  </select>
-                  <ChevronDown size={12} className="BulkAdd__SelectCaret" />
-                </div>
-              </label>
+                <CustomSelect
+                  value={filterPriority}
+                  options={PRIORITIES}
+                  className="BulkAdd__SelectControl"
+                  onChange={setFilterPriority}
+                />
+              </div>
             </>
           )}
         </div>
