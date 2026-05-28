@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Request, Depends, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .schema import track as track_schema
@@ -36,6 +36,14 @@ async def update_track(track_id: int, body: track_schema.TrackUpdate,
                        request: Request,
                        session: AsyncSession = Depends(db.session)):
     return await track_controller.update(track_id, body, request, session)
+
+
+@router.post("/{track_id}/icon-upload", summary="Track 아이콘 이미지 업로드",
+             dependencies=[Depends(require_login)])
+async def upload_track_icon(track_id: int, request: Request,
+                            file: UploadFile = File(...),
+                            session: AsyncSession = Depends(db.session)):
+    return await track_controller.upload_icon(track_id, file, request, session)
 
 
 @router.delete("/{track_id}", summary="Track 하드 삭제",

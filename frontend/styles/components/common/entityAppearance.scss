@@ -104,3 +104,180 @@
     &:disabled { cursor: not-allowed; opacity: .5; }
   }
 }
+
+.IconPicker {
+  &__Backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0, 0, 0, .4);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1000;
+  }
+
+  & {
+    width: 480px; max-width: 95vw;
+    max-height: 80vh;
+    background: $color-bg;
+    border-radius: $radius-lg;
+    display: flex; flex-direction: column;
+    box-shadow: $shadow-lg;
+  }
+
+  &__Header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: $space-3 $space-4;
+    border-bottom: 1px solid $color-border;
+  }
+  &__Title {
+    margin: 0;
+    font-size: $font-size-md;
+    font-weight: $font-weight-medium;
+    color: $color-text;
+  }
+  &__Close {
+    background: none; border: none; cursor: pointer; padding: $space-1;
+    color: $color-text-secondary;
+    display: inline-flex; align-items: center; justify-content: center;
+    &:hover { color: $color-text; }
+  }
+
+  &__Tabs {
+    display: flex; gap: $space-1;
+    padding: $space-2 $space-2 0;
+    border-bottom: 1px solid $color-border;
+  }
+  &__Tab {
+    padding: $space-2 $space-3;
+    border: none; background: none; cursor: pointer;
+    border-radius: $radius-sm $radius-sm 0 0;
+    font-size: $font-size-sm;
+    color: $color-text-secondary;
+    &--active {
+      color: $color-text;
+      background: $color-surface;
+      font-weight: $font-weight-medium;
+    }
+  }
+
+  &__Body {
+    flex: 1;
+    overflow: auto;
+    padding: $space-3 $space-4;
+    min-height: 320px;
+  }
+
+  &__Search {
+    display: flex; align-items: center; gap: $space-2;
+    padding: $space-2 $space-3;
+    border: 1px solid $color-border;
+    border-radius: $radius-sm;
+    margin-bottom: $space-3;
+    color: $color-text-secondary;
+    input {
+      border: none; outline: none; flex: 1;
+      font-size: $font-size-sm;
+      background: transparent;
+      color: $color-text;
+    }
+  }
+
+  &__Grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: $space-1;
+  }
+  &__GridCell {
+    aspect-ratio: 1;
+    border: 2px solid transparent;
+    border-radius: $radius-sm;
+    background: $color-surface;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: border-color .15s, background .15s;
+    padding: 0;
+    &:hover { background: $color-surface-hover; }
+    &--active { border-color: $color-primary; }
+  }
+
+  &__EmojiWrap {
+    display: flex;
+    justify-content: center;
+  }
+
+  &__UploadStub {
+    padding: 60px 20px;
+    text-align: center;
+    color: $color-text-secondary;
+    font-size: $font-size-sm;
+  }
+
+  &__Footer {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: $space-3 $space-4;
+    border-top: 1px solid $color-border;
+  }
+  &__Preview {
+    display: flex; align-items: center; gap: $space-2;
+    font-size: $font-size-xs;
+    color: $color-text-secondary;
+  }
+  &__Actions {
+    display: flex;
+    gap: $space-2;
+  }
+  &__BtnGhost {
+    padding: $space-2 $space-3;
+    border: 1px solid $color-border;
+    background: transparent;
+    border-radius: $radius-sm;
+    cursor: pointer;
+    font-size: $font-size-sm;
+    color: $color-text;
+    &:hover { background: $color-surface-hover; }
+  }
+  &__BtnPrimary {
+    padding: $space-2 $space-3;
+    border: none;
+    background: $color-primary;
+    color: $color-text-inverse;
+    border-radius: $radius-sm;
+    cursor: pointer;
+    font-size: $font-size-sm;
+    &:hover { background: $color-primary-hover; }
+  }
+
+  &__Upload { display: flex; flex-direction: column; gap: $space-3; }
+
+  &__UploadHint {
+    margin: 0;
+    font-size: $font-size-xs;
+    color: $color-text-secondary;
+  }
+
+  &__DropZone {
+    border: 2px dashed $color-border;
+    border-radius: $radius-sm;
+    padding: $space-6 $space-4;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: $space-2;
+    cursor: pointer;
+    background: $color-surface;
+    &:hover { border-color: $color-primary; background: $color-surface-hover; }
+  }
+
+  &__UploadError {
+    margin: 0;
+    font-size: $font-size-xs;
+    color: $color-error;
+  }
+
+  &__UploadPreview {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: $space-3;
+    background: $color-surface;
+    border-radius: $radius-sm;
+  }
+}

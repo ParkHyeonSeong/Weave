@@ -24,3 +24,4 @@ pycrdt>=0.12
 uvicorn==0.41.0
 httpx
 cryptography
+defusedxml==0.7.1

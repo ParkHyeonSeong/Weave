@@ -10,12 +10,26 @@ _IMAGE_SIGNATURES = {
 }
 
 
+def _looks_like_svg(content: bytes) -> bool:
+    """SVG는 텍스트라 magic byte가 없음 — BOM/공백 제거 후 '<?xml' 또는 '<svg' 시작인지 확인."""
+    # UTF-8 BOM 제거
+    stripped = content.lstrip(b'\xef\xbb\xbf').lstrip()
+    head = stripped[:5].lower()
+    return head.startswith(b'<?xml') or head.startswith(b'<svg')
+
+
 def validate_image_magic_bytes(content: bytes, extension: str) -> bool:
     """
     파일 내용의 매직 바이트가 확장자와 일치하는지 검증.
     extension: '.jpg', '.png' 등 점(.) 포함 소문자.
     """
-    if not content or len(content) < 12:
+    if not content:
+        return False
+
+    if extension == '.svg':
+        return _looks_like_svg(content)
+
+    if len(content) < 12:
         return False
 
     sigs = _IMAGE_SIGNATURES.get(extension)

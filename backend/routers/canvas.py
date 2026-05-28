@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Request, Depends, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .schema import canvas as canvas_schema
@@ -36,6 +36,14 @@ async def update_canvas(canvas_id: int, request: Request,
                         body: canvas_schema.CanvasUpdate,
                         session: AsyncSession = Depends(db.session)):
     return await canvas_controller.update(canvas_id, body, request, session)
+
+
+@router.post("/{canvas_id}/icon-upload", summary="Canvas 아이콘 이미지 업로드",
+             dependencies=[Depends(require_login)])
+async def upload_canvas_icon(canvas_id: int, request: Request,
+                             file: UploadFile = File(...),
+                             session: AsyncSession = Depends(db.session)):
+    return await canvas_controller.upload_icon(canvas_id, file, request, session)
 
 
 @router.delete("/{canvas_id}", summary="Canvas 삭제", dependencies=[Depends(require_login)])

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Request, Depends, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .schema import branch as branch_schema
@@ -36,6 +36,14 @@ async def update_branch(branch_id: int, request: Request,
                         body: branch_schema.BranchUpdate,
                         session: AsyncSession = Depends(db.session)):
     return await branch_controller.update(branch_id, body, request, session)
+
+
+@router.post("/{branch_id}/icon-upload", summary="Branch 아이콘 이미지 업로드",
+             dependencies=[Depends(require_login)])
+async def upload_branch_icon(branch_id: int, request: Request,
+                             file: UploadFile = File(...),
+                             session: AsyncSession = Depends(db.session)):
+    return await branch_controller.upload_icon(branch_id, file, request, session)
 
 
 @router.delete("/{branch_id}", summary="Branch 삭제", dependencies=[Depends(require_login)])

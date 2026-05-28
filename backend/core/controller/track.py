@@ -1,4 +1,7 @@
-from fastapi import Request
+import os
+import uuid
+
+from fastapi import Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.model import track as track_model
@@ -11,6 +14,15 @@ from core.model import branch_member as branch_member_model
 from core.model import branch as branch_model
 from core.model import task as task_model
 from core.model import task_dependency as dep_model
+from library.file_validator import validate_image_magic_bytes
+from library.svg_sanitizer import sanitize_svg
+
+ICON_UPLOAD_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+    'uploads', 'track-icons'
+)
+ICON_ALLOWED_EXT = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'}
+ICON_MAX_SIZE = 2 * 1024 * 1024  # 2MB
 
 
 # =========================================================================
@@ -100,6 +112,56 @@ async def update(track_id: int, body, request: Request, db: AsyncSession):
         return {'status': True}
     await track_model.update(track_id, fields, db)
     return {'status': True}
+
+
+async def upload_icon(track_id: int, file: UploadFile, request: Request, db: AsyncSession):
+    """Track 아이콘 이미지 업로드 — editor 이상. icon 컬럼에 'image:...' 저장."""
+    err = await _require_role(track_id, request, 'editor', db)
+    if err:
+        return err
+
+    track = await track_model.find_by_id(track_id, db)
+    if not track:
+        return {'status': False, 'message': 'TRACK_NOT_FOUND'}
+
+    if not file or not file.filename:
+        return {'status': False, 'message': 'NO_FILE'}
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in ICON_ALLOWED_EXT:
+        return {'status': False, 'message': 'INVALID_FILE_TYPE'}
+    content = await file.read()
+    if len(content) > ICON_MAX_SIZE:
+        return {'status': False, 'message': 'FILE_TOO_LARGE'}
+    if not validate_image_magic_bytes(content, ext):
+        return {'status': False, 'message': 'INVALID_FILE_CONTENT'}
+
+    if ext == '.svg':
+        sanitized = sanitize_svg(content)
+        if sanitized is None:
+            return {'status': False, 'message': 'INVALID_FILE_CONTENT'}
+        content = sanitized
+
+    os.makedirs(ICON_UPLOAD_DIR, exist_ok=True)
+
+    current = track.get('icon') or ''
+    if current.startswith('image:'):
+        rel = current[len('image:'):].replace('/api/uploads/', 'uploads/').lstrip('/')
+        old_path = os.path.normpath(os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+            rel
+        ))
+        uploads_base = os.path.normpath(ICON_UPLOAD_DIR)
+        if old_path.startswith(uploads_base) and os.path.exists(old_path):
+            os.remove(old_path)
+
+    filename = f"{track_id}_{uuid.uuid4().hex[:8]}{ext}"
+    filepath = os.path.join(ICON_UPLOAD_DIR, filename)
+    with open(filepath, 'wb') as f:
+        f.write(content)
+
+    icon_value = f"image:/api/uploads/track-icons/{filename}"
+    await track_model.update(track_id, {'icon': icon_value}, db)
+    return {'status': True, 'icon': icon_value}
 
 
 async def delete(track_id: int, request: Request, db: AsyncSession):

@@ -1,9 +1,21 @@
-from fastapi import Request
+import os
+import uuid
+
+from fastapi import Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.model import canvas as canvas_model
 from core.model import canvas_member as member_model
 from core.model import canvas_page as page_model
+from library.file_validator import validate_image_magic_bytes
+from library.svg_sanitizer import sanitize_svg
+
+ICON_UPLOAD_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+    'uploads', 'canvas-icons'
+)
+ICON_ALLOWED_EXT = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'}
+ICON_MAX_SIZE = 2 * 1024 * 1024  # 2MB
 
 
 async def create(body, request: Request, db: AsyncSession):
@@ -84,6 +96,58 @@ async def get_members(canvas_id: int, request: Request, db: AsyncSession):
 
     members = await member_model.find_by_canvas(canvas_id, db)
     return {'status': True, 'members': members}
+
+
+async def upload_icon(canvas_id: int, file: UploadFile, request: Request, db: AsyncSession):
+    """Canvas 아이콘 이미지 업로드 (admin만). icon 컬럼에 'image:...' 형태로 저장."""
+    user_id = request.state.payload.get('user_id')
+
+    canvas = await canvas_model.find_by_id(canvas_id, db)
+    if not canvas:
+        return {'status': False, 'message': 'CANVAS_NOT_FOUND'}
+
+    role = await member_model.get_role(canvas_id, user_id, db)
+    if role != 'admin':
+        return {'status': False, 'message': 'ADMIN_ONLY'}
+
+    if not file or not file.filename:
+        return {'status': False, 'message': 'NO_FILE'}
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in ICON_ALLOWED_EXT:
+        return {'status': False, 'message': 'INVALID_FILE_TYPE'}
+    content = await file.read()
+    if len(content) > ICON_MAX_SIZE:
+        return {'status': False, 'message': 'FILE_TOO_LARGE'}
+    if not validate_image_magic_bytes(content, ext):
+        return {'status': False, 'message': 'INVALID_FILE_CONTENT'}
+
+    if ext == '.svg':
+        sanitized = sanitize_svg(content)
+        if sanitized is None:
+            return {'status': False, 'message': 'INVALID_FILE_CONTENT'}
+        content = sanitized
+
+    os.makedirs(ICON_UPLOAD_DIR, exist_ok=True)
+
+    current = canvas.get('icon') or ''
+    if current.startswith('image:'):
+        rel = current[len('image:'):].replace('/api/uploads/', 'uploads/').lstrip('/')
+        old_path = os.path.normpath(os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+            rel
+        ))
+        uploads_base = os.path.normpath(ICON_UPLOAD_DIR)
+        if old_path.startswith(uploads_base) and os.path.exists(old_path):
+            os.remove(old_path)
+
+    filename = f"{canvas_id}_{uuid.uuid4().hex[:8]}{ext}"
+    filepath = os.path.join(ICON_UPLOAD_DIR, filename)
+    with open(filepath, 'wb') as f:
+        f.write(content)
+
+    icon_value = f"image:/api/uploads/canvas-icons/{filename}"
+    await canvas_model.update(canvas_id, {'icon': icon_value}, db)
+    return {'status': True, 'icon': icon_value}
 
 
 async def update(canvas_id: int, body, request: Request, db: AsyncSession):
