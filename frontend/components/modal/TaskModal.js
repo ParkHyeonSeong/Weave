@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, ChevronDown } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import DatePicker from '@/components/common/DatePicker';
 
 export default function TaskModal({ branchId, branchKey, task, defaultSprintId, onClose }) {
   const isEdit = !!task;
@@ -299,20 +300,16 @@ export default function TaskModal({ branchId, branchKey, task, defaultSprintId, 
           <div className="TaskModal__Row">
             <div className="TaskModal__Field TaskModal__Field--half">
               <label className="TaskModal__Label">Start Date</label>
-              <input
-                className="TaskModal__Input"
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+              <DatePicker
+                value={startDate || null}
+                onChange={(val) => setStartDate(val || '')}
               />
             </div>
             <div className="TaskModal__Field TaskModal__Field--half">
               <label className="TaskModal__Label">Due Date</label>
-              <input
-                className="TaskModal__Input"
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
+              <DatePicker
+                value={dueDate || null}
+                onChange={(val) => setDueDate(val || '')}
               />
             </div>
           </div>
@@ -343,10 +340,15 @@ export default function TaskModal({ branchId, branchKey, task, defaultSprintId, 
                         <option key={opt} value={opt}>{opt}</option>
                       ))}
                     </select>
+                  ) : cf.field_type === 'date' ? (
+                    <DatePicker
+                      value={customFieldValues[cf.custom_field_id] || null}
+                      onChange={(val) => setCustomFieldValues((prev) => ({ ...prev, [cf.custom_field_id]: val }))}
+                    />
                   ) : (
                     <input
                       className="TaskModal__Input"
-                      type={cf.field_type === 'number' ? 'number' : cf.field_type === 'date' ? 'date' : cf.field_type === 'url' ? 'url' : 'text'}
+                      type={cf.field_type === 'number' ? 'number' : cf.field_type === 'url' ? 'url' : 'text'}
                       value={customFieldValues[cf.custom_field_id] || ''}
                       onChange={(e) => setCustomFieldValues((prev) => ({
                         ...prev,

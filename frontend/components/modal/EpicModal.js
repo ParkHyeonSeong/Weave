@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import DatePicker from '@/components/common/DatePicker';
 
 const COLORS = ['#5E6AD2', '#2563EB', '#DC2626', '#16A34A', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4'];
 
@@ -154,20 +155,16 @@ export default function EpicModal({ branchId, epic, onClose }) {
           <div className="EpicModal__Row">
             <div className="EpicModal__Field EpicModal__Field--half">
               <label className="EpicModal__Label">Start Date</label>
-              <input
-                className="EpicModal__Input"
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+              <DatePicker
+                value={startDate || null}
+                onChange={(val) => setStartDate(val || '')}
               />
             </div>
             <div className="EpicModal__Field EpicModal__Field--half">
               <label className="EpicModal__Label">Due Date</label>
-              <input
-                className="EpicModal__Input"
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
+              <DatePicker
+                value={dueDate || null}
+                onChange={(val) => setDueDate(val || '')}
               />
             </div>
           </div>

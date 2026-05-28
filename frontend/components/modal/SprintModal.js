@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import DatePicker from '@/components/common/DatePicker';
 
 export default function SprintModal({ branchId, sprint, onClose }) {
   const isEdit = !!sprint?.sprint_id;
@@ -100,20 +101,16 @@ export default function SprintModal({ branchId, sprint, onClose }) {
           <div className="SprintModal__Row">
             <div className="SprintModal__Field SprintModal__Field--half">
               <label className="SprintModal__Label">Start Date</label>
-              <input
-                className="SprintModal__Input"
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+              <DatePicker
+                value={startDate || null}
+                onChange={(val) => setStartDate(val || '')}
               />
             </div>
             <div className="SprintModal__Field SprintModal__Field--half">
               <label className="SprintModal__Label">End Date</label>
-              <input
-                className="SprintModal__Input"
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
+              <DatePicker
+                value={endDate || null}
+                onChange={(val) => setEndDate(val || '')}
               />
             </div>
           </div>

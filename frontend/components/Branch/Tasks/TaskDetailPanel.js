@@ -4,6 +4,7 @@ import { X, Maximize2, Trash2, ChevronDown, Star, Pencil } from 'lucide-react';
 import useStar from '@/hooks/useStar';
 import LabelTagInput from '@/components/common/LabelTagInput';
 import CustomSelect from '@/components/common/CustomSelect';
+import DatePicker from '@/components/common/DatePicker';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import useTaskDetail from '@/hooks/useTaskDetail';
 import { sanitizeHtml } from '@/library/sanitize';
@@ -301,21 +302,19 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
 
             {/* 시작일 */}
             <DetailRow label="Start date">
-              <input
-                className="TaskDetailPanel__DateInput"
-                type="date"
-                value={task.start_date || ''}
-                onChange={(e) => updateField('start_date', e.target.value || null)}
+              <DatePicker
+                size="sm"
+                value={task.start_date || null}
+                onChange={(val) => updateField('start_date', val)}
               />
             </DetailRow>
 
             {/* 마감일 */}
             <DetailRow label="Due date">
-              <input
-                className="TaskDetailPanel__DateInput"
-                type="date"
-                value={task.due_date || ''}
-                onChange={(e) => updateField('due_date', e.target.value || null)}
+              <DatePicker
+                size="sm"
+                value={task.due_date || null}
+                onChange={(val) => updateField('due_date', val)}
               />
             </DetailRow>
           </div>
@@ -425,11 +424,10 @@ function CustomFieldInput({ field, value, onChange }) {
       );
     case 'date':
       return (
-        <input
-          className="TaskDetailPanel__DateInput"
-          type="date"
-          value={value || ''}
-          onChange={(e) => onChange(e.target.value || null)}
+        <DatePicker
+          size="sm"
+          value={value || null}
+          onChange={onChange}
         />
       );
     case 'checkbox':

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { axios } from '@/library/_axios';
 import { X, Trash2 } from 'lucide-react';
 import CustomSelect from '@/components/common/CustomSelect';
+import DatePicker from '@/components/common/DatePicker';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 
 const COLORS = ['#5E6AD2', '#2563EB', '#DC2626', '#16A34A', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4'];
@@ -216,11 +217,10 @@ export default function EpicDetailPanel({ branchId, workflowStatuses = [], epicS
             <div className="TaskDetailPanel__Row">
               <span className="TaskDetailPanel__RowLabel">Start date</span>
               <div className="TaskDetailPanel__RowValue">
-                <input
-                  className="TaskDetailPanel__DateInput"
-                  type="date"
-                  value={epic.start_date || ''}
-                  onChange={(e) => updateField('start_date', e.target.value || null)}
+                <DatePicker
+                  size="sm"
+                  value={epic.start_date || null}
+                  onChange={(val) => updateField('start_date', val)}
                 />
               </div>
             </div>
@@ -229,11 +229,10 @@ export default function EpicDetailPanel({ branchId, workflowStatuses = [], epicS
             <div className="TaskDetailPanel__Row">
               <span className="TaskDetailPanel__RowLabel">Due date</span>
               <div className="TaskDetailPanel__RowValue">
-                <input
-                  className="TaskDetailPanel__DateInput"
-                  type="date"
-                  value={epic.due_date || ''}
-                  onChange={(e) => updateField('due_date', e.target.value || null)}
+                <DatePicker
+                  size="sm"
+                  value={epic.due_date || null}
+                  onChange={(val) => updateField('due_date', val)}
                 />
               </div>
             </div>

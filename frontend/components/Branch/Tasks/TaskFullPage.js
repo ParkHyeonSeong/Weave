@@ -5,6 +5,7 @@ import useStar from '@/hooks/useStar';
 import LabelTagInput from '@/components/common/LabelTagInput';
 import { axios } from '@/library/_axios';
 import CustomSelect from '@/components/common/CustomSelect';
+import DatePicker from '@/components/common/DatePicker';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import useTaskDetail from '@/hooks/useTaskDetail';
 import { sanitizeHtml } from '@/library/sanitize';
@@ -336,20 +337,18 @@ export default function TaskFullPage() {
             </FieldRow>
 
             <FieldRow label="Start date">
-              <input
-                className="TaskFullPage__DateInput"
-                type="date"
-                value={task.start_date || ''}
-                onChange={(e) => updateField('start_date', e.target.value || null)}
+              <DatePicker
+                size="sm"
+                value={task.start_date || null}
+                onChange={(val) => updateField('start_date', val)}
               />
             </FieldRow>
 
             <FieldRow label="Due date">
-              <input
-                className="TaskFullPage__DateInput"
-                type="date"
-                value={task.due_date || ''}
-                onChange={(e) => updateField('due_date', e.target.value || null)}
+              <DatePicker
+                size="sm"
+                value={task.due_date || null}
+                onChange={(val) => updateField('due_date', val)}
               />
             </FieldRow>
 
@@ -401,7 +400,7 @@ function CustomFieldInput({ field, value, onChange, className = '' }) {
     case 'number':
       return <input className={inputClass} type="number" value={value ?? ''} onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)} />;
     case 'date':
-      return <input className={inputClass} type="date" value={value || ''} onChange={(e) => onChange(e.target.value || null)} />;
+      return <DatePicker size="sm" value={value || null} onChange={onChange} />;
     case 'checkbox':
       return <input type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked)} />;
     case 'select':

@@ -43,6 +43,7 @@ import "@/styles/components/modal/epicModal.scss";
 import "@/styles/components/branch/taskDetailPanel.scss";
 import "@/styles/components/profile/profile.scss";
 import "@/styles/components/common/customSelect.scss";
+import "@/styles/components/common/datePicker.scss";
 import "@/styles/components/common/labelTagInput.scss";
 import "@/styles/components/common/multiSelect.scss";
 import "@/styles/components/branch/branchSettings.scss";

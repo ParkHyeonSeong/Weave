@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, ChevronDown } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import DatePicker from '@/components/common/DatePicker';
 
 const COLORS = ['#5E6AD2', '#2563EB', '#DC2626', '#16A34A', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4'];
 
@@ -207,21 +208,18 @@ export default function ScheduleEventModal({ branchId, event, defaultDate, onClo
           <div className="ScheduleEventModal__Row">
             <div className="ScheduleEventModal__Field ScheduleEventModal__Field--half">
               <label className="ScheduleEventModal__Label">Start Date</label>
-              <input
-                className="ScheduleEventModal__Input"
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                required
+              <DatePicker
+                value={startDate || null}
+                onChange={(val) => setStartDate(val || '')}
+                placeholder="Pick start"
               />
             </div>
             <div className="ScheduleEventModal__Field ScheduleEventModal__Field--half">
               <label className="ScheduleEventModal__Label">End Date</label>
-              <input
-                className="ScheduleEventModal__Input"
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
+              <DatePicker
+                value={endDate || null}
+                onChange={(val) => setEndDate(val || '')}
+                placeholder="Pick end"
               />
             </div>
           </div>
