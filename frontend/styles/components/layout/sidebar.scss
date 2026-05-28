@@ -308,13 +308,6 @@
     width: max-content;
   }
 
-  &__BranchDot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-
   &__BranchName {
     white-space: nowrap;
     overflow: hidden;

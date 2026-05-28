@@ -3,13 +3,15 @@ import { useRouter } from 'next/router';
 import { Lock, Globe, AlertTriangle } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import { showToast } from '@/components/Layout/Toast';
-import { COLOR_PRESETS, HEX_RE, DEFAULT_TRACK_COLOR } from './constants';
+import AppearanceSection from '@/components/common/AppearanceSection';
+import { HEX_RE, DEFAULT_TRACK_COLOR } from './constants';
 
 export default function SettingsGeneral({ trackId, track, isOwner, onUpdated }) {
   const router = useRouter();
   const [trackName, setTrackName] = useState(track.track_name || '');
   const [description, setDescription] = useState(track.description || '');
   const [color, setColor] = useState(track.color || DEFAULT_TRACK_COLOR);
+  const [icon, setIcon] = useState(track.icon || null);
   const [visibility, setVisibility] = useState(track.visibility || 'private');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -23,6 +25,7 @@ export default function SettingsGeneral({ trackId, track, isOwner, onUpdated }) 
     trackName !== (track.track_name || '')
     || description !== (track.description || '')
     || color !== (track.color || DEFAULT_TRACK_COLOR)
+    || icon !== (track.icon || null)
     || visibility !== (track.visibility || 'private');
 
   const canSave = isOwner && dirty && nameValid && colorValid && !saving;
@@ -36,6 +39,7 @@ export default function SettingsGeneral({ trackId, track, isOwner, onUpdated }) 
         track_name: trackName.trim(),
         description: description.trim() || null,
         color,
+        icon,
         visibility,
       });
       if (res.data.status) {
@@ -100,36 +104,18 @@ export default function SettingsGeneral({ trackId, track, isOwner, onUpdated }) 
         />
       </div>
 
-      {/* Color */}
-      <div className="SettingsGeneral__Field">
-        <label className="SettingsGeneral__Label">Color</label>
-        <div className="SettingsGeneral__ColorRow">
-          <div className="SettingsGeneral__Swatches">
-            {COLOR_PRESETS.map((preset) => (
-              <button
-                key={preset}
-                type="button"
-                className={`SettingsGeneral__Swatch ${color.toLowerCase() === preset.toLowerCase() ? 'SettingsGeneral__Swatch--active' : ''}`}
-                style={{ background: preset }}
-                onClick={() => isOwner && setColor(preset)}
-                disabled={!isOwner}
-                aria-label={preset}
-              />
-            ))}
-          </div>
-          <input
-            className={`SettingsGeneral__HexInput ${!colorValid ? 'SettingsGeneral__HexInput--error' : ''}`}
-            value={color}
-            onChange={(e) => setColor(e.target.value)}
-            disabled={!isOwner}
-            maxLength={7}
-            placeholder="#RRGGBB"
-          />
-        </div>
-        {!colorValid && isOwner && (
-          <span className="SettingsGeneral__Error">유효한 hex (#RRGGBB)를 입력하세요</span>
-        )}
-      </div>
+      {/* Appearance */}
+      <AppearanceSection
+        icon={icon}
+        color={color}
+        entityType="track"
+        entityId={trackId}
+        disabled={!isOwner}
+        onChange={({ icon: newIcon, color: newColor }) => {
+          setIcon(newIcon);
+          setColor(newColor);
+        }}
+      />
 
       {/* Visibility */}
       <div className="SettingsGeneral__Field">

@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/router';
 import { axios } from '@/library/_axios';
 import { Globe, Lock, AlertTriangle } from 'lucide-react';
+import AppearanceSection from '@/components/common/AppearanceSection';
+import { DEFAULT_COLORS } from '@/library/entityAppearance';
 
 export default function SettingsGeneral({ canvasId, canvas, isAdmin, onUpdated }) {
   const router = useRouter();
@@ -10,6 +12,8 @@ export default function SettingsGeneral({ canvasId, canvas, isAdmin, onUpdated }
   const [keyError, setKeyError] = useState('');
   const [description, setDescription] = useState(canvas?.description || '');
   const [visibility, setVisibility] = useState(canvas?.visibility || 'private');
+  const [color, setColor] = useState(canvas?.color || DEFAULT_COLORS.canvas);
+  const [icon, setIcon] = useState(canvas?.icon || null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -36,6 +40,8 @@ export default function SettingsGeneral({ canvasId, canvas, isAdmin, onUpdated }
         key: key.trim(),
         description: description.trim() || null,
         visibility,
+        color,
+        icon,
       });
       if (res.data.status) {
         setSaved(true);
@@ -51,6 +57,19 @@ export default function SettingsGeneral({ canvasId, canvas, isAdmin, onUpdated }
 
   return (
     <div className="SettingsGeneral">
+      {/* Appearance */}
+      <AppearanceSection
+        icon={icon}
+        color={color}
+        entityType="canvas"
+        entityId={canvasId}
+        disabled={!isAdmin}
+        onChange={({ icon: newIcon, color: newColor }) => {
+          setIcon(newIcon);
+          setColor(newColor);
+        }}
+      />
+
       {/* Canvas Name */}
       <div className="SettingsGeneral__Field">
         <label className="SettingsGeneral__Label">Canvas Name</label>

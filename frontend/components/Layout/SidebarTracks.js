@@ -10,6 +10,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { axios } from '@/library/_axios';
+import EntityIcon from '@/components/common/EntityIcon';
 
 function SortableTrackItem({ track, isActive }) {  // isActive는 boolean (caller가 계산)
   const router = useRouter();
@@ -33,9 +34,11 @@ function SortableTrackItem({ track, isActive }) {  // isActive는 boolean (calle
       <span className="Sidebar__DragHandle" {...attributes} {...listeners}>
         <GripVertical size={12} />
       </span>
-      <span
-        className="Sidebar__BranchDot"
-        style={{ backgroundColor: track.color || '#5E6AD2' }}
+      <EntityIcon
+        icon={track.icon}
+        color={track.color}
+        size={14}
+        entityType="track"
       />
       <span className="Sidebar__BranchName">{track.track_name}</span>
     </button>
@@ -142,9 +145,11 @@ export default function SidebarTracks({ onCreateTrack, savedOrder, onOrderChange
             <DragOverlay>
               {activeItem && (
                 <div className="Sidebar__BranchItem Sidebar__BranchItem--dragging">
-                  <span
-                    className="Sidebar__BranchDot"
-                    style={{ backgroundColor: activeItem.color || '#5E6AD2' }}
+                  <EntityIcon
+                    icon={activeItem.icon}
+                    color={activeItem.color}
+                    size={14}
+                    entityType="track"
                   />
                   <span className="Sidebar__BranchName">{activeItem.track_name}</span>
                 </div>

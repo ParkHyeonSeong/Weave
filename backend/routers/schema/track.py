@@ -1,6 +1,11 @@
+import re
 from typing import Optional, List, Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+
+HEX_COLOR_RE = re.compile(r'^#[0-9A-Fa-f]{6}$')
+ICON_PREFIX_RE = re.compile(r'^(lucide|emoji|image):.+')
+LUCIDE_NAME_RE = re.compile(r'^[a-z][a-z0-9-]{0,48}$')
 
 VALID_VISIBILITY = ('public', 'private')
 VALID_ROLES = ('viewer', 'editor', 'owner')
@@ -62,6 +67,26 @@ class TrackUpdate(BaseModel):
         if v is not None and v not in VALID_VIEWS:
             raise ValueError(f'default_view must be one of {VALID_VIEWS}')
         return v
+
+    @field_validator('color')
+    @classmethod
+    def validate_color(cls, v):
+        if v is None:
+            return v
+        if not HEX_COLOR_RE.match(v):
+            raise ValueError('color must be #RRGGBB hex')
+        return v
+
+    @field_validator('icon')
+    @classmethod
+    def validate_icon(cls, v):
+        if v is None:
+            return v
+        if len(v) > 50:
+            raise ValueError('icon string too long')
+        if ICON_PREFIX_RE.match(v) or LUCIDE_NAME_RE.match(v):
+            return v
+        raise ValueError('icon must be prefixed (lucide:|emoji:|image:) or a lucide name')
 
 
 class TrackMemberAdd(BaseModel):

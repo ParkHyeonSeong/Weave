@@ -3,6 +3,8 @@ import { useRouter } from 'next/router';
 import { axios } from '@/library/_axios';
 import { Globe, Lock, AlertTriangle, Upload } from 'lucide-react';
 import JiraMigrationModal from './JiraMigrationModal';
+import AppearanceSection from '@/components/common/AppearanceSection';
+import { DEFAULT_COLORS } from '@/library/entityAppearance';
 
 export default function SettingsGeneral({ branchId, branch, isAdmin, onUpdated }) {
   const router = useRouter();
@@ -11,6 +13,8 @@ export default function SettingsGeneral({ branchId, branch, isAdmin, onUpdated }
   const [keyError, setKeyError] = useState('');
   const [description, setDescription] = useState(branch?.description || '');
   const [visibility, setVisibility] = useState(branch?.visibility || 'private');
+  const [color, setColor] = useState(branch?.color || DEFAULT_COLORS.branch);
+  const [icon, setIcon] = useState(branch?.icon || null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -38,10 +42,13 @@ export default function SettingsGeneral({ branchId, branch, isAdmin, onUpdated }
         key: key.trim(),
         description: description.trim() || null,
         visibility,
+        color,
+        icon,
       });
       if (res.data.status) {
         setSaved(true);
         if (onUpdated) onUpdated();
+        window.dispatchEvent(new Event('branch:created'));
         setTimeout(() => setSaved(false), 2000);
       } else if (res.data.message === 'KEY_ALREADY_EXISTS') {
         setKeyError('This key is already in use.');
@@ -52,6 +59,19 @@ export default function SettingsGeneral({ branchId, branch, isAdmin, onUpdated }
 
   return (
     <div className="SettingsGeneral">
+      {/* Appearance */}
+      <AppearanceSection
+        icon={icon}
+        color={color}
+        entityType="branch"
+        entityId={branchId}
+        disabled={!isAdmin}
+        onChange={({ icon: newIcon, color: newColor }) => {
+          setIcon(newIcon);
+          setColor(newColor);
+        }}
+      />
+
       {/* Branch Name */}
       <div className="SettingsGeneral__Field">
         <label className="SettingsGeneral__Label">Branch Name</label>

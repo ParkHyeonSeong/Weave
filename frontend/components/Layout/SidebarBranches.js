@@ -10,6 +10,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { axios } from '@/library/_axios';
+import EntityIcon from '@/components/common/EntityIcon';
 
 function SortableBranchItem({ branch, isActive }) {
   const router = useRouter();
@@ -33,9 +34,11 @@ function SortableBranchItem({ branch, isActive }) {
       <span className="Sidebar__DragHandle" {...attributes} {...listeners}>
         <GripVertical size={12} />
       </span>
-      <span
-        className="Sidebar__BranchDot"
-        style={{ backgroundColor: branch.color || '#5E6AD2' }}
+      <EntityIcon
+        icon={branch.icon}
+        color={branch.color}
+        size={14}
+        entityType="branch"
       />
       <span className="Sidebar__BranchName">{branch.branch_name}</span>
     </button>
@@ -138,9 +141,11 @@ export default function SidebarBranches({ onCreateBranch, savedOrder, onOrderCha
             <DragOverlay>
               {activeItem && (
                 <div className="Sidebar__BranchItem Sidebar__BranchItem--dragging">
-                  <span
-                    className="Sidebar__BranchDot"
-                    style={{ backgroundColor: activeItem.color || '#5E6AD2' }}
+                  <EntityIcon
+                    icon={activeItem.icon}
+                    color={activeItem.color}
+                    size={14}
+                    entityType="branch"
                   />
                   <span className="Sidebar__BranchName">{activeItem.branch_name}</span>
                 </div>

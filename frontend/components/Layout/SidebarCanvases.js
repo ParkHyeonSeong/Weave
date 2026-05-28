@@ -16,6 +16,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { axios } from '@/library/_axios';
+import EntityIcon from '@/components/common/EntityIcon';
 
 // 포인터가 아이템 위에 있으면 pointerWithin, 아이템 사이(갭)이면 closestCenter 폴백
 const treeCollisionDetection = (args) => {
@@ -549,9 +550,11 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
             <DragOverlay>
               {activeCanvas && (
                 <div className="Sidebar__BranchItem Sidebar__BranchItem--dragging">
-                  <span
-                    className="Sidebar__BranchDot"
-                    style={{ backgroundColor: activeCanvas.color || '#16A34A' }}
+                  <EntityIcon
+                    icon={activeCanvas.icon}
+                    color={activeCanvas.color}
+                    size={14}
+                    entityType="canvas"
                   />
                   <span className="Sidebar__BranchName">{activeCanvas.canvas_name}</span>
                 </div>
@@ -681,9 +684,11 @@ function CanvasRow({ canvas, isActive, isExpanded, onToggle, onAddDocument, onAd
         <span className="Sidebar__ExpandIcon">
           {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         </span>
-        <span
-          className="Sidebar__BranchDot"
-          style={{ backgroundColor: canvas.color || '#16A34A' }}
+        <EntityIcon
+          icon={canvas.icon}
+          color={canvas.color}
+          size={14}
+          entityType="canvas"
         />
         <span className="Sidebar__BranchName">{canvas.canvas_name}</span>
       </button>
