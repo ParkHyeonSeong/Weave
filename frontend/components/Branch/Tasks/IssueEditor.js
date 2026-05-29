@@ -68,10 +68,7 @@ const IssueEditor = forwardRef(({ content, placeholder, minHeight = 150, branchI
 
   useImperativeHandle(ref, () => ({
     getHTML: () => editor?.getHTML() || '',
-    isEmpty: () => {
-      const html = editor?.getHTML() || '';
-      return !html || html === '<p></p>';
-    },
+    isEmpty: () => editor?.isEmpty ?? true,
     clearContent: () => editor?.commands.clearContent(),
     focus: () => editor?.commands.focus(),
   }), [editor]);

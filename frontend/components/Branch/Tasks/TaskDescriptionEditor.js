@@ -75,9 +75,11 @@ export default function TaskDescriptionEditor({ content, onSave, branchId }) {
     const handleBlur = () => {
       if (savedRef.current) return;
       savedRef.current = true;
-      const html = editor.getHTML();
-      const isEmpty = !html || html === '<p></p>';
-      onSave(isEmpty ? null : html);
+      if (editor.isEmpty) {
+        onSave(null);
+      } else {
+        onSave(editor.getHTML());
+      }
     };
 
     editor.on('blur', handleBlur);
