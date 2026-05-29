@@ -1,20 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { X, Check, RotateCcw, Trash2, MoreHorizontal, MessageSquare } from 'lucide-react';
 import { sanitizeHtml } from '@/library/sanitize';
+import { formatRelative } from '@/library/formatTime';
 import IssueEditor from '@/components/Branch/Tasks/IssueEditor';
-
-function timeAgo(dateStr) {
-  if (!dateStr) return '';
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
-  return new Date(dateStr).toLocaleDateString();
-}
 
 function getInitial(name) {
   return (name || '?')[0].toUpperCase();
@@ -178,7 +166,7 @@ export default function AnnotationSidebar({
                       {getInitial(reply.author_name)}
                     </div>
                     <span className="AnnotationSidebar__AuthorName">{reply.author_name}</span>
-                    <span className="AnnotationSidebar__Time">{timeAgo(reply.created_at)}</span>
+                    <span className="AnnotationSidebar__Time">{formatRelative(reply.created_at)}</span>
 
                     {reply.author_id === myProfile.user_id && (
                       <div className="AnnotationSidebar__ReplyMenu">

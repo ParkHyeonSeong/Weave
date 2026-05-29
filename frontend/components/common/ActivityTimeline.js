@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Clock, ArrowRight } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import { formatRelative } from '@/library/formatTime';
 
 /**
  * ActivityTimeline - Task/Canvas 페이지의 활동 이력 타임라인
@@ -122,7 +123,7 @@ function ActivityItem({ activity }) {
     <div className="ActivityTimeline__Item">
       <div className="ActivityTimeline__ItemHeader">
         <span className="ActivityTimeline__Author">{actor_name || 'Unknown'}</span>
-        <span className="ActivityTimeline__Time">{timeAgo(created_at)}</span>
+        <span className="ActivityTimeline__Time">{formatRelative(created_at)}</span>
       </div>
       <div className="ActivityTimeline__Summary">{summary}</div>
       {Array.isArray(changes) && changes.length > 0 && (
@@ -184,21 +185,6 @@ function formatValue(val) {
   return String(val);
 }
 
-
-function timeAgo(dateStr) {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return new Date(dateStr).toLocaleDateString('ko-KR', {
-    month: 'short',
-    day: 'numeric',
-  });
-}
 
 
 function groupByDate(activities) {

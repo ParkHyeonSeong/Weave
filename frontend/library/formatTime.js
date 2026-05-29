@@ -18,16 +18,34 @@ export function formatMessageTime(dateStr) {
 
 /**
  * 상대 시간 포맷
- * just now / Nm ago / Nh ago / Nd ago / 날짜
+ * just now / Nm ago / Nh ago / yesterday / Nd ago / Nw ago / Nmo ago / 날짜
+ *
+ * yesterday는 (now와 t의) calendar day diff 기준 — 시간 diff가 23h여도
+ * 같은 calendar day면 "Nh ago", 어제면 "yesterday".
  */
 export function formatRelative(iso) {
   if (!iso) return '';
-  const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) return '';
-  const diff = (Date.now() - t) / 1000;
+  const t = new Date(iso);
+  const tMs = t.getTime();
+  if (Number.isNaN(tMs)) return '';
+  const now = new Date();
+  const diff = (now.getTime() - tMs) / 1000;
+
   if (diff < 60) return 'just now';
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
-  return new Date(iso).toLocaleDateString();
+
+  // calendar-day 기반 yesterday
+  const y = new Date(now);
+  y.setDate(y.getDate() - 1);
+  if (t.getFullYear() === y.getFullYear()
+      && t.getMonth() === y.getMonth()
+      && t.getDate() === y.getDate()) {
+    return 'yesterday';
+  }
+
+  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;          // <7d
+  if (diff < 2592000) return `${Math.floor(diff / 604800)}w ago`;        // <30d
+  if (diff < 31536000) return `${Math.floor(diff / 2592000)}mo ago`;     // <1y
+  return t.toLocaleDateString();
 }

@@ -3,19 +3,8 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { Workflow, Plus, Users, Layers } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import { formatRelative } from '@/library/formatTime';
 import CreateTrack from '@/components/modal/CreateTrack';
-
-function formatRelative(dateStr) {
-  if (!dateStr) return '';
-  const d = new Date(dateStr);
-  const now = new Date();
-  const days = Math.floor((now - d) / (24 * 60 * 60 * 1000));
-  if (days === 0) return 'today';
-  if (days === 1) return 'yesterday';
-  if (days < 7) return `${days}d ago`;
-  if (days < 30) return `${Math.floor(days / 7)}w ago`;
-  return `${Math.floor(days / 30)}mo ago`;
-}
 
 export default function TracksIndex() {
   const router = useRouter();

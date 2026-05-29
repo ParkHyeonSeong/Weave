@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { Plus, MessageCircle, CircleDot, CheckCircle2 } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import { formatRelative } from '@/library/formatTime';
 
 export default function TaskIssueSection({ branchId, taskId, expanded = false }) {
   const router = useRouter();
@@ -36,16 +37,6 @@ export default function TaskIssueSection({ branchId, taskId, expanded = false })
   const displayIssues = expanded ? issues : issues.slice(0, 5);
   const openCount = issues.filter((i) => i.status === 'open').length;
   const closedCount = issues.length - openCount;
-
-  const timeAgo = (dateStr) => {
-    const diff = Date.now() - new Date(dateStr).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 60) return `${mins}m ago`;
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    return `${days}d ago`;
-  };
 
   return (
     <div className="TaskIssueSection">
@@ -82,7 +73,7 @@ export default function TaskIssueSection({ branchId, taskId, expanded = false })
                 <span className="TaskIssueSection__ItemTitle">{issue.title}</span>
                 {expanded && (
                   <span className="TaskIssueSection__ItemMeta">
-                    #{issue.issue_id} opened {timeAgo(issue.created_at)} by {issue.author_name}
+                    #{issue.issue_id} opened {formatRelative(issue.created_at)} by {issue.author_name}
                   </span>
                 )}
               </div>
