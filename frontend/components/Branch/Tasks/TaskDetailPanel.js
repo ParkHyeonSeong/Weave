@@ -12,6 +12,7 @@ import TaskIssueSection from './TaskIssueSection';
 import TaskDependencySection from './TaskDependencySection';
 import TaskPageLinkSection from './TaskPageLinkSection';
 import TaskDescriptionEditor from './TaskDescriptionEditor';
+import TaskCommentSection from './TaskCommentSection';
 import ConfirmModal from '@/components/modal/ConfirmModal';
 import ActivityTimeline from '@/components/common/ActivityTimeline';
 
@@ -27,6 +28,10 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
   const taskTypes = (externalTaskTypes && externalTaskTypes.length > 0) ? externalTaskTypes : hookTaskTypes;
 
   const { starred, toggle: toggleStar } = useStar('task', task?.task_id);
+
+  const currentUserId = typeof window !== 'undefined'
+    ? (JSON.parse(sessionStorage.getItem('profile') || '{}').user_id ?? null)
+    : null;
 
   // 제목 편집
   const [editingTitle, setEditingTitle] = useState(false);
@@ -362,6 +367,16 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
 
         {/* 이슈 섹션 */}
         <TaskIssueSection branchId={branchId} taskId={task.task_id} />
+
+        <div className="TaskDetailPanel__Divider" />
+
+        {/* 댓글 */}
+        <TaskCommentSection
+          branchId={branchId}
+          taskId={task.task_id}
+          members={members}
+          currentUserId={currentUserId}
+        />
 
         <div className="TaskDetailPanel__Divider" />
 

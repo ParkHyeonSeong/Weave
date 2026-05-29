@@ -10,6 +10,7 @@ import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import useTaskDetail from '@/hooks/useTaskDetail';
 import { sanitizeHtml } from '@/library/sanitize';
 import TaskIssueSection from './TaskIssueSection';
+import TaskCommentSection from './TaskCommentSection';
 import TaskDependencySection from './TaskDependencySection';
 import TaskPageLinkSection from './TaskPageLinkSection';
 import TaskDescriptionEditor from './TaskDescriptionEditor';
@@ -29,6 +30,10 @@ export default function TaskFullPage() {
   } = useTaskDetail(branchId, taskId);
 
   const { starred, toggle: toggleStar } = useStar('task', task?.task_id);
+
+  const currentUserId = typeof window !== 'undefined'
+    ? (JSON.parse(sessionStorage.getItem('profile') || '{}').user_id ?? null)
+    : null;
 
   // 제목 편집
   const [editingTitle, setEditingTitle] = useState(false);
@@ -226,6 +231,16 @@ export default function TaskFullPage() {
 
           {/* 이슈 */}
           <TaskIssueSection branchId={branchId} taskId={task.task_id} expanded />
+
+          <div className="TaskFullPage__Divider" />
+
+          {/* 댓글 */}
+          <TaskCommentSection
+            branchId={branchId}
+            taskId={task.task_id}
+            members={members}
+            currentUserId={currentUserId}
+          />
 
           <div className="TaskFullPage__Divider" />
 

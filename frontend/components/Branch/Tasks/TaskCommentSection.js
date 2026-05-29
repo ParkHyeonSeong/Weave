@@ -24,9 +24,13 @@ export default function TaskCommentSection({
   // Slice 7에서 useEffect로 토글; 일단 false 유지
   const [highlightActive] = useState(false);
 
+  // 최상위 composer는 submit 후 unmount/remount로 비워진다 (답글/edit composer는 cancel로 닫히므로 영향 없음)
+  const [composerKey, setComposerKey] = useState(0);
+
   const handleCreateTop = async (html) => {
     try {
       await createComment(html, null);
+      setComposerKey((k) => k + 1);
     } catch (e) {
       console.error('Create comment failed', e);
     }
@@ -46,6 +50,7 @@ export default function TaskCommentSection({
 
       <div className="TaskCommentSection__Composer">
         <CommentEditor
+          key={composerKey}
           placeholder="댓글을 작성하세요..."
           branchId={branchId}
           onSubmit={handleCreateTop}
