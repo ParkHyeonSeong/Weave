@@ -14,7 +14,7 @@ const NOTI_ICONS = {
   task_status_changed: CheckCircle2,
 };
 
-export default function Header({ isMobile, onToggleSidebar, onSearchClick, notifications = [], unreadCount = 0, chatUnreadCount = 0, onChatClick, onClearNotifications, onMarkAllRead, onReadNotification, onNotiClick }) {
+export default function Header({ isMobile, hasSidebar = false, onToggleSidebar, onSearchClick, notifications = [], unreadCount = 0, chatUnreadCount = 0, onChatClick, onClearNotifications, onMarkAllRead, onReadNotification, onNotiClick }) {
   const router = useRouter();
   const [workspaceName, setWorkspaceName] = useState('');
   const [username, setUsername] = useState('');
@@ -93,7 +93,7 @@ export default function Header({ isMobile, onToggleSidebar, onSearchClick, notif
     <header className={`Header ${isMobile ? 'Header--mobile' : ''}`}>
       <div className="Header__Left">
         {/* 모바일: 햄버거 메뉴 */}
-        {isMobile && (
+        {isMobile && hasSidebar && (
           <button className="Header__IconBtn" onClick={onToggleSidebar} title="Menu">
             <Menu size={20} />
           </button>

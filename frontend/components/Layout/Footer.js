@@ -6,6 +6,7 @@ const mod = isMac ? '\u2318' : 'Ctrl+';
 
 export default function Footer({
   isMobile,
+  hasSidebar = false,
   isSidebarCollapsed,
   isMessengerCollapsed,
   onToggleSidebar,
@@ -38,13 +39,15 @@ export default function Footer({
           <Compass size={20} />
           <span className="Footer__NavLabel">Browse</span>
         </button>
-        <button
-          className={`Footer__NavItem ${!isSidebarCollapsed ? 'Footer__NavItem--active' : ''}`}
-          onClick={onToggleSidebar}
-        >
-          <Menu size={20} />
-          <span className="Footer__NavLabel">Menu</span>
-        </button>
+        {hasSidebar && (
+          <button
+            className={`Footer__NavItem ${!isSidebarCollapsed ? 'Footer__NavItem--active' : ''}`}
+            onClick={onToggleSidebar}
+          >
+            <Menu size={20} />
+            <span className="Footer__NavLabel">Menu</span>
+          </button>
+        )}
         <button
           className={`Footer__NavItem ${!isMessengerCollapsed ? 'Footer__NavItem--active' : ''}`}
           onClick={onToggleMessenger}
@@ -60,13 +63,15 @@ export default function Footer({
   return (
     <footer className="Footer">
       <div className="Footer__Left">
-        <button
-          className={`Footer__Toggle ${!isSidebarCollapsed ? 'Footer__Toggle--active' : ''}`}
-          onClick={onToggleSidebar}
-        >
-          <PanelLeft size={14} />
-          <span className="Footer__Tooltip">Sidebar <kbd>{mod}B</kbd></span>
-        </button>
+        {hasSidebar && (
+          <button
+            className={`Footer__Toggle ${!isSidebarCollapsed ? 'Footer__Toggle--active' : ''}`}
+            onClick={onToggleSidebar}
+          >
+            <PanelLeft size={14} />
+            <span className="Footer__Tooltip">Sidebar <kbd>{mod}B</kbd></span>
+          </button>
+        )}
       </div>
 
       <div className="Footer__Center" />

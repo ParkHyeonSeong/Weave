@@ -35,49 +35,6 @@
     }
   }
 
-  // -- Menu section --
-  &__Menu {
-    display: flex;
-    flex-direction: column;
-    gap: $space-1;
-    padding: 0 $space-3;
-  }
-
-  &__MenuItem {
-    display: flex;
-    align-items: center;
-    gap: $space-2;
-    padding: 8px $space-3;
-    border-radius: $radius-lg;
-    font-size: $font-size-sm;
-    font-weight: $font-weight-medium;
-    color: $color-text-secondary;
-    transition: all $transition-fast;
-    cursor: pointer;
-
-    &:hover {
-      background: $color-surface;
-      color: $color-text;
-    }
-
-    &--active {
-      background: $color-surface;
-      color: $color-text;
-    }
-  }
-
-  &__MenuIcon {
-    flex-shrink: 0;
-    color: inherit;
-  }
-
-  // -- Divider --
-  &__Divider {
-    height: 1px;
-    background: $color-border;
-    margin: $space-3 $space-3;
-  }
-
   // -- Branch section --
   &__SectionHeader {
     display: flex;
@@ -538,10 +495,6 @@
       border-radius: 0;
       border: none;
       border-right: 1px solid $color-border;
-    }
-
-    .Sidebar__MenuItem {
-      min-height: 44px;
     }
   }
 

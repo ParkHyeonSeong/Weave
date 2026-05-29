@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useRouter } from 'next/router';
+import { getAppContext } from '@/library/appContext';
 import { createPortal } from 'react-dom';
 import Header from './Header';
 import Sidebar from './Sidebar';
@@ -22,6 +24,8 @@ const SIDEBAR_DEFAULT_WIDTH = 240;
 
 export default function Layout({ children }) {
   const { isMobile } = useMobile();
+  const router = useRouter();
+  const inApp = !!getAppContext(router.pathname);
   const [showCreateBranch, setShowCreateBranch] = useState(false);
   const [showCreateCanvas, setShowCreateCanvas] = useState(false);
   const [showCreateTrack, setShowCreateTrack] = useState(false);
@@ -153,7 +157,7 @@ export default function Layout({ children }) {
       }
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === 'b') {
         e.preventDefault();
-        setIsSidebarCollapsed((prev) => !prev);
+        if (inApp) setIsSidebarCollapsed((prev) => !prev);
       }
       if ((e.metaKey || e.ctrlKey) && e.key === '.') {
         e.preventDefault();
@@ -162,7 +166,7 @@ export default function Layout({ children }) {
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [inApp]);
 
   // CommandPalette에서 Branch 생성 요청 수신
   useEffect(() => {
@@ -332,6 +336,7 @@ export default function Layout({ children }) {
     <div className={`Layout ${isMobile ? 'Layout--mobile' : ''}`}>
       <Header
         isMobile={isMobile}
+        hasSidebar={inApp}
         onToggleSidebar={() => setIsSidebarCollapsed((prev) => !prev)}
         onSearchClick={() => setShowPalette(true)}
         notifications={notifications}
@@ -375,10 +380,10 @@ export default function Layout({ children }) {
       />
       <div className="Layout__Body">
         {/* 모바일: 사이드바 backdrop */}
-        {isMobile && !isSidebarCollapsed && (
+        {isMobile && inApp && !isSidebarCollapsed && (
           <div className="Layout__Backdrop" onClick={handleBackdropClick} />
         )}
-        {!isSidebarCollapsed && (
+        {inApp && !isSidebarCollapsed && (
           <Sidebar
             isMobile={isMobile}
             width={isMobile ? undefined : sidebarWidth}
@@ -426,6 +431,7 @@ export default function Layout({ children }) {
       </div>
       <Footer
         isMobile={isMobile}
+        hasSidebar={inApp}
         isSidebarCollapsed={isSidebarCollapsed}
         isMessengerCollapsed={isMessengerCollapsed}
         onToggleSidebar={() => setIsSidebarCollapsed((prev) => !prev)}

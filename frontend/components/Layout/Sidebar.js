@@ -1,28 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
-import { LayoutDashboard, CheckSquare, Compass, GitBranch, FileEdit, Workflow, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import { getAppContext } from '@/library/appContext';
 import SidebarBranches from './SidebarBranches';
 import SidebarCanvases from './SidebarCanvases';
 import SidebarTracks from './SidebarTracks';
 
-function getAppContext(pathname) {
-  if (pathname.startsWith('/canvas')) return 'canvas';
-  if (pathname.startsWith('/branch')) return 'branch';
-  if (pathname.startsWith('/tracks')) return 'track';
-  return null;
-}
-
 export default function Sidebar({ isMobile, width, onResizeStart, onCreateBranch, onCreateCanvas, onCreateTrack, onClose }) {
   const router = useRouter();
-  const urlContext = getAppContext(router.pathname);
-  const [activeApp, setActiveApp] = useState(urlContext);
+  const activeApp = getAppContext(router.pathname);
   const [sidebarOrder, setSidebarOrder] = useState(null);
-
-  // URL 변경 시 앱 컨텍스트 동기화
-  useEffect(() => {
-    if (urlContext) setActiveApp(urlContext);
-  }, [urlContext]);
 
   // 사이드바 순서 로드
   useEffect(() => {
@@ -40,21 +28,6 @@ export default function Sidebar({ isMobile, width, onResizeStart, onCreateBranch
     });
   }, []);
 
-  const APP_HOME = { branch: '/branch', canvas: '/canvas', track: '/tracks' };
-
-  const handleAppClick = (app) => {
-    if (activeApp === app) return;
-    setActiveApp(app);
-    router.push(APP_HOME[app]);
-    if (isMobile) onClose?.();
-  };
-
-  // 모바일에서 메뉴 클릭 시 사이드바 닫기
-  const handleNavClick = (path) => {
-    router.push(path);
-    if (isMobile) onClose?.();
-  };
-
   return (
     <aside
       className={`Sidebar ${isMobile ? 'Sidebar--mobile' : ''}`}
@@ -71,78 +44,27 @@ export default function Sidebar({ isMobile, width, onResizeStart, onCreateBranch
           </div>
         )}
 
-        {/* 기본 메뉴 (항상 표시) */}
-        <nav className="Sidebar__Menu">
-          <button
-            className={`Sidebar__MenuItem ${router.pathname === '/' ? 'Sidebar__MenuItem--active' : ''}`}
-            onClick={() => handleNavClick('/')}
-          >
-            <LayoutDashboard size={16} className="Sidebar__MenuIcon" />
-            Home
-          </button>
-          <button
-            className={`Sidebar__MenuItem ${router.pathname === '/my-tasks' ? 'Sidebar__MenuItem--active' : ''}`}
-            onClick={() => handleNavClick('/my-tasks')}
-          >
-            <CheckSquare size={16} className="Sidebar__MenuIcon" />
-            My Tasks
-          </button>
-          <button
-            className={`Sidebar__MenuItem ${router.pathname === '/browse' ? 'Sidebar__MenuItem--active' : ''}`}
-            onClick={() => handleNavClick('/browse')}
-          >
-            <Compass size={16} className="Sidebar__MenuIcon" />
-            Browse
-          </button>
-          <button
-            className={`Sidebar__MenuItem ${activeApp === 'branch' ? 'Sidebar__MenuItem--active' : ''}`}
-            onClick={() => handleAppClick('branch')}
-          >
-            <GitBranch size={16} className="Sidebar__MenuIcon" />
-            Branch
-          </button>
-          <button
-            className={`Sidebar__MenuItem ${activeApp === 'canvas' ? 'Sidebar__MenuItem--active' : ''}`}
-            onClick={() => handleAppClick('canvas')}
-          >
-            <FileEdit size={16} className="Sidebar__MenuIcon" />
-            Canvas
-          </button>
-          <button
-            className={`Sidebar__MenuItem ${activeApp === 'track' ? 'Sidebar__MenuItem--active' : ''}`}
-            onClick={() => handleAppClick('track')}
-          >
-            <Workflow size={16} className="Sidebar__MenuIcon" />
-            Track
-          </button>
-        </nav>
-
-        {/* 앱 컨텍스트별 하단 섹션 */}
-        {activeApp && (
-          <>
-            <div className="Sidebar__Divider" />
-            {activeApp === 'branch' && (
-              <SidebarBranches
-                onCreateBranch={onCreateBranch}
-                savedOrder={sidebarOrder?.branches}
-                onOrderChange={(ids) => handleOrderChange('branches', ids)}
-              />
-            )}
-            {activeApp === 'canvas' && (
-              <SidebarCanvases
-                onCreateCanvas={onCreateCanvas}
-                savedOrder={sidebarOrder?.canvases}
-                onOrderChange={(ids) => handleOrderChange('canvases', ids)}
-              />
-            )}
-            {activeApp === 'track' && (
-              <SidebarTracks
-                onCreateTrack={onCreateTrack}
-                savedOrder={sidebarOrder?.tracks}
-                onOrderChange={(ids) => handleOrderChange('tracks', ids)}
-              />
-            )}
-          </>
+        {/* 현재 앱의 콘텐츠 섹션만 렌더 (Layout이 앱 컨텍스트에서만 Sidebar를 렌더함) */}
+        {activeApp === 'branch' && (
+          <SidebarBranches
+            onCreateBranch={onCreateBranch}
+            savedOrder={sidebarOrder?.branches}
+            onOrderChange={(ids) => handleOrderChange('branches', ids)}
+          />
+        )}
+        {activeApp === 'canvas' && (
+          <SidebarCanvases
+            onCreateCanvas={onCreateCanvas}
+            savedOrder={sidebarOrder?.canvases}
+            onOrderChange={(ids) => handleOrderChange('canvases', ids)}
+          />
+        )}
+        {activeApp === 'track' && (
+          <SidebarTracks
+            onCreateTrack={onCreateTrack}
+            savedOrder={sidebarOrder?.tracks}
+            onOrderChange={(ids) => handleOrderChange('tracks', ids)}
+          />
         )}
       </div>
 
