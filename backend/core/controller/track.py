@@ -15,6 +15,7 @@ from core.model import branch as branch_model
 from core.model import task as task_model
 from core.model import task_dependency as dep_model
 from library.file_validator import validate_image_magic_bytes
+from library.icon_storage import delete_image_icon_file
 from library.svg_sanitizer import sanitize_svg
 
 ICON_UPLOAD_DIR = os.path.join(
@@ -110,6 +111,15 @@ async def update(track_id: int, body, request: Request, db: AsyncSession):
     fields = body.model_dump(exclude_unset=True)
     if not fields:
         return {'status': True}
+
+    # icon이 image:에서 떠나면 디스크 정리
+    if 'icon' in fields:
+        current = await track_model.find_by_id(track_id, db)
+        if current:
+            old_icon = current.get('icon') or ''
+            if old_icon != (fields.get('icon') or ''):
+                delete_image_icon_file(old_icon, ICON_UPLOAD_DIR)
+
     await track_model.update(track_id, fields, db)
     return {'status': True}
 
@@ -142,17 +152,7 @@ async def upload_icon(track_id: int, file: UploadFile, request: Request, db: Asy
         content = sanitized
 
     os.makedirs(ICON_UPLOAD_DIR, exist_ok=True)
-
-    current = track.get('icon') or ''
-    if current.startswith('image:'):
-        rel = current[len('image:'):].replace('/api/uploads/', 'uploads/').lstrip('/')
-        old_path = os.path.normpath(os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-            rel
-        ))
-        uploads_base = os.path.normpath(ICON_UPLOAD_DIR)
-        if old_path.startswith(uploads_base) and os.path.exists(old_path):
-            os.remove(old_path)
+    delete_image_icon_file(track.get('icon'), ICON_UPLOAD_DIR)
 
     filename = f"{track_id}_{uuid.uuid4().hex[:8]}{ext}"
     filepath = os.path.join(ICON_UPLOAD_DIR, filename)

@@ -10,6 +10,7 @@ from core.model import branch_member as member_model
 from core.model import task_type_config as type_model
 from core.model import workflow_status as ws_model
 from library.file_validator import validate_image_magic_bytes
+from library.icon_storage import delete_image_icon_file
 from library.svg_sanitizer import sanitize_svg
 
 ICON_UPLOAD_DIR = os.path.join(
@@ -130,17 +131,8 @@ async def upload_icon(branch_id: int, file: UploadFile, request: Request, db: As
 
     os.makedirs(ICON_UPLOAD_DIR, exist_ok=True)
 
-    # 기존 image: 아이콘이 있으면 디스크에서 삭제 (path traversal 방어)
-    current = branch.get('icon') or ''
-    if current.startswith('image:'):
-        rel = current[len('image:'):].replace('/api/uploads/', 'uploads/').lstrip('/')
-        old_path = os.path.normpath(os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-            rel
-        ))
-        uploads_base = os.path.normpath(ICON_UPLOAD_DIR)
-        if old_path.startswith(uploads_base) and os.path.exists(old_path):
-            os.remove(old_path)
+    # 기존 image: 아이콘이 있으면 디스크에서 삭제
+    delete_image_icon_file(branch.get('icon'), ICON_UPLOAD_DIR)
 
     filename = f"{branch_id}_{uuid.uuid4().hex[:8]}{ext}"
     filepath = os.path.join(ICON_UPLOAD_DIR, filename)
@@ -163,12 +155,18 @@ async def update(branch_id: int, body, request: Request, db: AsyncSession):
     if not fields:
         return {'status': True}
 
-    # key 변경 시 중복 체크
-    if 'key' in fields:
-        branch = await branch_model.find_by_id(branch_id, db)
-        if branch and branch['key'] != fields['key']:
-            if await branch_model.find_by_key(fields['key'], db):
-                return {'status': False, 'message': 'KEY_ALREADY_EXISTS'}
+    # key 변경 시 중복 체크 + icon이 image:에서 떠나면 디스크 정리
+    needs_current = 'key' in fields or 'icon' in fields
+    current = await branch_model.find_by_id(branch_id, db) if needs_current else None
+
+    if 'key' in fields and current and current['key'] != fields['key']:
+        if await branch_model.find_by_key(fields['key'], db):
+            return {'status': False, 'message': 'KEY_ALREADY_EXISTS'}
+
+    if 'icon' in fields and current:
+        old_icon = current.get('icon') or ''
+        if old_icon != (fields.get('icon') or ''):
+            delete_image_icon_file(old_icon, ICON_UPLOAD_DIR)
 
     await branch_model.update(branch_id, fields, db)
     return {'status': True}

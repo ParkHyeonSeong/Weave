@@ -8,6 +8,7 @@ from core.model import canvas as canvas_model
 from core.model import canvas_member as member_model
 from core.model import canvas_page as page_model
 from library.file_validator import validate_image_magic_bytes
+from library.icon_storage import delete_image_icon_file
 from library.svg_sanitizer import sanitize_svg
 
 ICON_UPLOAD_DIR = os.path.join(
@@ -128,17 +129,7 @@ async def upload_icon(canvas_id: int, file: UploadFile, request: Request, db: As
         content = sanitized
 
     os.makedirs(ICON_UPLOAD_DIR, exist_ok=True)
-
-    current = canvas.get('icon') or ''
-    if current.startswith('image:'):
-        rel = current[len('image:'):].replace('/api/uploads/', 'uploads/').lstrip('/')
-        old_path = os.path.normpath(os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-            rel
-        ))
-        uploads_base = os.path.normpath(ICON_UPLOAD_DIR)
-        if old_path.startswith(uploads_base) and os.path.exists(old_path):
-            os.remove(old_path)
+    delete_image_icon_file(canvas.get('icon'), ICON_UPLOAD_DIR)
 
     filename = f"{canvas_id}_{uuid.uuid4().hex[:8]}{ext}"
     filepath = os.path.join(ICON_UPLOAD_DIR, filename)
@@ -161,12 +152,18 @@ async def update(canvas_id: int, body, request: Request, db: AsyncSession):
     if not fields:
         return {'status': True}
 
-    # key 변경 시 중복 체크
-    if 'key' in fields:
-        canvas = await canvas_model.find_by_id(canvas_id, db)
-        if canvas and canvas['key'] != fields['key']:
-            if await canvas_model.find_by_key(fields['key'], db):
-                return {'status': False, 'message': 'KEY_ALREADY_EXISTS'}
+    # key 변경 시 중복 체크 + icon이 image:에서 떠나면 디스크 정리
+    needs_current = 'key' in fields or 'icon' in fields
+    current = await canvas_model.find_by_id(canvas_id, db) if needs_current else None
+
+    if 'key' in fields and current and current['key'] != fields['key']:
+        if await canvas_model.find_by_key(fields['key'], db):
+            return {'status': False, 'message': 'KEY_ALREADY_EXISTS'}
+
+    if 'icon' in fields and current:
+        old_icon = current.get('icon') or ''
+        if old_icon != (fields.get('icon') or ''):
+            delete_image_icon_file(old_icon, ICON_UPLOAD_DIR)
 
     await canvas_model.update(canvas_id, fields, db)
     return {'status': True}

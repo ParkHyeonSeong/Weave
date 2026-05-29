@@ -20,6 +20,11 @@ from typing import Optional
 import defusedxml.ElementTree as defused_ET
 import xml.etree.ElementTree as ET  # 직렬화 전용 (parse는 defusedxml 사용)
 
+# Default namespace 등록 — tostring()이 'ns0:' 같은 자동 prefix 대신 깔끔한
+# <svg xmlns="…"> 형태로 직렬화하도록 함.
+ET.register_namespace('', 'http://www.w3.org/2000/svg')
+ET.register_namespace('xlink', 'http://www.w3.org/1999/xlink')
+
 
 _FORBIDDEN_TAGS = {'script', 'foreignobject'}
 _DANGEROUS_URI_RE = re.compile(r'^\s*(javascript|vbscript)\s*:', re.IGNORECASE)
