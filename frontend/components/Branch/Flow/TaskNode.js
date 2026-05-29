@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
+import { userInitial, userColor } from '@/library/userAvatar';
 
 function TaskNode({ data }) {
   const { displayId, title, statusColor, statusLabel, taskType, dueDate, assignee } = data;
@@ -24,10 +25,14 @@ function TaskNode({ data }) {
               </span>
             )}
             {assignee && (
-              <span className="TaskNode__Avatar" title={assignee.name}>
+              <span
+                className="TaskNode__Avatar"
+                title={assignee.username}
+                style={{ background: userColor(assignee.user_id) }}
+              >
                 {assignee.avatar_url
                   ? <img src={assignee.avatar_url} alt="" className="TaskNode__AvatarImg" />
-                  : assignee.name?.charAt(0).toUpperCase()}
+                  : userInitial(assignee.username)}
               </span>
             )}
           </div>

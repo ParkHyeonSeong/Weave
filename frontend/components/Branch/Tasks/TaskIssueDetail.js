@@ -4,6 +4,7 @@ import { ArrowLeft, CircleDot, MoreHorizontal, Pencil, Trash2, XCircle, CheckCir
 import { axios } from '@/library/_axios';
 import { ensureHtml } from '@/library/ensureHtml';
 import { sanitizeHtml } from '@/library/sanitize';
+import { userInitial, userColor } from '@/library/userAvatar';
 import IssueEditor from './IssueEditor';
 import ConfirmModal from '@/components/modal/ConfirmModal';
 
@@ -192,7 +193,6 @@ export default function TaskIssueDetail() {
   };
 
   const isEdited = (item) => item.updated_at && item.updated_at !== item.created_at;
-  const getInitial = (name) => (name || '?')[0].toUpperCase();
 
   return (
     <div className="IssueDetail">
@@ -259,8 +259,12 @@ export default function TaskIssueDetail() {
       <div className="IssueDetail__Timeline">
         {/* 본문 카드 (OP) */}
         <div className="IssueDetail__TimelineItem">
-          <div className="IssueDetail__Avatar" title={issue.author_name}>
-            {getInitial(issue.author_name)}
+          <div
+            className="IssueDetail__Avatar"
+            title={issue.author_name}
+            style={{ background: userColor(issue.created_by) }}
+          >
+            {userInitial(issue.author_name)}
           </div>
           <div className={`IssueDetail__Card IssueDetail__Card--op`}>
             <div className="IssueDetail__CardHeader">
@@ -315,8 +319,12 @@ export default function TaskIssueDetail() {
 
           return (
             <div key={comment.comment_id} className="IssueDetail__TimelineItem">
-              <div className="IssueDetail__Avatar" title={comment.author_name}>
-                {getInitial(comment.author_name)}
+              <div
+                className="IssueDetail__Avatar"
+                title={comment.author_name}
+                style={{ background: userColor(comment.author_id) }}
+              >
+                {userInitial(comment.author_name)}
               </div>
               <div className="IssueDetail__Card">
                 <div className="IssueDetail__CardHeader">
@@ -364,8 +372,12 @@ export default function TaskIssueDetail() {
 
       {/* 상태 토글 + 댓글 입력 */}
       <div className="IssueDetail__ReplyArea">
-        <div className="IssueDetail__Avatar IssueDetail__Avatar--sm" title={myProfile.username}>
-          {getInitial(myProfile.username)}
+        <div
+          className="IssueDetail__Avatar IssueDetail__Avatar--sm"
+          title={myProfile.username}
+          style={{ background: userColor(myProfile.user_id) }}
+        >
+          {userInitial(myProfile.username)}
         </div>
         <div className="IssueDetail__ReplyForm">
           <IssueEditor

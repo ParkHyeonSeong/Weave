@@ -222,12 +222,12 @@
     width: 20px;
     height: 20px;
     border-radius: 50%;
-    background: $color-surface-hover;
+    background: transparent; // overridden per-user via inline style
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 10px;
-    color: $color-text;
+    color: #fff;
     font-weight: 600;
     overflow: hidden;
   }

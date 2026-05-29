@@ -208,8 +208,8 @@
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    background: $color-primary;
-    color: $color-text-inverse;
+    background: transparent; // overridden per-user via inline style
+    color: #fff;
     display: flex;
     align-items: center;
     justify-content: center;

@@ -234,8 +234,8 @@
     width: 24px;
     height: 24px;
     border-radius: 50%;
-    background: $color-primary;
-    color: $color-text-inverse;
+    background: transparent; // overridden per-user via inline style
+    color: #fff;
     font-size: 11px;
     font-weight: $font-weight-semibold;
     flex-shrink: 0;
