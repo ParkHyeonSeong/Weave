@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState, useEffect } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import EntityIcon from '@/components/common/EntityIcon';
 
 // 캘린더 유틸
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -232,7 +233,12 @@ export default function TrackTimeline({
                   className="TrackTimeline__LaneGroup"
                   style={{ top: y, height: GROUP_HEAD_HEIGHT, borderLeftColor: grp.branch.color }}
                 >
-                  <span className="TrackTimeline__LaneGroupDot" style={{ background: grp.branch.color }} />
+                  <EntityIcon
+                    icon={grp.branch.icon}
+                    color={grp.branch.color}
+                    size={14}
+                    entityType="branch"
+                  />
                   <span className="TrackTimeline__LaneGroupName">{grp.branch.name}</span>
                   <span className="TrackTimeline__LaneGroupCount">{grp.items.length}</span>
                 </div>

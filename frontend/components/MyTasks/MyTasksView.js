@@ -4,6 +4,7 @@ import { CheckSquare, Inbox } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import CustomSelect from '@/components/common/CustomSelect';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
+import EntityIcon from '@/components/common/EntityIcon';
 
 const STATUS_CATEGORY_OPTIONS = [
   { value: 'todo', label: 'To Do' },
@@ -207,7 +208,12 @@ function MyTasksRow({ task, onRefresh }) {
           router.push(`/branch/${task.branch_id}`);
         }}
       >
-        <span className="MyTasksRow__BranchDot" style={{ backgroundColor: task.branch_color || '#5E6AD2' }} />
+        <EntityIcon
+          icon={task.branch_icon}
+          color={task.branch_color}
+          size={14}
+          entityType="branch"
+        />
         {task.branch_key}
       </button>
 

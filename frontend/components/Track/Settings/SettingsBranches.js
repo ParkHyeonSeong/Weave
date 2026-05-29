@@ -5,6 +5,7 @@ import { Pencil, X, RotateCcw, Info } from 'lucide-react';
 import ConfirmModal from '@/components/modal/ConfirmModal';
 import { showToast } from '@/components/Layout/Toast';
 import { COLOR_PRESETS, HEX_RE, DEFAULT_TRACK_COLOR } from './constants';
+import EntityIcon from '@/components/common/EntityIcon';
 
 export default function SettingsBranches({ trackId, isEditor }) {
   const router = useRouter();
@@ -124,9 +125,11 @@ export default function SettingsBranches({ trackId, isEditor }) {
             return (
               <li key={b.branch_id} className="SettingsBranches__Card">
                 <div className="SettingsBranches__CardMain">
-                  <span
-                    className="SettingsBranches__Dot"
-                    style={{ background: b.color }}
+                  <EntityIcon
+                    icon={b.icon}
+                    color={b.color_override || b.branch_real_color || b.color}
+                    size={14}
+                    entityType="branch"
                   />
                   <div className="SettingsBranches__Names">
                     <span className="SettingsBranches__Name">{b.display_name}</span>

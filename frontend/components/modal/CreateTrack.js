@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, Workflow, Globe, Lock, Check } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import EntityIcon from '@/components/common/EntityIcon';
 
 const COLOR_PRESETS = [
   '#5E6AD2', '#10B981', '#F59E0B', '#9333EA',
@@ -189,7 +190,12 @@ export default function CreateTrack({ onClose, onCreated }) {
                       <span className="CreateTrack__BranchMark">
                         {checked && <Check size={11} />}
                       </span>
-                      <span className="CreateTrack__BranchDot" />
+                      <EntityIcon
+                        icon={b.icon}
+                        color={b.color}
+                        size={14}
+                        entityType="branch"
+                      />
                       <span className="CreateTrack__BranchName">{b.branch_name}</span>
                       <span className="CreateTrack__BranchKey">{b.key}</span>
                     </button>

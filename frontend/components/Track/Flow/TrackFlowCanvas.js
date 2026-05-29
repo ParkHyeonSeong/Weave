@@ -47,6 +47,7 @@ function buildNodes(items, branchById, workflowStatuses, onItemDelete) {
         branchKey: branch.key || '?',
         branchName: branch.name || '?',
         branchColor: branch.color || '#9CA3AF',
+        branchIcon: branch.icon || null,
         assignees: it.assignees || [],
         dueDate: it.due_date,
         otherTracksCount: (it.other_tracks || []).length,

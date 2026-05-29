@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { CalendarDays, Layers, X } from 'lucide-react';
+import EntityIcon from '@/components/common/EntityIcon';
 
 function formatDue(date) {
   if (!date) return null;
@@ -13,7 +14,7 @@ function formatDue(date) {
 const CrossBranchTaskNode = memo(function CrossBranchTaskNode({ data, selected }) {
   const {
     displayId, title, status, statusLabel, statusColor,
-    priority, branchKey, branchName, branchColor,
+    priority, branchKey, branchName, branchColor, branchIcon,
     assignees, dueDate, otherTracksCount,
     itemId, onDelete,
   } = data;
@@ -42,7 +43,12 @@ const CrossBranchTaskNode = memo(function CrossBranchTaskNode({ data, selected }
 
       <div className="TrackNode__Header">
         <span className="TrackNode__BranchChip" style={{ background: `${branchColor}14`, color: branchColor }}>
-          <span className="TrackNode__BranchChipDot" style={{ background: branchColor }} />
+          <EntityIcon
+            icon={branchIcon}
+            color={branchColor}
+            size={14}
+            entityType="branch"
+          />
           {branchKey}
         </span>
         <span className="TrackNode__DisplayId">{displayId}</span>

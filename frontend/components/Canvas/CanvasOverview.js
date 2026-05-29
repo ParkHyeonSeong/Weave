@@ -6,6 +6,7 @@ import { axios } from '@/library/_axios';
 import useCollabProvider from '@/library/useCollabProvider';
 import { sanitizeHtml } from '@/library/sanitize';
 import PresenceBar from './PresenceBar';
+import EntityIcon from '@/components/common/EntityIcon';
 
 const CanvasCollabEditor = dynamic(() => import('./CanvasCollabEditor'), { ssr: false });
 
@@ -240,9 +241,11 @@ export default function CanvasOverview() {
     <div className="CanvasOverview">
       <div className="CanvasOverview__Header">
         <div className="CanvasOverview__TitleRow">
-          <span
-            className="CanvasOverview__Dot"
-            style={{ backgroundColor: canvas.color || '#16A34A' }}
+          <EntityIcon
+            icon={canvas.icon}
+            color={canvas.color}
+            size={24}
+            entityType="canvas"
           />
           <h2 className="CanvasOverview__Name">{canvas.canvas_name}</h2>
         </div>

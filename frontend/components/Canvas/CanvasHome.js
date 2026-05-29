@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import { Plus, Clock, Star, FileText, Search, FileEdit } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import EntityIcon from '@/components/common/EntityIcon';
 
 const getRelativeTime = (dateStr) => {
   const now = new Date();
@@ -169,9 +170,11 @@ export default function CanvasHome() {
                 onClick={() => router.push(`/canvas/${canvas.canvas_id}`)}
               >
                 <div className="CanvasHome__CardHeader">
-                  <span
-                    className="CanvasHome__CardDot"
-                    style={{ backgroundColor: canvas.color || '#16A34A' }}
+                  <EntityIcon
+                    icon={canvas.icon}
+                    color={canvas.color}
+                    size={20}
+                    entityType="canvas"
                   />
                   <span className="CanvasHome__CardName">{canvas.canvas_name}</span>
                 </div>

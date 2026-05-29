@@ -103,7 +103,8 @@ async def find_tree(track_id: int, user_id: int, db: AsyncSession):
     # 1. Track에 참여한 branch 목록 (사용자가 멤버인 것만)
     branches_result = await db.execute(text("""
         SELECT tb.branch_id, b.branch_name, b.key AS branch_key,
-               COALESCE(tb.color_override, b.color) AS branch_color
+               COALESCE(tb.color_override, b.color) AS branch_color,
+               b.icon AS branch_icon
         FROM track_branch tb
         INNER JOIN branch b ON tb.branch_id = b.branch_id
         INNER JOIN branch_member bm
@@ -188,6 +189,7 @@ async def find_tree(track_id: int, user_id: int, db: AsyncSession):
             'branch_name': b['branch_name'],
             'branch_key': b['branch_key'],
             'branch_color': b['branch_color'],
+            'branch_icon': b.get('branch_icon'),
             'sprints': b_sprints,
             'epics': b_epics,
         })

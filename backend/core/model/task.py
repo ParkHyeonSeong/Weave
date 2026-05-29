@@ -601,7 +601,7 @@ async def find_by_assignee(user_id: int, status: str, status_category: str, prio
         SELECT t.task_id, t.branch_id, t.display_number, t.title,
                t.task_type, t.status, t.priority,
                t.start_date, t.due_date, t.updated_at, t.created_at,
-               b.key AS branch_key, b.branch_name, b.color AS branch_color,
+               b.key AS branch_key, b.branch_name, b.color AS branch_color, b.icon AS branch_icon,
                ws.label AS status_label, ws.color AS status_color, ws.category AS status_category
         FROM task t
         INNER JOIN branch b ON t.branch_id = b.branch_id

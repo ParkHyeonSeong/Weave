@@ -68,7 +68,7 @@ async def find_by_track(track_id: int, user_id: int, db: AsyncSession):
             ti.color_override, ti.label_override,
             t.task_id, t.title, t.description, t.display_number,
             t.status, t.priority, t.start_date, t.due_date,
-            b.branch_id, b.branch_name, b.key AS branch_key, b.color AS branch_color,
+            b.branch_id, b.branch_name, b.key AS branch_key, b.color AS branch_color, b.icon AS branch_icon,
             ws.label AS status_label, ws.color AS status_color, ws.category AS status_category,
             CASE WHEN bm.user_id IS NULL THEN TRUE ELSE FALSE END AS restricted
         FROM track_item ti
@@ -109,6 +109,7 @@ async def find_by_track(track_id: int, user_id: int, db: AsyncSession):
                 'branch_id': r['branch_id'],
                 'branch_key': r['branch_key'],
                 'branch_color': r['branch_color'],
+                'branch_icon': r.get('branch_icon'),
                 'branch_name': r['branch_name'],
                 'display_id': f"{r['branch_key']}-{r['display_number']}",
                 'title': r['label_override'] or r['title'],

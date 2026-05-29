@@ -445,12 +445,6 @@
       border-color: var(--branch-color);
     }
   }
-  &__BranchDot {
-    width: 8px; height: 8px;
-    border-radius: 50%;
-    background: var(--branch-color);
-    flex-shrink: 0;
-  }
   &__BranchName {
     flex: 1;
     font-size: 13px;

@@ -116,13 +116,6 @@
     margin-bottom: $space-1;
   }
 
-  &__CardDot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-
   &__CardName {
     font-size: $font-size-base;
     font-weight: $font-weight-semibold;

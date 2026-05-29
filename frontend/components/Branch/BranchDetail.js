@@ -11,6 +11,7 @@ import EpicDetailPanel from './Epics/EpicDetailPanel';
 import EpicFlow from './Flow/EpicFlow';
 import BranchSettings from './Settings/BranchSettings';
 import BranchSchedule from './Schedule/BranchSchedule';
+import EntityIcon from '@/components/common/EntityIcon';
 
 const TABS = [
   { key: 'epics', label: 'Epics', icon: Zap },
@@ -147,9 +148,11 @@ export default function BranchDetail() {
       <div className={`BranchDetail__Main ${activeTab === 'flow' ? 'BranchDetail__Main--flow' : ''}`}>
         {/* 헤더 */}
         <div className="BranchDetail__Header">
-          <span
-            className="BranchDetail__Icon"
-            style={{ backgroundColor: branch.color || '#5E6AD2' }}
+          <EntityIcon
+            icon={branch.icon}
+            color={branch.color}
+            size={24}
+            entityType="branch"
           />
           <h1 className="BranchDetail__Name">{branch.branch_name}</h1>
           <span className="BranchDetail__Key">{branch.key}</span>

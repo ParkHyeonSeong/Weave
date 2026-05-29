@@ -147,13 +147,14 @@ export default function TrackDetail() {
     [items, selectedItemId]
   );
 
-  // participating branches를 한 형태(branch_id/name/key/color)로 정규화 — 여러 곳에서 재사용
+  // participating branches를 한 형태(branch_id/name/key/color/icon)로 정규화 — 여러 곳에서 재사용
   const normalizedBranches = useMemo(
     () => participatingBranches.map((b) => ({
       branch_id: b.branch_id,
       name: b.display_name,
       key: b.branch_key,
       color: b.color,
+      icon: b.icon,
     })),
     [participatingBranches]
   );
@@ -170,6 +171,7 @@ export default function TrackDetail() {
         name: it.branch_name || 'Unknown',
         key: it.branch_key || '?',
         color: it.branch_color || '#9CA3AF',
+        icon: it.branch_icon || null,
       };
     });
     return map;
@@ -401,6 +403,7 @@ export default function TrackDetail() {
           track_name: track.track_name,
           description: track.description,
           color: track.color,
+          icon: track.icon,
         }}
         members={membersForHeader}
         viewMode={viewMode}

@@ -4,6 +4,7 @@ import { Plus, Clock, Search, FileText, GitBranch } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import TaskSummary from '@/components/Home/DashboardWidgets/TaskSummary';
 import ActiveSprints from '@/components/Home/DashboardWidgets/ActiveSprints';
+import EntityIcon from '@/components/common/EntityIcon';
 
 const getRelativeTime = (dateStr) => {
   const now = new Date();
@@ -140,9 +141,11 @@ export default function BranchHome() {
                 onClick={() => router.push(`/branch/${branch.branch_id}`)}
               >
                 <div className="BranchHome__CardHeader">
-                  <span
-                    className="BranchHome__CardDot"
-                    style={{ backgroundColor: branch.color || '#5E6AD2' }}
+                  <EntityIcon
+                    icon={branch.icon}
+                    color={branch.color}
+                    size={20}
+                    entityType="branch"
                   />
                   <span className="BranchHome__CardName">{branch.branch_name}</span>
                   <span className="BranchHome__CardKey">{branch.key}</span>

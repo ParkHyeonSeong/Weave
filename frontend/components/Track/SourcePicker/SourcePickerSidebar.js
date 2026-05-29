@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { Search, ChevronDown, ChevronRight, GripVertical, Plus, Filter, Calendar, Zap, X } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import EntityIcon from '@/components/common/EntityIcon';
 
 const PICKER_DATA_MIME = 'application/x-track-source';
 const SEARCH_DEBOUNCE_MS = 200;
@@ -216,9 +217,11 @@ export default function SourcePickerSidebar({
                 <span className="SourcePicker__Chevron">
                   {branchOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                 </span>
-                <span
-                  className="SourcePicker__BranchDot"
-                  style={{ background: branch.branch_color, boxShadow: `0 0 0 3px ${branch.branch_color}22` }}
+                <EntityIcon
+                  icon={branch.branch_icon}
+                  color={branch.branch_color}
+                  size={14}
+                  entityType="branch"
                 />
                 <span className="SourcePicker__BranchName">{branch.branch_name}</span>
                 <span className="SourcePicker__BranchKey">{branch.branch_key}</span>

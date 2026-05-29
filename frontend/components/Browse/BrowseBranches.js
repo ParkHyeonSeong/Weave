@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { axios } from '@/library/_axios';
 import { Search, Users, Globe, GitBranch, FileText } from 'lucide-react';
+import EntityIcon from '@/components/common/EntityIcon';
 
 export default function BrowseBranches() {
   const router = useRouter();
@@ -106,9 +107,11 @@ export default function BrowseBranches() {
               <div key={branch.branch_id} className="BrowseBranches__Card">
                 <div className="BrowseBranches__CardMain">
                   <div className="BrowseBranches__CardHeader">
-                    <span
-                      className="BrowseBranches__CardDot"
-                      style={{ backgroundColor: branch.color || '#5E6AD2' }}
+                    <EntityIcon
+                      icon={branch.icon}
+                      color={branch.color}
+                      size={14}
+                      entityType="branch"
                     />
                     <span className="BrowseBranches__CardName">{branch.branch_name}</span>
                     <span className="BrowseBranches__CardKey">{branch.key}</span>
@@ -152,9 +155,11 @@ export default function BrowseBranches() {
               <div key={canvas.canvas_id} className="BrowseBranches__Card">
                 <div className="BrowseBranches__CardMain">
                   <div className="BrowseBranches__CardHeader">
-                    <span
-                      className="BrowseBranches__CardDot"
-                      style={{ backgroundColor: canvas.color || '#5E6AD2' }}
+                    <EntityIcon
+                      icon={canvas.icon}
+                      color={canvas.color}
+                      size={14}
+                      entityType="canvas"
                     />
                     <span className="BrowseBranches__CardName">{canvas.canvas_name}</span>
                     <span className="BrowseBranches__CardKey">{canvas.key}</span>

@@ -5,6 +5,7 @@ import { axios } from '@/library/_axios';
 import SettingsGeneral from './SettingsGeneral';
 import SettingsMembers from './SettingsMembers';
 import SettingsBranches from './SettingsBranches';
+import EntityIcon from '@/components/common/EntityIcon';
 
 const SUB_TABS = [
   { key: 'general', label: 'General', icon: SettingsIcon },
@@ -57,9 +58,11 @@ export default function TrackSettings() {
           <ArrowLeft size={14} /> Back to Track
         </button>
         <div className="TrackSettings__HeaderTitle">
-          <span
-            className="TrackSettings__Dot"
-            style={{ backgroundColor: track.color || '#5E6AD2' }}
+          <EntityIcon
+            icon={track.icon}
+            color={track.color}
+            size={18}
+            entityType="track"
           />
           <h1 className="TrackSettings__Name">{track.track_name}</h1>
         </div>

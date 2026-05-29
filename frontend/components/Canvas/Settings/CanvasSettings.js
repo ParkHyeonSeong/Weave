@@ -4,6 +4,7 @@ import { Settings, Users } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import SettingsGeneral from './SettingsGeneral';
 import SettingsMembers from './SettingsMembers';
+import EntityIcon from '@/components/common/EntityIcon';
 
 const SUB_TABS = [
   { key: 'general', label: 'General', icon: Settings },
@@ -38,9 +39,11 @@ export default function CanvasSettings() {
   return (
     <div className="CanvasSettings">
       <div className="CanvasSettings__Header">
-        <span
-          className="CanvasSettings__Dot"
-          style={{ backgroundColor: canvas.color || '#16A34A' }}
+        <EntityIcon
+          icon={canvas.icon}
+          color={canvas.color}
+          size={18}
+          entityType="canvas"
         />
         <h1 className="CanvasSettings__Name">{canvas.canvas_name}</h1>
       </div>

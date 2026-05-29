@@ -1,4 +1,5 @@
 import { Workflow, Calendar, GitBranch, Settings, Share2, Star } from 'lucide-react';
+import EntityIcon from '@/components/common/EntityIcon';
 
 const VIEW_MODES = [
   { key: 'flow', label: 'Flow', icon: Workflow },
@@ -16,7 +17,12 @@ export default function TrackHeader({
       <div className="TrackHeader__Top">
         <div className="TrackHeader__TitleBlock">
           <div className="TrackHeader__Eyebrow">
-            <span className="TrackHeader__EyebrowDot" style={{ background: track.color }} />
+            <EntityIcon
+              icon={track.icon}
+              color={track.color}
+              size={24}
+              entityType="track"
+            />
             <span className="TrackHeader__EyebrowText">TRACK · {String(track.track_id).padStart(3, '0')}</span>
           </div>
           <h1 className="TrackHeader__Title">{track.track_name}</h1>
@@ -33,7 +39,12 @@ export default function TrackHeader({
                     style={{ color: b.color, background: `${b.color}14`, borderColor: `${b.color}33` }}
                     title={b.name}
                   >
-                    <span className="TrackHeader__ParticipatingDot" style={{ background: b.color }} />
+                    <EntityIcon
+                      icon={b.icon}
+                      color={b.color}
+                      size={14}
+                      entityType="branch"
+                    />
                     {b.name}
                   </span>
                 ))}

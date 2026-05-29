@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, AlertCircle, Lock, CalendarDays } from 'lucide-react';
+import EntityIcon from '@/components/common/EntityIcon';
 
 function formatDue(date) {
   if (!date) return null;
@@ -86,6 +87,12 @@ export default function TrackTree({
                   {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                 </span>
                 <span className="TrackTree__GroupColorBar" />
+                <EntityIcon
+                  icon={g.branch.icon}
+                  color={g.branch.color}
+                  size={14}
+                  entityType="branch"
+                />
                 <span className="TrackTree__GroupName">{g.branch.name}</span>
                 <span className="TrackTree__GroupKey">{g.branch.key}</span>
                 <span className="TrackTree__GroupCount">{g.items.length}</span>
