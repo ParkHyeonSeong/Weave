@@ -115,6 +115,14 @@ export default function TrackDetail() {
     fetchTrack();
   }, [fetchTrack]);
 
+  // track:updated 이벤트 수신 (헤더 appearance/일반 설정 변경 반영)
+  useEffect(() => {
+    if (!trackId) return;
+    const handler = () => fetchTrack();
+    window.addEventListener('track:updated', handler);
+    return () => window.removeEventListener('track:updated', handler);
+  }, [trackId, fetchTrack]);
+
   // trackId가 결정되면 마지막으로 본 view를 localStorage에서 복원
   useEffect(() => {
     if (!trackId) return;
@@ -404,6 +412,7 @@ export default function TrackDetail() {
           description: track.description,
           color: track.color,
           icon: track.icon,
+          my_role: track.my_role,
         }}
         members={membersForHeader}
         viewMode={viewMode}

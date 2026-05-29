@@ -7,6 +7,7 @@ import useCollabProvider from '@/library/useCollabProvider';
 import { sanitizeHtml } from '@/library/sanitize';
 import PresenceBar from './PresenceBar';
 import EntityIcon from '@/components/common/EntityIcon';
+import EntityAppearancePopover from '@/components/common/EntityAppearancePopover';
 
 const CanvasCollabEditor = dynamic(() => import('./CanvasCollabEditor'), { ssr: false });
 
@@ -21,6 +22,11 @@ export default function CanvasOverview() {
   const htmlRef = useRef('');
   const contentTimerRef = useRef(null);
   const contentRef = useRef(null);
+
+  // Header appearance popover
+  const iconRef = useRef(null);
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const isAdmin = canvas?.my_role === 'admin';
 
   useEffect(() => {
     try {
@@ -57,6 +63,14 @@ export default function CanvasOverview() {
     fetchCanvas();
     fetchOverview();
   }, [canvasId, fetchOverview]);
+
+  // canvas:created 이벤트 수신 (헤더 appearance/일반 설정 변경 반영)
+  useEffect(() => {
+    if (!canvasId) return;
+    const handler = () => fetchCanvas();
+    window.addEventListener('canvas:created', handler);
+    return () => window.removeEventListener('canvas:created', handler);
+  }, [canvasId]);
 
   // Edit 모드일 때만 WebSocket 연결
   const { ydoc, provider, status, connectedUsers } = useCollabProvider(
@@ -241,11 +255,24 @@ export default function CanvasOverview() {
     <div className="CanvasOverview">
       <div className="CanvasOverview__Header">
         <div className="CanvasOverview__TitleRow">
-          <EntityIcon
-            icon={canvas.icon}
-            color={canvas.color}
-            size={24}
+          <span ref={iconRef} style={{ display: 'inline-flex' }}>
+            <EntityIcon
+              icon={canvas.icon}
+              color={canvas.color}
+              size={24}
+              entityType="canvas"
+              onClick={isAdmin ? () => setPopoverOpen(true) : undefined}
+              title={isAdmin ? 'Click to edit appearance' : undefined}
+            />
+          </span>
+          <EntityAppearancePopover
+            anchorRef={iconRef}
+            isOpen={popoverOpen}
+            onClose={() => setPopoverOpen(false)}
             entityType="canvas"
+            entityId={canvas.canvas_id}
+            initialIcon={canvas.icon}
+            initialColor={canvas.color}
           />
           <h2 className="CanvasOverview__Name">{canvas.canvas_name}</h2>
         </div>

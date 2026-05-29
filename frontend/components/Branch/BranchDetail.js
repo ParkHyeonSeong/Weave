@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { axios } from '@/library/_axios';
 import { Zap, ListTodo, Columns3, Workflow, CalendarDays, Archive, Settings } from 'lucide-react';
@@ -12,6 +12,7 @@ import EpicFlow from './Flow/EpicFlow';
 import BranchSettings from './Settings/BranchSettings';
 import BranchSchedule from './Schedule/BranchSchedule';
 import EntityIcon from '@/components/common/EntityIcon';
+import EntityAppearancePopover from '@/components/common/EntityAppearancePopover';
 
 const TABS = [
   { key: 'epics', label: 'Epics', icon: Zap },
@@ -42,6 +43,11 @@ export default function BranchDetail() {
   const [selectedTask, setSelectedTask] = useState(null);
   const [selectedEpic, setSelectedEpic] = useState(null);
 
+  // Header appearance popover
+  const iconRef = useRef(null);
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const isAdmin = branch?.my_role === 'admin';
+
   useEffect(() => {
     if (!id) return;
     fetchBranch();
@@ -61,6 +67,14 @@ export default function BranchDetail() {
     const handler = () => fetchTaskTypes();
     window.addEventListener('tasktype:updated', handler);
     return () => window.removeEventListener('tasktype:updated', handler);
+  }, [id]);
+
+  // branch:created 이벤트 수신 (헤더 appearance/일반 설정 변경 반영)
+  useEffect(() => {
+    if (!id) return;
+    const handler = () => fetchBranch();
+    window.addEventListener('branch:created', handler);
+    return () => window.removeEventListener('branch:created', handler);
   }, [id]);
 
   // URL query tab 동기화
@@ -148,11 +162,24 @@ export default function BranchDetail() {
       <div className={`BranchDetail__Main ${activeTab === 'flow' ? 'BranchDetail__Main--flow' : ''}`}>
         {/* 헤더 */}
         <div className="BranchDetail__Header">
-          <EntityIcon
-            icon={branch.icon}
-            color={branch.color}
-            size={24}
+          <span ref={iconRef} style={{ display: 'inline-flex' }}>
+            <EntityIcon
+              icon={branch.icon}
+              color={branch.color}
+              size={24}
+              entityType="branch"
+              onClick={isAdmin ? () => setPopoverOpen(true) : undefined}
+              title={isAdmin ? 'Click to edit appearance' : undefined}
+            />
+          </span>
+          <EntityAppearancePopover
+            anchorRef={iconRef}
+            isOpen={popoverOpen}
+            onClose={() => setPopoverOpen(false)}
             entityType="branch"
+            entityId={branch.branch_id}
+            initialIcon={branch.icon}
+            initialColor={branch.color}
           />
           <h1 className="BranchDetail__Name">{branch.branch_name}</h1>
           <span className="BranchDetail__Key">{branch.key}</span>

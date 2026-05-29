@@ -1,5 +1,7 @@
+import { useRef, useState } from 'react';
 import { Workflow, Calendar, GitBranch, Settings, Share2, Star } from 'lucide-react';
 import EntityIcon from '@/components/common/EntityIcon';
+import EntityAppearancePopover from '@/components/common/EntityAppearancePopover';
 
 const VIEW_MODES = [
   { key: 'flow', label: 'Flow', icon: Workflow },
@@ -12,16 +14,33 @@ export default function TrackHeader({
   distribution, totalItems, totalLinks,
   participatingBranches, onOpenSettings,
 }) {
+  const iconRef = useRef(null);
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const canEditAppearance = track.my_role === 'owner' || track.my_role === 'editor';
+
   return (
     <header className="TrackHeader">
       <div className="TrackHeader__Top">
         <div className="TrackHeader__TitleBlock">
           <div className="TrackHeader__Eyebrow">
-            <EntityIcon
-              icon={track.icon}
-              color={track.color}
-              size={24}
+            <span ref={iconRef} style={{ display: 'inline-flex' }}>
+              <EntityIcon
+                icon={track.icon}
+                color={track.color}
+                size={24}
+                entityType="track"
+                onClick={canEditAppearance ? () => setPopoverOpen(true) : undefined}
+                title={canEditAppearance ? 'Click to edit appearance' : undefined}
+              />
+            </span>
+            <EntityAppearancePopover
+              anchorRef={iconRef}
+              isOpen={popoverOpen}
+              onClose={() => setPopoverOpen(false)}
               entityType="track"
+              entityId={track.track_id}
+              initialIcon={track.icon}
+              initialColor={track.color}
             />
             <span className="TrackHeader__EyebrowText">TRACK · {String(track.track_id).padStart(3, '0')}</span>
           </div>

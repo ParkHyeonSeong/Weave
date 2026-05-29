@@ -281,3 +281,61 @@
     border-radius: $radius-sm;
   }
 }
+
+.EntityAppearancePopover {
+  width: 320px;
+  background: $color-bg;
+  border: 1px solid $color-border;
+  border-radius: $radius-md;
+  box-shadow: $shadow-lg;
+  padding: $space-3;
+  display: flex;
+  flex-direction: column;
+  gap: $space-3;
+
+  &__Row {
+    display: flex;
+    align-items: center;
+    gap: $space-3;
+  }
+
+  &__IconBtn {
+    flex: 1;
+    padding: $space-2 $space-3;
+    border: 1px solid $color-border;
+    background: $color-bg;
+    border-radius: $radius-sm;
+    cursor: pointer;
+    font-size: $font-size-sm;
+    color: $color-text;
+    text-align: left;
+    &:hover { background: $color-surface-hover; }
+  }
+
+  &__Actions {
+    display: flex;
+    gap: $space-2;
+    justify-content: flex-end;
+    border-top: 1px solid $color-border;
+    padding-top: $space-3;
+
+    button {
+      padding: $space-2 $space-3;
+      border: 1px solid $color-border;
+      background: transparent;
+      border-radius: $radius-sm;
+      cursor: pointer;
+      font-size: $font-size-sm;
+      color: $color-text;
+      &:hover:not(:disabled) { background: $color-surface-hover; }
+      &:disabled { opacity: .5; cursor: not-allowed; }
+    }
+
+    .EntityAppearancePopover__BtnPrimary {
+      background: $color-primary;
+      border-color: $color-primary;
+      color: $color-text-inverse;
+      &:hover:not(:disabled) { background: $color-primary-hover; }
+    }
+  }
+}
