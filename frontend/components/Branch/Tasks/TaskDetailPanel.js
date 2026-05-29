@@ -8,6 +8,7 @@ import DatePicker from '@/components/common/DatePicker';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import useTaskDetail from '@/hooks/useTaskDetail';
 import { sanitizeHtml } from '@/library/sanitize';
+import { userInitial, userColor } from '@/library/userAvatar';
 import TaskIssueSection from './TaskIssueSection';
 import TaskDependencySection from './TaskDependencySection';
 import TaskPageLinkSection from './TaskPageLinkSection';
@@ -322,6 +323,27 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
                 value={task.due_date || null}
                 onChange={(val) => updateField('due_date', val)}
               />
+            </DetailRow>
+
+            {/* 생성자 */}
+            <DetailRow label="Created by">
+              {task.creator ? (
+                <span className="TaskDetailPanel__Creator">
+                  {task.creator.avatar_url ? (
+                    <img className="TaskDetailPanel__CreatorAvatar" src={task.creator.avatar_url} alt="" />
+                  ) : (
+                    <span
+                      className="TaskDetailPanel__CreatorAvatarPlaceholder"
+                      style={{ background: userColor(task.creator.user_id) }}
+                    >
+                      {userInitial(task.creator.username)}
+                    </span>
+                  )}
+                  <span className="TaskDetailPanel__CreatorName">{task.creator.username || '—'}</span>
+                </span>
+              ) : (
+                <span className="TaskDetailPanel__CreatorEmpty">—</span>
+              )}
             </DetailRow>
           </div>
         </div>

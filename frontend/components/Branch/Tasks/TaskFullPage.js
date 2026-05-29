@@ -9,6 +9,7 @@ import DatePicker from '@/components/common/DatePicker';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import useTaskDetail from '@/hooks/useTaskDetail';
 import { sanitizeHtml } from '@/library/sanitize';
+import { userInitial, userColor } from '@/library/userAvatar';
 import TaskIssueSection from './TaskIssueSection';
 import TaskCommentSection from './TaskCommentSection';
 import TaskDependencySection from './TaskDependencySection';
@@ -367,6 +368,27 @@ export default function TaskFullPage() {
                 value={task.due_date || null}
                 onChange={(val) => updateField('due_date', val)}
               />
+            </FieldRow>
+
+            {/* 생성자 */}
+            <FieldRow label="Created by">
+              {task.creator ? (
+                <span className="TaskFullPage__Creator">
+                  {task.creator.avatar_url ? (
+                    <img className="TaskFullPage__CreatorAvatar" src={task.creator.avatar_url} alt="" />
+                  ) : (
+                    <span
+                      className="TaskFullPage__CreatorAvatarPlaceholder"
+                      style={{ background: userColor(task.creator.user_id) }}
+                    >
+                      {userInitial(task.creator.username)}
+                    </span>
+                  )}
+                  <span className="TaskFullPage__CreatorName">{task.creator.username || '—'}</span>
+                </span>
+              ) : (
+                <span className="TaskFullPage__CreatorEmpty">—</span>
+              )}
             </FieldRow>
 
             {/* 커스텀 필드 */}
