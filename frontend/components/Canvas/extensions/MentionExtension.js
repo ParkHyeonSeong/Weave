@@ -160,6 +160,7 @@ const MentionNode = Node.create({
             const editorContainer = editorView.dom.closest('.CanvasEditor')
               || editorView.dom.closest('.TaskDescEditor')
               || editorView.dom.closest('.IssueEditor')
+              || editorView.dom.closest('.CommentEditor')
               || editorView.dom.parentElement;
             const editorRect = editorContainer.getBoundingClientRect();
 
