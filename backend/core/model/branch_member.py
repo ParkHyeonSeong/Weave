@@ -98,6 +98,19 @@ async def search_members(branch_id: int, query: str, exclude_user_id: int,
     return [dict(r._mapping) for r in result.fetchall()]
 
 
+async def filter_users_in_branch(branch_id: int, user_ids: list[int],
+                                  db: AsyncSession) -> list[int]:
+    """주어진 user_ids 중 해당 branch의 멤버만 추려서 반환 (없으면 빈 리스트)."""
+    if not user_ids:
+        return []
+    result = await db.execute(text("""
+        SELECT user_id FROM branch_member
+        WHERE branch_id = :branch_id
+          AND user_id = ANY(CAST(:user_ids AS bigint[]))
+    """), {'branch_id': branch_id, 'user_ids': list(set(user_ids))})
+    return [row[0] for row in result.fetchall()]
+
+
 async def search_non_members(branch_id: int, query: str, db: AsyncSession):
     """초대 가능한 사용자 검색 (아직 멤버가 아닌 active 유저)"""
     result = await db.execute(text("""
