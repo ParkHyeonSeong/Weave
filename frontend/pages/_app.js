@@ -11,6 +11,7 @@ import "@/styles/components/modal/alert.scss";
 import "@/styles/components/setup/setup.scss";
 import "@/styles/components/layout/layout.scss";
 import "@/styles/components/layout/header.scss";
+import "@/styles/components/layout/appSwitcher.scss";
 import "@/styles/components/layout/sidebar.scss";
 import "@/styles/components/modal/commandPalette.scss";
 import "@/styles/components/modal/createBranch.scss";

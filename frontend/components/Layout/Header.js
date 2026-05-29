@@ -1,8 +1,9 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/router';
-import { Search, Bell, CircleHelp, Settings, Shield, AtSign, UserPlus, AlertCircle, MessageSquare, CheckCircle2, Menu } from 'lucide-react';
+import { Search, Bell, Settings, Shield, AtSign, UserPlus, AlertCircle, MessageSquare, CheckCircle2, Menu } from 'lucide-react';
 import { formatMessageTime } from '@/library/formatTime';
 import { getBaseURL } from '@/library/_axios';
+import AppSwitcher from './AppSwitcher';
 
 const NOTI_ICONS = {
   mention: AtSign,
@@ -107,6 +108,8 @@ export default function Header({ isMobile, onToggleSidebar, onSearchClick, notif
             </>
           )}
         </div>
+        <span className="Header__Separator">/</span>
+        <AppSwitcher />
       </div>
 
       <div className="Header__Center">
@@ -190,9 +193,6 @@ export default function Header({ isMobile, onToggleSidebar, onSearchClick, notif
             </div>
           )}
         </div>
-        <button className="Header__IconBtn" title="Help">
-          <CircleHelp size={18} />
-        </button>
         <div className="Header__SettingsWrap" ref={settingsRef}>
           <button
             className="Header__IconBtn"

@@ -1,0 +1,109 @@
+@use '../../variables' as *;
+
+.AppSwitcher {
+  position: relative;
+
+  &__Trigger {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    height: 30px;
+    padding: 0 $space-2;
+    border-radius: $radius-md;
+    color: $color-text;
+    transition: background $transition-fast;
+    cursor: pointer;
+
+    &:hover { background: $color-surface; }
+  }
+
+  &__TrigIcon { display: flex; align-items: center; flex-shrink: 0; }
+
+  &__TrigLabel {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    white-space: nowrap;
+  }
+
+  &__Chevron { color: $color-text-tertiary; flex-shrink: 0; }
+
+  &__Menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    width: 248px;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+    box-shadow: $shadow-md;
+    padding: $space-1;
+    z-index: 200;
+  }
+
+  &__Label {
+    padding: $space-2 $space-2 $space-1;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: $color-text-tertiary;
+  }
+
+  &__Item {
+    display: flex;
+    align-items: center;
+    gap: $space-3;
+    width: 100%;
+    padding: 8px $space-2;
+    border-radius: $radius-md;
+    font-size: $font-size-sm;
+    color: $color-text-secondary;
+    text-align: left;
+    transition: background $transition-fast;
+
+    &:hover { background: $color-surface; color: $color-text; }
+
+    &--active { background: rgba($color-primary, 0.12); color: $color-text; }
+  }
+
+  &__ItemIcon { display: flex; align-items: center; flex-shrink: 0; }
+  &__ItemLabel { flex: 1; }
+  &__ItemCheck { color: $color-primary; flex-shrink: 0; }
+
+  &__Divider {
+    height: 1px;
+    background: $color-border;
+    margin: $space-1 $space-2;
+  }
+
+  &__Recent {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    width: 100%;
+    padding: 6px $space-2;
+    border-radius: $radius-md;
+    font-size: $font-size-sm;
+    color: $color-text-secondary;
+    text-align: left;
+    transition: background $transition-fast;
+
+    &:hover { background: $color-surface; color: $color-text; }
+  }
+
+  &__RecentDot {
+    width: 7px;
+    height: 7px;
+    border-radius: 2px;
+    background: $color-text-tertiary;
+    flex-shrink: 0;
+  }
+
+  &__RecentDocIcon { color: $color-text-tertiary; flex-shrink: 0; }
+
+  &__RecentTitle {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
