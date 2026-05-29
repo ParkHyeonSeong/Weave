@@ -1,74 +1,137 @@
 @use '../../variables' as *;
 
-.Launchpad {
+.HomeView {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: $space-8;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 100%;
-  padding: $space-10;
+  gap: $space-8;
 
-  &__Header {
-    text-align: center;
-    margin-bottom: $space-10;
+  &__Top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: $space-4;
   }
 
-  &__Title {
-    font-size: 32px;
+  &__Hello {
+    font-size: 20px;
     font-weight: $font-weight-bold;
     color: $color-text;
-    margin-bottom: $space-2;
+    margin: 0;
   }
 
-  &__Subtitle {
-    font-size: $font-size-base;
+  &__Sub {
+    font-size: $font-size-sm;
     color: $color-text-tertiary;
+    margin: $space-1 0 0;
   }
 
-  &__Grid {
+  &__Widgets {
     display: grid;
-    grid-template-columns: repeat(2, 200px);
-    gap: $space-6;
+    grid-template-columns: 1fr 1fr;
+    gap: $space-4;
   }
 
-  &__Card {
+  &__WidgetFull { grid-column: 1 / -1; }
+  &__WidgetCol { min-width: 0; }
+}
+
+.Launchpad {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $space-6;
+
+  &__Tile {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: $space-3;
-    padding: $space-8 $space-6;
-    background: $color-bg;
-    border: 1px solid $color-border;
-    border-radius: $radius-2xl;
+    gap: $space-2;
+    width: 104px;
+    padding: $space-2;
+    border-radius: $radius-xl;
     cursor: pointer;
-    transition: all $transition-base;
+    transition: transform $transition-fast;
 
-    &:hover {
-      border-color: $color-primary;
-      box-shadow: $shadow-md;
-      transform: translateY(-2px);
-    }
+    &:hover { transform: translateY(-2px); }
+    &:hover .Launchpad__Icon { box-shadow: $shadow-md; }
   }
 
-  &__IconWrap {
+  &__Icon {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 64px;
-    height: 64px;
-    border-radius: $radius-xl;
+    width: 72px;
+    height: 72px;
+    border-radius: 20px;
+    transition: box-shadow $transition-fast;
   }
 
-  &__AppName {
-    font-size: $font-size-base;
-    font-weight: $font-weight-semibold;
+  &__Name {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
     color: $color-text;
   }
 
-  &__AppDesc {
+  &__Sub {
     font-size: $font-size-xs;
     color: $color-text-tertiary;
-    text-align: center;
-    line-height: 1.4;
   }
+}
+
+.QuickCreate {
+  position: relative;
+  flex-shrink: 0;
+
+  &__Btn {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: 8px $space-4;
+    background: $color-primary;
+    color: $color-text-inverse;
+    border-radius: $radius-lg;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-semibold;
+    transition: opacity $transition-fast;
+
+    &:hover { opacity: 0.9; }
+  }
+
+  &__Menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    min-width: 180px;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+    box-shadow: $shadow-md;
+    padding: $space-1;
+    z-index: 50;
+  }
+
+  &__Item {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    width: 100%;
+    padding: 8px $space-3;
+    border-radius: $radius-md;
+    font-size: $font-size-sm;
+    color: $color-text-secondary;
+    text-align: left;
+    transition: background $transition-fast;
+
+    &:hover { background: $color-surface; color: $color-text; }
+
+    svg { color: $color-text-tertiary; flex-shrink: 0; }
+  }
+}
+
+@media (max-width: 720px) {
+  .HomeView { padding: $space-4; }
+  .HomeView__Widgets { grid-template-columns: 1fr; }
 }

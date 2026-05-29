@@ -1,52 +1,31 @@
 import { useRouter } from 'next/router';
-import { GitBranch, BookOpen } from 'lucide-react';
+import { GitBranch, FileEdit, Workflow } from 'lucide-react';
+import { APP_HOME } from '@/library/appContext';
+import { DEFAULT_COLORS } from '@/library/entityAppearance';
 
-const apps = [
-  {
-    id: 'branch',
-    name: 'Branch',
-    description: 'Project management, tasks, boards and sprints',
-    icon: GitBranch,
-    color: '#5E6AD2',
-    href: '/branch',
-  },
-  {
-    id: 'canvas',
-    name: 'Canvas',
-    description: 'Documents, knowledge base and team notes',
-    icon: BookOpen,
-    color: '#16A34A',
-    href: '/canvas',
-  },
+const APPS = [
+  { key: 'branch', label: 'Branch', sub: '프로젝트·작업', Icon: GitBranch, color: DEFAULT_COLORS.branch, path: APP_HOME.branch },
+  { key: 'canvas', label: 'Canvas', sub: '문서',         Icon: FileEdit,  color: DEFAULT_COLORS.canvas, path: APP_HOME.canvas },
+  { key: 'track',  label: 'Track',  sub: '워크플로우',    Icon: Workflow,  color: DEFAULT_COLORS.track,  path: APP_HOME.track },
 ];
 
 export default function Launchpad() {
   const router = useRouter();
-
   return (
     <div className="Launchpad">
-      <div className="Launchpad__Header">
-        <h1 className="Launchpad__Title">Weave</h1>
-        <p className="Launchpad__Subtitle">Choose an app to get started</p>
-      </div>
-      <div className="Launchpad__Grid">
-        {apps.map((app) => (
-          <button
-            key={app.id}
-            className="Launchpad__Card"
-            onClick={() => router.push(app.href)}
-          >
-            <div
-              className="Launchpad__IconWrap"
-              style={{ backgroundColor: `${app.color}14` }}
-            >
-              <app.icon size={32} style={{ color: app.color }} />
-            </div>
-            <span className="Launchpad__AppName">{app.name}</span>
-            <span className="Launchpad__AppDesc">{app.description}</span>
+      {APPS.map((app) => {
+        const Icon = app.Icon;
+        return (
+          <button key={app.key} className="Launchpad__Tile" onClick={() => router.push(app.path)}>
+            <span className="Launchpad__Icon" style={{ background: app.color }}>
+              {/* 배지 슬롯(향후): <span className="Launchpad__Badge" /> */}
+              <Icon size={30} color="#fff" strokeWidth={2} />
+            </span>
+            <span className="Launchpad__Name">{app.label}</span>
+            <span className="Launchpad__Sub">{app.sub}</span>
           </button>
-        ))}
-      </div>
+        );
+      })}
     </div>
   );
 }

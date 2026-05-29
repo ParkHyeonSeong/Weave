@@ -1,5 +1,5 @@
 import Head from 'next/head';
-import Dashboard from '@/components/Home/Dashboard';
+import HomeView from '@/components/Home/HomeView';
 
 export default function Home() {
   return (
@@ -8,7 +8,7 @@ export default function Home() {
         <title>Weave</title>
         <meta name="description" content="Weave - Project Management Platform" />
       </Head>
-      <Dashboard />
+      <HomeView />
     </>
   );
 }

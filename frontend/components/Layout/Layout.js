@@ -189,6 +189,13 @@ export default function Layout({ children }) {
     return () => window.removeEventListener('layout:create-canvas', handleCreate);
   }, []);
 
+  // QuickCreate에서 Track 생성 요청 수신
+  useEffect(() => {
+    const handleCreate = () => setShowCreateTrack(true);
+    window.addEventListener('layout:create-track', handleCreate);
+    return () => window.removeEventListener('layout:create-track', handleCreate);
+  }, []);
+
   // 영구 알림 + 채팅 unread 로드
   useEffect(() => {
     const fetchNotifications = async () => {
