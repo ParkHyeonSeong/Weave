@@ -1,5 +1,6 @@
 from typing import Optional
 from pydantic import BaseModel, field_validator
+from library.html_validator import is_empty_html
 
 
 class IssueCreate(BaseModel):
@@ -54,21 +55,13 @@ class IssueUpdate(BaseModel):
         return v
 
 
-def _is_empty_html(v: str) -> bool:
-    """HTML 콘텐츠가 실질적으로 비어있는지 확인"""
-    if not v:
-        return True
-    stripped = v.strip()
-    return not stripped or stripped == '<p></p>'
-
-
 class CommentCreate(BaseModel):
     content: str
 
     @field_validator('content')
     @classmethod
     def validate_content(cls, v):
-        if _is_empty_html(v):
+        if is_empty_html(v):
             raise ValueError('content is required')
         if len(v) > 10000:
             raise ValueError('content must be 10000 characters or less')
@@ -81,7 +74,7 @@ class CommentUpdate(BaseModel):
     @field_validator('content')
     @classmethod
     def validate_content(cls, v):
-        if _is_empty_html(v):
+        if is_empty_html(v):
             raise ValueError('content is required')
         if len(v) > 10000:
             raise ValueError('content must be 10000 characters or less')
