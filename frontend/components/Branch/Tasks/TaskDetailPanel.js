@@ -296,7 +296,7 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
             </DetailRow>
 
             {/* 라벨 */}
-            <DetailRow label="Labels" align="top">
+            <DetailRow label="Labels">
               <LabelTagInput
                 assignedLabels={task.labels || []}
                 allLabels={labels}

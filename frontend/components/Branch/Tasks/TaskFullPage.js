@@ -343,7 +343,7 @@ export default function TaskFullPage() {
               />
             </FieldRow>
 
-            <FieldRow label="Labels" align="top">
+            <FieldRow label="Labels">
               <LabelTagInput
                 assignedLabels={task.labels || []}
                 allLabels={labels}

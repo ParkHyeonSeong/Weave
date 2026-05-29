@@ -308,6 +308,41 @@
   &__RowValue {
     flex: 1;
     min-width: 0;
+
+    // 모든 inner value 요소를 24px 박스 + 12px font로 통일 → 모든 row height 37px 일관
+    .CustomSelect__Trigger,
+    .DatePicker__Trigger,
+    .TaskDetailPanel__SubAssigneeBtn,
+    .TaskDetailPanel__SubAssigneeWrap,
+    .LabelTagInput__Chips,
+    .TaskDetailPanel__Creator,
+    .TaskDetailPanel__CreatorEmpty {
+      min-height: 24px;
+      box-sizing: border-box;
+      font-size: $font-size-xs;
+    }
+
+    // 텍스트 시작점 4px 통일
+    .CustomSelect__Trigger,
+    .DatePicker__Trigger {
+      padding-left: 4px;
+    }
+
+    // SubAssigneeWrap은 inner Button(padding-left 4px)이 자체적으로 박스 역할
+    // → wrap에 padding/display 추가하면 text가 8px로 들여쓰여 다른 row와 어긋남
+    .TaskDetailPanel__SubAssigneeWrap {
+      display: flex;
+      align-items: center;
+    }
+
+    // Creator/CreatorEmpty: 1px transparent border로 trigger와 동일한 inner text x-position
+    .TaskDetailPanel__Creator,
+    .TaskDetailPanel__CreatorEmpty {
+      border: 1px solid transparent;
+      border-radius: $radius-sm;
+      padding-left: 3px;
+      line-height: 22px;
+    }
   }
 
   &__FieldValue {
@@ -461,7 +496,7 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: $font-size-sm;
+    // font-size / padding-left / border / line-height 는 __RowValue scope override에서 처리
   }
 
   &__CreatorAvatar,
