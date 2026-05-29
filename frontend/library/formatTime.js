@@ -15,3 +15,19 @@ export function formatMessageTime(dateStr) {
   const day = String(date.getDate()).padStart(2, '0');
   return `${month}/${day} ${hours}:${minutes}`;
 }
+
+/**
+ * 상대 시간 포맷
+ * just now / Nm ago / Nh ago / Nd ago / 날짜
+ */
+export function formatRelative(iso) {
+  if (!iso) return '';
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return '';
+  const diff = (Date.now() - t) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+  return new Date(iso).toLocaleDateString();
+}

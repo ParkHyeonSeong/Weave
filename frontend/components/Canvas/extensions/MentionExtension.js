@@ -13,8 +13,23 @@ const MentionNode = Node.create({
 
   addAttributes() {
     return {
-      userId: { default: null },
-      username: { default: '' },
+      userId: {
+        default: null,
+        parseHTML: (el) => {
+          const v = el.getAttribute('data-user-id');
+          return v != null && v !== '' ? Number(v) : null;
+        },
+        renderHTML: (attrs) => (
+          attrs.userId != null ? { 'data-user-id': attrs.userId } : {}
+        ),
+      },
+      username: {
+        default: '',
+        parseHTML: (el) => el.getAttribute('data-username') || '',
+        renderHTML: (attrs) => (
+          attrs.username ? { 'data-username': attrs.username } : {}
+        ),
+      },
     };
   },
 
@@ -27,7 +42,6 @@ const MentionNode = Node.create({
       'span',
       mergeAttributes(HTMLAttributes, {
         'data-mention': 'true',
-        'data-user-id': node.attrs.userId,
         class: 'mention',
       }),
       `@${node.attrs.username}`,
@@ -228,3 +242,9 @@ const MentionNode = Node.create({
 });
 
 export default MentionNode;
+
+export function buildMentionHtml(user) {
+  if (!user || !user.user_id) return '';
+  const escaped = String(user.username || '').replace(/"/g, '&quot;');
+  return `<span data-mention="true" data-user-id="${user.user_id}" data-username="${escaped}" class="mention">@${user.username}</span>`;
+}

@@ -67,6 +67,7 @@ import "@/styles/components/canvas/typstEditor.scss";
 import "@/styles/components/canvas/annotation.scss";
 import "@/styles/components/branch/taskFullPage.scss";
 import "@/styles/components/branch/taskIssueSection.scss";
+import "@/styles/components/branch/taskComment.scss";
 import "@/styles/components/branch/taskIssueDetail.scss";
 import "@/styles/components/branch/createIssuePage.scss";
 import "@/styles/components/myTasks/myTasks.scss";
