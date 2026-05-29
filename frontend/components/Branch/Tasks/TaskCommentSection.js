@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import useTaskComments from '@/hooks/useTaskComments';
 import CommentItem from './CommentItem';
 import CommentEditor from './CommentEditor';
@@ -21,8 +21,17 @@ export default function TaskCommentSection({
 
   const { roots, childrenByRoot } = useMemo(() => buildTree(comments), [comments]);
 
-  // Slice 7에서 useEffect로 토글; 일단 false 유지
-  const [highlightActive] = useState(false);
+  const [highlightActive, setHighlightActive] = useState(false);
+
+  useEffect(() => {
+    if (!highlightCommentId || comments.length === 0) return;
+    const el = document.getElementById(`comment-${highlightCommentId}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setHighlightActive(true);
+    const t = setTimeout(() => setHighlightActive(false), 2000);
+    return () => clearTimeout(t);
+  }, [highlightCommentId, comments]);
 
   // 최상위 composer는 submit 후 unmount/remount로 비워진다 (답글/edit composer는 cancel로 닫히므로 영향 없음)
   const [composerKey, setComposerKey] = useState(0);

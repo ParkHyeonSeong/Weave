@@ -20,6 +20,7 @@ import ActivityTimeline from '@/components/common/ActivityTimeline';
 export default function TaskFullPage() {
   const router = useRouter();
   const { id: branchId, taskId } = router.query;
+  const highlightCommentId = router.query.comment_id ? Number(router.query.comment_id) : null;
 
   const [branch, setBranch] = useState(null);
 
@@ -240,6 +241,7 @@ export default function TaskFullPage() {
             taskId={task.task_id}
             members={members}
             currentUserId={currentUserId}
+            highlightCommentId={highlightCommentId}
           />
 
           <div className="TaskFullPage__Divider" />

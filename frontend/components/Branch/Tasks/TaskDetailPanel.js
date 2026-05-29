@@ -18,6 +18,7 @@ import ActivityTimeline from '@/components/common/ActivityTimeline';
 
 export default function TaskDetailPanel({ branchId, branchKey, taskTypes: externalTaskTypes, workflowStatuses: externalStatuses, taskSummary, onClose, onSelectTask }) {
   const router = useRouter();
+  const highlightCommentId = router.query.comment_id ? Number(router.query.comment_id) : null;
   const {
     task, loading, sprints, epics, members, labels,
     workflowStatuses: hookStatuses, taskTypes: hookTaskTypes, customFields,
@@ -376,6 +377,7 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
           taskId={task.task_id}
           members={members}
           currentUserId={currentUserId}
+          highlightCommentId={highlightCommentId}
         />
 
         <div className="TaskDetailPanel__Divider" />
