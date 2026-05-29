@@ -35,6 +35,7 @@ export default function CommentEditor({
   // keep latest callbacks in refs so the editor's keydown handler always sees current values
   const submitRef = useRef(onSubmit);
   const cancelRef = useRef(onCancel);
+  const editorRef = useRef(null);
   useEffect(() => { submitRef.current = onSubmit; }, [onSubmit]);
   useEffect(() => { cancelRef.current = onCancel; }, [onCancel]);
 
@@ -73,9 +74,9 @@ export default function CommentEditor({
       handleKeyDown(_view, event) {
         if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
           event.preventDefault();
-          if (!editor.isEmpty) {
-            const html = editor.getHTML();
-            submitRef.current?.(html);
+          const ed = editorRef.current;
+          if (ed && !ed.isEmpty) {
+            submitRef.current?.(ed.getHTML());
           }
           return true;
         }
@@ -88,6 +89,10 @@ export default function CommentEditor({
       },
     },
   }, [extensions]);
+
+  useEffect(() => {
+    editorRef.current = editor;
+  }, [editor]);
 
   if (!editor) return null;
   return (

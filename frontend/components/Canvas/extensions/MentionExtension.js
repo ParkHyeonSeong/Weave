@@ -243,8 +243,19 @@ const MentionNode = Node.create({
 
 export default MentionNode;
 
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export function buildMentionHtml(user) {
   if (!user || !user.user_id) return '';
-  const escaped = String(user.username || '').replace(/"/g, '&quot;');
-  return `<span data-mention="true" data-user-id="${user.user_id}" data-username="${escaped}" class="mention">@${user.username}</span>`;
+  const uid = Number(user.user_id);
+  if (!Number.isFinite(uid)) return '';
+  const uname = escHtml(user.username || '');
+  return `<span data-mention="true" data-user-id="${uid}" data-username="${uname}" class="mention">@${uname}</span>`;
 }
