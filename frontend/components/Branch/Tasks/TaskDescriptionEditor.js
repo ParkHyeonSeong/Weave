@@ -2,10 +2,8 @@ import { useEffect, useRef, useMemo } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import { Extension } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
-import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
-import Underline from '@tiptap/extension-underline';
 import Highlight from '@tiptap/extension-highlight';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
@@ -22,14 +20,12 @@ import CanvasEditorToolbar from '@/components/Canvas/CanvasEditorToolbar';
 const lowlight = createLowlight(common);
 
 const baseExtensions = [
-  StarterKit.configure({ codeBlock: false }),
-  Link.configure({
-    openOnClick: false,
-    HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' },
+  StarterKit.configure({
+    codeBlock: false,
+    link: { openOnClick: false, HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' } },
   }),
   Placeholder.configure({ placeholder: 'Add description...' }),
   CodeBlockLowlight.configure({ lowlight }),
-  Underline,
   Highlight.configure({ multicolor: true }),
   TaskList,
   TaskItem.configure({ nested: true }),

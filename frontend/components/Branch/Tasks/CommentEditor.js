@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import { Extension } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
-import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import { common, createLowlight } from 'lowlight';
@@ -41,10 +40,9 @@ export default function CommentEditor({
 
   const extensions = useMemo(() => {
     const ext = [
-      StarterKit.configure({ codeBlock: false }),
-      Link.configure({
-        openOnClick: false,
-        HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' },
+      StarterKit.configure({
+        codeBlock: false,
+        link: { openOnClick: false, HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' } },
       }),
       Placeholder.configure({ placeholder }),
       CodeBlockLowlight.configure({ lowlight }),
