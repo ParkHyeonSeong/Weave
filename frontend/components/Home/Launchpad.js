@@ -1,5 +1,5 @@
 import { useRouter } from 'next/router';
-import { GitBranch, FileEdit, Workflow } from 'lucide-react';
+import { GitBranch, FileEdit, Workflow, Compass } from 'lucide-react';
 import { APP_HOME } from '@/library/appContext';
 import { DEFAULT_COLORS } from '@/library/entityAppearance';
 
@@ -7,6 +7,7 @@ const APPS = [
   { key: 'branch', label: 'Branch', sub: '프로젝트·작업', Icon: GitBranch, color: DEFAULT_COLORS.branch, path: APP_HOME.branch },
   { key: 'canvas', label: 'Canvas', sub: '문서',         Icon: FileEdit,  color: DEFAULT_COLORS.canvas, path: APP_HOME.canvas },
   { key: 'track',  label: 'Track',  sub: '워크플로우',    Icon: Workflow,  color: DEFAULT_COLORS.track,  path: APP_HOME.track },
+  { key: 'browse', label: '둘러보기', sub: '공개 브랜치', Icon: Compass, color: '#F59E0B', path: '/browse' },
 ];
 
 export default function Launchpad() {
