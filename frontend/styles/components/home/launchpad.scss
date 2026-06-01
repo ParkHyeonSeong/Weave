@@ -28,14 +28,6 @@
     margin: $space-1 0 0;
   }
 
-  &__Widgets {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: $space-4;
-  }
-
-  &__WidgetFull { grid-column: 1 / -1; }
-  &__WidgetCol { min-width: 0; }
 }
 
 .Launchpad {
@@ -133,5 +125,4 @@
 
 @media (max-width: 720px) {
   .HomeView { padding: $space-4; }
-  .HomeView__Widgets { grid-template-columns: 1fr; }
 }

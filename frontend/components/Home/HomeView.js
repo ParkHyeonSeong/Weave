@@ -1,8 +1,6 @@
 import Launchpad from './Launchpad';
 import QuickCreate from './QuickCreate';
-import TaskSummary from './DashboardWidgets/TaskSummary';
-import RecentItems from './DashboardWidgets/RecentItems';
-import StarredItems from './DashboardWidgets/StarredItems';
+import WidgetZone from './WidgetZone';
 
 export default function HomeView() {
   return (
@@ -17,17 +15,7 @@ export default function HomeView() {
 
       <Launchpad />
 
-      <div className="HomeView__Widgets">
-        <div className="HomeView__WidgetFull">
-          <TaskSummary />
-        </div>
-        <div className="HomeView__WidgetCol">
-          <RecentItems />
-        </div>
-        <div className="HomeView__WidgetCol">
-          <StarredItems />
-        </div>
-      </div>
+      <WidgetZone />
     </div>
   );
 }
