@@ -1,102 +1,30 @@
 import httpx
-import pytest
 import respx
 
-from weave_mcp.client import WeaveClient, WeaveAuthError
+from weave_mcp.client import WeaveClient
 from weave_mcp.config import Settings
 
 
-def make_client():
-    return WeaveClient(
-        settings=Settings(base_url="http://test", email="bot@x.com", password="pw")
-    )
+def make_client(token="wv_test_token"):
+    return WeaveClient(settings=Settings(base_url="http://test", token=token))
 
 
 @respx.mock
-async def test_call_logs_in_on_401_then_retries():
-    login = respx.post("http://test/api/auth/login").mock(
-        return_value=httpx.Response(
-            200,
-            json={"status": True},
-            headers={"set-cookie": "weave_token=abc; Path=/"},
-        )
-    )
-    target = respx.get("http://test/api/branches").mock(
-        side_effect=[
-            httpx.Response(401, json={"message": "NEED_LOGIN"}),
-            httpx.Response(200, json=[{"id": 1}]),
-        ]
-    )
-    c = make_client()
-    resp = await c.call("GET", "/api/branches")
-    await c.aclose()
-
-    assert resp.status_code == 200
-    assert login.call_count == 1
-    assert target.call_count == 2
-    # retry carried the cookie obtained from login
-    assert "weave_token=abc" in target.calls[1].request.headers.get("cookie", "")
-
-
-@respx.mock
-async def test_call_reuses_cookie_without_relogin():
-    login = respx.post("http://test/api/auth/login").mock(
-        return_value=httpx.Response(
-            200,
-            json={"status": True},
-            headers={"set-cookie": "weave_token=abc; Path=/"},
-        )
-    )
-    respx.get("http://test/api/branches").mock(
-        side_effect=[
-            httpx.Response(401),            # first call -> triggers login
-            httpx.Response(200, json=[]),   # retry of first call
-            httpx.Response(200, json=[]),   # second call -> no 401, no relogin
-        ]
-    )
-    c = make_client()
-    await c.call("GET", "/api/branches")
+async def test_call_sends_bearer_header():
+    route = respx.get("http://test/api/branches").mock(return_value=httpx.Response(200, json=[]))
+    c = make_client("wv_abc")
     await c.call("GET", "/api/branches")
     await c.aclose()
-
-    assert login.call_count == 1
-
-
-@respx.mock
-async def test_login_bad_credentials_http200_raises_auth_error():
-    # Weave returns HTTP 200 with {"status": false} for bad credentials (no cookie set).
-    # The status code alone would look like success — _login must check the body.
-    respx.post("http://test/api/auth/login").mock(
-        return_value=httpx.Response(
-            200, json={"status": False, "message": "INVALID_CREDENTIALS"}
-        )
-    )
-    respx.get("http://test/api/branches").mock(return_value=httpx.Response(401))
-    c = make_client()
-    with pytest.raises(WeaveAuthError):
-        await c.call("GET", "/api/branches")
-    await c.aclose()
-
-
-@respx.mock
-async def test_login_http_error_raises_auth_error():
-    respx.post("http://test/api/auth/login").mock(return_value=httpx.Response(500))
-    respx.get("http://test/api/branches").mock(return_value=httpx.Response(401))
-    c = make_client()
-    with pytest.raises(WeaveAuthError):
-        await c.call("GET", "/api/branches")
-    await c.aclose()
+    assert route.calls[0].request.headers.get("authorization") == "Bearer wv_abc"
 
 
 @respx.mock
 async def test_call_json_success_returns_parsed_body():
-    respx.get("http://test/api/branches").mock(
-        return_value=httpx.Response(200, json=[{"id": 1, "name": "Core"}])
-    )
+    respx.get("http://test/api/branches").mock(return_value=httpx.Response(200, json=[{"id": 1}]))
     c = make_client()
     result = await c.call_json("GET", "/api/branches")
     await c.aclose()
-    assert result == [{"id": 1, "name": "Core"}]
+    assert result == [{"id": 1}]
 
 
 @respx.mock
@@ -112,15 +40,13 @@ async def test_call_json_http_error_returns_error_dict():
 
 
 @respx.mock
-async def test_call_json_auth_error_returns_error_dict():
-    respx.post("http://test/api/auth/login").mock(
-        return_value=httpx.Response(200, json={"status": False, "message": "INVALID_CREDENTIALS"})
-    )
-    respx.get("http://test/api/branches").mock(return_value=httpx.Response(401))
+async def test_call_json_401_returns_error_dict_no_retry():
+    route = respx.get("http://test/api/branches").mock(return_value=httpx.Response(401))
     c = make_client()
     result = await c.call_json("GET", "/api/branches")
     await c.aclose()
-    assert result["error"] == "auth"
+    assert result["error"] == 401
+    assert route.call_count == 1  # no retry
 
 
 @respx.mock
@@ -130,3 +56,10 @@ async def test_call_json_network_error_returns_error_dict():
     result = await c.call_json("GET", "/api/branches")
     await c.aclose()
     assert result["error"] == "network"
+
+
+async def test_call_json_missing_token_returns_auth_error():
+    c = make_client(token="")
+    result = await c.call_json("GET", "/api/branches")
+    await c.aclose()
+    assert result["error"] == "auth"

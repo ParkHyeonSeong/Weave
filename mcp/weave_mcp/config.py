@@ -13,13 +13,11 @@ load_dotenv(_ENV_PATH)
 @dataclass(frozen=True)
 class Settings:
     base_url: str
-    email: str
-    password: str
+    token: str
 
 
 def get_settings() -> Settings:
     return Settings(
         base_url=os.getenv("WEAVE_BASE_URL", "http://localhost:8000").rstrip("/"),
-        email=os.getenv("WEAVE_SVC_EMAIL", ""),
-        password=os.getenv("WEAVE_SVC_PASSWORD", ""),
+        token=os.getenv("WEAVE_API_TOKEN", ""),
     )
