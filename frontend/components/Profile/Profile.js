@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { User, Mail, Lock, Eye, EyeOff, Camera } from 'lucide-react';
 import { axios, getBaseURL } from '@/library/_axios';
 import Alert from '@/components/modal/Alert';
+import ProfileTokens from '@/components/Profile/ProfileTokens';
 
 export default function Profile() {
   // 프로필 정보
@@ -316,6 +317,8 @@ export default function Profile() {
           </button>
         </form>
       </div>
+
+      <ProfileTokens showAlert={showAlert} />
 
       <Alert isOpen={alertOpen} title={alertTitle} contents={alertMessage} onClose={() => setAlertOpen(false)} />
     </div>

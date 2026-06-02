@@ -209,3 +209,137 @@
 @keyframes profile-spin {
   to { transform: rotate(360deg); }
 }
+
+.Profile {
+  &__TokenIntro {
+    font-size: $font-size-sm;
+    color: $color-text-secondary;
+    line-height: 1.5;
+    margin-bottom: $space-4;
+  }
+
+  &__TokenReveal {
+    border: 1px solid $color-primary;
+    background: $color-input-bg;
+    border-radius: $radius-lg;
+    padding: $space-4;
+    margin-bottom: $space-4;
+  }
+
+  &__TokenRevealWarn {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-semibold;
+    color: $color-text;
+    margin-bottom: $space-3;
+  }
+
+  &__TokenRevealRow {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    margin-bottom: $space-3;
+  }
+
+  &__TokenValue {
+    flex: 1;
+    font-family: monospace;
+    font-size: $font-size-sm;
+    word-break: break-all;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+    padding: 8px $space-3;
+    color: $color-text;
+  }
+
+  &__TokenCopyBtn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px $space-3;
+    background: $color-primary;
+    color: $color-text-inverse;
+    border: none;
+    border-radius: $radius-lg;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background $transition-fast;
+
+    &:hover { background: $color-primary-hover; }
+  }
+
+  &__TokenDismiss {
+    padding: 0;
+    background: none;
+    border: none;
+    color: $color-text-secondary;
+    font-size: $font-size-sm;
+    cursor: pointer;
+
+    &:hover { color: $color-text; }
+  }
+
+  &__TokenList {
+    display: flex;
+    flex-direction: column;
+    gap: $space-3;
+    margin-top: $space-5;
+  }
+
+  &__TokenItem {
+    display: flex;
+    align-items: center;
+    gap: $space-3;
+    padding: $space-3 $space-4;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+  }
+
+  &__TokenItemMain {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 140px;
+  }
+
+  &__TokenName {
+    font-size: $font-size-base;
+    font-weight: $font-weight-medium;
+    color: $color-text;
+  }
+
+  &__TokenPrefix {
+    font-family: monospace;
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+  }
+
+  &__TokenMeta {
+    display: flex;
+    flex: 1;
+    flex-wrap: wrap;
+    gap: $space-1 $space-4;
+    font-size: $font-size-xs;
+    color: $color-text-secondary;
+  }
+
+  &__TokenRevokeBtn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px $space-3;
+    background: none;
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+    color: #dc2626;
+    font-size: $font-size-sm;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background $transition-fast;
+
+    &:hover { background: rgba(220, 38, 38, 0.08); }
+  }
+}
