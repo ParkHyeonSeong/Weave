@@ -5,85 +5,131 @@
 <h1 align="center">Weave</h1>
 
 <p align="center">
-  Open-source project management platform — a self-hostable alternative to Jira + Confluence.
+  Open-source work platform — self-hostable project management, docs, chat, and AI in one place.
 </p>
 
 <p align="center">
-  <a href="#features">Features</a> · <a href="#quick-start">Quick Start</a> · <a href="#tech-stack">Tech Stack</a> · <a href="#contributing">Contributing</a>
+  <a href="#features">Features</a> · <a href="#quick-start">Quick Start</a> · <a href="#weave-mcp-server">MCP Server</a> · <a href="#tech-stack">Tech Stack</a> · <a href="#contributing">Contributing</a>
 </p>
 
 ---
 
 ## Why Weave?
 
-Most teams use Jira for tasks and Confluence for docs — two separate tools, two separate contexts. Weave combines project management, documentation, and team chat into a single, self-hosted platform that you fully own.
+Most teams stitch together Jira for tasks, Confluence for docs, and Slack for chat — three tools, three logins, three places to lose context. Weave combines **project management, real-time documentation, team chat, and an AI assistant** into a single self-hosted platform that you fully own.
 
 - **No per-seat pricing.** Host it yourself, invite your whole team.
-- **All-in-one.** Tasks, docs, and chat in one place — no more context switching.
-- **Simple to deploy.** One `make up-build` and you're running.
+- **All-in-one.** Tasks, docs, chat, and AI in one place — no more context switching.
+- **Yours to own.** Your data stays on your server. One `make up-build` and you're running.
 
 ## Features
 
 ### 📋 Task Management
-Organize work with a flexible task system inspired by Linear.
+Organize work with a flexible task system inspired by Linear, scoped per project ("branch").
 
-- **Kanban Board** — drag-and-drop cards across status columns
-- **Sprints** — plan iterations, activate, and track completion
-- **Epics & Timeline** — visualize long-term plans across weeks, months, or quarters
-- **Custom Task Types** — define your own task types per project
-- **Custom Fields** — add custom fields per task type for flexible tracking
-- **Workflow Statuses** — define custom status flows per project
-- **Labels & Priorities** — categorize and prioritize with visual tags
-- **Task Dependencies** — set blocking/blocked-by relationships between tasks
-- **Task Filtering** — filter tasks by status, assignee, label, priority, and more
-- **Issue Threads** — discuss specific tasks with threaded comments
-- **My Tasks** — personal dashboard with filters across all projects
+- **Kanban Board** — drag-and-drop cards across custom workflow columns
+- **Sprints** — plan iterations, activate, and complete (carrying over unfinished work)
+- **Epics & Timeline** — Gantt-style roadmap across weeks, months, or quarters, with sprints overlaid
+- **Flow View** — visualize tasks and their dependencies as an interactive node graph
+- **Custom Task Types, Fields & Statuses** — define your own per project
+- **Labels, Priorities & Dependencies** — categorize, prioritize, and link tasks (blocking/relates-to, even across projects)
+- **Issues** — track sub-issues/bugs under a task, each with its own thread
+- **Comments & Activity Log** — rich threaded comments plus a full audit trail of every change
+- **Filtering & My Tasks** — filter by status, assignee, label, priority, type; personal cross-project task view
+- **Archive** — completed and cancelled tasks kept out of the way but searchable
+
+### 🔗 Tracks
+A higher-order view that pulls tasks from **multiple projects** into one shared workflow — perfect for cross-team initiatives and release trains.
+
+- **Flow** — cross-branch dependency graph
+- **Timeline** — Gantt chart grouped by project
+- **Tree** — hierarchical outline sorted by due date
+- **Bulk Add** — pull in tasks by epic, sprint, or filter in one go
 
 ### 📝 Canvas (Documentation)
-A rich knowledge base built on TipTap, replacing Confluence.
+A real-time collaborative knowledge base built on TipTap + Yjs, replacing Confluence.
 
-- **Rich Text Editor** — headings, tables, code blocks with syntax highlighting, math (KaTeX), callouts
-- **Markdown Paste** — paste markdown content and it auto-converts to rich text
-- **Inline Annotations** — leave comments on specific parts of a document
-- **Typst Editor** — write and render Typst documents alongside rich text pages
-- **Page Hierarchy** — nested documents with drag-and-drop reordering
-- **Image Support** — paste, drag-and-drop, or upload images directly
-- **Task References** — link tasks inline with live preview popups
+- **Live Collaboration** — multiple people edit the same page simultaneously, with presence avatars (CRDT-based, native Python Yjs server)
+- **Rich Text Editor** — headings, tables (with cell colors), code blocks with syntax highlighting, math (KaTeX), callouts, multicolor text/highlight
+- **Mermaid Diagrams** — write diagrams-as-code with live preview
+- **Typst Editor** — author and render Typst documents, export to PDF
+- **Bookmarks & Link Previews** — paste a URL to get a rich preview card
+- **Inline References** — link tasks, docs, and issues inline with live hover previews
+- **Inline Annotations** — highlight text and leave anchored comment threads
+- **Markdown Paste** — paste markdown and it auto-converts to rich text
+- **Page Hierarchy** — nested pages with drag-and-drop reordering and per-page activity history
+- **Images** — paste, drag-and-drop, or upload (validated by magic bytes)
 
 ### 💬 Messenger (Real-time Chat)
-Built-in team communication via WebSocket.
+Built-in team communication over WebSocket.
 
-- **Direct & Group Messages** — 1:1 or group conversations
-- **File Attachments** — share files and images in conversations
-- **Task References in Chat** — search and link tasks with `/` commands
-- **Picture-in-Picture** — pop out the messenger into a floating window
-- **Read Receipts** — see who's read your messages
-- **Persistent History** — full message history with pagination
+- **Direct & Group Messages** with full, paginated history
+- **Mentions & References** — `@mention` people; attach tasks, docs, and issues via `/` commands
+- **File Attachments** — images and documents (up to 10 files / 10 MB each)
+- **Read Receipts & Presence** — see who's read messages and who's online
+- **Picture-in-Picture** — pop the messenger out into a floating window
+
+### 🏠 Home & Launchpad
+A personal landing page that adapts to how you work.
+
+- **Customizable Widgets** — My Tasks, Active Sprints, Recent, Starred — drag to add, remove, and reorder (saved locally)
+- **Launchpad & Quick Create** — jump into Branches, Canvases, and Tracks, or create anything from anywhere
+
+### 🤖 AI Assistant
+An in-app AI chat that knows your work.
+
+- **Conversational assistant** with streaming responses and saved conversation history
+- **Task-aware** — the assistant is given a live summary of your tasks
+- **Pluggable providers** — Anthropic (Claude) or OpenAI, configured by an admin (API key stored encrypted)
+- See also the [Weave MCP Server](#weave-mcp-server) to drive Weave from Claude itself
 
 ### 📅 Schedule
-Project-level calendar for planning and tracking events.
+A project calendar for planning and tracking.
 
-- **Calendar View** — visualize events on a monthly/weekly calendar
-- **Event-Task Linking** — connect schedule events to tasks for cross-referencing
+- **Calendar View** with sprint bars overlaid across weeks
+- **Event–Task Linking** — connect meetings and milestones to tasks
+
+### ⚡ Productivity & Platform
+- **PWA** — install Weave as a native-feeling app on desktop and mobile, with an offline page
+- **Notifications** — real-time in-app feed plus background **Web Push** (works when the browser is closed)
+- **Command Palette** — `⌘K` to navigate, create, or search tasks/docs/issues/people at once
+- **Stars & Recents** — bookmark items and jump back to recent activity
+- **Browse & Discover** — find and join public projects and canvases
+- **Jira Migration** — import projects from a Jira CSV export with user mapping
 
 ### 🔧 Administration
-- **Setup Wizard** — guided initial configuration (workspace name, registration policy, admin account)
-- **User Management** — approve/reject registrations, assign roles
-- **Forced Password Change** — admin can require users to reset their password on next login
-- **Registration Policies** — public or invite-only signup
-- **AI Integration** — configure AI providers (API key, model) from admin settings
+- **Setup Wizard** — guided first-run config (workspace name, registration policy, admin account)
+- **User Management** — approve/reject registrations, assign roles, force password resets
+- **Registration Policies** — open signup or invite-only (admin approval)
+- **Integrations** — configure the AI provider and SMTP email from admin settings
 
-### ⚡ Productivity
-- **PWA (Progressive Web App)** — install Weave as a native app on desktop and mobile
-- **Mobile Responsive** — fully responsive UI that adapts to phones and tablets
-- **Background Push Notifications** — receive alerts even when the browser is closed
-- **In-app Notifications** — real-time notification feed with read/unread tracking
-- **Online Presence** — see who's online with real-time status indicators
-- **Command Palette** — `⌘K` to quickly navigate or create resources
-- **Starring & Recent Views** — bookmark items and quickly access recent activity
-- **Resizable Panels** — sidebar and messenger widths persist across sessions
-- **Browse & Discover** — find and join public projects and canvases
-- **Jira Migration** — import projects from Jira via CSV export
+## Weave MCP Server
+
+Weave ships an optional **[MCP (Model Context Protocol)](https://modelcontextprotocol.io) server** so you can drive Weave from AI clients like Claude — list projects, read and create tasks, and comment, straight from a chat session.
+
+- Tools: `list_branches`, `list_my_tasks`, `get_task`, `create_task`, `add_task_comment`
+- Talks to Weave over its REST API only — **no backend changes required**
+- Runs locally over stdio; authenticates with a Weave Personal Access Token (Bearer)
+
+Quickest way for a teammate to add it (requires [`uv`](https://docs.astral.sh/uv/)):
+
+```jsonc
+// .mcp.json
+{
+  "mcpServers": {
+    "weave": {
+      "command": "uvx",
+      "args": ["--from", "git+https://github.com/your-org/Weave#subdirectory=mcp", "weave-mcp"],
+      "env": {
+        "WEAVE_BASE_URL": "https://weave.example.com",
+        "WEAVE_API_TOKEN": "wv_your_token_here"
+      }
+    }
+  }
+}
+```
+
+See [`mcp/README.md`](mcp/README.md) for setup, the auth model, and local development.
 
 ## Quick Start
 
@@ -126,12 +172,12 @@ make help           # Show all available commands
 
 ### Services
 
-| Service    | Default URL                  |
-|------------|------------------------------|
-| Frontend   | http://localhost:3000         |
-| Backend    | http://localhost:8000         |
-| API Docs   | http://localhost:8000/docs (dev only) |
-| PostgreSQL | localhost:5432               |
+| Service    | Default URL                            |
+|------------|----------------------------------------|
+| Frontend   | http://localhost:3000                  |
+| Backend    | http://localhost:8000                  |
+| API Docs   | http://localhost:8000/api/docs (dev only) |
+| PostgreSQL | localhost:5432                         |
 
 > Ports are configurable via `.env`. API Docs (Swagger UI) is only available when `DEBUG=true`.
 
@@ -139,32 +185,36 @@ make help           # Show all available commands
 
 Weave includes the following built-in security measures:
 
-- **SSRF Protection** — URL metadata fetching validates DNS-resolved IPs, blocking internal networks and cloud metadata endpoints
+- **SSRF Protection** — URL metadata fetching validates DNS-resolved IPs at every redirect hop, blocking internal networks and cloud metadata endpoints
 - **Rate Limiting** — login, registration, and API endpoints are rate-limited per IP
-- **XSS Prevention** — all user-generated HTML is sanitized with DOMPurify before rendering
+- **XSS Prevention** — user-generated HTML is sanitized before rendering; SVG uploads are sanitized
 - **File Upload Validation** — image uploads are verified by magic bytes, not just file extension
-- **HTTP Security Headers** — `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, HSTS via Nginx
-- **CORS Restriction** — production mode only allows the configured `ALLOWED_ORIGINS`; dev mode restricts to LAN
+- **Encrypted Secrets at Rest** — SMTP and AI provider credentials are encrypted (Fernet)
+- **HTTP Security Headers** — `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, CSP via Nginx
+- **CORS Restriction** — production allows only the configured `ALLOWED_ORIGINS`; dev restricts to LAN
 
 ## Production Deployment
 
-For deploying to a server (IDC, VPS, etc.) with an existing Nginx reverse proxy:
+For deploying to a server (IDC, VPS, etc.) behind a reverse proxy:
 
 ```bash
 # 1. Clone and configure
 git clone https://github.com/your-org/Weave.git
 cd Weave
 cp .env.production.example .env.production
-# Edit .env.production — set DOMAIN, POSTGRES_PASSWORD, ports, etc.
+# Edit .env.production — set DOMAIN, JWT_SECRET_KEY, POSTGRES_PASSWORD, ALLOWED_ORIGINS, ports, etc.
 
-# 2. Build and start
+# 2. Build and start (Nginx exposes a single port)
 make prod-build
 
-# 3. Update (when new version is available)
+# 3. (One-time) Issue an SSL certificate once DNS points at the host
+make ssl-init
+
+# 4. Update (when a new version is available)
 git pull && make prod-build
 ```
 
-Configure your host Nginx to proxy to the exposed ports — see `nginx/host-nginx.conf.example` for a reference config.
+In production, only the Nginx container's port is exposed; the backend, frontend, and database stay on an internal network. Point your host's reverse proxy at it — see [`nginx/host-nginx.conf.example`](nginx/host-nginx.conf.example) for a reference config.
 
 ### Minimum Requirements
 
@@ -181,19 +231,22 @@ Configure your host Nginx to proxy to the exposed ports — see `nginx/host-ngin
 make prod-build   # Build and start production services
 make prod-down    # Stop production services
 make prod-logs    # Tail production logs
-make prod-ps      # Show production service status
+make ssl-renew    # Renew the SSL certificate
 ```
 
 ## Tech Stack
 
-| Layer        | Technology                                         |
-|--------------|----------------------------------------------------|
-| Frontend     | Next.js 16, React 19, SCSS, TipTap, Typst, dnd-kit |
-| Backend      | Python 3.13, FastAPI, SQLAlchemy (async), Alembic   |
-| Database     | PostgreSQL 17                                       |
-| Auth         | JWT (httpOnly cookie) + bcrypt                      |
-| Real-time    | WebSocket                                           |
-| Infra        | Docker Compose                                      |
+| Layer        | Technology                                              |
+|--------------|---------------------------------------------------------|
+| Frontend     | Next.js 16, React 19, SCSS, TipTap, Typst, dnd-kit, React Flow |
+| Backend      | Python 3.13, FastAPI, SQLAlchemy (async), Alembic       |
+| Database     | PostgreSQL 17                                            |
+| Auth         | JWT (httpOnly cookie) + bcrypt                          |
+| Real-time    | WebSocket; collaborative editing via Yjs CRDT (pycrdt)  |
+| AI           | Anthropic / OpenAI (streaming)                          |
+| Notifications| Web Push (VAPID)                                        |
+| Infra        | Docker Compose, Nginx                                   |
+| AI access    | MCP server (stdio) — see [`mcp/`](mcp/)                 |
 
 ## Contributing
 

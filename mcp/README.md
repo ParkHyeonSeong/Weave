@@ -10,11 +10,34 @@ Talks to Weave's REST API only — the Weave backend is not modified.
 - `create_task(branch_id, title, description?, priority?, status?, due_date?)` — create a task
 - `add_task_comment(branch_id, task_id, content)` — comment on a task
 
-## Setup
-1. Create a dedicated Weave service account (e.g. register `mcp-bot@example.com`).
-2. `cp mcp/.env.example mcp/.env` and fill in `WEAVE_BASE_URL`, `WEAVE_SVC_EMAIL`, `WEAVE_SVC_PASSWORD`.
-3. `python3 -m venv mcp/.venv && mcp/.venv/bin/pip install -e "./mcp[dev]"`
-4. Register the server in the repo-root `.mcp.json` (note: `.mcp.json` is git-ignored, so this stays local to your machine — each clone must add it):
+## Use it (recommended — no clone needed)
+
+Requires [`uv`](https://docs.astral.sh/uv/). Add this to your MCP client's `.mcp.json` and restart it:
+
+```jsonc
+{
+  "mcpServers": {
+    "weave": {
+      "command": "uvx",
+      "args": ["--from", "git+https://github.com/your-org/Weave#subdirectory=mcp", "weave-mcp"],
+      "env": {
+        "WEAVE_BASE_URL": "https://weave.example.com",
+        "WEAVE_API_TOKEN": "${WEAVE_API_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+`uvx` fetches and runs the server in an isolated environment — no clone, no venv, no `.env` file. Credentials come from the `env` block. Create a Personal Access Token in Weave (Profile → Personal Access Tokens), then put it in `WEAVE_API_TOKEN` — here, or in your shell env referenced via `${WEAVE_API_TOKEN}`.
+
+## Local development
+
+For working on the server itself:
+
+1. `cp mcp/.env.example mcp/.env` and fill in `WEAVE_BASE_URL` and `WEAVE_API_TOKEN`.
+2. `python3 -m venv mcp/.venv && mcp/.venv/bin/pip install -e "./mcp[dev]"`
+3. Register it in the repo-root `.mcp.json` (git-ignored, so it stays local to your machine):
    ```json
    "weave": { "command": "mcp/.venv/bin/weave-mcp" }
    ```
@@ -26,8 +49,7 @@ mcp/.venv/bin/python -m pytest mcp/tests -v
 ```
 
 ## Auth model
-One `httpx.AsyncClient` logs in with the service-account credentials, caches the `weave_token`
-cookie, reuses it until it expires (24h), and re-logs-in once on any HTTP 401. Secrets live only
-in `mcp/.env` (git-ignored).
-
-**Important — Secure cookie / HTTP:** The Weave backend marks the `weave_token` cookie `Secure` unless it runs with `DEBUG=true`. A `Secure` cookie is not sent back over plain `http://`, so every call would return 401. To use this server, either run the Weave backend with `DEBUG=true` (non-Secure cookie, fine for local dev) or point `WEAVE_BASE_URL` at an `https://` Weave. 
+The client sends a Weave Personal Access Token as an `Authorization: Bearer` header on every
+request. Tokens are long-lived and revocable (revoke in the Weave UI), so there is no login,
+cookie, or session refresh. An invalid/revoked/expired token returns a 401, surfaced as an
+`{"error": 401}` result. The token lives only in `WEAVE_API_TOKEN` (env / git-ignored `mcp/.env`).
