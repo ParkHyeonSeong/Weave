@@ -4,6 +4,7 @@ ENCRYPT_KEY 환경변수 기반으로 민감 데이터(SMTP 비밀번호 등) �
 """
 import base64
 import hashlib
+import hmac
 import logging
 
 from cryptography.fernet import Fernet, InvalidToken
@@ -44,3 +45,14 @@ def decrypt(token: str) -> str:
     except InvalidToken:
         # 기존 평문 데이터 호환 — 암호화되지 않은 값이면 그대로 반환
         return token
+
+
+def hash_token(raw: str) -> str:
+    """One-way hash for PATs. HMAC-SHA256 peppered with ENCRYPT_KEY when set,
+    plain SHA-256 otherwise (dev fallback). Deterministic — same input → same digest,
+    so it can be used both to store and to look up tokens."""
+    if ENCRYPT_KEY:
+        key = _derive_key(ENCRYPT_KEY)  # 32-byte urlsafe-b64 key, reused from Fernet derivation
+        return hmac.new(key, raw.encode(), hashlib.sha256).hexdigest()
+    logger.warning("ENCRYPT_KEY not set — hashing PAT without pepper (sha256)")
+    return hashlib.sha256(raw.encode()).hexdigest()

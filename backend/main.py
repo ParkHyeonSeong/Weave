@@ -47,6 +47,9 @@ from routers import schedule_event as schedule_event_router
 from routers import schedule_event_task as event_task_router
 from routers import jira_migrate as jira_migrate_router
 from routers import track as track_router
+from routers import pat as pat_router
+from core.controller import pat as pat_controller
+import db_engine as db
 
 # -- Logging ---------------------------------------------------------------
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -117,7 +120,17 @@ else:
 # -- Middleware ------------------------------------------------------------
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
-    request.state.payload = validator.validate_login(request)
+    payload = validator.validate_login(request)  # cookie JWT (sync, no DB)
+    if not payload.get('user_id'):
+        auth = request.headers.get('Authorization', '')
+        if auth.startswith('Bearer '):
+            token = auth[7:].strip()
+            if token:  # skip the DB lookup for an empty "Bearer " header
+                async with db.transactional_session() as session:
+                    pat_payload = await pat_controller.authenticate_token(token, session)
+                if pat_payload:
+                    payload = pat_payload
+    request.state.payload = payload
     response = await call_next(request)
     return response
 
@@ -136,6 +149,7 @@ app.include_router(epic_router.router, prefix="/api/branches/{branch_id}/epics",
 app.include_router(task_router.router, prefix="/api/branches/{branch_id}/tasks", tags=["tasks"])
 app.include_router(task_type_config_router.router, prefix="/api/branches/{branch_id}/task-types", tags=["task-types"])
 app.include_router(profile_router.router, prefix="/api/profile", tags=["profile"])
+app.include_router(pat_router.router, prefix="/api/profile/tokens", tags=["tokens"])
 app.include_router(canvas_router.router, prefix="/api/canvases", tags=["canvases"])
 app.include_router(canvas_page_router.router, prefix="/api/canvases/{canvas_id}/pages", tags=["canvas-pages"])
 app.include_router(canvas_annotation_router.router, prefix="/api/canvases/{canvas_id}/pages/{page_id}/annotations", tags=["canvas-annotations"])
