@@ -105,9 +105,9 @@ A project calendar for planning and tracking.
 
 ## Weave MCP Server
 
-Weave ships an optional **[MCP (Model Context Protocol)](https://modelcontextprotocol.io) server** so you can drive Weave from AI clients like Claude — list projects, read and create tasks, and comment, straight from a chat session.
+Weave ships an optional **[MCP (Model Context Protocol)](https://modelcontextprotocol.io) server** so you can drive Weave from AI clients like Claude — manage tasks, sprints, epics, issues, dependencies, and docs straight from a chat session.
 
-- Tools: `list_branches`, `list_my_tasks`, `get_task`, `create_task`, `add_task_comment`
+- **41 tools** across tasks, comments, issues, dependencies, sprints, epics, branch config, Canvas docs, and notifications — see [`mcp/README.md`](mcp/README.md) for the full list
 - Talks to Weave over its REST API only — **no backend changes required**
 - Runs locally over stdio; authenticates with a Weave Personal Access Token (Bearer)
 
