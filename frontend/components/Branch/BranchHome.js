@@ -1,27 +1,48 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/router';
-import { Plus, Clock, Search, FileText, GitBranch } from 'lucide-react';
+import { Inbox, Clock, AlarmClock, Activity, GitBranch } from 'lucide-react';
 import { axios } from '@/library/_axios';
-import TaskSummary from '@/components/Home/DashboardWidgets/TaskSummary';
-import ActiveSprints from '@/components/Home/DashboardWidgets/ActiveSprints';
-import EntityIcon from '@/components/common/EntityIcon';
+import HomeHero from '@/components/Home/shared/HomeHero';
+import StatTiles from '@/components/Home/shared/StatTiles';
+import ContinueStrip from '@/components/Home/shared/ContinueStrip';
+import HomeToolbar from '@/components/Home/shared/HomeToolbar';
+import HomeSkeleton from '@/components/Home/shared/HomeSkeleton';
+import HomeEmptyState from '@/components/Home/shared/HomeEmptyState';
+import ProgressRing from '@/components/Home/shared/ProgressRing';
+import AppCard, { AvatarSet } from '@/components/Home/shared/AppCard';
 
 const getRelativeTime = (dateStr) => {
   const now = new Date();
   const date = new Date(dateStr);
   const diff = Math.floor((now - date) / 1000);
-  if (diff < 60) return 'just now';
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  if (diff < 172800) return 'yesterday';
-  return `${Math.floor(diff / 86400)}d ago`;
+  if (diff < 60) return '방금 전';
+  if (diff < 3600) return `${Math.floor(diff / 60)}분 전`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}시간 전`;
+  if (diff < 172800) return '어제';
+  return `${Math.floor(diff / 86400)}일 전`;
 };
+
+const getMyName = () => {
+  try {
+    const profile = JSON.parse(sessionStorage.getItem('profile') || '{}');
+    return profile.username || '';
+  } catch {
+    return '';
+  }
+};
+
+const createBranch = () => window.dispatchEvent(new CustomEvent('layout:create-branch'));
+const openCommandPalette = () => window.dispatchEvent(new CustomEvent('layout:open-search'));
 
 export default function BranchHome() {
   const router = useRouter();
   const [branches, setBranches] = useState([]);
   const [recentTasks, setRecentTasks] = useState([]);
+  const [stats, setStats] = useState(null);
   const [query, setQuery] = useState('');
+  const [view, setView] = useState('grid');
+  const [loading, setLoading] = useState(true);
+  const [me, setMe] = useState('');
 
   const fetchBranches = async () => {
     try {
@@ -37,9 +58,19 @@ export default function BranchHome() {
     } catch {}
   };
 
+  const fetchStats = async () => {
+    try {
+      const res = await axios.get('/branches/home-stats');
+      if (res.data.status) setStats(res.data);
+    } catch {}
+  };
+
   useEffect(() => {
-    fetchBranches();
-    fetchRecentTasks();
+    setMe(getMyName());
+    (async () => {
+      await Promise.all([fetchBranches(), fetchRecentTasks(), fetchStats()]);
+      setLoading(false);
+    })();
   }, []);
 
   useEffect(() => {
@@ -57,112 +88,104 @@ export default function BranchHome() {
   }, [branches, query]);
 
   return (
-    <div className="BranchHome">
-      <div className="BranchHome__Panel">
-        <div className="BranchHome__PanelHeader">
-          <GitBranch size={16} />
-          <span className="BranchHome__PanelTitle">Branch</span>
-          <button
-            className="BranchHome__CreateBtn"
-            onClick={() => window.dispatchEvent(new CustomEvent('layout:create-branch'))}
-          >
-            <Plus size={14} />
-            New Branch
-          </button>
-        </div>
-        <div className="BranchHome__PanelBody">
+    <div className="HomeMain">
+      <HomeHero
+        greeting={me ? <>안녕하세요, {me}님 👋</> : <>안녕하세요 👋</>}
+        summary={stats && (
+          <>
+            이번 주 마감 <b>{stats.due_this_week_count}</b> · 진행 중{' '}
+            <b>{stats.in_progress_count}</b> · 활성 스프린트{' '}
+            <b>{stats.active_sprint_count}</b>
+          </>
+        )}
+        actions={
+          <>
+            <button className="HBtn HBtn--sm" onClick={openCommandPalette}>
+              ⌘K 빠른 이동
+            </button>
+            <button className="HBtn HBtn--pri HBtn--sm" onClick={createBranch}>
+              ＋ 새 브랜치
+            </button>
+          </>
+        }
+      />
 
-      {/* 위젯 영역 */}
-      <div className="BranchHome__WidgetGrid">
-        <TaskSummary />
-        <ActiveSprints />
-      </div>
+      <StatTiles
+        loading={!stats}
+        tiles={stats ? [
+          { icon: <Inbox size={16} />, label: '열린 태스크', value: stats.open_count, tone: 'primary' },
+          { icon: <Clock size={16} />, label: '진행 중', value: stats.in_progress_count, tone: 'inprog' },
+          { icon: <AlarmClock size={16} />, label: '이번 주 마감', value: stats.due_this_week_count, tone: 'error' },
+          { icon: <Activity size={16} />, label: '활성 스프린트', value: stats.active_sprint_count, tone: 'success' },
+        ] : []}
+      />
 
-      {/* 최근 태스크 */}
-      {recentTasks.length > 0 && (
-        <div className="BranchHome__RecentSection">
-          <div className="Widget">
-            <div className="Widget__Header">
-              <Clock size={16} />
-              <span className="Widget__Title">Recent Tasks</span>
-            </div>
-            <div className="Widget__Body">
-              <div className="BranchHome__RecentList">
-                {recentTasks.map((item) => (
-                  <div
-                    key={item.task_id}
-                    className="BranchHome__RecentItem"
-                    onClick={() => router.push(`/branch/${item.branch_id}/task/${item.task_id}`)}
-                  >
-                    <div className={`BranchHome__StatusDot BranchHome__StatusDot--${item.status}`} />
-                    <span className="BranchHome__RecentId">{item.display_number}</span>
-                    <span className="BranchHome__RecentTitle">{item.title}</span>
-                    <span className="BranchHome__RecentTime">{getRelativeTime(item.viewed_at)}</span>
-                  </div>
-                ))}
+      <ContinueStrip
+        title="이어서 작업하기"
+        onMore={() => router.push('/my-tasks')}
+        loading={loading}
+        items={recentTasks.map((it) => ({
+          title: it.title,
+          dotColor: it.status_color,
+          meta: `${it.display_number} · ${getRelativeTime(it.viewed_at)}`,
+          onClick: () => router.push(`/branch/${it.branch_id}/task/${it.task_id}`),
+        }))}
+        emptyText="최근 작업한 태스크가 없습니다"
+      />
+
+      <div className="HomeDivider" />
+
+      <HomeToolbar
+        count={`브랜치 ${branches.length}`}
+        query={query}
+        onQuery={setQuery}
+        placeholder="브랜치 검색…"
+        sortLabel="최근 활동순"
+        view={view}
+        onView={setView}
+      />
+
+      {loading ? (
+        <HomeSkeleton variant="cards" />
+      ) : filteredBranches.length === 0 ? (
+        <HomeEmptyState
+          icon={<GitBranch size={26} />}
+          title={branches.length === 0 ? '아직 브랜치가 없어요' : '검색 결과 없음'}
+          desc={
+            branches.length === 0
+              ? '브랜치를 만들어 프로젝트 관리를 시작하세요.'
+              : `"${query}"에 맞는 브랜치가 없습니다.`
+          }
+          ctaLabel={branches.length === 0 ? '＋ 새 브랜치' : undefined}
+          onCta={createBranch}
+        />
+      ) : (
+        <div className="HGrid">
+          {filteredBranches.map((b) => (
+            <AppCard
+              key={b.branch_id}
+              accent={b.color}
+              onClick={() => router.push(`/branch/${b.branch_id}`)}
+            >
+              <div className="HCard__Top">
+                <ProgressRing value={b.progress_percent} color={b.color} />
+                <div>
+                  <div className="HCard__Title">{b.branch_name}</div>
+                  <div className="HCard__Desc">{b.description}</div>
+                </div>
               </div>
-            </div>
-          </div>
+              <div className="HCard__Foot">
+                <span className={`HChip ${b.active_sprint_name ? 'HChip--sprint' : 'HChip--muted'}`}>
+                  {b.active_sprint_name
+                    ? `${b.active_sprint_name} · ${b.task_total} 태스크`
+                    : `${b.task_total} 태스크`}
+                </span>
+                <AvatarSet members={b.members || []} />
+              </div>
+            </AppCard>
+          ))}
         </div>
       )}
-
-      {/* 구분선 + 전체 브랜치 목록 */}
-      <div className="BranchHome__Divider" />
-
-      <div className="BranchHome__ListSection">
-        <div className="BranchHome__SearchWrap">
-          <Search size={16} />
-          <input
-            className="BranchHome__SearchInput"
-            type="text"
-            placeholder="Search branches..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
-
-        {filteredBranches.length === 0 ? (
-          <div className="BranchHome__Empty">
-            {branches.length === 0 ? (
-              <>
-                <p>No branches yet.</p>
-                <p>Create a branch to start managing your project.</p>
-              </>
-            ) : (
-              <p>No branches matching &quot;{query}&quot;</p>
-            )}
-          </div>
-        ) : (
-          <div className="BranchHome__Grid">
-            {filteredBranches.map((branch) => (
-              <button
-                key={branch.branch_id}
-                className="BranchHome__Card"
-                onClick={() => router.push(`/branch/${branch.branch_id}`)}
-              >
-                <div className="BranchHome__CardHeader">
-                  <EntityIcon
-                    icon={branch.icon}
-                    color={branch.color}
-                    size={20}
-                    entityType="branch"
-                  />
-                  <span className="BranchHome__CardName">{branch.branch_name}</span>
-                  <span className="BranchHome__CardKey">{branch.key}</span>
-                </div>
-                {branch.description && (
-                  <p className="BranchHome__CardDesc">{branch.description}</p>
-                )}
-                <div className="BranchHome__CardMeta">
-                  <span className="BranchHome__CardRole">{branch.my_role}</span>
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-        </div>
-      </div>
     </div>
   );
 }

@@ -66,6 +66,13 @@ async def get_list(request: Request, db: AsyncSession):
     return {'status': True, 'branches': branches}
 
 
+async def get_home_stats(request: Request, db: AsyncSession):
+    """홈 KPI 집계 (접근 가능한 모든 Branch 기준)"""
+    user_id = request.state.payload.get('user_id')
+    stats = await branch_model.home_stats(user_id, db)
+    return {'status': True, **stats}
+
+
 async def get_detail(branch_id: int, request: Request, db: AsyncSession):
     """Branch 상세 (현재 사용자의 role 포함)"""
     branch = await branch_model.find_by_id(branch_id, db)

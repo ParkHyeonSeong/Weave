@@ -196,6 +196,13 @@ export default function Layout({ children }) {
     return () => window.removeEventListener('layout:create-track', handleCreate);
   }, []);
 
+  // 앱 홈에서 커맨드 팔레트 열기 요청 수신 (⌘K 빠른 이동 버튼)
+  useEffect(() => {
+    const handleOpen = () => setShowPalette(true);
+    window.addEventListener('layout:open-search', handleOpen);
+    return () => window.removeEventListener('layout:open-search', handleOpen);
+  }, []);
+
   // 영구 알림 + 채팅 unread 로드
   useEffect(() => {
     const fetchNotifications = async () => {

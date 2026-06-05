@@ -25,6 +25,12 @@ async def list_public_branches(request: Request, session: AsyncSession = Depends
     return await branch_controller.get_public_list(request, session)
 
 
+# 주의: /{branch_id} 보다 위에 선언해야 "home-stats"가 branch_id로 매칭되지 않음.
+@router.get("/home-stats", summary="Branch 홈 KPI 집계", dependencies=[Depends(require_login)])
+async def get_branch_home_stats(request: Request, session: AsyncSession = Depends(db.session)):
+    return await branch_controller.get_home_stats(request, session)
+
+
 @router.get("/{branch_id}", summary="Branch 상세", dependencies=[Depends(require_login)])
 async def get_branch(branch_id: int, request: Request,
                      session: AsyncSession = Depends(db.session)):
