@@ -37,20 +37,152 @@ async def find_by_id(track_id: int, db: AsyncSession):
 
 
 async def find_accessible(user_id: int, db: AsyncSession):
-    """사용자가 멤버인 Track 목록 (item/branch 카운트 포함)"""
+    """사용자가 멤버인 Track 목록 (홈 카드 집계 필드 포함).
+
+    각 track dict 에 추가되는 필드:
+    - item_count / branch_count / member_count (기존)
+    - progress_percent (0-100): track 의 task 참조(track_item, source_type='task')
+      전체에 대한 완료율. done = workflow_status category in done/cancelled
+      (branch/canvas 와 동일 규칙). task 가 없으면 0.
+    - branches (상위 3 [{name, color}]): 연결 branch 미리보기. track_branch 의
+      display_name_override / color_override 가 있으면 그쪽 우선
+      (track_branch.find_by_track 와 동일 해석).
+
+    progress 는 단일 목록 쿼리에서 상관 서브쿼리로 처리하고, branches 미리보기만
+    별도 배치 쿼리 1회로 가져와 N+1 을 피한다.
+    """
     result = await db.execute(text("""
         SELECT t.track_id, t.track_name, t.description, t.color, t.icon,
                t.visibility, t.default_view, t.created_at, t.updated_at,
                tm.role AS my_role,
-               (SELECT COUNT(*) FROM track_item ti WHERE ti.track_id = t.track_id) AS item_count,
+               COALESCE(pa.item_count, 0) AS item_count,
                (SELECT COUNT(*) FROM track_branch tb WHERE tb.track_id = t.track_id) AS branch_count,
-               (SELECT COUNT(*) FROM track_member tm2 WHERE tm2.track_id = t.track_id) AS member_count
+               (SELECT COUNT(*) FROM track_member tm2 WHERE tm2.track_id = t.track_id) AS member_count,
+               COALESCE(pa.task_total, 0) AS task_total,
+               COALESCE(pa.task_done, 0) AS task_done
         FROM track t
         INNER JOIN track_member tm ON t.track_id = tm.track_id
+        LEFT JOIN (
+            -- track 당 item 총수(item_count) 와 task 참조 집계를 한 번에.
+            -- Caveat: status 가 매칭되는 workflow_status row 가 없으면 'done' 으로
+            -- fallback(branch/canvas 와 동일). task 가 삭제됐으면 CASCADE 로
+            -- track_item 도 사라지므로 t.task_id NULL 케이스는 발생하지 않음.
+            SELECT ti.track_id,
+                   COUNT(*) AS item_count,
+                   COUNT(*) FILTER (WHERE ti.source_type = 'task') AS task_total,
+                   COUNT(*) FILTER (
+                       WHERE ti.source_type = 'task'
+                         AND COALESCE(ws.category, 'done') IN ('done', 'cancelled')
+                   ) AS task_done
+            FROM track_item ti
+            LEFT JOIN task tk ON tk.task_id = ti.source_task_id
+            LEFT JOIN workflow_status ws
+                ON ws.branch_id = tk.branch_id AND ws.key = tk.status
+            GROUP BY ti.track_id
+        ) pa ON pa.track_id = t.track_id
         WHERE tm.user_id = :user_id AND t.is_archived = FALSE
         ORDER BY t.updated_at DESC NULLS LAST, t.created_at DESC
     """), {'user_id': user_id})
-    return [dict(r._mapping) for r in result.fetchall()]
+    tracks = [dict(r._mapping) for r in result.fetchall()]
+
+    if not tracks:
+        return tracks
+
+    for t in tracks:
+        total = t.pop('task_total')
+        done = t.pop('task_done')
+        t['progress_percent'] = round(done / total * 100) if total else 0
+        t['branches'] = []
+
+    # 연결 branch 미리보기(상위 3) 배치 조회 — branch_name 순으로 3개까지.
+    # override 가 있으면 display_name / color 를 그쪽으로 해석
+    # (track_branch.find_by_track 와 동일).
+    track_ids = [t['track_id'] for t in tracks]
+    branches_result = await db.execute(text("""
+        SELECT track_id,
+               COALESCE(display_name_override, branch_real_name) AS name,
+               COALESCE(color_override, branch_real_color) AS color
+        FROM (
+            SELECT tb.track_id,
+                   tb.display_name_override, tb.color_override,
+                   b.branch_name AS branch_real_name,
+                   b.color AS branch_real_color,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY tb.track_id
+                       ORDER BY b.branch_name, b.branch_id
+                   ) AS rn
+            FROM track_branch tb
+            INNER JOIN branch b ON tb.branch_id = b.branch_id
+            WHERE tb.track_id = ANY(:track_ids) AND b.is_archived = FALSE
+        ) ranked
+        WHERE rn <= 3
+        ORDER BY track_id, rn
+    """), {'track_ids': track_ids})
+
+    by_track = {t['track_id']: t for t in tracks}
+    for row in branches_result.fetchall():
+        m = row._mapping
+        by_track[m['track_id']]['branches'].append({
+            'name': m['name'],
+            'color': m['color'],
+        })
+
+    return tracks
+
+
+async def home_stats(user_id: int, db: AsyncSession):
+    """사용자가 접근 가능한 Track 전체에 대한 홈 KPI 집계.
+
+    - active_track_count: 멤버인(아카이브 안 된) track 수.
+      track 에는 close/status 컬럼이 없고 is_archived 만 있으며,
+      find_accessible 과 동일하게 archived 는 이미 제외되므로
+      "활성 트랙 = 접근 가능한 트랙" 이다.
+    - connected_branch_count: 그 track 들에 연결된 distinct branch 수.
+    - in_progress_task_count: track 의 task 참조 중 category = 'in_progress'.
+    - due_this_week_count: 미완료(done/cancelled 외) 중 due_date 가
+      오늘~+7일 이내인 task 참조 수.
+
+    같은 task / branch 가 여러 track 에 참조돼도 distinct 로 한 번만 센다
+    (branch 는 명시적 DISTINCT, task 는 task_id distinct).
+    """
+    result = await db.execute(text("""
+        WITH my_tracks AS (
+            SELECT t.track_id
+            FROM track t
+            INNER JOIN track_member tm ON t.track_id = tm.track_id
+            WHERE tm.user_id = :user_id AND t.is_archived = FALSE
+        ),
+        my_tasks AS (
+            SELECT DISTINCT tk.task_id, tk.due_date,
+                   COALESCE(ws.category, 'done') AS category
+            FROM track_item ti
+            INNER JOIN my_tracks mt ON mt.track_id = ti.track_id
+            INNER JOIN task tk ON tk.task_id = ti.source_task_id
+            LEFT JOIN workflow_status ws
+                ON ws.branch_id = tk.branch_id AND ws.key = tk.status
+            WHERE ti.source_type = 'task'
+        )
+        SELECT
+            (SELECT COUNT(*) FROM my_tracks) AS active_track_count,
+            (SELECT COUNT(DISTINCT tb.branch_id)
+             FROM track_branch tb
+             INNER JOIN my_tracks mt2 ON mt2.track_id = tb.track_id
+            ) AS connected_branch_count,
+            (SELECT COUNT(*) FROM my_tasks
+             WHERE category = 'in_progress') AS in_progress_task_count,
+            (SELECT COUNT(*) FROM my_tasks
+             WHERE category NOT IN ('done', 'cancelled')
+               AND due_date IS NOT NULL
+               AND due_date >= CURRENT_DATE
+               AND due_date < CURRENT_DATE + 7) AS due_this_week_count
+    """), {'user_id': user_id})
+    row = result.fetchone()
+    return {
+        'active_track_count': row._mapping['active_track_count'],
+        'connected_branch_count': row._mapping['connected_branch_count'],
+        'in_progress_task_count': row._mapping['in_progress_task_count'],
+        'due_this_week_count': row._mapping['due_this_week_count'],
+    }
 
 
 async def update(track_id: int, fields: dict, db: AsyncSession):

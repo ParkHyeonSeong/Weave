@@ -25,6 +25,13 @@ async def list_tracks(request: Request,
     return await track_controller.get_list(request, session)
 
 
+# 주의: /{track_id} 보다 위에 선언해야 "home-stats"가 track_id로 매칭되지 않음.
+@router.get("/home-stats", summary="Track 홈 KPI 집계", dependencies=[Depends(require_login)])
+async def get_track_home_stats(request: Request,
+                               session: AsyncSession = Depends(db.session)):
+    return await track_controller.get_home_stats(request, session)
+
+
 @router.get("/{track_id}", summary="Track 상세", dependencies=[Depends(require_login)])
 async def get_track(track_id: int, request: Request,
                     session: AsyncSession = Depends(db.session)):

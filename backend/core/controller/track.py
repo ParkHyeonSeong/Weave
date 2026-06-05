@@ -85,6 +85,13 @@ async def get_list(request: Request, db: AsyncSession):
     return {'status': True, 'tracks': tracks}
 
 
+async def get_home_stats(request: Request, db: AsyncSession):
+    """홈 KPI 집계 (접근 가능한 모든 Track 기준)"""
+    user_id = request.state.payload.get('user_id')
+    stats = await track_model.home_stats(user_id, db)
+    return {'status': True, **stats}
+
+
 async def get_detail(track_id: int, request: Request, db: AsyncSession):
     """Track 상세 + 내 role + 참여 branches"""
     track = await track_model.find_by_id(track_id, db)
