@@ -66,6 +66,13 @@ async def get_list(request: Request, db: AsyncSession):
     return {'status': True, 'canvases': canvases}
 
 
+async def get_home_stats(request: Request, db: AsyncSession):
+    """홈 KPI 집계 (접근 가능한 모든 Canvas 기준)"""
+    user_id = request.state.payload.get('user_id')
+    stats = await canvas_model.home_stats(user_id, db)
+    return {'status': True, **stats}
+
+
 async def get_detail(canvas_id: int, request: Request, db: AsyncSession):
     """Canvas 상세 (현재 사용자의 role 포함)"""
     canvas = await canvas_model.find_by_id(canvas_id, db)

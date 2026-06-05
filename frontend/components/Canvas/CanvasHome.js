@@ -1,26 +1,63 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/router';
-import { Plus, Clock, Star, FileText, Search, FileEdit } from 'lucide-react';
+import { FileText, FileEdit, Star } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import EntityIcon from '@/components/common/EntityIcon';
+import HomeHero from '@/components/Home/shared/HomeHero';
+import StatTiles from '@/components/Home/shared/StatTiles';
+import ContinueStrip from '@/components/Home/shared/ContinueStrip';
+import HomeToolbar from '@/components/Home/shared/HomeToolbar';
+import HomeSkeleton from '@/components/Home/shared/HomeSkeleton';
+import HomeEmptyState from '@/components/Home/shared/HomeEmptyState';
+import AppCard, { AvatarSet } from '@/components/Home/shared/AppCard';
+
+const DEFAULT_DOC_COLOR = '#16A34A';
 
 const getRelativeTime = (dateStr) => {
   const now = new Date();
   const date = new Date(dateStr);
   const diff = Math.floor((now - date) / 1000);
-  if (diff < 60) return 'just now';
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  if (diff < 172800) return 'yesterday';
-  return `${Math.floor(diff / 86400)}d ago`;
+  if (diff < 60) return '방금 전';
+  if (diff < 3600) return `${Math.floor(diff / 60)}분 전`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}시간 전`;
+  if (diff < 172800) return '어제';
+  return `${Math.floor(diff / 86400)}일 전`;
 };
+
+const getMyName = () => {
+  try {
+    const profile = JSON.parse(sessionStorage.getItem('profile') || '{}');
+    return profile.username || '';
+  } catch {
+    return '';
+  }
+};
+
+// Low-alpha tint of a #RRGGBB hex for the icon box background.
+const tintOf = (hex) => {
+  const m = /^#([0-9a-fA-F]{6})$/.exec(hex || '');
+  if (!m) return 'rgba(94,106,210,.10)';
+  const n = parseInt(m[1], 16);
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+  return `rgba(${r},${g},${b},.12)`;
+};
+
+const createCanvas = () => window.dispatchEvent(new CustomEvent('layout:create-canvas'));
+const openCommandPalette = () => window.dispatchEvent(new CustomEvent('layout:open-search'));
 
 export default function CanvasHome() {
   const router = useRouter();
   const [canvases, setCanvases] = useState([]);
   const [recentDocs, setRecentDocs] = useState([]);
   const [starredDocs, setStarredDocs] = useState([]);
+  const [stats, setStats] = useState(null);
   const [query, setQuery] = useState('');
+  const [view, setView] = useState('grid');
+  const [activeTab, setActiveTab] = useState('recent');
+  const [loading, setLoading] = useState(true);
+  const [me, setMe] = useState('');
 
   const fetchCanvases = async () => {
     try {
@@ -40,9 +77,19 @@ export default function CanvasHome() {
     } catch {}
   };
 
+  const fetchStats = async () => {
+    try {
+      const res = await axios.get('/canvases/home-stats');
+      if (res.data.status) setStats(res.data);
+    } catch {}
+  };
+
   useEffect(() => {
-    fetchCanvases();
-    fetchWidgetData();
+    setMe(getMyName());
+    (async () => {
+      await Promise.all([fetchCanvases(), fetchWidgetData(), fetchStats()]);
+      setLoading(false);
+    })();
   }, []);
 
   useEffect(() => {
@@ -57,137 +104,114 @@ export default function CanvasHome() {
     return canvases.filter((c) => c.canvas_name.toLowerCase().includes(q));
   }, [canvases, query]);
 
-  const handleDocClick = (item) => {
-    router.push(`/canvas/${item.canvas_id}/${item.page_id}`);
-  };
+  const stripDocs = activeTab === 'starred' ? starredDocs : recentDocs;
+  const stripItems = stripDocs.map((it) => ({
+    title: it.title,
+    dotColor: it.color || DEFAULT_DOC_COLOR,
+    meta: `${it.canvas_name} · ${getRelativeTime(it.viewed_at || it.starred_at)}`,
+    onClick: () => router.push(`/canvas/${it.canvas_id}/${it.page_id}`),
+  }));
 
   return (
-    <div className="CanvasHome">
-      <div className="CanvasHome__Panel">
-        <div className="CanvasHome__PanelHeader">
-          <FileEdit size={16} />
-          <span className="CanvasHome__PanelTitle">Canvas</span>
-          <button
-            className="CanvasHome__CreateBtn"
-            onClick={() => window.dispatchEvent(new CustomEvent('layout:create-canvas'))}
-          >
-            <Plus size={14} />
-            New Canvas
-          </button>
-        </div>
-        <div className="CanvasHome__PanelBody">
-
-      {/* 위젯 영역 */}
-      <div className="CanvasHome__WidgetGrid">
-        {/* 최근 문서 */}
-        <div className="Widget">
-          <div className="Widget__Header">
-            <Clock size={16} />
-            <span className="Widget__Title">Recent Docs</span>
-          </div>
-          <div className="Widget__Body">
-            {recentDocs.length === 0 ? (
-              <div className="Widget__Empty">No recent docs</div>
-            ) : (
-              <div className="CanvasHome__DocList">
-                {recentDocs.map((item) => (
-                  <div
-                    key={item.page_id}
-                    className="CanvasHome__DocItem"
-                    onClick={() => handleDocClick(item)}
-                  >
-                    <FileText size={12} className="CanvasHome__DocIcon" />
-                    <span className="CanvasHome__DocCanvas">{item.canvas_name}</span>
-                    <span className="CanvasHome__DocTitle">{item.title}</span>
-                    <span className="CanvasHome__DocTime">{getRelativeTime(item.viewed_at)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* 즐겨찾기 문서 */}
-        <div className="Widget">
-          <div className="Widget__Header">
-            <Star size={16} />
-            <span className="Widget__Title">Starred Docs</span>
-          </div>
-          <div className="Widget__Body">
-            {starredDocs.length === 0 ? (
-              <div className="Widget__Empty">No starred docs</div>
-            ) : (
-              <div className="CanvasHome__DocList">
-                {starredDocs.map((item) => (
-                  <div
-                    key={item.page_id}
-                    className="CanvasHome__DocItem"
-                    onClick={() => handleDocClick(item)}
-                  >
-                    <FileText size={12} className="CanvasHome__DocIcon" />
-                    <span className="CanvasHome__DocCanvas">{item.canvas_name}</span>
-                    <span className="CanvasHome__DocTitle">{item.title}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* 구분선 + 전체 캔버스 목록 */}
-      <div className="CanvasHome__Divider" />
-
-      <div className="CanvasHome__ListSection">
-        <div className="CanvasHome__SearchWrap">
-          <Search size={16} />
-          <input
-            className="CanvasHome__SearchInput"
-            type="text"
-            placeholder="Search canvases..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
-
-        {filteredCanvases.length === 0 ? (
-          <div className="CanvasHome__Empty">
-            {canvases.length === 0 ? (
-              <>
-                <p>No canvases yet.</p>
-                <p>Create a canvas to start documenting.</p>
-              </>
-            ) : (
-              <p>No canvases matching &quot;{query}&quot;</p>
-            )}
-          </div>
-        ) : (
-          <div className="CanvasHome__Grid">
-            {filteredCanvases.map((canvas) => (
-              <button
-                key={canvas.canvas_id}
-                className="CanvasHome__Card"
-                onClick={() => router.push(`/canvas/${canvas.canvas_id}`)}
-              >
-                <div className="CanvasHome__CardHeader">
-                  <EntityIcon
-                    icon={canvas.icon}
-                    color={canvas.color}
-                    size={20}
-                    entityType="canvas"
-                  />
-                  <span className="CanvasHome__CardName">{canvas.canvas_name}</span>
-                </div>
-                {canvas.description && (
-                  <p className="CanvasHome__CardDesc">{canvas.description}</p>
-                )}
-              </button>
-            ))}
-          </div>
+    <div className="HomeMain">
+      <HomeHero
+        greeting={me ? <>안녕하세요, {me}님 👋</> : <>문서 작업을 이어가 볼까요 👋</>}
+        summary={stats && (
+          <>
+            이번 주 편집 <b>{stats.edited_this_week}</b> · 별표{' '}
+            <b>{stats.starred_count}</b>
+          </>
         )}
-      </div>
+        actions={
+          <>
+            <button className="HBtn HBtn--sm" onClick={openCommandPalette}>
+              ⌘K 빠른 이동
+            </button>
+            <button className="HBtn HBtn--pri HBtn--sm" onClick={createCanvas}>
+              ＋ 새 문서
+            </button>
+          </>
+        }
+      />
+
+      <StatTiles
+        loading={!stats}
+        tiles={stats ? [
+          { icon: <FileText size={16} />, label: '전체 문서', value: stats.total_docs, tone: 'doc' },
+          { icon: <FileEdit size={16} />, label: '이번 주 편집', value: stats.edited_this_week, tone: 'primary' },
+          { icon: <Star size={16} />, label: '별표 문서', value: stats.starred_count, tone: 'warn' },
+        ] : []}
+      />
+
+      <ContinueStrip
+        title="이어서 작업하기"
+        tabs={[
+          { key: 'recent', label: '최근' },
+          { key: 'starred', label: '별표' },
+        ]}
+        activeTab={activeTab}
+        onTab={setActiveTab}
+        loading={loading}
+        items={stripItems}
+        emptyText={activeTab === 'starred' ? '별표한 문서가 없습니다' : '최근 본 문서가 없습니다'}
+      />
+
+      <div className="HomeDivider" />
+
+      <HomeToolbar
+        count={`캔버스 ${canvases.length}`}
+        query={query}
+        onQuery={setQuery}
+        placeholder="문서·캔버스 검색…"
+        sortLabel="최근 편집순"
+        view={view}
+        onView={setView}
+      />
+
+      {loading ? (
+        <HomeSkeleton variant="cards" />
+      ) : filteredCanvases.length === 0 ? (
+        <HomeEmptyState
+          icon={<FileText size={26} />}
+          title={canvases.length === 0 ? '아직 캔버스가 없어요' : '검색 결과 없음'}
+          desc={
+            canvases.length === 0
+              ? '캔버스를 만들어 문서 작업을 시작하세요.'
+              : `"${query}"에 맞는 캔버스가 없습니다.`
+          }
+          ctaLabel={canvases.length === 0 ? '＋ 새 캔버스' : undefined}
+          onCta={createCanvas}
+        />
+      ) : (
+        <div className="HGrid">
+          {filteredCanvases.map((c) => (
+            <AppCard
+              key={c.canvas_id}
+              accent={c.color}
+              onClick={() => router.push(`/canvas/${c.canvas_id}`)}
+            >
+              <div className="HCard__Top">
+                <div className="HCard__IconBox" style={{ background: tintOf(c.color) }}>
+                  <EntityIcon icon={c.icon} color={c.color} size={24} entityType="canvas" />
+                </div>
+                <div>
+                  <div className="HCard__Title">{c.canvas_name}</div>
+                  <div className="HCard__Desc">{c.description}</div>
+                </div>
+              </div>
+              <div className="HCard__Foot">
+                <span className="HChip HChip--doc">{c.page_count ?? 0} 페이지</span>
+                <AvatarSet members={c.contributors || []} />
+              </div>
+              {c.last_edited_at && (
+                <div className="CanvasHome__Edited">
+                  {getRelativeTime(c.last_edited_at)} 편집
+                </div>
+              )}
+            </AppCard>
+          ))}
         </div>
-      </div>
+      )}
     </div>
   );
 }

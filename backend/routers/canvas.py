@@ -25,6 +25,12 @@ async def list_public_canvases(request: Request, session: AsyncSession = Depends
     return await canvas_controller.get_public_list(request, session)
 
 
+# 주의: /{canvas_id} 보다 위에 선언해야 "home-stats"가 canvas_id로 매칭되지 않음.
+@router.get("/home-stats", summary="Canvas 홈 KPI 집계", dependencies=[Depends(require_login)])
+async def get_canvas_home_stats(request: Request, session: AsyncSession = Depends(db.session)):
+    return await canvas_controller.get_home_stats(request, session)
+
+
 @router.get("/{canvas_id}", summary="Canvas 상세", dependencies=[Depends(require_login)])
 async def get_canvas(canvas_id: int, request: Request,
                      session: AsyncSession = Depends(db.session)):
