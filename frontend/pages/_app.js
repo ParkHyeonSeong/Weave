@@ -75,6 +75,7 @@ import "@/styles/components/branch/createIssuePage.scss";
 import "@/styles/components/myTasks/myTasks.scss";
 import "@/styles/components/layout/toast.scss";
 import "@/styles/components/home/ai-chat.scss";
+import "@/styles/components/home/shared/home-shared.scss";
 import "@/styles/components/branch/epicFlow.scss";
 import "@/styles/components/branch/branchSchedule.scss";
 import "@/styles/components/modal/scheduleEventModal.scss";
