@@ -5,5 +5,6 @@ from . import issues  # noqa: F401
 from . import epics  # noqa: F401
 from . import sprints  # noqa: F401
 from . import canvas  # noqa: F401
+from . import tracks  # noqa: F401
 from . import config  # noqa: F401
 from . import notify  # noqa: F401

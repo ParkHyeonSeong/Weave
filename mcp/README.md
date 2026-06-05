@@ -4,13 +4,14 @@ Exposes Weave project-management tools (tasks, sprints, epics, issues, docs, and
 Claude sessions over MCP (stdio). Talks to Weave's REST API only — the Weave backend is not
 modified. Each tool acts as the token's owner; `?` marks optional arguments.
 
-## Tools (41)
+## Tools (48)
 
 > The authoritative, always-current description of each tool is its docstring in
 > `weave_mcp/tools/*.py` (that's what the model reads). This list is the human-readable overview.
 
 **Branches & your work**
 - `list_branches()` — list branches (projects); call first to get a `branch_id`
+- `get_branch_home_stats()` — open / in-progress / due-this-week / active-sprint counts across your branches
 - `list_my_tasks(status?, priority?, branch_id?)` — your assigned tasks across branches
 
 **Tasks**
@@ -55,8 +56,14 @@ modified. Each tool acts as the token's owner; `?` marks optional arguments.
 
 **Canvas (docs)**
 - `list_canvases()` · `get_canvas_page_tree(canvas_id)` · `get_canvas_page(canvas_id, page_id)`
+- `get_canvas_home_stats()` — total-docs / edited-this-week / starred counts across your canvases
 - `create_canvas_page(canvas_id, title, content?, parent_page_id?)`
 - `update_canvas_page(canvas_id, page_id, title?, content?)` — `content` replaces the whole page body
+
+**Tracks** (cross-branch workflows)
+- `list_tracks()` — your tracks, each with `progress_percent`, item/branch/member counts and a linked-branch preview
+- `get_track(track_id)` · `get_track_home_stats()` — active-track / connected-branch / in-progress / due-this-week counts
+- `list_track_branches(track_id)` · `list_track_items(track_id)`
 
 **Notifications & stars**
 - `list_notifications()` · `mark_notification_read(notification_id)` · `list_starred(item_type?)`

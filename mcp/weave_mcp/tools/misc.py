@@ -8,8 +8,20 @@ async def list_branches() -> Any:
     """List all branches (projects) the account can access.
 
     Call this first — other tools need a branch_id, which comes from here.
+    Each branch includes progress_percent, task_total, active_sprint_name and a
+    preview of its members.
     """
     return await get_client().call_json("GET", "/api/branches")
+
+
+@mcp.tool
+async def get_branch_home_stats() -> Any:
+    """Get Branch home KPI aggregates across accessible branches.
+
+    Returns open_count, in_progress_count, due_this_week_count and
+    active_sprint_count.
+    """
+    return await get_client().call_json("GET", "/api/branches/home-stats")
 
 
 @mcp.tool

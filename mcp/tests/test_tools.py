@@ -10,6 +10,13 @@ async def test_list_branches(fake_client):
     fake_client.call_json.assert_awaited_once_with("GET", "/api/branches")
 
 
+async def test_get_branch_home_stats(fake_client):
+    fake_client.call_json.return_value = {"status": True}
+    async with Client(_app.mcp) as client:
+        await client.call_tool("get_branch_home_stats", {})
+    fake_client.call_json.assert_awaited_once_with("GET", "/api/branches/home-stats")
+
+
 async def test_list_my_tasks_filters(fake_client):
     fake_client.call_json.return_value = []
     async with Client(_app.mcp) as client:

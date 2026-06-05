@@ -10,6 +10,13 @@ async def test_list_canvases(fake_client):
     fake_client.call_json.assert_awaited_once_with("GET", "/api/canvases")
 
 
+async def test_get_canvas_home_stats(fake_client):
+    fake_client.call_json.return_value = {"status": True}
+    async with Client(_app.mcp) as client:
+        await client.call_tool("get_canvas_home_stats", {})
+    fake_client.call_json.assert_awaited_once_with("GET", "/api/canvases/home-stats")
+
+
 async def test_get_canvas_page_tree(fake_client):
     fake_client.call_json.return_value = {"status": True}
     async with Client(_app.mcp) as client:

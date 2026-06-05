@@ -5,8 +5,21 @@ from .._app import mcp, get_client
 
 @mcp.tool
 async def list_canvases() -> Any:
-    """List all canvases available to the current user."""
+    """List all canvases available to the current user.
+
+    Each canvas includes page_count, last_edited_at and a preview of its
+    contributors.
+    """
     return await get_client().call_json("GET", "/api/canvases")
+
+
+@mcp.tool
+async def get_canvas_home_stats() -> Any:
+    """Get Canvas home KPI aggregates across accessible canvases.
+
+    Returns total_docs, edited_this_week and starred_count.
+    """
+    return await get_client().call_json("GET", "/api/canvases/home-stats")
 
 
 @mcp.tool
