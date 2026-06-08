@@ -6,7 +6,9 @@ import ScrumCell from './ScrumCell';
 const getProfile = () => { try { return JSON.parse(sessionStorage.getItem('profile') || '{}'); } catch { return {}; } };
 const COLS = [['keep', 'Keep · 잘한 것'], ['problem', 'Problem · 문제'], ['try', 'Try · 시도']];
 
-export default function RetroView({ boardId }) {
+// 회고도 멤버별로 각자 KPT를 적는다. 한 회고 문서(period) 안에서 멤버마다
+// 별도 fragment(`${userId}:keep|problem|try`)에 바인딩 → 동시 협업·격리.
+export default function RetroView({ boardId, members = [] }) {
   const [retro, setRetro] = useState(null);
   const [manual, setManual] = useState(false);
   const user = useMemo(() => { const p = getProfile(); return p.user_id ? { user_id: p.user_id, username: p.username } : null; }, []);
@@ -32,17 +34,26 @@ export default function RetroView({ boardId }) {
   const fmt = (s) => s?.slice(5).replace('-', '/');
   return (
     <div className="RetroView">
-      <div className="RetroView__Period">{fmt(retro.period_start)} – {fmt(retro.period_end)} 회고 · KPT</div>
-      <div className="RetroView__Cols">
-        {COLS.map(([key, label]) => (
-          <div key={key} className={`RetroCol RetroCol--${key}`}>
-            <div className="RetroCol__Head">{label}</div>
-            <div className="RetroCol__Body">
-              <ScrumCell ydoc={ydoc} fragmentKey={key} placeholder="" />
-            </div>
+      <div className="RetroView__Period">{fmt(retro.period_start)} – {fmt(retro.period_end)} 회고 · KPT · 멤버별</div>
+      {members.map((m) => (
+        <div key={m.user_id} className="RetroMember">
+          <div className="RetroMember__Head">
+            <span className="RetroMember__Avatar">{(m.username || '?').slice(0, 1)}</span>
+            <span className="RetroMember__Name">{m.username}</span>
+            {m.user_id === user?.user_id && <em className="RetroMember__You">나</em>}
           </div>
-        ))}
-      </div>
+          <div className="RetroView__Cols">
+            {COLS.map(([key, label]) => (
+              <div key={key} className={`RetroCol RetroCol--${key}`}>
+                <div className="RetroCol__Head">{label}</div>
+                <div className="RetroCol__Body">
+                  <ScrumCell ydoc={ydoc} fragmentKey={`${m.user_id}:${key}`} placeholder="" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

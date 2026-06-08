@@ -30,10 +30,18 @@ export default function ScrumBoardView() {
     if (!boardId) return;
     try {
       const res = await axios.get(`/scrum/${boardId}`);
-      if (res.data.status) { setBoard(res.data.board); setMembers(res.data.board.members || []); }
-      else setErr(res.data.message || '접근 불가');
+      if (res.data.status) {
+        setBoard(res.data.board);
+        const ms = res.data.board.members || [];
+        const myId = user?.user_id;
+        // 본인을 항상 맨 위로, 나머지는 원래 순서(가입순) 유지
+        const ordered = myId
+          ? [...ms].sort((a, b) => (b.user_id === myId) - (a.user_id === myId))
+          : ms;
+        setMembers(ordered);
+      } else setErr(res.data.message || '접근 불가');
     } catch { setErr('불러오기 실패'); }
-  }, [boardId]);
+  }, [boardId, user?.user_id]);
 
   useEffect(() => { refetchBoard(); }, [refetchBoard]);
 
@@ -101,7 +109,7 @@ export default function ScrumBoardView() {
           <ScrumWeekGrid ydoc={ydoc} members={members} isoYear={wk.isoYear} isoWeek={wk.isoWeek} />
         )
       ) : (
-        <RetroView boardId={boardId} />
+        <RetroView boardId={boardId} members={members} />
       )}
       {showMembers && (
         <ScrumMembersModal

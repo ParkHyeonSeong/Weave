@@ -220,3 +220,68 @@
   transition:background 120ms;
   &:hover { background:color.adjust(#DC2626, $lightness:48%); }
 }
+
+// =========================================================================
+// 셀 내 인라인 칩 (task/doc 참조 + @mention) — Canvas와 동일한 디자인.
+// Canvas 칩 스타일은 에디터 컨테이너 스코프라 스크럼 셀엔 안 입혀져서 여기서 재현.
+// 그리드 셀과 회고 셀 모두 .ScrumCell 이라 한 번에 적용됨.
+// =========================================================================
+.ScrumCell {
+  .task-ref {
+    display:inline-flex; align-items:center; gap:3px; padding:1px 7px;
+    border-radius:$radius-md; font-size:$font-size-xs; font-weight:$font-weight-medium;
+    background:$color-primary-subtle; color:$color-primary; border:1px solid transparent;
+    cursor:pointer; vertical-align:baseline; line-height:1.5; white-space:nowrap; max-width:100%;
+    &::before {
+      content:''; display:inline-block; width:12px; height:12px; flex-shrink:0; background:currentColor;
+      -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='6' height='6' rx='1'/%3E%3Cpath d='m3 17 2 2 4-4'/%3E%3Cline x1='13' y1='6' x2='21' y2='6'/%3E%3Cline x1='13' y1='12' x2='21' y2='12'/%3E%3Cline x1='13' y1='18' x2='21' y2='18'/%3E%3C/svg%3E") no-repeat center / contain;
+      mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='6' height='6' rx='1'/%3E%3Cpath d='m3 17 2 2 4-4'/%3E%3Cline x1='13' y1='6' x2='21' y2='6'/%3E%3Cline x1='13' y1='12' x2='21' y2='12'/%3E%3Cline x1='13' y1='18' x2='21' y2='18'/%3E%3C/svg%3E") no-repeat center / contain;
+    }
+    &:hover { border-color:$color-primary; }
+  }
+  .doc-ref {
+    display:inline-flex; align-items:center; gap:3px; padding:1px 7px;
+    border-radius:$radius-md; font-size:$font-size-xs; font-weight:$font-weight-medium;
+    background:$color-ref-doc-bg; color:$color-ref-doc; border:1px solid transparent;
+    cursor:pointer; vertical-align:baseline; line-height:1.5; white-space:nowrap; max-width:100%;
+    &::before {
+      content:''; display:inline-block; width:12px; height:12px; flex-shrink:0; background:currentColor;
+      -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z'/%3E%3Cpath d='M14 2v4a2 2 0 0 0 2 2h4'/%3E%3C/svg%3E") no-repeat center / contain;
+      mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z'/%3E%3Cpath d='M14 2v4a2 2 0 0 0 2 2h4'/%3E%3C/svg%3E") no-repeat center / contain;
+    }
+    &:hover { border-color:$color-ref-doc; }
+  }
+  .mention {
+    color:$color-primary; background:rgba($color-primary, 0.1);
+    padding:1px 5px; border-radius:4px; font-weight:$font-weight-medium; white-space:nowrap;
+  }
+  .ref-chip__badge {
+    display:inline-flex; align-items:center; margin-left:4px; padding:0 5px;
+    border-radius:3px; font-size:10px; font-weight:$font-weight-medium; line-height:1.5; white-space:nowrap;
+    &--todo { background:rgba(0,0,0,0.06); color:$color-text-secondary; }
+    &--in_progress { background:$color-status-in-progress-bg; color:$color-status-in-progress; }
+    &--done { background:$color-success-bg; color:$color-success; }
+    &--cancelled { background:rgba(0,0,0,0.06); color:$color-text-secondary; }
+    &--open { background:$color-status-in-progress-bg; color:$color-status-in-progress; }
+    &--closed { background:$color-success-bg; color:$color-success; }
+  }
+}
+
+// =========================================================================
+// 회고 멤버별 섹션 (본인이 맨 위)
+// =========================================================================
+.RetroMember { display:flex; flex-direction:column; gap:8px; }
+.RetroMember + .RetroMember {
+  margin-top:4px; padding-top:14px;
+  border-top:1px solid color.adjust($color-border, $lightness:3%);
+}
+.RetroMember__Head { display:flex; align-items:center; gap:7px; font-weight:800; font-size:14px; }
+.RetroMember__Avatar {
+  width:20px; height:20px; border-radius:50%; background:#16A34A; color:#fff;
+  font-size:11px; display:flex; align-items:center; justify-content:center;
+}
+.RetroMember__You {
+  font-style:normal; font-size:11px; font-weight:700; color:#16A34A;
+  background:color.adjust(#16A34A, $lightness:50%); border-radius:4px; padding:1px 6px;
+}
+.RetroMember .RetroCol__Body { min-height:110px; }
