@@ -184,8 +184,16 @@ const IssueRefNode = Node.create({
             // 우측 가장자리에서 화면 밖으로 넘치지 않게 left 클램프
             popup.style.left = `${Math.min(coords.left, window.innerWidth - 360)}px`;
             popup.style.top = `${coords.bottom + 4}px`;
-            popup.style.zIndex = '200';
+            popup.style.zIndex = '500';
             document.body.appendChild(popup);
+            // 화면 아래로 넘치면 커서 위로 뒤집어 띄움 (하단 셀에서 안 묻히게)
+            requestAnimationFrame(() => {
+              if (!popup) return;
+              const h = popup.offsetHeight;
+              if (h && coords.bottom + h + 8 > window.innerHeight) {
+                popup.style.top = `${Math.max(8, coords.top - h - 4)}px`;
+              }
+            });
 
             renderer = new ReactRenderer(IssueRefPopup, {
               editor,
