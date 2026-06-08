@@ -31,6 +31,13 @@
 .Scrum__ChipRow { display:flex; gap:6px; flex-wrap:wrap; }
 .Scrum__Chip { border:1px solid $color-border; border-radius:999px; padding:3px 10px; font-size:12px; background:#fff; cursor:pointer; }
 .Scrum__Chip--on { border-color:#16A34A; color:#16A34A; font-weight:700; }
+.Scrum__Chip:disabled { opacity:.55; cursor:not-allowed; }
+
+// Scrum 설정 헤더 색상 점
+.ScrumSettings__ColorDot {
+  width:14px; height:14px; border-radius:50%; flex-shrink:0;
+  display:inline-block;
+}
 
 // 회고(Retro) 탭 + KPT 뷰
 .ScrumBoard__Tabs { display:flex; gap:4px; }
@@ -60,6 +67,16 @@
   display:inline-flex; align-items:center; gap:6px;
   border:1px solid $color-border; border-radius:8px; padding:4px 10px;
   font-size:13px; font-weight:700; background:#fff;
+  color:color.adjust($color-border, $lightness:-45%); cursor:pointer;
+  transition:border-color 120ms, background 120ms, color 120ms;
+  &:hover { border-color:$color-border-hover; background:$color-surface-hover; color:$color-text; }
+  svg { opacity:.8; }
+}
+
+.ScrumBoard__SettingsBtn {
+  display:inline-flex; align-items:center; justify-content:center;
+  width:30px; height:30px;
+  border:1px solid $color-border; border-radius:8px; background:#fff;
   color:color.adjust($color-border, $lightness:-45%); cursor:pointer;
   transition:border-color 120ms, background 120ms, color 120ms;
   &:hover { border-color:$color-border-hover; background:$color-surface-hover; color:$color-text; }

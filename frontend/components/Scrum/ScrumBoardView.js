@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/router';
-import { ChevronLeft, ChevronRight, Users } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Users, Settings } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import useScrumWeekCollab from '@/library/useScrumWeekCollab';
 import ScrumWeekGrid from './ScrumWeekGrid';
@@ -98,6 +98,15 @@ export default function ScrumBoardView() {
             <Users size={14} />
             멤버 {members.length}
           </button>
+          <button
+            type="button"
+            className="ScrumBoard__SettingsBtn"
+            onClick={() => router.push(`/scrum/${boardId}/settings`)}
+            title="보드 설정"
+            aria-label="보드 설정"
+          >
+            <Settings size={15} />
+          </button>
         </div>
       </header>
       {tab === 'board' ? (
@@ -115,6 +124,7 @@ export default function ScrumBoardView() {
         <ScrumMembersModal
           boardId={boardId}
           myRole={board.my_role}
+          count={members.length}
           onClose={() => setShowMembers(false)}
           onChanged={refetchBoard}
         />
