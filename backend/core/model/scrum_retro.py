@@ -51,6 +51,14 @@ async def get_or_create_current(board_id: int, cadence: str, interval_weeks,
     return dict(row._mapping)
 
 
+async def find_by_period(board_id: int, period_start: date, db: AsyncSession) -> dict | None:
+    """(board, period_start)의 회고 메타 dict 반환. 없으면 None."""
+    row = (await db.execute(text(
+        "SELECT retro_id, status FROM scrum_retro WHERE board_id=:b AND period_start=:s"),
+        {'b': board_id, 's': period_start})).fetchone()
+    return dict(row._mapping) if row else None
+
+
 async def find_by_id(retro_id: int, db: AsyncSession):
     row = (await db.execute(text(f"SELECT {_COLS} FROM scrum_retro WHERE retro_id=:r"),
                             {'r': retro_id})).fetchone()

@@ -10,9 +10,9 @@ def test_board_routes_registered():
     paths = _paths()
     assert (("POST",), "") in paths
     assert (("GET",), "") in paths
-    assert (("GET",), "/{board_id}") in paths
-    assert (("PATCH",), "/{board_id}") in paths
-    assert (("DELETE",), "/{board_id}") in paths
+    assert (("GET",), "/{board_id:int}") in paths
+    assert (("PATCH",), "/{board_id:int}") in paths
+    assert (("DELETE",), "/{board_id:int}") in paths
 
 
 def test_member_routes_registered():

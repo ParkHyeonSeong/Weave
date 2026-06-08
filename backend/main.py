@@ -47,6 +47,7 @@ from routers import schedule_event as schedule_event_router
 from routers import schedule_event_task as event_task_router
 from routers import jira_migrate as jira_migrate_router
 from routers import track as track_router
+from routers import scrum_home as scrum_home_router
 from routers import scrum_board as scrum_board_router
 from routers import scrum_week as scrum_week_router
 from routers import scrum_retro as scrum_retro_router
@@ -185,6 +186,7 @@ app.include_router(schedule_event_router.router, prefix="/api/branches/{branch_i
 app.include_router(event_task_router.router, prefix="/api/branches/{branch_id}/schedule-events/{event_id}/tasks", tags=["schedule-event-tasks"])
 app.include_router(jira_migrate_router.router, prefix="/api/branches/{branch_id}/jira-migrate", tags=["jira-migrate"])
 app.include_router(track_router.router, prefix="/api/tracks", tags=["tracks"])
+app.include_router(scrum_home_router.router, prefix="/api/scrum", tags=["scrum"])
 app.include_router(scrum_board_router.router, prefix="/api/scrum", tags=["scrum"])
 app.include_router(scrum_week_router.router, prefix="/api/scrum", tags=["scrum"])
 app.include_router(scrum_retro_router.router, prefix="/api/scrum", tags=["scrum"])

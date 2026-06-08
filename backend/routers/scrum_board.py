@@ -22,20 +22,20 @@ async def list_boards(request: Request,
     return await scrum_controller.get_list(request, session)
 
 
-@router.get("/{board_id}", summary="보드 상세", dependencies=[Depends(require_login)])
+@router.get("/{board_id:int}", summary="보드 상세", dependencies=[Depends(require_login)])
 async def get_board(board_id: int, request: Request,
                     session: AsyncSession = Depends(db.session)):
     return await scrum_controller.get_detail(board_id, request, session)
 
 
-@router.patch("/{board_id}", summary="보드 수정", dependencies=[Depends(require_login)])
+@router.patch("/{board_id:int}", summary="보드 수정", dependencies=[Depends(require_login)])
 async def update_board(board_id: int, body: scrum_schema.ScrumBoardUpdate,
                        request: Request,
                        session: AsyncSession = Depends(db.session)):
     return await scrum_controller.update(board_id, body, request, session)
 
 
-@router.delete("/{board_id}", summary="보드 아카이브", dependencies=[Depends(require_login)])
+@router.delete("/{board_id:int}", summary="보드 아카이브", dependencies=[Depends(require_login)])
 async def delete_board(board_id: int, request: Request,
                        session: AsyncSession = Depends(db.session)):
     return await scrum_controller.delete(board_id, request, session)

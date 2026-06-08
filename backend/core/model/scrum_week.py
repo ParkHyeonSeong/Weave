@@ -27,6 +27,16 @@ async def get_or_create(board_id: int, iso_year: int, iso_week: int,
     return dict(row._mapping)
 
 
+async def find_by_week(board_id: int, iso_year: int, iso_week: int,
+                       db: AsyncSession) -> dict | None:
+    """(board, iso_year, iso_week)의 주 메타 dict 반환. 없으면 None (생성 안 함)."""
+    row = (await db.execute(text(f"""
+        SELECT {_WEEK_COLS} FROM scrum_week
+        WHERE board_id = :board_id AND iso_year = :iso_year AND iso_week = :iso_week
+    """), {'board_id': board_id, 'iso_year': iso_year, 'iso_week': iso_week})).fetchone()
+    return dict(row._mapping) if row else None
+
+
 async def find_by_id(week_id: int, db: AsyncSession):
     """주 메타 (board 소속 확인용)."""
     result = await db.execute(text(f"""
