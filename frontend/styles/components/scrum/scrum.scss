@@ -31,3 +31,24 @@
 .Scrum__ChipRow { display:flex; gap:6px; flex-wrap:wrap; }
 .Scrum__Chip { border:1px solid $color-border; border-radius:999px; padding:3px 10px; font-size:12px; background:#fff; cursor:pointer; }
 .Scrum__Chip--on { border-color:#16A34A; color:#16A34A; font-weight:700; }
+
+// 회고(Retro) 탭 + KPT 뷰
+.ScrumBoard__Tabs { display:flex; gap:4px; }
+.ScrumBoard__Tabs button {
+  border:1px solid $color-border; border-radius:8px; padding:4px 12px; font-size:13px; font-weight:700;
+  background:#fff; color:color.adjust($color-border, $lightness:-45%); cursor:pointer;
+}
+.ScrumBoard__Tabs button.is-on { border-color:#16A34A; color:#16A34A; background:color.adjust(#16A34A, $lightness:52%); }
+
+.RetroView { display:flex; flex-direction:column; gap:12px; padding:14px 18px; overflow:auto; }
+.RetroView__Period { font-size:13px; font-weight:700; opacity:.75; }
+.RetroView__Loading,
+.RetroView__Empty { padding:24px 18px; font-size:13px; opacity:.7; }
+.RetroView__Cols { display:grid; grid-template-columns:repeat(3, minmax(180px, 1fr)); gap:12px; }
+
+.RetroCol { display:flex; flex-direction:column; border:1px solid $color-border; border-radius:10px; overflow:hidden; background:$color-surface; }
+.RetroCol__Head { font-size:13px; font-weight:800; padding:8px 12px; border-bottom:1px solid $color-border; }
+.RetroCol__Body { flex:1; padding:6px 8px; min-height:200px; }
+.RetroCol--keep .RetroCol__Head { color:#16A34A; background:color.adjust(#16A34A, $lightness:52%); border-bottom-color:color.adjust(#16A34A, $lightness:40%); }
+.RetroCol--problem .RetroCol__Head { color:#DC2626; background:color.adjust(#DC2626, $lightness:48%); border-bottom-color:color.adjust(#DC2626, $lightness:36%); }
+.RetroCol--try .RetroCol__Head { color:#2563EB; background:color.adjust(#2563EB, $lightness:46%); border-bottom-color:color.adjust(#2563EB, $lightness:34%); }
