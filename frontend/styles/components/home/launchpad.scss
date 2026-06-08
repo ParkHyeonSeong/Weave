@@ -1,3 +1,4 @@
+@use 'sass:color';
 @use '../../variables' as *;
 
 .HomeView {
@@ -120,6 +121,83 @@
     &:hover { background: $color-surface; color: $color-text; }
 
     svg { color: $color-text-tertiary; flex-shrink: 0; }
+  }
+}
+
+.ScrumCards {
+  display: flex;
+  flex-direction: column;
+  gap: $space-2;
+}
+
+.ScrumCard {
+  display: flex;
+  align-items: center;
+  gap: $space-3;
+  padding: $space-3 $space-4;
+  border: 1px solid $color-border;
+  border-radius: $radius-lg;
+  background: $color-bg;
+  font-size: $font-size-sm;
+  color: $color-text;
+
+  &--today {
+    border-left: 3px solid var(--accent, #{$color-primary});
+
+    .ScrumCard__Main svg { color: var(--accent, #{$color-primary}); }
+  }
+
+  &--retro {
+    border-left: 3px solid $color-warning;
+
+    .ScrumCard__Main svg { color: $color-warning; }
+  }
+
+  &__Main {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    flex: 1;
+    min-width: 0;
+    cursor: pointer;
+
+    span { color: $color-text-secondary; }
+    b { color: $color-text; font-weight: $font-weight-semibold; }
+    svg { flex-shrink: 0; }
+  }
+
+  &__Go {
+    flex-shrink: 0;
+    padding: $space-1 $space-3;
+    border-radius: $radius-md;
+    background: var(--accent, #{$color-primary});
+    color: $color-text-inverse;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-semibold;
+    transition: opacity $transition-fast;
+
+    &:hover { opacity: 0.9; }
+
+    &--retro {
+      background: $color-warning;
+      color: $color-text-inverse;
+
+      &:hover { background: color.adjust($color-warning, $lightness: -6%); }
+    }
+  }
+
+  &__X {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: $radius-md;
+    color: $color-text-tertiary;
+    transition: background $transition-fast, color $transition-fast;
+
+    &:hover { background: $color-surface-hover; color: $color-text; }
   }
 }
 

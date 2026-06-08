@@ -1,6 +1,7 @@
 import Launchpad from './Launchpad';
 import QuickCreate from './QuickCreate';
 import WidgetZone from './WidgetZone';
+import ScrumHomeCards from './ScrumHomeCards';
 
 export default function HomeView() {
   return (
@@ -12,6 +13,8 @@ export default function HomeView() {
         </div>
         <QuickCreate />
       </div>
+
+      <ScrumHomeCards />
 
       <Launchpad />
 

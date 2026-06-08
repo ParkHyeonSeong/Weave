@@ -18,7 +18,8 @@ export default function ScrumBoardView() {
   const [members, setMembers] = useState([]);
   const [wk, setWk] = useState(() => currentISOWeek());
   const [weekId, setWeekId] = useState(null);
-  const [tab, setTab] = useState('board');
+  const [tab, setTab] = useState(() => (typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).get('tab') === 'retro') ? 'retro' : 'board');
   const [err, setErr] = useState('');
   const user = useMemo(() => { const p = getProfile(); return p.user_id ? { user_id: p.user_id, username: p.username } : null; }, []);
 
