@@ -1,0 +1,33 @@
+@use 'sass:color';
+@use '../../variables' as *;
+
+.ScrumBoard { display:flex; flex-direction:column; height:100%; }
+.ScrumBoard__Head { display:flex; align-items:center; gap:16px; padding:14px 18px; border-bottom:1px solid $color-border; }
+.ScrumBoard__Title { font-weight:800; font-size:16px; border-left:3px solid var(--accent,#16A34A); padding-left:10px; }
+.ScrumBoard__WeekNav { display:flex; align-items:center; gap:8px; }
+.ScrumBoard__WeekNav button { border:1px solid $color-border; border-radius:7px; padding:3px 6px; background:#fff; cursor:pointer; }
+.ScrumBoard__WeekLabel { font-weight:700; font-size:13px; }
+.ScrumBoard__Presence { margin-left:auto; }
+.ScrumBoard__Live { display:flex; align-items:center; gap:4px; }
+.ScrumBoard__Dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:3px; }
+.ScrumBoard__LiveText { font-size:12px; opacity:.7; }
+.ScrumBoard__Loading,
+.ScrumBoard__Empty,
+.ScrumBoard__Error { padding:24px 18px; font-size:13px; opacity:.7; }
+
+.ScrumGrid { overflow:auto; padding:12px 18px; }
+.ScrumGrid__Row { display:grid; grid-template-columns:88px repeat(5,minmax(140px,1fr)); }
+.ScrumGrid__Row--head .ScrumGrid__ColHead { text-align:center; font-weight:700; opacity:.7; padding:6px; border-bottom:1px solid $color-border; }
+.ScrumGrid__Wd { margin-right:4px; }
+.ScrumGrid__Date { font-size:11px; opacity:.6; }
+.ScrumGrid__Person { margin-bottom:10px; }
+.ScrumGrid__PersonHead { display:flex; align-items:center; gap:6px; font-weight:800; padding:8px 4px 4px; }
+.ScrumGrid__Avatar { width:18px; height:18px; border-radius:50%; background:#16A34A; color:#fff; font-size:10px; display:flex; align-items:center; justify-content:center; }
+.ScrumGrid__RowLabel { font-size:11px; opacity:.6; display:flex; align-items:center; font-weight:700; }
+.ScrumGrid__CellWrap { border:1px solid color.adjust($color-border, $lightness:3%); border-radius:6px; margin:2px; min-height:34px; }
+.ScrumCell { padding:5px 7px; font-size:12px; min-height:24px; }
+.ScrumCell .ProseMirror { outline:none; min-height:20px; }
+.ScrumCell--loading { min-height:34px; background:color.adjust($color-surface, $lightness:-1%); border-radius:6px; }
+.Scrum__ChipRow { display:flex; gap:6px; flex-wrap:wrap; }
+.Scrum__Chip { border:1px solid $color-border; border-radius:999px; padding:3px 10px; font-size:12px; background:#fff; cursor:pointer; }
+.Scrum__Chip--on { border-color:#16A34A; color:#16A34A; font-weight:700; }

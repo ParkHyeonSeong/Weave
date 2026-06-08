@@ -85,6 +85,7 @@ import "@/styles/components/common/activityTimeline.scss";
 import "@/styles/components/track/track.scss";
 import "@/styles/components/track/tracksIndex.scss";
 import "@/styles/components/track/trackSettings.scss";
+import "@/styles/components/scrum/scrum.scss";
 
 const publicPaths = ['/auth/login', '/auth/change-password', '/setup'];
 const noLayoutPaths = ['/auth/login', '/auth/change-password', '/setup', '/admin'];
