@@ -9,6 +9,7 @@ import Messenger from '@/components/Messenger/Messenger';
 import CreateBranch from '@/components/modal/CreateBranch';
 import CreateCanvas from '@/components/modal/CreateCanvas';
 import CreateTrack from '@/components/modal/CreateTrack';
+import CreateScrumBoard from '@/components/modal/CreateScrumBoard';
 import CommandPalette from '@/components/modal/CommandPalette';
 import { requestNotificationPermission, showNotification, playNotificationSound } from '@/library/notification';
 import { subscribeToPush } from '@/library/pushSubscription';
@@ -29,6 +30,7 @@ export default function Layout({ children }) {
   const [showCreateBranch, setShowCreateBranch] = useState(false);
   const [showCreateCanvas, setShowCreateCanvas] = useState(false);
   const [showCreateTrack, setShowCreateTrack] = useState(false);
+  const [showCreateScrum, setShowCreateScrum] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     try { return sessionStorage.getItem('sidebar_collapsed') === 'true'; }
@@ -194,6 +196,13 @@ export default function Layout({ children }) {
     const handleCreate = () => setShowCreateTrack(true);
     window.addEventListener('layout:create-track', handleCreate);
     return () => window.removeEventListener('layout:create-track', handleCreate);
+  }, []);
+
+  // ScrumHome에서 Scrum 보드 생성 요청 수신
+  useEffect(() => {
+    const handleCreate = () => setShowCreateScrum(true);
+    window.addEventListener('layout:create-scrum', handleCreate);
+    return () => window.removeEventListener('layout:create-scrum', handleCreate);
   }, []);
 
   // 앱 홈에서 커맨드 팔레트 열기 요청 수신 (⌘K 빠른 이동 버튼)
@@ -405,6 +414,7 @@ export default function Layout({ children }) {
             onCreateBranch={() => setShowCreateBranch(true)}
             onCreateCanvas={() => setShowCreateCanvas(true)}
             onCreateTrack={() => setShowCreateTrack(true)}
+            onCreateScrum={() => setShowCreateScrum(true)}
             onClose={() => setIsSidebarCollapsed(true)}
           />
         )}
@@ -463,6 +473,12 @@ export default function Layout({ children }) {
       )}
       {showCreateCanvas && (
         <CreateCanvas onClose={() => setShowCreateCanvas(false)} />
+      )}
+      {showCreateScrum && (
+        <CreateScrumBoard
+          onClose={() => setShowCreateScrum(false)}
+          onCreated={() => setShowCreateScrum(false)}
+        />
       )}
       {showPalette && (
         <CommandPalette onClose={() => setShowPalette(false)} />

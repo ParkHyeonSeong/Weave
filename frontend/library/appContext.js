@@ -4,8 +4,9 @@ export function getAppContext(pathname) {
   if (pathname.startsWith('/canvas')) return 'canvas';
   if (pathname.startsWith('/branch')) return 'branch';
   if (pathname.startsWith('/tracks')) return 'track';
+  if (pathname.startsWith('/scrum')) return 'scrum';
   return null;
 }
 
 // 각 앱의 진입(목록) 경로
-export const APP_HOME = { branch: '/branch', canvas: '/canvas', track: '/tracks' };
+export const APP_HOME = { branch: '/branch', canvas: '/canvas', track: '/tracks', scrum: '/scrum' };

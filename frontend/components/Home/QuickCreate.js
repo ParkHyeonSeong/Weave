@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
-import { Plus, GitBranch, FileEdit, Workflow } from 'lucide-react';
+import { Plus, GitBranch, FileEdit, Workflow, CalendarCheck } from 'lucide-react';
 
 const ITEMS = [
   { key: 'branch', label: '새 브랜치', event: 'layout:create-branch', Icon: GitBranch },
   { key: 'canvas', label: '새 캔버스', event: 'layout:create-canvas', Icon: FileEdit },
   { key: 'track',  label: '새 트랙',   event: 'layout:create-track',  Icon: Workflow },
+  { key: 'scrum',  label: '새 스크럼', event: 'layout:create-scrum',  Icon: CalendarCheck },
 ];
 
 export default function QuickCreate() {

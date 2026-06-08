@@ -6,8 +6,9 @@ import { getAppContext } from '@/library/appContext';
 import SidebarBranches from './SidebarBranches';
 import SidebarCanvases from './SidebarCanvases';
 import SidebarTracks from './SidebarTracks';
+import SidebarScrums from './SidebarScrums';
 
-export default function Sidebar({ isMobile, width, onResizeStart, onCreateBranch, onCreateCanvas, onCreateTrack, onClose }) {
+export default function Sidebar({ isMobile, width, onResizeStart, onCreateBranch, onCreateCanvas, onCreateTrack, onCreateScrum, onClose }) {
   const router = useRouter();
   const activeApp = getAppContext(router.pathname);
   const [sidebarOrder, setSidebarOrder] = useState(null);
@@ -64,6 +65,13 @@ export default function Sidebar({ isMobile, width, onResizeStart, onCreateBranch
             onCreateTrack={onCreateTrack}
             savedOrder={sidebarOrder?.tracks}
             onOrderChange={(ids) => handleOrderChange('tracks', ids)}
+          />
+        )}
+        {activeApp === 'scrum' && (
+          <SidebarScrums
+            onCreateScrum={onCreateScrum}
+            savedOrder={sidebarOrder?.scrums}
+            onOrderChange={(ids) => handleOrderChange('scrums', ids)}
           />
         )}
       </div>

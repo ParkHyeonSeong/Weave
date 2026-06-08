@@ -11,6 +11,7 @@ export const DEFAULT_COLORS = {
   branch: '#5E6AD2',
   track:  '#5E6AD2',
   canvas: '#16A34A',
+  scrum:  '#16A34A',
 };
 
 // IconPicker가 보여주는 큐레이션 Lucide 목록.

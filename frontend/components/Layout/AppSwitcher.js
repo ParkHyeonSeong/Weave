@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
-import { LayoutDashboard, GitBranch, FileEdit, Workflow, ChevronDown, Check, FileText } from 'lucide-react';
+import { LayoutDashboard, GitBranch, FileEdit, Workflow, CalendarCheck, ChevronDown, Check, FileText } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import { getAppContext, APP_HOME } from '@/library/appContext';
 import { DEFAULT_COLORS } from '@/library/entityAppearance';
@@ -10,6 +10,7 @@ const APPS = [
   { key: 'branch', label: 'Branch', Icon: GitBranch,       color: DEFAULT_COLORS.branch, path: APP_HOME.branch },
   { key: 'canvas', label: 'Canvas', Icon: FileEdit,        color: DEFAULT_COLORS.canvas, path: APP_HOME.canvas },
   { key: 'track',  label: 'Track',  Icon: Workflow,        color: DEFAULT_COLORS.track,  path: APP_HOME.track },
+  { key: 'scrum',  label: 'Scrum',  Icon: CalendarCheck,   color: DEFAULT_COLORS.scrum,  path: APP_HOME.scrum },
 ];
 
 export default function AppSwitcher() {
