@@ -6,6 +6,7 @@ from pycrdt import Doc
 
 from core.model import canvas_page as canvas_page_model
 from core.model import scrum_week as scrum_week_model
+from core.model import scrum_retro as scrum_retro_model
 import db_engine as db
 
 logger = logging.getLogger("weave.collab")
@@ -270,5 +271,15 @@ class ScrumWeekStore:
         await scrum_week_model.save_yjs_state(room_id, state, db_session)
 
 
+class ScrumRetroStore:
+    """스크럼 회고 yjs_state store."""
+    async def get_yjs_state(self, room_id, db_session):
+        return await scrum_retro_model.get_yjs_state(room_id, db_session)
+
+    async def save_yjs_state(self, room_id, state, db_session):
+        await scrum_retro_model.save_yjs_state(room_id, state, db_session)
+
+
 collab_manager = CollabManager(CanvasPageStore())
 scrum_week_collab_manager = CollabManager(ScrumWeekStore())
+scrum_retro_collab_manager = CollabManager(ScrumRetroStore())

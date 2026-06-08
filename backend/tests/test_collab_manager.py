@@ -59,6 +59,8 @@ async def test_separate_managers_have_isolated_rooms():
 def test_default_managers_exist():
     assert isinstance(cm.collab_manager, cm.CollabManager)
     assert isinstance(cm.scrum_week_collab_manager, cm.CollabManager)
+    assert isinstance(cm.scrum_retro_collab_manager, cm.CollabManager)
     # 싱글턴이 올바른 store 타입을 주입받았는지 (복붙 실수 방지)
     assert isinstance(cm.collab_manager.store, cm.CanvasPageStore)
     assert isinstance(cm.scrum_week_collab_manager.store, cm.ScrumWeekStore)
+    assert isinstance(cm.scrum_retro_collab_manager.store, cm.ScrumRetroStore)
