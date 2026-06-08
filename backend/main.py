@@ -11,7 +11,7 @@ from slowapi.errors import RateLimitExceeded
 
 from library import validator
 from library.rate_limiter import limiter
-from library.ws_collab_manager import collab_manager
+from library.ws_collab_manager import collab_manager, scrum_week_collab_manager
 from routers import auth as auth_router
 from routers import setup as setup_router
 from routers import branch as branch_router
@@ -48,6 +48,8 @@ from routers import schedule_event_task as event_task_router
 from routers import jira_migrate as jira_migrate_router
 from routers import track as track_router
 from routers import scrum_board as scrum_board_router
+from routers import scrum_week as scrum_week_router
+from routers import ws_scrum as ws_scrum_router
 from routers import pat as pat_router
 from core.controller import pat as pat_controller
 import db_engine as db
@@ -68,6 +70,7 @@ async def lifespan(app):
     # Graceful shutdown: 활성 collaboration room 영속화
     logger.info("Persisting active collaboration rooms...")
     await collab_manager.persist_all()
+    await scrum_week_collab_manager.persist_all()
 
 
 # -- App -------------------------------------------------------------------
@@ -143,6 +146,7 @@ app.include_router(branch_router.router, prefix="/api/branches", tags=["branches
 app.include_router(chat_router.router, prefix="/api/chat", tags=["chat"])
 app.include_router(ws_chat_router.router, prefix="/api", tags=["websocket"])
 app.include_router(ws_canvas_router.router, prefix="/api", tags=["websocket"])
+app.include_router(ws_scrum_router.router, prefix="/api", tags=["websocket"])
 app.include_router(admin_router.router, prefix="/api/admin", tags=["admin"])
 app.include_router(sprint_router.router, prefix="/api/branches/{branch_id}/sprints", tags=["sprints"])
 app.include_router(label_router.router, prefix="/api/branches/{branch_id}/labels", tags=["labels"])
@@ -178,6 +182,7 @@ app.include_router(event_task_router.router, prefix="/api/branches/{branch_id}/s
 app.include_router(jira_migrate_router.router, prefix="/api/branches/{branch_id}/jira-migrate", tags=["jira-migrate"])
 app.include_router(track_router.router, prefix="/api/tracks", tags=["tracks"])
 app.include_router(scrum_board_router.router, prefix="/api/scrum", tags=["scrum"])
+app.include_router(scrum_week_router.router, prefix="/api/scrum", tags=["scrum"])
 
 # -- Static files (업로드 파일 서빙) -----------------------------------------
 uploads_dir = os.path.join(os.path.dirname(__file__), 'uploads')
