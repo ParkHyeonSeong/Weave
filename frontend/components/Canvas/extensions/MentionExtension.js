@@ -171,19 +171,16 @@ const MentionNode = Node.create({
             destroyPopup();
 
             const coords = editorView.coordsAtPos(editorView.state.selection.from);
-            const editorContainer = editorView.dom.closest('.CanvasEditor')
-              || editorView.dom.closest('.TaskDescEditor')
-              || editorView.dom.closest('.IssueEditor')
-              || editorView.dom.closest('.CommentEditor')
-              || editorView.dom.parentElement;
-            const editorRect = editorContainer.getBoundingClientRect();
 
             popup = document.createElement('div');
-            popup.style.position = 'absolute';
-            popup.style.left = `${coords.left - editorRect.left}px`;
-            popup.style.top = `${coords.bottom - editorRect.top + 4}px`;
+            // viewport 기준 fixed + body append → 에디터 컨테이너 종류/overflow 클리핑과
+            // 무관하게 어디서든(스크럼 셀 포함) 커서 위치에 정확히 뜬다.
+            popup.style.position = 'fixed';
+            // 우측 가장자리(목/금 칸 등)에서 화면 밖으로 넘치지 않게 left 클램프
+            popup.style.left = `${Math.min(coords.left, window.innerWidth - 360)}px`;
+            popup.style.top = `${coords.bottom + 4}px`;
             popup.style.zIndex = '200';
-            editorContainer.appendChild(popup);
+            document.body.appendChild(popup);
 
             renderer = new ReactRenderer(MentionPopup, {
               editor,

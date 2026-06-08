@@ -176,16 +176,16 @@ const IssueRefNode = Node.create({
           function createPopup(pluginState) {
             destroyPopup();
 
+            // viewport 기준 fixed + body append → 컨테이너 종류/클리핑 무관하게 정확히 뜸
             const coords = editorView.coordsAtPos(editorView.state.selection.from);
-            const editorContainer = editorView.dom.closest('.CanvasEditor') || editorView.dom.closest('.TaskDescEditor') || editorView.dom.parentElement;
-            const editorRect = editorContainer.getBoundingClientRect();
 
             popup = document.createElement('div');
-            popup.style.position = 'absolute';
-            popup.style.left = `${coords.left - editorRect.left}px`;
-            popup.style.top = `${coords.bottom - editorRect.top + 4}px`;
+            popup.style.position = 'fixed';
+            // 우측 가장자리에서 화면 밖으로 넘치지 않게 left 클램프
+            popup.style.left = `${Math.min(coords.left, window.innerWidth - 360)}px`;
+            popup.style.top = `${coords.bottom + 4}px`;
             popup.style.zIndex = '200';
-            editorContainer.appendChild(popup);
+            document.body.appendChild(popup);
 
             renderer = new ReactRenderer(IssueRefPopup, {
               editor,
