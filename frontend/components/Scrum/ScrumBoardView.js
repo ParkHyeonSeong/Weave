@@ -1,10 +1,11 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/router';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Users } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import useScrumWeekCollab from '@/library/useScrumWeekCollab';
 import ScrumWeekGrid from './ScrumWeekGrid';
 import RetroView from './RetroView';
+import ScrumMembersModal from './ScrumMembersModal';
 import { currentISOWeek, addWeeks, weekDates } from '@/library/isoWeek';
 
 const getProfile = () => {
@@ -21,19 +22,20 @@ export default function ScrumBoardView() {
   const [tab, setTab] = useState(() => (typeof window !== 'undefined'
     && new URLSearchParams(window.location.search).get('tab') === 'retro') ? 'retro' : 'board');
   const [err, setErr] = useState('');
+  const [showMembers, setShowMembers] = useState(false);
   const user = useMemo(() => { const p = getProfile(); return p.user_id ? { user_id: p.user_id, username: p.username } : null; }, []);
 
   // 보드 상세 + 멤버
-  useEffect(() => {
+  const refetchBoard = useCallback(async () => {
     if (!boardId) return;
-    (async () => {
-      try {
-        const res = await axios.get(`/scrum/${boardId}`);
-        if (res.data.status) { setBoard(res.data.board); setMembers(res.data.board.members || []); }
-        else setErr(res.data.message || '접근 불가');
-      } catch { setErr('불러오기 실패'); }
-    })();
+    try {
+      const res = await axios.get(`/scrum/${boardId}`);
+      if (res.data.status) { setBoard(res.data.board); setMembers(res.data.board.members || []); }
+      else setErr(res.data.message || '접근 불가');
+    } catch { setErr('불러오기 실패'); }
   }, [boardId]);
+
+  useEffect(() => { refetchBoard(); }, [refetchBoard]);
 
   // 주 get_or_create → week_id
   useEffect(() => {
@@ -71,18 +73,24 @@ export default function ScrumBoardView() {
             <button onClick={() => setWk((p) => addWeeks(p.isoYear, p.isoWeek, 1))} aria-label="다음 주"><ChevronRight size={16} /></button>
           </div>
         )}
-        {tab === 'board' && (
-          <div className="ScrumBoard__Presence">
-            {status === 'connected' && connectedUsers.length > 0 && (
-              <span className="ScrumBoard__Live">
-                {connectedUsers.slice(0, 5).map((u) => (
-                  <span key={u.clientId} className="ScrumBoard__Dot" style={{ background: u.color }} title={u.name} />
-                ))}
-                <span className="ScrumBoard__LiveText">편집 중 {connectedUsers.length}</span>
-              </span>
-            )}
-          </div>
-        )}
+        <div className="ScrumBoard__Presence">
+          {tab === 'board' && status === 'connected' && connectedUsers.length > 0 && (
+            <span className="ScrumBoard__Live">
+              {connectedUsers.slice(0, 5).map((u) => (
+                <span key={u.clientId} className="ScrumBoard__Dot" style={{ background: u.color }} title={u.name} />
+              ))}
+              <span className="ScrumBoard__LiveText">편집 중 {connectedUsers.length}</span>
+            </span>
+          )}
+          <button
+            type="button"
+            className="ScrumBoard__MembersBtn"
+            onClick={() => setShowMembers(true)}
+          >
+            <Users size={14} />
+            멤버 {members.length}
+          </button>
+        </div>
       </header>
       {tab === 'board' ? (
         !weekId || !ydoc ? (
@@ -94,6 +102,14 @@ export default function ScrumBoardView() {
         )
       ) : (
         <RetroView boardId={boardId} />
+      )}
+      {showMembers && (
+        <ScrumMembersModal
+          boardId={boardId}
+          myRole={board.my_role}
+          onClose={() => setShowMembers(false)}
+          onChanged={refetchBoard}
+        />
       )}
     </div>
   );

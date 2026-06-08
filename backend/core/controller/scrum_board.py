@@ -118,6 +118,16 @@ async def update_member_role(board_id: int, target_user_id: int, body,
     return {'status': True}
 
 
+async def search_invite_candidates(board_id: int, query: str, request: Request,
+                                   db: AsyncSession):
+    """초대 가능한 사용자 검색 — admin만"""
+    err = await _require_role(board_id, request, 'admin', db)
+    if err:
+        return err
+    users = await member_model.search_non_members(board_id, query, db)
+    return {'status': True, 'users': users}
+
+
 async def remove_member(board_id: int, target_user_id: int, request: Request,
                         db: AsyncSession):
     if not await board_model.find_by_id(board_id, db):

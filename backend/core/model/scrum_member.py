@@ -64,3 +64,17 @@ async def count_admins(board_id: int, db: AsyncSession) -> int:
         WHERE board_id = :board_id AND role = 'admin'
     """), {'board_id': board_id})
     return result.scalar_one()
+
+
+async def search_non_members(board_id: int, query: str, db: AsyncSession):
+    """초대 가능한 사용자 검색 (아직 멤버 아닌 active 유저, username/email ILIKE, 최대 10)"""
+    result = await db.execute(text("""
+        SELECT u.user_id, u.username, u.email
+        FROM "user" u
+        WHERE u.status = 'active'
+          AND u.user_id NOT IN (SELECT user_id FROM scrum_member WHERE board_id = :board_id)
+          AND (u.username ILIKE :q OR u.email ILIKE :q)
+        ORDER BY u.username
+        LIMIT 10
+    """), {'board_id': board_id, 'q': f'%{query}%'})
+    return [dict(r._mapping) for r in result.fetchall()]

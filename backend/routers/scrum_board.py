@@ -48,6 +48,13 @@ async def list_members(board_id: int, request: Request,
     return await scrum_controller.get_members(board_id, request, session)
 
 
+@router.get("/{board_id}/members/search", summary="초대 가능 사용자 검색",
+            dependencies=[Depends(require_login)])
+async def search_members(board_id: int, q: str = '', request: Request = None,
+                         session: AsyncSession = Depends(db.session)):
+    return await scrum_controller.search_invite_candidates(board_id, q, request, session)
+
+
 @router.post("/{board_id}/members", summary="멤버 추가", dependencies=[Depends(require_login)])
 async def add_member(board_id: int, body: scrum_schema.ScrumMemberAdd,
                      request: Request,

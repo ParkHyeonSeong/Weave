@@ -7,7 +7,7 @@
 .ScrumBoard__WeekNav { display:flex; align-items:center; gap:8px; }
 .ScrumBoard__WeekNav button { border:1px solid $color-border; border-radius:7px; padding:3px 6px; background:#fff; cursor:pointer; }
 .ScrumBoard__WeekLabel { font-weight:700; font-size:13px; }
-.ScrumBoard__Presence { margin-left:auto; }
+.ScrumBoard__Presence { margin-left:auto; display:flex; align-items:center; gap:10px; }
 .ScrumBoard__Live { display:flex; align-items:center; gap:4px; }
 .ScrumBoard__Dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:3px; }
 .ScrumBoard__LiveText { font-size:12px; opacity:.7; }
@@ -52,3 +52,171 @@
 .RetroCol--keep .RetroCol__Head { color:#16A34A; background:color.adjust(#16A34A, $lightness:52%); border-bottom-color:color.adjust(#16A34A, $lightness:40%); }
 .RetroCol--problem .RetroCol__Head { color:#DC2626; background:color.adjust(#DC2626, $lightness:48%); border-bottom-color:color.adjust(#DC2626, $lightness:36%); }
 .RetroCol--try .RetroCol__Head { color:#2563EB; background:color.adjust(#2563EB, $lightness:46%); border-bottom-color:color.adjust(#2563EB, $lightness:34%); }
+
+// =========================================================================
+// 헤더 멤버 버튼
+// =========================================================================
+.ScrumBoard__MembersBtn {
+  display:inline-flex; align-items:center; gap:6px;
+  border:1px solid $color-border; border-radius:8px; padding:4px 10px;
+  font-size:13px; font-weight:700; background:#fff;
+  color:color.adjust($color-border, $lightness:-45%); cursor:pointer;
+  transition:border-color 120ms, background 120ms, color 120ms;
+  &:hover { border-color:$color-border-hover; background:$color-surface-hover; color:$color-text; }
+  svg { opacity:.8; }
+}
+
+// =========================================================================
+// 멤버 관리 모달
+// =========================================================================
+.ScrumMembers__Backdrop {
+  position:fixed; inset:0; z-index:1000;
+  background:rgba(28,28,28,0.32); backdrop-filter:blur(2px);
+  display:flex; align-items:center; justify-content:center;
+}
+.ScrumMembers {
+  width:480px; max-width:calc(100vw - 32px);
+  max-height:calc(100vh - 64px);
+  background:#fff; border-radius:12px;
+  box-shadow:0 24px 60px -16px rgba(0,0,0,0.28), 0 4px 12px rgba(0,0,0,0.06);
+  display:flex; flex-direction:column; overflow:hidden;
+}
+.ScrumMembers__Head {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:16px 20px 13px; border-bottom:1px solid $color-border;
+}
+.ScrumMembers__HeadTitle {
+  display:inline-flex; align-items:center; gap:8px;
+  font-size:15px; font-weight:700; color:$color-text;
+  svg { color:#16A34A; }
+}
+.ScrumMembers__Count {
+  font-style:normal; font-size:12px; font-weight:700;
+  color:color.adjust($color-border, $lightness:-45%);
+  background:$color-surface-hover; border-radius:999px; padding:1px 8px;
+}
+.ScrumMembers__Close {
+  width:28px; height:28px; border-radius:6px; border:none; background:none;
+  color:$color-text-secondary; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  transition:background 120ms, color 120ms;
+  &:hover { background:$color-surface-hover; color:$color-text; }
+}
+.ScrumMembers__Body {
+  padding:14px 20px; overflow-y:auto;
+  display:flex; flex-direction:column; gap:10px;
+}
+.ScrumMembers__Loading {
+  padding:16px 2px; font-size:13px; opacity:.7;
+}
+
+// 초대
+.ScrumMembers__Actions { position:relative; }
+.ScrumMembers__InviteBtn {
+  display:inline-flex; align-items:center; gap:6px;
+  border:1px solid #16A34A; border-radius:8px; padding:6px 12px;
+  font-size:13px; font-weight:700; cursor:pointer;
+  color:#16A34A; background:color.adjust(#16A34A, $lightness:52%);
+  transition:background 120ms;
+  &:hover { background:color.adjust(#16A34A, $lightness:48%); }
+}
+.ScrumMembers__InviteDropdown {
+  position:absolute; top:calc(100% + 6px); left:0; right:0; z-index:5;
+  background:#fff; border:1px solid $color-border; border-radius:10px;
+  box-shadow:$shadow-lg; overflow:hidden;
+}
+.ScrumMembers__SearchWrap {
+  display:flex; align-items:center; gap:8px;
+  padding:9px 12px; border-bottom:1px solid $color-border;
+}
+.ScrumMembers__SearchIcon { color:$color-text-tertiary; flex-shrink:0; }
+.ScrumMembers__SearchInput {
+  flex:1; border:none; outline:none; background:none;
+  font-size:13px; color:$color-text; font-family:inherit;
+  &::placeholder { color:$color-text-tertiary; }
+}
+.ScrumMembers__SearchResults { max-height:220px; overflow-y:auto; }
+.ScrumMembers__SearchEmpty {
+  padding:12px; font-size:12px; color:$color-text-tertiary; text-align:center;
+}
+.ScrumMembers__SearchItem {
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+  width:100%; padding:8px 12px; border:none; background:none; cursor:pointer;
+  text-align:left; color:$color-text;
+  transition:background 100ms;
+  &:hover { background:$color-surface-hover; }
+  svg { color:#16A34A; flex-shrink:0; }
+}
+.ScrumMembers__SearchItemInfo { display:flex; flex-direction:column; gap:1px; min-width:0; }
+.ScrumMembers__SearchItemName { font-size:13px; font-weight:600; }
+.ScrumMembers__SearchItemEmail {
+  font-size:12px; color:$color-text-tertiary;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+
+// 멤버 목록
+.ScrumMembers__List { display:flex; flex-direction:column; }
+.ScrumMembers__Row {
+  display:flex; align-items:center; gap:10px;
+  padding:8px 2px; border-bottom:1px solid color.adjust($color-border, $lightness:3%);
+  &:last-child { border-bottom:none; }
+}
+.ScrumMembers__Avatar {
+  width:30px; height:30px; border-radius:50%; flex-shrink:0;
+  background:#16A34A; color:#fff; font-size:13px; font-weight:700;
+  display:flex; align-items:center; justify-content:center;
+}
+.ScrumMembers__Info { display:flex; flex-direction:column; gap:1px; flex:1; min-width:0; }
+.ScrumMembers__Name {
+  display:inline-flex; align-items:center; gap:6px;
+  font-size:13px; font-weight:600; color:$color-text;
+}
+.ScrumMembers__You {
+  font-style:normal; font-size:11px; font-weight:600; color:$color-text-tertiary;
+  background:$color-surface-hover; border-radius:4px; padding:0 5px;
+}
+.ScrumMembers__Email {
+  font-size:12px; color:$color-text-tertiary;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.ScrumMembers__RoleCol { flex-shrink:0; min-width:84px; }
+.ScrumMembers__RoleBadge {
+  display:inline-block; font-size:12px; font-weight:600; text-transform:capitalize;
+  color:color.adjust($color-border, $lightness:-45%);
+  background:$color-surface-hover; border-radius:6px; padding:3px 10px;
+}
+.ScrumMembers__ActionCol {
+  flex-shrink:0; display:flex; align-items:center; justify-content:flex-end; min-width:28px;
+}
+.ScrumMembers__RemoveBtn {
+  width:26px; height:26px; border-radius:6px; border:none; background:none; cursor:pointer;
+  color:$color-text-tertiary;
+  display:flex; align-items:center; justify-content:center;
+  transition:background 120ms, color 120ms;
+  &:hover { background:color.adjust(#DC2626, $lightness:48%); color:#DC2626; }
+}
+.ScrumMembers__ConfirmInline { display:inline-flex; align-items:center; gap:4px; }
+.ScrumMembers__ConfirmYes {
+  border:none; border-radius:6px; padding:4px 8px; cursor:pointer;
+  font-size:12px; font-weight:700; color:#fff; background:#DC2626;
+  &:hover { background:color.adjust(#DC2626, $lightness:-6%); }
+}
+.ScrumMembers__ConfirmNo {
+  border:1px solid $color-border; border-radius:6px; padding:4px 8px; cursor:pointer;
+  font-size:12px; font-weight:600; color:$color-text-secondary; background:#fff;
+  &:hover { background:$color-surface-hover; }
+}
+
+// 나가기
+.ScrumMembers__Foot {
+  padding:12px 20px; border-top:1px solid $color-border;
+  display:flex; justify-content:flex-end;
+}
+.ScrumMembers__LeaveBtn {
+  display:inline-flex; align-items:center; gap:6px;
+  border:1px solid color.adjust(#DC2626, $lightness:36%); border-radius:8px;
+  padding:6px 12px; font-size:13px; font-weight:700; cursor:pointer;
+  color:#DC2626; background:#fff;
+  transition:background 120ms;
+  &:hover { background:color.adjust(#DC2626, $lightness:48%); }
+}

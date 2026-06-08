@@ -165,3 +165,28 @@ async def test_member_can_leave_themselves(db_session):
     denied = await ctrl.remove_member(bid, owner, _req(other), db_session)
     assert denied["status"] is False
     assert denied["message"] == "PERMISSION_DENIED"
+
+
+async def test_search_invite_candidates(db_session):
+    owner = await _make_user(db_session, "c12a@test.local", "c12a")
+    res = await ctrl.create(schema.ScrumBoardCreate(name="t"), _req(owner), db_session)
+    bid = res["board_id"]
+    target = await _make_user(db_session, "c12b@test.local", "초대대상")
+
+    out = await ctrl.search_invite_candidates(bid, "초대", _req(owner), db_session)
+    assert out["status"] is True
+    user_ids = {u["user_id"] for u in out["users"]}
+    assert target in user_ids          # 비멤버 초대 대상은 결과에 포함
+    assert owner not in user_ids       # 이미 멤버인 owner는 제외
+
+
+async def test_search_invite_candidates_requires_admin(db_session):
+    owner = await _make_user(db_session, "c13a@test.local", "c13a")
+    member = await _make_user(db_session, "c13b@test.local", "c13b")
+    res = await ctrl.create(schema.ScrumBoardCreate(name="t"), _req(owner), db_session)
+    bid = res["board_id"]
+    await member_model.add(bid, member, "member", db_session)
+
+    denied = await ctrl.search_invite_candidates(bid, "c1", _req(member), db_session)
+    assert denied["status"] is False
+    assert denied["message"] == "PERMISSION_DENIED"
