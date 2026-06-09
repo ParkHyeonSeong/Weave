@@ -3,7 +3,7 @@ import ScrumCell from './ScrumCell';
 import { weekDates } from '@/library/isoWeek';
 
 const WD = ['월', '화', '수', '목', '금'];
-const ROWS = [['plan', '할 일'], ['gap', 'Gap']];
+const ROWS = [['plan', 'To Do'], ['gap', 'Recap']];
 
 // memo: props(ydoc/members/isoYear/isoWeek)가 안정적이라, 보드뷰의 presence
 // (connectedUsers) 갱신 re-render가 N×10 셀 트리로 전파되지 않게 차단.
