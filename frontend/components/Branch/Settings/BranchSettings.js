@@ -36,6 +36,7 @@ export default function BranchSettings({ branchId, branch, myRole, onBranchUpdat
       <div className="BranchSettings__Content">
         {activeSubTab === 'general' && (
           <SettingsGeneral
+            key={branchId}
             branchId={branchId}
             branch={branch}
             isAdmin={isAdmin}

@@ -63,7 +63,9 @@ export default function CanvasSettings() {
 
       <div className="CanvasSettings__Content">
         {activeSubTab === 'general' && (
+          // key는 데이터 id로 (canvasId는 router 파생 → fetch 완료 전 먼저 바뀌어 입력값 stale 유발)
           <SettingsGeneral
+            key={canvas.canvas_id}
             canvasId={canvasId}
             canvas={canvas}
             isAdmin={isAdmin}

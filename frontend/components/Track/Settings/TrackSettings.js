@@ -83,7 +83,9 @@ export default function TrackSettings() {
 
       <div className="TrackSettings__Content">
         {activeSubTab === 'general' && (
+          // key는 데이터 id로 (trackId는 router 파생 → fetch 완료 전 먼저 바뀌어 입력값 stale 유발)
           <SettingsGeneral
+            key={track.track_id}
             trackId={trackId}
             track={track}
             isOwner={isOwner}

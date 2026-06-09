@@ -77,7 +77,9 @@ export default function ScrumSettings() {
 
       <div className="TrackSettings__Content">
         {activeSubTab === 'general' && (
+          // key는 데이터 id로 (boardId는 router 파생 → fetch 완료 전 먼저 바뀌어 입력값 stale 유발)
           <ScrumSettingsGeneral
+            key={board.board_id}
             board={board}
             boardId={boardId}
             isAdmin={isAdmin}
