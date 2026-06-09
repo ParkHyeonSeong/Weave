@@ -51,7 +51,12 @@ export default function ScrumHome() {
       <HomeHero
         greeting={me ? <>안녕하세요, {me}님 👋</> : <>오늘의 스크럼을 시작해볼까요 👋</>}
         summary={<>스크럼 보드 <b>{boards.length}</b>개</>}
-        actions={<button className="HBtn HBtn--pri HBtn--sm" onClick={() => setShowCreate(true)}>＋ 새 보드</button>}
+        actions={(
+          <>
+            <button className="HBtn HBtn--sm" onClick={() => router.push('/scrum/archive')}>🗄 보관함</button>
+            <button className="HBtn HBtn--pri HBtn--sm" onClick={() => setShowCreate(true)}>＋ 새 보드</button>
+          </>
+        )}
       />
       <StatTiles
         loading={loading}

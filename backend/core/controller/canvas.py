@@ -282,6 +282,33 @@ async def delete(canvas_id: int, request: Request, db: AsyncSession):
     if not canvas:
         return {'status': False, 'message': 'CANVAS_NOT_FOUND'}
 
+    await canvas_model.archive(canvas_id, db)
+    return {'status': True}
+
+
+async def list_archived(request: Request, db: AsyncSession):
+    """아카이브된 Canvas 목록 (admin인 것만, 보관함용)."""
+    user_id = request.state.payload.get('user_id')
+    canvases = await canvas_model.find_archived(user_id, db)
+    return {'status': True, 'canvases': canvases}
+
+
+async def restore(canvas_id: int, request: Request, db: AsyncSession):
+    """Canvas 복원 (admin만). 아카이브된 canvas도 멤버십은 살아있어 role로 확인."""
+    user_id = request.state.payload.get('user_id')
+    role = await member_model.get_role(canvas_id, user_id, db)
+    if role != 'admin':
+        return {'status': False, 'message': 'ADMIN_ONLY'}
+    await canvas_model.restore(canvas_id, db)
+    return {'status': True}
+
+
+async def permanent_delete(canvas_id: int, request: Request, db: AsyncSession):
+    """Canvas 영구삭제 (admin만, CASCADE)."""
+    user_id = request.state.payload.get('user_id')
+    role = await member_model.get_role(canvas_id, user_id, db)
+    if role != 'admin':
+        return {'status': False, 'message': 'ADMIN_ONLY'}
     await canvas_model.hard_delete(canvas_id, db)
     return {'status': True}
 

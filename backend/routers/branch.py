@@ -31,6 +31,12 @@ async def get_branch_home_stats(request: Request, session: AsyncSession = Depend
     return await branch_controller.get_home_stats(request, session)
 
 
+# 주의: /{branch_id} 보다 위에 선언해야 "archived"가 branch_id로 매칭되지 않음.
+@router.get("/archived", summary="아카이브된 Branch 목록", dependencies=[Depends(require_login)])
+async def archived_branches(request: Request, session: AsyncSession = Depends(db.session)):
+    return await branch_controller.list_archived(request, session)
+
+
 @router.get("/{branch_id}", summary="Branch 상세", dependencies=[Depends(require_login)])
 async def get_branch(branch_id: int, request: Request,
                      session: AsyncSession = Depends(db.session)):
@@ -56,6 +62,18 @@ async def upload_branch_icon(branch_id: int, request: Request,
 async def delete_branch(branch_id: int, request: Request,
                         session: AsyncSession = Depends(db.session)):
     return await branch_controller.delete(branch_id, request, session)
+
+
+@router.post("/{branch_id}/restore", summary="Branch 복원", dependencies=[Depends(require_login)])
+async def restore_branch(branch_id: int, request: Request,
+                         session: AsyncSession = Depends(db.session)):
+    return await branch_controller.restore(branch_id, request, session)
+
+
+@router.delete("/{branch_id}/permanent", summary="Branch 영구삭제", dependencies=[Depends(require_login)])
+async def permanent_branch(branch_id: int, request: Request,
+                           session: AsyncSession = Depends(db.session)):
+    return await branch_controller.permanent_delete(branch_id, request, session)
 
 
 @router.post("/{branch_id}/leave", summary="Branch 나가기", dependencies=[Depends(require_login)])

@@ -172,13 +172,37 @@ async def upload_icon(track_id: int, file: UploadFile, request: Request, db: Asy
 
 
 async def delete(track_id: int, request: Request, db: AsyncSession):
-    """Track 하드 삭제 — owner만.
-    Track이 만든 materialized task_dependency를 먼저 청소한 뒤 track 삭제.
-    track_* 자식 테이블은 ON DELETE CASCADE로 자동 정리.
-    """
+    """Track 아카이브 (soft delete) — owner만. 영구삭제는 permanent_delete."""
     err = await _require_role(track_id, request, 'owner', db)
     if err:
         return err
+    await track_model.archive(track_id, db)
+    return {'status': True}
+
+
+async def list_archived(request: Request, db: AsyncSession):
+    """아카이브된 Track 목록 (owner인 것만, 보관함용)."""
+    user_id = request.state.payload.get('user_id')
+    tracks = await track_model.find_archived(user_id, db)
+    return {'status': True, 'tracks': tracks}
+
+
+async def restore(track_id: int, request: Request, db: AsyncSession):
+    """Track 복원 — owner만. 아카이브된 track은 find_by_id로 못 찾으므로 role 직접 확인."""
+    user_id = request.state.payload.get('user_id')
+    role = await member_model.get_role(track_id, user_id, db)
+    if not member_model.has_at_least(role, 'owner'):
+        return {'status': False, 'message': 'PERMISSION_DENIED'}
+    await track_model.restore(track_id, db)
+    return {'status': True}
+
+
+async def permanent_delete(track_id: int, request: Request, db: AsyncSession):
+    """Track 영구삭제 — owner만. materialized task_dependency 청소 후 삭제(track_* CASCADE)."""
+    user_id = request.state.payload.get('user_id')
+    role = await member_model.get_role(track_id, user_id, db)
+    if not member_model.has_at_least(role, 'owner'):
+        return {'status': False, 'message': 'PERMISSION_DENIED'}
     dep_ids = await track_model.find_materialized_dep_ids(track_id, db)
     await dep_model.delete_by_ids(dep_ids, db)
     await track_model.delete(track_id, db)

@@ -216,3 +216,32 @@ async def find_materialized_dep_ids(track_id: int, db: AsyncSession):
         WHERE track_id = :track_id AND materialized_dependency_id IS NOT NULL
     """), {'track_id': track_id})
     return [r[0] for r in result.fetchall()]
+
+
+async def archive(track_id: int, db: AsyncSession):
+    """Track 아카이브 (soft delete)"""
+    await db.execute(text("""
+        UPDATE track SET is_archived = TRUE, updated_at = NOW()
+        WHERE track_id = :track_id
+    """), {'track_id': track_id})
+
+
+async def restore(track_id: int, db: AsyncSession):
+    """Track 복원 (is_archived=FALSE)"""
+    await db.execute(text("""
+        UPDATE track SET is_archived = FALSE, updated_at = NOW()
+        WHERE track_id = :track_id
+    """), {'track_id': track_id})
+
+
+async def find_archived(user_id: int, db: AsyncSession):
+    """owner인 사용자의 아카이브된 Track 목록(보관함용)."""
+    result = await db.execute(text("""
+        SELECT t.track_id, t.track_name, t.icon, t.color,
+               t.updated_at, tm.role AS my_role
+        FROM track t
+        INNER JOIN track_member tm ON t.track_id = tm.track_id
+        WHERE tm.user_id = :user_id AND t.is_archived = TRUE AND tm.role = 'owner'
+        ORDER BY t.updated_at DESC NULLS LAST, t.track_id DESC
+    """), {'user_id': user_id})
+    return [dict(r._mapping) for r in result.fetchall()]

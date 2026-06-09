@@ -1,0 +1,157 @@
+@use 'sass:color';
+@use '../../variables' as *;
+
+.ArchiveView {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: $space-8;
+  display: flex;
+  flex-direction: column;
+  gap: $space-5;
+
+  &__Head {
+    display: flex;
+    flex-direction: column;
+    gap: $space-2;
+  }
+
+  &__Back {
+    display: inline-flex;
+    align-items: center;
+    gap: $space-1;
+    align-self: flex-start;
+    color: $color-text-tertiary;
+    font-size: $font-size-sm;
+
+    &:hover { color: $color-text; }
+  }
+
+  &__Title {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    margin: 0;
+    font-size: 18px;
+    font-weight: $font-weight-bold;
+    color: $color-text;
+  }
+
+  &__Loading,
+  &__Empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: $space-2;
+    padding: $space-8;
+    color: $color-text-tertiary;
+  }
+
+  &__List {
+    display: flex;
+    flex-direction: column;
+    gap: $space-2;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  &__Card {
+    display: flex;
+    align-items: center;
+    gap: $space-3;
+    padding: $space-3 $space-4;
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+    background: $color-bg;
+  }
+
+  &__Dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  &__Info {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__Name {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-semibold;
+    color: $color-text;
+  }
+
+  &__Sub {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+  }
+
+  &__Actions,
+  &__Confirm {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    flex-shrink: 0;
+  }
+
+  &__Confirm {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+
+    strong { color: $color-text; }
+
+    input {
+      width: 120px;
+      padding: 4px 8px;
+      border: 1px solid $color-border;
+      border-radius: $radius-md;
+      font-size: $font-size-xs;
+    }
+  }
+
+  &__RestoreBtn,
+  &__DeleteBtn,
+  &__DangerBtn,
+  &__GhostBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px $space-3;
+    border-radius: $radius-md;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-semibold;
+    transition: background $transition-fast, color $transition-fast;
+  }
+
+  &__RestoreBtn {
+    background: $color-surface;
+    color: $color-text;
+
+    &:hover { background: $color-surface-hover; }
+    &:disabled { opacity: 0.5; }
+  }
+
+  &__DeleteBtn {
+    color: $color-error;
+
+    &:hover { background: color.adjust($color-error, $alpha: -0.92); }
+  }
+
+  &__DangerBtn {
+    background: $color-error;
+    color: #fff;
+
+    &:hover { background: color.adjust($color-error, $lightness: -6%); }
+    &:disabled { opacity: 0.5; }
+  }
+
+  &__GhostBtn {
+    color: $color-text-tertiary;
+
+    &:hover { color: $color-text; }
+  }
+}

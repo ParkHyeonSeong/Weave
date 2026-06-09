@@ -80,6 +80,9 @@ export default function TrackHome() {
             <button className="HBtn HBtn--sm" onClick={openCommandPalette}>
               ⌘K 빠른 이동
             </button>
+            <button className="HBtn HBtn--sm" onClick={() => router.push('/tracks/archive')}>
+              🗄 보관함
+            </button>
             <button className="HBtn HBtn--pri HBtn--sm" onClick={() => setShowCreate(true)}>
               ＋ 새 트랙
             </button>

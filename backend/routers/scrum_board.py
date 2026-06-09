@@ -22,6 +22,11 @@ async def list_boards(request: Request,
     return await scrum_controller.get_list(request, session)
 
 
+@router.get("/archived", summary="아카이브된 스크럼 보드 목록", dependencies=[Depends(require_login)])
+async def archived_boards(request: Request, session: AsyncSession = Depends(db.session)):
+    return await scrum_controller.list_archived(request, session)
+
+
 @router.get("/{board_id:int}", summary="보드 상세", dependencies=[Depends(require_login)])
 async def get_board(board_id: int, request: Request,
                     session: AsyncSession = Depends(db.session)):
@@ -39,6 +44,18 @@ async def update_board(board_id: int, body: scrum_schema.ScrumBoardUpdate,
 async def delete_board(board_id: int, request: Request,
                        session: AsyncSession = Depends(db.session)):
     return await scrum_controller.delete(board_id, request, session)
+
+
+@router.post("/{board_id:int}/restore", summary="보드 복원", dependencies=[Depends(require_login)])
+async def restore_board(board_id: int, request: Request,
+                        session: AsyncSession = Depends(db.session)):
+    return await scrum_controller.restore(board_id, request, session)
+
+
+@router.delete("/{board_id:int}/permanent", summary="보드 영구삭제", dependencies=[Depends(require_login)])
+async def permanent_board(board_id: int, request: Request,
+                          session: AsyncSession = Depends(db.session)):
+    return await scrum_controller.permanent_delete(board_id, request, session)
 
 
 # ----- 멤버 -----

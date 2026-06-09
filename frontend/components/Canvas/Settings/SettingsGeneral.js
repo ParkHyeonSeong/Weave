@@ -166,22 +166,22 @@ export default function SettingsGeneral({ canvasId, canvas, isAdmin, onUpdated }
           {!showDeleteConfirm ? (
             <div className="SettingsGeneral__DangerRow">
               <div className="SettingsGeneral__DangerInfo">
-                <span className="SettingsGeneral__DangerTitle">Delete this canvas</span>
+                <span className="SettingsGeneral__DangerTitle">이 캔버스 아카이브</span>
                 <span className="SettingsGeneral__DangerDesc">
-                  Once deleted, all pages and settings will be permanently removed.
+                  아카이브하면 목록에서 사라지고, 보관함에서 복원하거나 영구삭제할 수 있어요.
                 </span>
               </div>
               <button
                 className="SettingsGeneral__DeleteBtn"
                 onClick={() => setShowDeleteConfirm(true)}
               >
-                Delete Canvas
+                아카이브
               </button>
             </div>
           ) : (
             <div className="SettingsGeneral__DeleteConfirm">
               <p className="SettingsGeneral__DeleteWarning">
-                This action cannot be undone. Please type <strong>{canvas?.key}</strong> to confirm.
+                보관함에서 되돌릴 수 있어요. 확정하려면 <strong>{canvas?.key}</strong> 입력.
               </p>
               <input
                 className="SettingsGeneral__Input"
@@ -205,7 +205,7 @@ export default function SettingsGeneral({ canvasId, canvas, isAdmin, onUpdated }
                     setDeleting(false);
                   }}
                 >
-                  {deleting ? 'Deleting...' : 'I understand, delete this canvas'}
+                  {deleting ? '아카이브 중…' : '아카이브'}
                 </button>
                 <button
                   className="SettingsGeneral__CancelBtn"

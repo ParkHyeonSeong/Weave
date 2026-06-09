@@ -201,6 +201,59 @@ async def archive(branch_id: int, db: AsyncSession):
     """), {'branch_id': branch_id})
 
 
+async def restore(branch_id: int, db: AsyncSession):
+    """Branch 복원 (is_archived=FALSE)"""
+    await db.execute(text("""
+        UPDATE branch SET is_archived = FALSE, updated_at = NOW()
+        WHERE branch_id = :branch_id
+    """), {'branch_id': branch_id})
+
+
+async def find_archived(user_id: int, db: AsyncSession):
+    """admin인 사용자의 아카이브된 Branch 목록(보관함용)."""
+    result = await db.execute(text("""
+        SELECT b.branch_id, b.branch_name, b.key, b.icon, b.color,
+               b.updated_at, bm.role AS my_role
+        FROM branch b
+        INNER JOIN branch_member bm ON b.branch_id = bm.branch_id
+        WHERE bm.user_id = :user_id AND b.is_archived = TRUE AND bm.role = 'admin'
+        ORDER BY b.updated_at DESC NULLS LAST, b.branch_id DESC
+    """), {'user_id': user_id})
+    return [dict(r._mapping) for r in result.fetchall()]
+
+
+async def hard_delete(branch_id: int, db: AsyncSession):
+    """Branch 영구 삭제. canvas는 detach(branch_id=NULL), poly 참조 정리 후 branch 삭제.
+    branch 자식(task/sprint/epic/...)은 ON DELETE CASCADE로 자동 삭제된다.
+    canvas.branch_id는 NO ACTION이라 먼저 끊어야 FK 위반이 안 난다(문서는 보존).
+    """
+    # 1) 이 브랜치 task를 가리키는 poly 참조(FK 없음) 정리
+    await db.execute(text("""
+        DELETE FROM recent_view
+        WHERE item_type = 'task' AND item_id IN (
+            SELECT task_id FROM task WHERE branch_id = :branch_id)
+    """), {'branch_id': branch_id})
+    await db.execute(text("""
+        DELETE FROM user_star
+        WHERE item_type = 'task' AND item_id IN (
+            SELECT task_id FROM task WHERE branch_id = :branch_id)
+    """), {'branch_id': branch_id})
+    await db.execute(text("""
+        DELETE FROM notification
+        WHERE (entity_type = 'task' AND entity_id IN (
+                 SELECT task_id FROM task WHERE branch_id = :branch_id))
+           OR (entity_type = 'branch' AND entity_id = :branch_id)
+    """), {'branch_id': branch_id})
+    # 2) canvas detach (branch_id NULL → 문서 보존)
+    await db.execute(text("""
+        UPDATE canvas SET branch_id = NULL WHERE branch_id = :branch_id
+    """), {'branch_id': branch_id})
+    # 3) branch 삭제 → 나머지 자식 CASCADE
+    await db.execute(text("""
+        DELETE FROM branch WHERE branch_id = :branch_id
+    """), {'branch_id': branch_id})
+
+
 async def find_public(user_id: int, query: str, db: AsyncSession):
     """public Branch 목록 (가입 여부 포함)"""
     params = {'user_id': user_id}

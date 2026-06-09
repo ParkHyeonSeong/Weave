@@ -127,6 +127,9 @@ export default function CanvasHome() {
             <button className="HBtn HBtn--sm" onClick={openCommandPalette}>
               ⌘K 빠른 이동
             </button>
+            <button className="HBtn HBtn--sm" onClick={() => router.push('/canvas/archive')}>
+              🗄 보관함
+            </button>
             <button className="HBtn HBtn--pri HBtn--sm" onClick={createCanvas}>
               ＋ 새 문서
             </button>

@@ -75,6 +75,33 @@ async def delete(board_id: int, request: Request, db: AsyncSession):
     return {'status': True}
 
 
+async def list_archived(request: Request, db: AsyncSession):
+    """아카이브된 보드 목록 (admin인 것만, 보관함용)."""
+    user_id = request.state.payload.get('user_id')
+    boards = await board_model.find_archived(user_id, db)
+    return {'status': True, 'boards': boards}
+
+
+async def restore(board_id: int, request: Request, db: AsyncSession):
+    """보드 복원 — admin만. 아카이브된 보드는 find_by_id로 못 찾으므로 role 직접 확인."""
+    user_id = request.state.payload.get('user_id')
+    role = await member_model.get_role(board_id, user_id, db)
+    if not member_model.has_at_least(role, 'admin'):
+        return {'status': False, 'message': 'PERMISSION_DENIED'}
+    await board_model.restore(board_id, db)
+    return {'status': True}
+
+
+async def permanent_delete(board_id: int, request: Request, db: AsyncSession):
+    """보드 영구삭제 — admin만. member/week/retro(yjs 포함) CASCADE."""
+    user_id = request.state.payload.get('user_id')
+    role = await member_model.get_role(board_id, user_id, db)
+    if not member_model.has_at_least(role, 'admin'):
+        return {'status': False, 'message': 'PERMISSION_DENIED'}
+    await board_model.hard_delete(board_id, db)
+    return {'status': True}
+
+
 async def get_members(board_id: int, request: Request, db: AsyncSession):
     # get_detail과 동일한 가시성 규칙: public은 누구나, private은 멤버만.
     board = await board_model.find_by_id(board_id, db)

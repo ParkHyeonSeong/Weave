@@ -171,10 +171,9 @@ export default function SettingsGeneral({ trackId, track, isOwner, onUpdated }) 
           {!showDeleteConfirm ? (
             <div className="SettingsGeneral__DangerRow">
               <div className="SettingsGeneral__DangerInfo">
-                <span className="SettingsGeneral__DangerTitle">Delete this track</span>
+                <span className="SettingsGeneral__DangerTitle">이 트랙 아카이브</span>
                 <span className="SettingsGeneral__DangerDesc">
-                  Track 자체와 import한 item·link가 모두 영구 삭제됩니다.
-                  Track에서 materialize한 의존 관계도 함께 정리됩니다.
+                  아카이브하면 목록에서 사라지고, 보관함에서 복원하거나 영구삭제할 수 있어요.
                   원본 task·branch·sprint·epic에는 영향이 없습니다.
                 </span>
               </div>
@@ -182,13 +181,13 @@ export default function SettingsGeneral({ trackId, track, isOwner, onUpdated }) 
                 className="SettingsGeneral__DeleteBtn"
                 onClick={() => setShowDeleteConfirm(true)}
               >
-                Delete Track
+                아카이브
               </button>
             </div>
           ) : (
             <div className="SettingsGeneral__DeleteConfirm">
               <p className="SettingsGeneral__DeleteWarning">
-                되돌릴 수 없습니다. 확정하려면 Track 이름{' '}
+                보관함에서 되돌릴 수 있어요. 확정하려면 Track 이름{' '}
                 <strong>{track.track_name}</strong>을(를) 입력하세요.
               </p>
               <input
@@ -203,7 +202,7 @@ export default function SettingsGeneral({ trackId, track, isOwner, onUpdated }) 
                   disabled={deleteInput !== track.track_name || deleting}
                   onClick={handleDelete}
                 >
-                  {deleting ? 'Deleting…' : 'I understand, delete this track'}
+                  {deleting ? '아카이브 중…' : '아카이브'}
                 </button>
                 <button
                   className="SettingsGeneral__CancelBtn"

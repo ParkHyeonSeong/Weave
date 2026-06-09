@@ -76,3 +76,30 @@ async def archive(board_id: int, db: AsyncSession):
         UPDATE scrum_board SET is_archived = TRUE, updated_at = NOW()
         WHERE board_id = :board_id
     """), {'board_id': board_id})
+
+
+async def restore(board_id: int, db: AsyncSession):
+    """보드 복원 (is_archived=FALSE)"""
+    await db.execute(text("""
+        UPDATE scrum_board SET is_archived = FALSE, updated_at = NOW()
+        WHERE board_id = :board_id
+    """), {'board_id': board_id})
+
+
+async def find_archived(user_id: int, db: AsyncSession):
+    """admin인 사용자의 아카이브된 Scrum 보드 목록(보관함용)."""
+    result = await db.execute(text("""
+        SELECT b.board_id, b.name, b.color, b.updated_at, sm.role AS my_role
+        FROM scrum_board b
+        INNER JOIN scrum_member sm ON b.board_id = sm.board_id
+        WHERE sm.user_id = :user_id AND b.is_archived = TRUE AND sm.role = 'admin'
+        ORDER BY b.updated_at DESC NULLS LAST, b.board_id DESC
+    """), {'user_id': user_id})
+    return [dict(r._mapping) for r in result.fetchall()]
+
+
+async def hard_delete(board_id: int, db: AsyncSession):
+    """Scrum 보드 영구 삭제. scrum_member/scrum_week/scrum_retro(yjs_state 포함)는 CASCADE."""
+    await db.execute(text("""
+        DELETE FROM scrum_board WHERE board_id = :board_id
+    """), {'board_id': board_id})

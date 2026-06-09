@@ -31,6 +31,12 @@ async def get_canvas_home_stats(request: Request, session: AsyncSession = Depend
     return await canvas_controller.get_home_stats(request, session)
 
 
+# 주의: /{canvas_id} 보다 위에 선언해야 "archived"가 canvas_id로 매칭되지 않음.
+@router.get("/archived", summary="아카이브된 Canvas 목록", dependencies=[Depends(require_login)])
+async def archived_canvases(request: Request, session: AsyncSession = Depends(db.session)):
+    return await canvas_controller.list_archived(request, session)
+
+
 @router.get("/{canvas_id}", summary="Canvas 상세", dependencies=[Depends(require_login)])
 async def get_canvas(canvas_id: int, request: Request,
                      session: AsyncSession = Depends(db.session)):
@@ -56,6 +62,18 @@ async def upload_canvas_icon(canvas_id: int, request: Request,
 async def delete_canvas(canvas_id: int, request: Request,
                         session: AsyncSession = Depends(db.session)):
     return await canvas_controller.delete(canvas_id, request, session)
+
+
+@router.post("/{canvas_id}/restore", summary="Canvas 복원", dependencies=[Depends(require_login)])
+async def restore_canvas(canvas_id: int, request: Request,
+                         session: AsyncSession = Depends(db.session)):
+    return await canvas_controller.restore(canvas_id, request, session)
+
+
+@router.delete("/{canvas_id}/permanent", summary="Canvas 영구삭제", dependencies=[Depends(require_login)])
+async def permanent_canvas(canvas_id: int, request: Request,
+                           session: AsyncSession = Depends(db.session)):
+    return await canvas_controller.permanent_delete(canvas_id, request, session)
 
 
 @router.post("/{canvas_id}/leave", summary="Canvas 나가기", dependencies=[Depends(require_login)])

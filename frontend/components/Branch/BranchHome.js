@@ -103,6 +103,9 @@ export default function BranchHome() {
             <button className="HBtn HBtn--sm" onClick={openCommandPalette}>
               ⌘K 빠른 이동
             </button>
+            <button className="HBtn HBtn--sm" onClick={() => router.push('/branch/archive')}>
+              🗄 보관함
+            </button>
             <button className="HBtn HBtn--pri HBtn--sm" onClick={createBranch}>
               ＋ 새 브랜치
             </button>

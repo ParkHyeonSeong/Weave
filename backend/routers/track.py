@@ -32,6 +32,12 @@ async def get_track_home_stats(request: Request,
     return await track_controller.get_home_stats(request, session)
 
 
+# 주의: /{track_id} 보다 위에 선언해야 "archived"가 track_id로 매칭되지 않음.
+@router.get("/archived", summary="아카이브된 Track 목록", dependencies=[Depends(require_login)])
+async def archived_tracks(request: Request, session: AsyncSession = Depends(db.session)):
+    return await track_controller.list_archived(request, session)
+
+
 @router.get("/{track_id}", summary="Track 상세", dependencies=[Depends(require_login)])
 async def get_track(track_id: int, request: Request,
                     session: AsyncSession = Depends(db.session)):
@@ -53,11 +59,23 @@ async def upload_track_icon(track_id: int, request: Request,
     return await track_controller.upload_icon(track_id, file, request, session)
 
 
-@router.delete("/{track_id}", summary="Track 하드 삭제",
+@router.delete("/{track_id}", summary="Track 아카이브",
                dependencies=[Depends(require_login)])
 async def delete_track(track_id: int, request: Request,
                        session: AsyncSession = Depends(db.session)):
     return await track_controller.delete(track_id, request, session)
+
+
+@router.post("/{track_id}/restore", summary="Track 복원", dependencies=[Depends(require_login)])
+async def restore_track(track_id: int, request: Request,
+                        session: AsyncSession = Depends(db.session)):
+    return await track_controller.restore(track_id, request, session)
+
+
+@router.delete("/{track_id}/permanent", summary="Track 영구삭제", dependencies=[Depends(require_login)])
+async def permanent_track(track_id: int, request: Request,
+                          session: AsyncSession = Depends(db.session)):
+    return await track_controller.permanent_delete(track_id, request, session)
 
 
 # =========================================================================

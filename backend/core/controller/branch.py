@@ -295,6 +295,33 @@ async def delete(branch_id: int, request: Request, db: AsyncSession):
     return {'status': True}
 
 
+async def list_archived(request: Request, db: AsyncSession):
+    """아카이브된 Branch 목록 (admin인 것만, 보관함용)."""
+    user_id = request.state.payload.get('user_id')
+    branches = await branch_model.find_archived(user_id, db)
+    return {'status': True, 'branches': branches}
+
+
+async def restore(branch_id: int, request: Request, db: AsyncSession):
+    """Branch 복원 (admin만). 아카이브된 branch도 멤버십은 살아있어 role로 확인."""
+    user_id = request.state.payload.get('user_id')
+    role = await member_model.get_role(branch_id, user_id, db)
+    if role != 'admin':
+        return {'status': False, 'message': 'ADMIN_ONLY'}
+    await branch_model.restore(branch_id, db)
+    return {'status': True}
+
+
+async def permanent_delete(branch_id: int, request: Request, db: AsyncSession):
+    """Branch 영구삭제 (admin만). canvas detach + poly 정리 + CASCADE."""
+    user_id = request.state.payload.get('user_id')
+    role = await member_model.get_role(branch_id, user_id, db)
+    if role != 'admin':
+        return {'status': False, 'message': 'ADMIN_ONLY'}
+    await branch_model.hard_delete(branch_id, db)
+    return {'status': True}
+
+
 async def search_non_members(branch_id: int, query: str, request: Request, db: AsyncSession):
     """초대 가능한 사용자 검색"""
     user_id = request.state.payload.get('user_id')

@@ -210,6 +210,35 @@ async def hard_delete(canvas_id: int, db: AsyncSession):
     """), {'canvas_id': canvas_id})
 
 
+async def archive(canvas_id: int, db: AsyncSession):
+    """Canvas 아카이브 (soft delete)"""
+    await db.execute(text("""
+        UPDATE canvas SET is_archived = TRUE, updated_at = NOW()
+        WHERE canvas_id = :canvas_id
+    """), {'canvas_id': canvas_id})
+
+
+async def restore(canvas_id: int, db: AsyncSession):
+    """Canvas 복원 (is_archived=FALSE)"""
+    await db.execute(text("""
+        UPDATE canvas SET is_archived = FALSE, updated_at = NOW()
+        WHERE canvas_id = :canvas_id
+    """), {'canvas_id': canvas_id})
+
+
+async def find_archived(user_id: int, db: AsyncSession):
+    """admin인 사용자의 아카이브된 Canvas 목록(보관함용)."""
+    result = await db.execute(text("""
+        SELECT c.canvas_id, c.canvas_name, c.key, c.icon, c.color,
+               c.created_at, cm.role AS my_role
+        FROM canvas c
+        INNER JOIN canvas_member cm ON c.canvas_id = cm.canvas_id
+        WHERE cm.user_id = :user_id AND c.is_archived = TRUE AND cm.role = 'admin'
+        ORDER BY c.canvas_name
+    """), {'user_id': user_id})
+    return [dict(r._mapping) for r in result.fetchall()]
+
+
 async def find_public(user_id: int, query: str, db: AsyncSession):
     """public Canvas 목록 (가입 여부 포함)"""
     params = {'user_id': user_id}
