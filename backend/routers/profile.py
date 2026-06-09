@@ -41,20 +41,18 @@ async def upload_avatar(request: Request, file: UploadFile = File(...),
     return await profile_controller.upload_avatar(file, request, session)
 
 
-@router.get("/sidebar-order", summary="사이드바 순서 조회", dependencies=[Depends(require_login)])
-async def get_sidebar_order(request: Request, session: AsyncSession = Depends(db.session)):
+@router.get("/ui-prefs", summary="뷰 상태 조회", dependencies=[Depends(require_login)])
+async def get_ui_prefs(request: Request, session: AsyncSession = Depends(db.session)):
     user_id = request.state.payload['user_id']
-    order = await user_model.get_sidebar_order(user_id, session)
-    return {'status': True, 'sidebar_order': order}
+    prefs = await user_model.get_ui_prefs(user_id, session)
+    return {'status': True, 'ui_prefs': prefs or {}}
 
 
-@router.patch("/sidebar-order", summary="사이드바 순서 저장", dependencies=[Depends(require_login)])
-async def update_sidebar_order(body: profile_schema.UpdateSidebarOrder, request: Request,
-                               session: AsyncSession = Depends(db.session)):
+@router.patch("/ui-prefs", summary="뷰 상태 저장", dependencies=[Depends(require_login)])
+async def update_ui_prefs(body: profile_schema.UpdateUiPrefs, request: Request,
+                          session: AsyncSession = Depends(db.session)):
     user_id = request.state.payload['user_id']
-    order = body.model_dump(exclude_none=True)
-    # 기존 순서와 병합
-    current = await user_model.get_sidebar_order(user_id, session) or {}
-    current.update(order)
-    await user_model.update_sidebar_order(user_id, current, session)
-    return {'status': True, 'sidebar_order': current}
+    patch = body.model_dump(exclude_none=True)
+    # DB에서 원자적 top-level 병합(경합 없음)
+    await user_model.update_ui_prefs(user_id, patch, session)
+    return {'status': True}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useMemo } from 'react';
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
 } from '@dnd-kit/core';
@@ -8,24 +8,12 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { Pencil, Check, X, GripVertical, Plus } from 'lucide-react';
 import { WIDGET_REGISTRY, WIDGET_ORDER, DEFAULT_ENABLED } from './widgetRegistry';
+import { useUiPrefs } from '@/library/UiPrefsContext';
 
-const STORAGE_KEY = 'home_widget_layout';
-
-function loadEnabled() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        return parsed.filter((k) => WIDGET_REGISTRY[k]);
-      }
-    }
-  } catch {}
+// 저장본에서 알 수 없는 위젯 key 제거. 값 없으면 기본 활성 세트.
+function normalizeEnabled(saved) {
+  if (Array.isArray(saved)) return saved.filter((k) => WIDGET_REGISTRY[k]);
   return [...DEFAULT_ENABLED];
-}
-
-function saveEnabled(keys) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(keys)); } catch {}
 }
 
 function SortableWidget({ id, editing, onRemove }) {
@@ -57,17 +45,15 @@ function SortableWidget({ id, editing, onRemove }) {
 }
 
 export default function WidgetZone() {
-  const [enabled, setEnabled] = useState(() => [...DEFAULT_ENABLED]);
+  const { prefs, setNamespace } = useUiPrefs();
+  const enabled = useMemo(() => normalizeEnabled(prefs.widget_layout), [prefs.widget_layout]);
   const [editing, setEditing] = useState(false);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
 
-  // 마운트 후 localStorage에서 로드(SSR 하이드레이션 불일치 방지 위해 effect에서)
-  useEffect(() => { setEnabled(loadEnabled()); }, []);
-
-  // 변경 시 즉시 저장(핸들러에서 호출)
-  const update = useCallback((next) => { setEnabled(next); saveEnabled(next); }, []);
+  // 변경 시 즉시 저장(네임스페이스 교체 → 낙관적 업데이트 + 서버 저장)
+  const update = (next) => setNamespace('widget_layout', next);
 
   const handleDragEnd = (event) => {
     const { active, over } = event;

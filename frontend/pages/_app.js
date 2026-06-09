@@ -4,6 +4,7 @@ import { axios } from '@/library/_axios';
 import Layout from '@/components/Layout/Layout';
 import ErrorBoundary from '@/components/Layout/ErrorBoundary';
 import Toast from '@/components/Layout/Toast';
+import { UiPrefsProvider } from '@/library/UiPrefsContext';
 import "@/styles/globals.scss";
 import "@/styles/fonts.css";
 import "@/styles/components/auth/login.scss";
@@ -192,7 +193,7 @@ export default function App({ Component, pageProps }) {
   return (
     <ErrorBoundary>
       {needsLayout
-        ? <Layout><Component {...pageProps} /></Layout>
+        ? <UiPrefsProvider><Layout><Component {...pageProps} /></Layout></UiPrefsProvider>
         : <Component {...pageProps} />}
       <Toast />
     </ErrorBoundary>

@@ -41,6 +41,8 @@ class ForceChangePassword(BaseModel):
         return v
 
 
-class UpdateSidebarOrder(BaseModel):
-    branches: Optional[List[int]] = None
-    canvases: Optional[List[int]] = None
+class UpdateUiPrefs(BaseModel):
+    sidebar_order: Optional[dict] = None
+    hidden: Optional[dict] = None
+    launchpad_order: Optional[List[str]] = None
+    widget_layout: Optional[List[str]] = None

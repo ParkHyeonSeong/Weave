@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { X } from 'lucide-react';
-import { axios } from '@/library/_axios';
 import { getAppContext } from '@/library/appContext';
+import { useUiPrefs } from '@/library/UiPrefsContext';
 import SidebarBranches from './SidebarBranches';
 import SidebarCanvases from './SidebarCanvases';
 import SidebarTracks from './SidebarTracks';
@@ -11,23 +11,14 @@ import SidebarScrums from './SidebarScrums';
 export default function Sidebar({ isMobile, width, onResizeStart, onCreateBranch, onCreateCanvas, onCreateTrack, onCreateScrum, onClose }) {
   const router = useRouter();
   const activeApp = getAppContext(router.pathname);
-  const [sidebarOrder, setSidebarOrder] = useState(null);
+  const { prefs, setNamespace, hide, unhide } = useUiPrefs();
+  const sidebarOrder = prefs.sidebar_order;
+  const hidden = prefs.hidden || {};
 
-  // 사이드바 순서 로드
-  useEffect(() => {
-    axios.get('/profile/sidebar-order')
-      .then((res) => { if (res.data.status) setSidebarOrder(res.data.sidebar_order); })
-      .catch(() => {});
-  }, []);
-
-  // 순서 변경 핸들러 (낙관적 업데이트 + 서버 저장)
+  // 순서 변경 핸들러 (네임스페이스 통째 교체 → 낙관적 업데이트 + 서버 저장)
   const handleOrderChange = useCallback((key, ids) => {
-    setSidebarOrder((prev) => {
-      const next = { ...prev, [key]: ids };
-      axios.patch('/profile/sidebar-order', { [key]: ids }).catch(() => {});
-      return next;
-    });
-  }, []);
+    setNamespace('sidebar_order', { ...(prefs.sidebar_order || {}), [key]: ids });
+  }, [prefs.sidebar_order, setNamespace]);
 
   return (
     <aside
@@ -51,6 +42,9 @@ export default function Sidebar({ isMobile, width, onResizeStart, onCreateBranch
             onCreateBranch={onCreateBranch}
             savedOrder={sidebarOrder?.branches}
             onOrderChange={(ids) => handleOrderChange('branches', ids)}
+            hidden={hidden.branches}
+            onHide={(id) => hide('branches', id)}
+            onUnhide={(id) => unhide('branches', id)}
           />
         )}
         {activeApp === 'canvas' && (
@@ -58,6 +52,9 @@ export default function Sidebar({ isMobile, width, onResizeStart, onCreateBranch
             onCreateCanvas={onCreateCanvas}
             savedOrder={sidebarOrder?.canvases}
             onOrderChange={(ids) => handleOrderChange('canvases', ids)}
+            hidden={hidden.canvases}
+            onHide={(id) => hide('canvases', id)}
+            onUnhide={(id) => unhide('canvases', id)}
           />
         )}
         {activeApp === 'track' && (
@@ -65,6 +62,9 @@ export default function Sidebar({ isMobile, width, onResizeStart, onCreateBranch
             onCreateTrack={onCreateTrack}
             savedOrder={sidebarOrder?.tracks}
             onOrderChange={(ids) => handleOrderChange('tracks', ids)}
+            hidden={hidden.tracks}
+            onHide={(id) => hide('tracks', id)}
+            onUnhide={(id) => unhide('tracks', id)}
           />
         )}
         {activeApp === 'scrum' && (
@@ -72,6 +72,9 @@ export default function Sidebar({ isMobile, width, onResizeStart, onCreateBranch
             onCreateScrum={onCreateScrum}
             savedOrder={sidebarOrder?.scrums}
             onOrderChange={(ids) => handleOrderChange('scrums', ids)}
+            hidden={hidden.scrums}
+            onHide={(id) => hide('scrums', id)}
+            onUnhide={(id) => unhide('scrums', id)}
           />
         )}
       </div>

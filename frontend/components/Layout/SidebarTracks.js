@@ -11,8 +11,9 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { axios } from '@/library/_axios';
 import EntityIcon from '@/components/common/EntityIcon';
+import SidebarItemActions from './SidebarItemActions';
 
-function SortableTrackItem({ track, isActive }) {  // isActive는 boolean (caller가 계산)
+function SortableTrackItem({ track, isActive, onHide }) {  // isActive는 boolean (caller가 계산)
   const router = useRouter();
   const {
     attributes, listeners, setNodeRef, transform, transition, isDragging,
@@ -25,30 +26,34 @@ function SortableTrackItem({ track, isActive }) {  // isActive는 boolean (calle
   };
 
   return (
-    <button
-      ref={setNodeRef}
-      style={style}
-      className={`Sidebar__BranchItem ${isActive ? 'Sidebar__BranchItem--active' : ''}`}
-      onClick={() => router.push(`/tracks/${track.track_id}`)}
-    >
-      <span className="Sidebar__DragHandle" {...attributes} {...listeners}>
-        <GripVertical size={12} />
-      </span>
-      <EntityIcon
-        icon={track.icon}
-        color={track.color}
-        size={14}
-        entityType="track"
-      />
-      <span className="Sidebar__BranchName">{track.track_name}</span>
-    </button>
+    <div ref={setNodeRef} style={style} className={`Sidebar__BranchRow ${isActive ? 'Sidebar__BranchRow--active' : ''}`}>
+      <button
+        className={`Sidebar__BranchItem ${isActive ? 'Sidebar__BranchItem--active' : ''}`}
+        onClick={() => router.push(`/tracks/${track.track_id}`)}
+      >
+        <span className="Sidebar__DragHandle" {...attributes} {...listeners}>
+          <GripVertical size={12} />
+        </span>
+        <EntityIcon
+          icon={track.icon}
+          color={track.color}
+          size={14}
+          entityType="track"
+        />
+        <span className="Sidebar__BranchName">{track.track_name}</span>
+      </button>
+      <div className="Sidebar__BranchActions">
+        <SidebarItemActions onHide={() => onHide(track.track_id)} />
+      </div>
+    </div>
   );
 }
 
-export default function SidebarTracks({ onCreateTrack, savedOrder, onOrderChange }) {
+export default function SidebarTracks({ onCreateTrack, savedOrder, onOrderChange, hidden = [], onHide, onUnhide }) {
   const router = useRouter();
   const [tracks, setTracks] = useState([]);
   const [activeItem, setActiveItem] = useState(null);
+  const [showHidden, setShowHidden] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -88,10 +93,14 @@ export default function SidebarTracks({ onCreateTrack, savedOrder, onOrderChange
     });
   }, [tracks, savedOrder]);
 
-  const sortableIds = sortedTracks.map((t) => t.track_id);
+  const hiddenSet = useMemo(() => new Set(hidden || []), [hidden]);
+  const visibleTracks = useMemo(() => sortedTracks.filter((t) => !hiddenSet.has(t.track_id)), [sortedTracks, hiddenSet]);
+  const hiddenTracks = useMemo(() => sortedTracks.filter((t) => hiddenSet.has(t.track_id)), [sortedTracks, hiddenSet]);
+
+  const sortableIds = visibleTracks.map((t) => t.track_id);
 
   const handleDragStart = (event) => {
-    const item = sortedTracks.find((t) => t.track_id === event.active.id);
+    const item = visibleTracks.find((t) => t.track_id === event.active.id);
     setActiveItem(item || null);
   };
 
@@ -99,10 +108,10 @@ export default function SidebarTracks({ onCreateTrack, savedOrder, onOrderChange
     setActiveItem(null);
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const oldIndex = sortedTracks.findIndex((t) => t.track_id === active.id);
-    const newIndex = sortedTracks.findIndex((t) => t.track_id === over.id);
+    const oldIndex = visibleTracks.findIndex((t) => t.track_id === active.id);
+    const newIndex = visibleTracks.findIndex((t) => t.track_id === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
-    const reordered = arrayMove(sortedTracks, oldIndex, newIndex);
+    const reordered = arrayMove(visibleTracks, oldIndex, newIndex);
     onOrderChange(reordered.map((t) => t.track_id));
   };
 
@@ -123,39 +132,59 @@ export default function SidebarTracks({ onCreateTrack, savedOrder, onOrderChange
             No tracks yet.<br />Create one to get started.
           </div>
         ) : (
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
-              {sortedTracks.map((track) => (
-                <SortableTrackItem
-                  key={track.track_id}
-                  track={track}
-                  // /tracks/[id] 페이지일 때만 active. router.query.id는 string이라
-                  // loose 비교(SidebarBranches와 동일 컨벤션)로 number/string 모두 매치.
-                  // eslint-disable-next-line eqeqeq
-                  isActive={router.pathname.startsWith('/tracks/') && router.query.id == track.track_id}
-                />
-              ))}
-            </SortableContext>
-
-            <DragOverlay>
-              {activeItem && (
-                <div className="Sidebar__BranchItem Sidebar__BranchItem--dragging">
-                  <EntityIcon
-                    icon={activeItem.icon}
-                    color={activeItem.color}
-                    size={14}
-                    entityType="track"
+          <>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
+                {visibleTracks.map((track) => (
+                  <SortableTrackItem
+                    key={track.track_id}
+                    track={track}
+                    // /tracks/[id] 페이지일 때만 active. router.query.id는 string이라
+                    // loose 비교(SidebarBranches와 동일 컨벤션)로 number/string 모두 매치.
+                    // eslint-disable-next-line eqeqeq
+                    isActive={router.pathname.startsWith('/tracks/') && router.query.id == track.track_id}
+                    onHide={onHide}
                   />
-                  <span className="Sidebar__BranchName">{activeItem.track_name}</span>
-                </div>
-              )}
-            </DragOverlay>
-          </DndContext>
+                ))}
+              </SortableContext>
+
+              <DragOverlay>
+                {activeItem && (
+                  <div className="Sidebar__BranchItem Sidebar__BranchItem--dragging">
+                    <EntityIcon
+                      icon={activeItem.icon}
+                      color={activeItem.color}
+                      size={14}
+                      entityType="track"
+                    />
+                    <span className="Sidebar__BranchName">{activeItem.track_name}</span>
+                  </div>
+                )}
+              </DragOverlay>
+            </DndContext>
+
+            {hiddenTracks.length > 0 && (
+              <>
+                <button className="Sidebar__HiddenToggle" onClick={() => setShowHidden((s) => !s)}>
+                  {showHidden ? '숨긴 항목 숨기기' : `숨긴 항목 ${hiddenTracks.length}개 표시`}
+                </button>
+                {showHidden && hiddenTracks.map((track) => (
+                  <div key={track.track_id} className="Sidebar__BranchRow Sidebar__BranchRow--hidden">
+                    <button className="Sidebar__BranchItem" onClick={() => router.push(`/tracks/${track.track_id}`)}>
+                      <EntityIcon icon={track.icon} color={track.color} size={14} entityType="track" />
+                      <span className="Sidebar__BranchName">{track.track_name}</span>
+                    </button>
+                    <button className="Sidebar__UnhideBtn" onClick={() => onUnhide(track.track_id)}>숨김 해제</button>
+                  </div>
+                ))}
+              </>
+            )}
+          </>
         )}
       </div>
     </>

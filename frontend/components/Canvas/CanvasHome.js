@@ -10,6 +10,7 @@ import HomeToolbar from '@/components/Home/shared/HomeToolbar';
 import HomeSkeleton from '@/components/Home/shared/HomeSkeleton';
 import HomeEmptyState from '@/components/Home/shared/HomeEmptyState';
 import AppCard, { AvatarSet } from '@/components/Home/shared/AppCard';
+import { useUiPrefs } from '@/library/UiPrefsContext';
 
 const DEFAULT_DOC_COLOR = '#16A34A';
 
@@ -49,6 +50,7 @@ const openCommandPalette = () => window.dispatchEvent(new CustomEvent('layout:op
 
 export default function CanvasHome() {
   const router = useRouter();
+  const { isHidden } = useUiPrefs();
   const [canvases, setCanvases] = useState([]);
   const [recentDocs, setRecentDocs] = useState([]);
   const [starredDocs, setStarredDocs] = useState([]);
@@ -99,10 +101,11 @@ export default function CanvasHome() {
   }, []);
 
   const filteredCanvases = useMemo(() => {
-    if (!query.trim()) return canvases;
+    const base = canvases.filter((c) => !isHidden('canvases', c.canvas_id));
+    if (!query.trim()) return base;
     const q = query.toLowerCase();
-    return canvases.filter((c) => c.canvas_name.toLowerCase().includes(q));
-  }, [canvases, query]);
+    return base.filter((c) => c.canvas_name.toLowerCase().includes(q));
+  }, [canvases, query, isHidden]);
 
   const stripDocs = activeTab === 'starred' ? starredDocs : recentDocs;
   const stripItems = stripDocs.map((it) => ({
@@ -162,7 +165,7 @@ export default function CanvasHome() {
       <div className="HomeDivider" />
 
       <HomeToolbar
-        count={`캔버스 ${canvases.length}`}
+        count={`캔버스 ${filteredCanvases.length}`}
         query={query}
         onQuery={setQuery}
         placeholder="문서·캔버스 검색…"
@@ -176,7 +179,7 @@ export default function CanvasHome() {
       ) : filteredCanvases.length === 0 ? (
         <HomeEmptyState
           icon={<FileText size={26} />}
-          title={canvases.length === 0 ? '아직 캔버스가 없어요' : '검색 결과 없음'}
+          title={canvases.length === 0 ? '아직 캔버스가 없어요' : (query.trim() ? '검색 결과 없음' : '표시할 캔버스가 없어요')}
           desc={
             canvases.length === 0
               ? '캔버스를 만들어 문서 작업을 시작하세요.'

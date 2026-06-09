@@ -145,19 +145,21 @@ async def update_avatar(user_id: int, avatar_url: str, db: AsyncSession):
     """), {'user_id': user_id, 'avatar_url': avatar_url})
 
 
-async def get_sidebar_order(user_id: int, db: AsyncSession):
-    """사이드바 순서 조회"""
+async def get_ui_prefs(user_id: int, db: AsyncSession):
+    """per-user 뷰 상태(ui_prefs) 조회"""
     result = await db.execute(text("""
-        SELECT sidebar_order FROM "user" WHERE user_id = :user_id
+        SELECT ui_prefs FROM "user" WHERE user_id = :user_id
     """), {'user_id': user_id})
     row = result.fetchone()
-    return row._mapping['sidebar_order'] if row else None
+    return row._mapping['ui_prefs'] if row else None
 
 
-async def update_sidebar_order(user_id: int, sidebar_order: dict, db: AsyncSession):
-    """사이드바 순서 저장"""
+async def update_ui_prefs(user_id: int, patch: dict, db: AsyncSession):
+    """per-user 뷰 상태(ui_prefs) top-level 네임스페이스 원자적 병합 저장.
+    `||`는 top-level 키 단위 shallow merge → 동시 탭이 서로 다른 네임스페이스를
+    PATCH해도 clobber 없음(read-modify-write 경합 제거)."""
     await db.execute(text("""
         UPDATE "user"
-        SET sidebar_order = CAST(:sidebar_order AS jsonb)
+        SET ui_prefs = COALESCE(ui_prefs, '{}'::jsonb) || CAST(:patch AS jsonb)
         WHERE user_id = :user_id
-    """), {'user_id': user_id, 'sidebar_order': __import__('json').dumps(sidebar_order)})
+    """), {'user_id': user_id, 'patch': __import__('json').dumps(patch)})

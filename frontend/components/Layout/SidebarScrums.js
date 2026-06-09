@@ -11,8 +11,9 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { axios } from '@/library/_axios';
 import EntityIcon from '@/components/common/EntityIcon';
+import SidebarItemActions from './SidebarItemActions';
 
-function SortableBoardItem({ board, isActive }) {  // isActive는 boolean (caller가 계산)
+function SortableBoardItem({ board, isActive, onHide }) {  // isActive는 boolean (caller가 계산)
   const router = useRouter();
   const {
     attributes, listeners, setNodeRef, transform, transition, isDragging,
@@ -25,30 +26,34 @@ function SortableBoardItem({ board, isActive }) {  // isActive는 boolean (calle
   };
 
   return (
-    <button
-      ref={setNodeRef}
-      style={style}
-      className={`Sidebar__BranchItem ${isActive ? 'Sidebar__BranchItem--active' : ''}`}
-      onClick={() => router.push(`/scrum/${board.board_id}`)}
-    >
-      <span className="Sidebar__DragHandle" {...attributes} {...listeners}>
-        <GripVertical size={12} />
-      </span>
-      <EntityIcon
-        icon={board.icon}
-        color={board.color}
-        size={14}
-        entityType="track"
-      />
-      <span className="Sidebar__BranchName">{board.name}</span>
-    </button>
+    <div ref={setNodeRef} style={style} className={`Sidebar__BranchRow ${isActive ? 'Sidebar__BranchRow--active' : ''}`}>
+      <button
+        className={`Sidebar__BranchItem ${isActive ? 'Sidebar__BranchItem--active' : ''}`}
+        onClick={() => router.push(`/scrum/${board.board_id}`)}
+      >
+        <span className="Sidebar__DragHandle" {...attributes} {...listeners}>
+          <GripVertical size={12} />
+        </span>
+        <EntityIcon
+          icon={board.icon}
+          color={board.color}
+          size={14}
+          entityType="track"
+        />
+        <span className="Sidebar__BranchName">{board.name}</span>
+      </button>
+      <div className="Sidebar__BranchActions">
+        <SidebarItemActions onHide={() => onHide(board.board_id)} />
+      </div>
+    </div>
   );
 }
 
-export default function SidebarScrums({ onCreateScrum, savedOrder, onOrderChange }) {
+export default function SidebarScrums({ onCreateScrum, savedOrder, onOrderChange, hidden = [], onHide, onUnhide }) {
   const router = useRouter();
   const [boards, setBoards] = useState([]);
   const [activeItem, setActiveItem] = useState(null);
+  const [showHidden, setShowHidden] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -88,10 +93,14 @@ export default function SidebarScrums({ onCreateScrum, savedOrder, onOrderChange
     });
   }, [boards, savedOrder]);
 
-  const sortableIds = sortedBoards.map((b) => b.board_id);
+  const hiddenSet = useMemo(() => new Set(hidden || []), [hidden]);
+  const visibleBoards = useMemo(() => sortedBoards.filter((b) => !hiddenSet.has(b.board_id)), [sortedBoards, hiddenSet]);
+  const hiddenBoards = useMemo(() => sortedBoards.filter((b) => hiddenSet.has(b.board_id)), [sortedBoards, hiddenSet]);
+
+  const sortableIds = visibleBoards.map((b) => b.board_id);
 
   const handleDragStart = (event) => {
-    const item = sortedBoards.find((b) => b.board_id === event.active.id);
+    const item = visibleBoards.find((b) => b.board_id === event.active.id);
     setActiveItem(item || null);
   };
 
@@ -99,10 +108,10 @@ export default function SidebarScrums({ onCreateScrum, savedOrder, onOrderChange
     setActiveItem(null);
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const oldIndex = sortedBoards.findIndex((b) => b.board_id === active.id);
-    const newIndex = sortedBoards.findIndex((b) => b.board_id === over.id);
+    const oldIndex = visibleBoards.findIndex((b) => b.board_id === active.id);
+    const newIndex = visibleBoards.findIndex((b) => b.board_id === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
-    const reordered = arrayMove(sortedBoards, oldIndex, newIndex);
+    const reordered = arrayMove(visibleBoards, oldIndex, newIndex);
     onOrderChange(reordered.map((b) => b.board_id));
   };
 
@@ -123,39 +132,59 @@ export default function SidebarScrums({ onCreateScrum, savedOrder, onOrderChange
             No boards yet.<br />Create one to get started.
           </div>
         ) : (
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
-              {sortedBoards.map((board) => (
-                <SortableBoardItem
-                  key={board.board_id}
-                  board={board}
-                  // /scrum/[boardId] 페이지일 때만 active. router.query.boardId는 string이라
-                  // loose 비교(SidebarBranches와 동일 컨벤션)로 number/string 모두 매치.
-                  // eslint-disable-next-line eqeqeq
-                  isActive={router.pathname.startsWith('/scrum/') && router.query.boardId == board.board_id}
-                />
-              ))}
-            </SortableContext>
-
-            <DragOverlay>
-              {activeItem && (
-                <div className="Sidebar__BranchItem Sidebar__BranchItem--dragging">
-                  <EntityIcon
-                    icon={activeItem.icon}
-                    color={activeItem.color}
-                    size={14}
-                    entityType="track"
+          <>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
+                {visibleBoards.map((board) => (
+                  <SortableBoardItem
+                    key={board.board_id}
+                    board={board}
+                    // /scrum/[boardId] 페이지일 때만 active. router.query.boardId는 string이라
+                    // loose 비교(SidebarBranches와 동일 컨벤션)로 number/string 모두 매치.
+                    // eslint-disable-next-line eqeqeq
+                    isActive={router.pathname.startsWith('/scrum/') && router.query.boardId == board.board_id}
+                    onHide={onHide}
                   />
-                  <span className="Sidebar__BranchName">{activeItem.name}</span>
-                </div>
-              )}
-            </DragOverlay>
-          </DndContext>
+                ))}
+              </SortableContext>
+
+              <DragOverlay>
+                {activeItem && (
+                  <div className="Sidebar__BranchItem Sidebar__BranchItem--dragging">
+                    <EntityIcon
+                      icon={activeItem.icon}
+                      color={activeItem.color}
+                      size={14}
+                      entityType="track"
+                    />
+                    <span className="Sidebar__BranchName">{activeItem.name}</span>
+                  </div>
+                )}
+              </DragOverlay>
+            </DndContext>
+
+            {hiddenBoards.length > 0 && (
+              <>
+                <button className="Sidebar__HiddenToggle" onClick={() => setShowHidden((s) => !s)}>
+                  {showHidden ? '숨긴 항목 숨기기' : `숨긴 항목 ${hiddenBoards.length}개 표시`}
+                </button>
+                {showHidden && hiddenBoards.map((board) => (
+                  <div key={board.board_id} className="Sidebar__BranchRow Sidebar__BranchRow--hidden">
+                    <button className="Sidebar__BranchItem" onClick={() => router.push(`/scrum/${board.board_id}`)}>
+                      <EntityIcon icon={board.icon} color={board.color} size={14} entityType="track" />
+                      <span className="Sidebar__BranchName">{board.name}</span>
+                    </button>
+                    <button className="Sidebar__UnhideBtn" onClick={() => onUnhide(board.board_id)}>숨김 해제</button>
+                  </div>
+                ))}
+              </>
+            )}
+          </>
         )}
       </div>
     </>

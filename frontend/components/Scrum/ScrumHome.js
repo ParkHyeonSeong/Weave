@@ -9,6 +9,7 @@ import HomeSkeleton from '@/components/Home/shared/HomeSkeleton';
 import HomeEmptyState from '@/components/Home/shared/HomeEmptyState';
 import AppCard from '@/components/Home/shared/AppCard';
 import CreateScrumBoard from '@/components/modal/CreateScrumBoard';
+import { useUiPrefs } from '@/library/UiPrefsContext';
 
 const getMyName = () => {
   try { return JSON.parse(sessionStorage.getItem('profile') || '{}').username || ''; } catch { return ''; }
@@ -17,6 +18,7 @@ const CADENCE_LABEL = { weekly: '매주', biweekly: '격주', every_n_weeks: 'N�
 
 export default function ScrumHome() {
   const router = useRouter();
+  const { isHidden } = useUiPrefs();
   const [boards, setBoards] = useState([]);
   const [query, setQuery] = useState('');
   const [view, setView] = useState('grid');
@@ -39,10 +41,11 @@ export default function ScrumHome() {
   }, [router]);
 
   const filtered = useMemo(() => {
-    if (!query.trim()) return boards;
+    const base = boards.filter((b) => !isHidden('scrums', b.board_id));
+    if (!query.trim()) return base;
     const q = query.toLowerCase();
-    return boards.filter((b) => b.name.toLowerCase().includes(q));
-  }, [boards, query]);
+    return base.filter((b) => b.name.toLowerCase().includes(q));
+  }, [boards, query, isHidden]);
 
   const memberTotal = useMemo(() => boards.reduce((s, b) => s + (b.member_count || 0), 0), [boards]);
 
@@ -66,14 +69,14 @@ export default function ScrumHome() {
         ]}
       />
       <div className="HomeDivider" />
-      <HomeToolbar count={`보드 ${boards.length}`} query={query} onQuery={setQuery} placeholder="보드 검색…" sortLabel="최근순" view={view} onView={setView} />
+      <HomeToolbar count={`보드 ${filtered.length}`} query={query} onQuery={setQuery} placeholder="보드 검색…" sortLabel="최근순" view={view} onView={setView} />
       {loading ? (
         <HomeSkeleton variant="cards" />
       ) : filtered.length === 0 ? (
         <HomeEmptyState
           icon={<CalendarCheck size={26} />}
-          title={boards.length === 0 ? '아직 스크럼 보드가 없어요' : '검색 결과 없음'}
-          desc={boards.length === 0 ? '첫 보드를 만들고 팀의 데일리스크럼을 시작하세요.' : `"${query}"에 맞는 보드가 없습니다.`}
+          title={boards.length === 0 ? '아직 스크럼 보드가 없어요' : (query.trim() ? '검색 결과 없음' : '표시할 보드가 없어요')}
+          desc={boards.length === 0 ? '첫 보드를 만들고 팀의 데일리스크럼을 시작하세요.' : (query.trim() ? `"${query}"에 맞는 보드가 없습니다.` : '모든 보드가 숨겨졌어요. 사이드바에서 해제할 수 있어요.')}
           ctaLabel={boards.length === 0 ? '＋ 새 보드' : undefined}
           onCta={() => setShowCreate(true)}
         />

@@ -10,6 +10,7 @@ import HomeSkeleton from '@/components/Home/shared/HomeSkeleton';
 import HomeEmptyState from '@/components/Home/shared/HomeEmptyState';
 import ProgressRing from '@/components/Home/shared/ProgressRing';
 import AppCard, { AvatarSet } from '@/components/Home/shared/AppCard';
+import { useUiPrefs } from '@/library/UiPrefsContext';
 
 const getRelativeTime = (dateStr) => {
   const now = new Date();
@@ -36,6 +37,7 @@ const openCommandPalette = () => window.dispatchEvent(new CustomEvent('layout:op
 
 export default function BranchHome() {
   const router = useRouter();
+  const { isHidden } = useUiPrefs();
   const [branches, setBranches] = useState([]);
   const [recentTasks, setRecentTasks] = useState([]);
   const [stats, setStats] = useState(null);
@@ -80,12 +82,13 @@ export default function BranchHome() {
   }, []);
 
   const filteredBranches = useMemo(() => {
-    if (!query.trim()) return branches;
+    const base = branches.filter((b) => !isHidden('branches', b.branch_id));
+    if (!query.trim()) return base;
     const q = query.toLowerCase();
-    return branches.filter(
+    return base.filter(
       (b) => b.branch_name.toLowerCase().includes(q) || b.key.toLowerCase().includes(q)
     );
-  }, [branches, query]);
+  }, [branches, query, isHidden]);
 
   return (
     <div className="HomeMain">
@@ -139,7 +142,7 @@ export default function BranchHome() {
       <div className="HomeDivider" />
 
       <HomeToolbar
-        count={`브랜치 ${branches.length}`}
+        count={`브랜치 ${filteredBranches.length}`}
         query={query}
         onQuery={setQuery}
         placeholder="브랜치 검색…"
@@ -153,7 +156,7 @@ export default function BranchHome() {
       ) : filteredBranches.length === 0 ? (
         <HomeEmptyState
           icon={<GitBranch size={26} />}
-          title={branches.length === 0 ? '아직 브랜치가 없어요' : '검색 결과 없음'}
+          title={branches.length === 0 ? '아직 브랜치가 없어요' : (query.trim() ? '검색 결과 없음' : '표시할 브랜치가 없어요')}
           desc={
             branches.length === 0
               ? '브랜치를 만들어 프로젝트 관리를 시작하세요.'

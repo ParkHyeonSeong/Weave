@@ -8,6 +8,7 @@ import HomeToolbar from '@/components/Home/shared/HomeToolbar';
 import HomeSkeleton from '@/components/Home/shared/HomeSkeleton';
 import HomeEmptyState from '@/components/Home/shared/HomeEmptyState';
 import ProgressRing from '@/components/Home/shared/ProgressRing';
+import { useUiPrefs } from '@/library/UiPrefsContext';
 import AppCard from '@/components/Home/shared/AppCard';
 import CreateTrack from '@/components/modal/CreateTrack';
 
@@ -24,6 +25,7 @@ const openCommandPalette = () => window.dispatchEvent(new CustomEvent('layout:op
 
 export default function TrackHome() {
   const router = useRouter();
+  const { isHidden } = useUiPrefs();
   const [tracks, setTracks] = useState([]);
   const [stats, setStats] = useState(null);
   const [query, setQuery] = useState('');
@@ -60,10 +62,11 @@ export default function TrackHome() {
   }, [router]);
 
   const filteredTracks = useMemo(() => {
-    if (!query.trim()) return tracks;
+    const base = tracks.filter((t) => !isHidden('tracks', t.track_id));
+    if (!query.trim()) return base;
     const q = query.toLowerCase();
-    return tracks.filter((t) => t.track_name.toLowerCase().includes(q));
-  }, [tracks, query]);
+    return base.filter((t) => t.track_name.toLowerCase().includes(q));
+  }, [tracks, query, isHidden]);
 
   return (
     <div className="HomeMain">
@@ -103,7 +106,7 @@ export default function TrackHome() {
       <div className="HomeDivider" />
 
       <HomeToolbar
-        count={`트랙 ${tracks.length}`}
+        count={`트랙 ${filteredTracks.length}`}
         query={query}
         onQuery={setQuery}
         placeholder="트랙 검색…"
@@ -117,7 +120,7 @@ export default function TrackHome() {
       ) : filteredTracks.length === 0 ? (
         <HomeEmptyState
           icon={<Workflow size={26} />}
-          title={tracks.length === 0 ? '아직 트랙이 없어요' : '검색 결과 없음'}
+          title={tracks.length === 0 ? '아직 트랙이 없어요' : (query.trim() ? '검색 결과 없음' : '표시할 트랙이 없어요')}
           desc={
             tracks.length === 0
               ? '첫 Track을 만들고 여러 branch의 task를 모아 흐름을 그려보세요.'

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import {
   Plus, ChevronRight, ChevronDown,
-  FileText, FileCode, Folder, FolderOpen, FolderPlus, MoreHorizontal, Settings,
+  FileText, FileCode, Folder, FolderOpen, FolderPlus, MoreHorizontal, Settings, EyeOff,
   Trash2, Pencil, Copy, Link, FolderInput,
 } from 'lucide-react';
 import ConfirmModal from '@/components/modal/ConfirmModal';
@@ -25,7 +25,7 @@ const treeCollisionDetection = (args) => {
   return closestCenter(args);
 };
 
-export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderChange }) {
+export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderChange, hidden = [], onHide, onUnhide }) {
   const router = useRouter();
   const [canvases, setCanvases] = useState([]);
   const [expandedId, setExpandedId] = useState(null);
@@ -393,6 +393,7 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
 
   // 캔버스 목록 DnD
   const [activeCanvas, setActiveCanvas] = useState(null);
+  const [showHidden, setShowHidden] = useState(false);
   const canvasSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
@@ -409,10 +410,14 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
     });
   }, [canvases, savedOrder]);
 
-  const canvasSortableIds = sortedCanvases.map((c) => c.canvas_id);
+  const hiddenSet = useMemo(() => new Set(hidden || []), [hidden]);
+  const visibleCanvases = useMemo(() => sortedCanvases.filter((c) => !hiddenSet.has(c.canvas_id)), [sortedCanvases, hiddenSet]);
+  const hiddenCanvases = useMemo(() => sortedCanvases.filter((c) => hiddenSet.has(c.canvas_id)), [sortedCanvases, hiddenSet]);
+
+  const canvasSortableIds = visibleCanvases.map((c) => c.canvas_id);
 
   const handleCanvasDragStart = (event) => {
-    const item = sortedCanvases.find((c) => c.canvas_id === event.active.id);
+    const item = visibleCanvases.find((c) => c.canvas_id === event.active.id);
     setActiveCanvas(item || null);
   };
 
@@ -420,10 +425,10 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
     setActiveCanvas(null);
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const oldIndex = sortedCanvases.findIndex((c) => c.canvas_id === active.id);
-    const newIndex = sortedCanvases.findIndex((c) => c.canvas_id === over.id);
+    const oldIndex = visibleCanvases.findIndex((c) => c.canvas_id === active.id);
+    const newIndex = visibleCanvases.findIndex((c) => c.canvas_id === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
-    const reordered = arrayMove(sortedCanvases, oldIndex, newIndex);
+    const reordered = arrayMove(visibleCanvases, oldIndex, newIndex);
     const newOrder = reordered.map((c) => c.canvas_id);
     onOrderChange(newOrder);
   };
@@ -442,6 +447,7 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
             No canvases yet.<br />Create one to get started.
           </div>
         ) : (
+          <>
           <DndContext
             sensors={canvasSensors}
             collisionDetection={closestCenter}
@@ -449,7 +455,7 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
             onDragEnd={handleCanvasDragEnd}
           >
             <SortableContext items={canvasSortableIds} strategy={verticalListSortingStrategy}>
-              {sortedCanvases.map((canvas) => (
+              {visibleCanvases.map((canvas) => (
             <div key={canvas.canvas_id}>
               <CanvasRow
                 canvas={canvas}
@@ -466,6 +472,7 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
                   setInlineTitle('');
                 }}
                 onAddTypst={() => handleQuickCreate(canvas.canvas_id, 'typst')}
+                onHide={onHide}
               />
 
               {expandedId === canvas.canvas_id && (
@@ -561,6 +568,24 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
               )}
             </DragOverlay>
           </DndContext>
+
+          {hiddenCanvases.length > 0 && (
+            <>
+              <button className="Sidebar__HiddenToggle" onClick={() => setShowHidden((s) => !s)}>
+                {showHidden ? '숨긴 항목 숨기기' : `숨긴 항목 ${hiddenCanvases.length}개 표시`}
+              </button>
+              {showHidden && hiddenCanvases.map((canvas) => (
+                <div key={canvas.canvas_id} className="Sidebar__BranchRow Sidebar__BranchRow--hidden">
+                  <button className="Sidebar__BranchItem" onClick={() => router.push(`/canvas/${canvas.canvas_id}`)}>
+                    <EntityIcon icon={canvas.icon} color={canvas.color} size={14} entityType="canvas" />
+                    <span className="Sidebar__BranchName">{canvas.canvas_name}</span>
+                  </button>
+                  <button className="Sidebar__UnhideBtn" onClick={() => onUnhide(canvas.canvas_id)}>숨김 해제</button>
+                </div>
+              ))}
+            </>
+          )}
+          </>
         )}
       </div>
 
@@ -632,7 +657,7 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
 }
 
 // 캔버스 제목 row + 호버 시 더보기/+ 버튼
-function CanvasRow({ canvas, isActive, isExpanded, onToggle, onAddDocument, onAddFolder, onAddTypst }) {
+function CanvasRow({ canvas, isActive, isExpanded, onToggle, onAddDocument, onAddFolder, onAddTypst, onHide }) {
   const router = useRouter();
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [addMenuPos, setAddMenuPos] = useState(null);
@@ -720,6 +745,13 @@ function CanvasRow({ canvas, isActive, isExpanded, onToggle, onAddDocument, onAd
               >
                 <Settings size={13} />
                 Settings
+              </button>
+              <button
+                className="Sidebar__AddMenuItem"
+                onClick={() => { setShowMoreMenu(false); onHide(canvas.canvas_id); }}
+              >
+                <EyeOff size={13} />
+                숨기기
               </button>
             </div>
           )}

@@ -537,3 +537,35 @@
     transform: translateX(0);
   }
 }
+
+/* 개인 숨김 — ⋯ 메뉴 래퍼 + 숨김 토글/항목 (버튼·메뉴는 BranchAddBtn/AddMenu 재사용) */
+.Sidebar__ItemActions {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+}
+
+.Sidebar__HiddenToggle {
+  width: 100%;
+  text-align: left;
+  padding: 6px $space-4;
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+  transition: color $transition-fast;
+
+  &:hover { color: $color-text; }
+}
+
+.Sidebar__BranchRow--hidden { opacity: 0.55; }
+
+.Sidebar__UnhideBtn {
+  flex-shrink: 0;
+  margin-right: $space-2;
+  padding: 2px 8px;
+  border-radius: $radius-sm;
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+  transition: all $transition-fast;
+
+  &:hover { background: $color-border; color: $color-text; }
+}
