@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { axios } from '@/library/_axios';
 import { Zap } from 'lucide-react';
+import { useUiPrefs } from '@/library/UiPrefsContext';
 
 export default function ActiveSprints() {
   const [sprints, setSprints] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { isHidden } = useUiPrefs();
 
   useEffect(() => {
     fetchSprints();
@@ -26,6 +28,7 @@ export default function ActiveSprints() {
             if (countRes.data.status) {
               allSprints.push({
                 ...sprint,
+                branch_id: branch.branch_id,
                 branch_name: branch.branch_name,
                 branch_key: branch.key,
                 done: countRes.data.done_count,
@@ -42,6 +45,8 @@ export default function ActiveSprints() {
       setLoading(false);
     }
   };
+
+  const visibleSprints = sprints.filter((s) => !isHidden('branches', s.branch_id));
 
   if (loading) {
     return (
@@ -64,10 +69,10 @@ export default function ActiveSprints() {
         <span className="Widget__Title">Active Sprints</span>
       </div>
       <div className="Widget__Body">
-        {sprints.length === 0 ? (
+        {visibleSprints.length === 0 ? (
           <div className="Widget__Empty">No active sprints</div>
         ) : (
-          sprints.map((sprint) => {
+          visibleSprints.map((sprint) => {
             const percent = sprint.total > 0 ? Math.round((sprint.done / sprint.total) * 100) : 0;
             return (
               <div key={sprint.sprint_id} className="ActiveSprints__Item">

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, Workflow, Globe, Lock, Check } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import { useUiPrefs } from '@/library/UiPrefsContext';
 import EntityIcon from '@/components/common/EntityIcon';
 
 const COLOR_PRESETS = [
@@ -18,6 +19,7 @@ export default function CreateTrack({ onClose, onCreated }) {
   const [loading, setLoading] = useState(false);
   const [loadingBranches, setLoadingBranches] = useState(true);
   const [error, setError] = useState('');
+  const { isHidden } = useUiPrefs();
 
   // 가입된 branch 목록 로드
   useEffect(() => {
@@ -73,6 +75,8 @@ export default function CreateTrack({ onClose, onCreated }) {
       setLoading(false);
     }
   };
+
+  const visibleBranches = branches.filter((b) => !isHidden('branches', b.branch_id));
 
   return (
     <div className="CreateTrack__Backdrop" onClick={onClose}>
@@ -173,11 +177,11 @@ export default function CreateTrack({ onClose, onCreated }) {
             </span>
             {loadingBranches ? (
               <div className="CreateTrack__BranchesLoading">Loading branches…</div>
-            ) : branches.length === 0 ? (
+            ) : visibleBranches.length === 0 ? (
               <div className="CreateTrack__BranchesEmpty">아직 가입된 branch가 없어요. 나중에 추가할 수 있어요.</div>
             ) : (
               <div className="CreateTrack__Branches">
-                {branches.map((b) => {
+                {visibleBranches.map((b) => {
                   const checked = selectedBranchIds.has(b.branch_id);
                   return (
                     <button

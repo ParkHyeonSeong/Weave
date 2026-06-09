@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { axios } from '@/library/_axios';
 import { Clock, FileText } from 'lucide-react';
+import { useUiPrefs } from '@/library/UiPrefsContext';
 
 export default function RecentItems() {
   const router = useRouter();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { isHidden } = useUiPrefs();
 
   useEffect(() => {
     fetchRecent();
@@ -44,6 +46,12 @@ export default function RecentItems() {
     }
   };
 
+  const visibleItems = items.filter((it) =>
+    it.type === 'task'
+      ? !isHidden('branches', it.branch_id)
+      : !isHidden('canvases', it.canvas_id)
+  );
+
   if (loading) {
     return (
       <div className="Widget">
@@ -65,11 +73,11 @@ export default function RecentItems() {
         <span className="Widget__Title">Recent Items</span>
       </div>
       <div className="Widget__Body">
-        {items.length === 0 ? (
+        {visibleItems.length === 0 ? (
           <div className="Widget__Empty">No recent items</div>
         ) : (
           <div className="RecentItems__List">
-            {items.map((item) => (
+            {visibleItems.map((item) => (
               <div
                 key={`${item.type}-${item.type === 'task' ? item.task_id : item.page_id}`}
                 className="RecentItems__Item"

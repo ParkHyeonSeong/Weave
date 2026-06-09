@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { CalendarCheck, History, X } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import { useUiPrefs } from '@/library/UiPrefsContext';
 
 export default function ScrumHomeCards() {
   const router = useRouter();
   const [data, setData] = useState(null);
   const [dismissed, setDismissed] = useState(() => new Set());
+  const { isHidden } = useUiPrefs();
 
   useEffect(() => {
     let alive = true;
@@ -17,8 +19,8 @@ export default function ScrumHomeCards() {
   }, []);
 
   if (!data) return null;
-  const pending = (data.today_pending || []).filter((b) => !dismissed.has(`t${b.board_id}`));
-  const retro = (data.retro_due || []).filter((b) => !dismissed.has(`r${b.board_id}`));
+  const pending = (data.today_pending || []).filter((b) => !dismissed.has(`t${b.board_id}`) && !isHidden('scrums', b.board_id));
+  const retro = (data.retro_due || []).filter((b) => !dismissed.has(`r${b.board_id}`) && !isHidden('scrums', b.board_id));
   if (pending.length === 0 && retro.length === 0) return null;
 
   const dismiss = (k) => setDismissed((p) => new Set(p).add(k));

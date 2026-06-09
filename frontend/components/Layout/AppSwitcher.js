@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { LayoutDashboard, GitBranch, FileEdit, Workflow, CalendarCheck, ChevronDown, Check, FileText } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import { useUiPrefs } from '@/library/UiPrefsContext';
 import { getAppContext, APP_HOME } from '@/library/appContext';
 import { DEFAULT_COLORS } from '@/library/entityAppearance';
 
@@ -19,6 +20,7 @@ export default function AppSwitcher() {
   const current = APPS.find((a) => a.key === currentKey) || APPS[0];
   const [open, setOpen] = useState(false);
   const [recent, setRecent] = useState([]);
+  const { isHidden } = useUiPrefs();
   const ref = useRef(null);
 
   // 드롭다운이 열릴 때만 최근 항목 로드
@@ -46,6 +48,12 @@ export default function AppSwitcher() {
     if (item.type === 'task') router.push(`/branch/${item.branch_id}/task/${item.task_id}`);
     else if (item.type === 'doc') router.push(`/canvas/${item.canvas_id}/${item.page_id}`);
   };
+
+  const visibleRecent = recent.filter((it) =>
+    it.type === 'task'
+      ? !isHidden('branches', it.branch_id)
+      : !isHidden('canvases', it.canvas_id)
+  );
 
   const CurIcon = current.Icon;
 
@@ -86,11 +94,11 @@ export default function AppSwitcher() {
             );
           })}
 
-          {recent.length > 0 && (
+          {visibleRecent.length > 0 && (
             <>
               <div className="AppSwitcher__Divider" />
               <div className="AppSwitcher__Label">최근</div>
-              {recent.map((item) => (
+              {visibleRecent.map((item) => (
                 <button
                   key={`${item.type}-${item.type === 'task' ? item.task_id : item.page_id}`}
                   className="AppSwitcher__Recent"

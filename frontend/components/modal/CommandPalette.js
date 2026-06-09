@@ -5,6 +5,7 @@ import {
   Compass, User, CircleDot, Clock, Settings, PanelLeft,
 } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import { useUiPrefs } from '@/library/UiPrefsContext';
 
 // --- Command 모드 액션 ---
 const ACTIONS = [
@@ -22,6 +23,7 @@ const formatStatusKey = (key) => key?.replace(/_/g, ' ').replace(/\b\w/g, (c) =>
 
 export default function CommandPalette({ onClose }) {
   const router = useRouter();
+  const { isHidden } = useUiPrefs();
   const inputRef = useRef(null);
   const timerRef = useRef(null);
   const listRef = useRef(null);
@@ -86,11 +88,21 @@ export default function CommandPalette({ onClose }) {
 
   // --- flat items 리스트 생성 ---
   const { groups, flatItems } = useMemo(() => {
+    const taskVisible = (x) => !isHidden('branches', x.branch_id);
+    const docVisible = (x) => !isHidden('canvases', x.canvas_id);
     if (isSearchMode) {
-      return buildSearchGroups(searchResults);
+      return buildSearchGroups({
+        ...searchResults,
+        tasks: searchResults.tasks.filter(taskVisible),
+        docs: searchResults.docs.filter(docVisible),
+        issues: searchResults.issues.filter(taskVisible),
+      });
     }
-    return buildCommandGroups(recentItems, query);
-  }, [isSearchMode, searchResults, recentItems, query]);
+    const visibleRecent = recentItems.filter((r) =>
+      r.type === 'task' ? taskVisible(r) : docVisible(r)
+    );
+    return buildCommandGroups(visibleRecent, query);
+  }, [isSearchMode, searchResults, recentItems, query, isHidden]);
 
   // 키보드 네비게이션
   const handleKeyDown = (e) => {
