@@ -2,6 +2,7 @@ import { useMemo, useState, useRef, useEffect } from 'react';
 import { Search, User, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import MultiSelect from '@/components/common/MultiSelect';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
+import Avatar from '@/components/common/Avatar';
 
 const MAX_VISIBLE = 5;
 
@@ -27,6 +28,8 @@ export default function TaskFilterBar({
 }) {
   const [sortOpen, setSortOpen] = useState(false);
   const sortRef = useRef(null);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef(null);
 
   // 외부 클릭 닫기
   useEffect(() => {
@@ -37,6 +40,16 @@ export default function TaskFilterBar({
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, [sortOpen]);
+
+  // 멤버 +N 팝오버 외부 클릭 닫기
+  useEffect(() => {
+    if (!moreOpen) return;
+    const handleClick = (e) => {
+      if (moreRef.current && !moreRef.current.contains(e.target)) setMoreOpen(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [moreOpen]);
   const visibleMembers = members.slice(0, MAX_VISIBLE);
   const remaining = members.length - MAX_VISIBLE;
 
@@ -244,16 +257,40 @@ export default function TaskFilterBar({
           <button
             key={m.user_id}
             type="button"
-            className={`TaskFilterBar__Avatar ${selectedUserIds.has(m.user_id) ? 'TaskFilterBar__Avatar--selected' : ''}`}
+            className={`TaskFilterBar__AvatarBtn ${selectedUserIds.has(m.user_id) ? 'TaskFilterBar__AvatarBtn--selected' : ''}`}
             title={m.username || m.email}
             onClick={() => onToggleUser(m.user_id)}
           >
-            {(m.username || m.email).charAt(0).toUpperCase()}
+            <Avatar user={m} size="sm" />
           </button>
         ))}
 
         {remaining > 0 && (
-          <span className="TaskFilterBar__More">+{remaining}</span>
+          <div className="TaskFilterBar__More" ref={moreRef}>
+            <button
+              type="button"
+              className="TaskFilterBar__MoreBtn"
+              onClick={() => setMoreOpen((prev) => !prev)}
+              title="More members"
+            >
+              +{remaining}
+            </button>
+            {moreOpen && (
+              <div className="TaskFilterBar__MoreMenu">
+                {members.slice(MAX_VISIBLE).map((m) => (
+                  <button
+                    key={m.user_id}
+                    type="button"
+                    className={`TaskFilterBar__MoreItem ${selectedUserIds.has(m.user_id) ? 'TaskFilterBar__MoreItem--selected' : ''}`}
+                    onClick={() => onToggleUser(m.user_id)}
+                  >
+                    <Avatar user={m} size="sm" />
+                    <span className="TaskFilterBar__MoreItemName">{m.username || m.email}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>

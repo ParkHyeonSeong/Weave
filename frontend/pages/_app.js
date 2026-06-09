@@ -49,6 +49,7 @@ import "@/styles/components/common/datePicker.scss";
 import "@/styles/components/common/labelTagInput.scss";
 import "@/styles/components/common/multiSelect.scss";
 import "@/styles/components/common/entityAppearance.scss";
+import "@/styles/components/common/avatar.scss";
 import "@/styles/components/branch/branchSettings.scss";
 import "@/styles/components/browse/browseBranches.scss";
 import "@/styles/components/home/launchpad.scss";

@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { User, Mail, Lock, Eye, EyeOff, Camera } from 'lucide-react';
-import { axios, getBaseURL } from '@/library/_axios';
+import { axios } from '@/library/_axios';
 import Alert from '@/components/modal/Alert';
 import ProfileTokens from '@/components/Profile/ProfileTokens';
+import Avatar from '@/components/common/Avatar';
 
 export default function Profile() {
   // 프로필 정보
@@ -182,9 +183,6 @@ export default function Profile() {
 
   if (loading) return null;
 
-  const initial = username ? username.charAt(0).toUpperCase() : '?';
-  const fullAvatarUrl = avatarUrl ? `${getBaseURL()}${avatarUrl}` : '';
-
   return (
     <div className="Profile">
       <h1 className="Profile__Title">Profile Settings</h1>
@@ -194,11 +192,7 @@ export default function Profile() {
         <h2 className="Profile__SectionTitle">Avatar</h2>
         <div className="Profile__AvatarArea">
           <div className="Profile__AvatarPreview" onClick={handleAvatarClick}>
-            {fullAvatarUrl ? (
-              <img src={fullAvatarUrl} alt={username} className="Profile__AvatarImg" />
-            ) : (
-              <span className="Profile__AvatarInitial">{initial}</span>
-            )}
+            <Avatar name={username} avatarUrl={avatarUrl} size={80} className="Profile__AvatarMain" />
             <div className="Profile__AvatarOverlay">
               {avatarUploading ? (
                 <span className="Profile__AvatarSpinner" />

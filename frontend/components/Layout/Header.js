@@ -2,8 +2,8 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { Search, Bell, Settings, Shield, AtSign, UserPlus, AlertCircle, MessageSquare, CheckCircle2, Menu } from 'lucide-react';
 import { formatMessageTime } from '@/library/formatTime';
-import { getBaseURL } from '@/library/_axios';
 import AppSwitcher from './AppSwitcher';
+import Avatar from '@/components/common/Avatar';
 
 const NOTI_ICONS = {
   mention: AtSign,
@@ -20,6 +20,8 @@ export default function Header({ isMobile, hasSidebar = false, onToggleSidebar, 
   const [username, setUsername] = useState('');
   const [role, setRole] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
+  const [userId, setUserId] = useState(null);
+  const [avatarColor, setAvatarColor] = useState(null);
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [showNotiMenu, setShowNotiMenu] = useState(false);
   const settingsRef = useRef(null);
@@ -31,6 +33,8 @@ export default function Header({ isMobile, hasSidebar = false, onToggleSidebar, 
       setUsername(profile.username || '');
       setRole(profile.role || '');
       setAvatarUrl(sessionStorage.getItem('avatar_url') || '');
+      setUserId(profile.user_id ?? null);
+      setAvatarColor(profile.avatar_color ?? null);
     } catch {}
 
     const fetchWorkspace = async () => {
@@ -52,6 +56,8 @@ export default function Header({ isMobile, hasSidebar = false, onToggleSidebar, 
         const profile = JSON.parse(sessionStorage.getItem('profile') || '{}');
         setUsername(profile.username || '');
         setAvatarUrl(sessionStorage.getItem('avatar_url') || '');
+        setUserId(profile.user_id ?? null);
+        setAvatarColor(profile.avatar_color ?? null);
       } catch {}
     };
     window.addEventListener('profile:updated', handleProfileUpdate);
@@ -86,8 +92,6 @@ export default function Header({ isMobile, hasSidebar = false, onToggleSidebar, 
     }
     setShowNotiMenu(false);
   };
-
-  const initial = username ? username.charAt(0).toUpperCase() : '?';
 
   return (
     <header className={`Header ${isMobile ? 'Header--mobile' : ''}`}>
@@ -213,12 +217,14 @@ export default function Header({ isMobile, hasSidebar = false, onToggleSidebar, 
             </div>
           )}
         </div>
-        <div className="Header__Avatar" title={username} onClick={() => router.push('/profile')}>
-          {avatarUrl ? (
-            <img src={`${getBaseURL()}${avatarUrl}`} alt={username} className="Header__AvatarImg" />
-          ) : (
-            initial
-          )}
+        <div className="Header__Avatar" onClick={() => router.push('/profile')}>
+          <Avatar
+            name={username}
+            userId={userId}
+            avatarUrl={avatarUrl}
+            avatarColor={avatarColor}
+            size={28}
+          />
         </div>
       </div>
     </header>

@@ -1,0 +1,53 @@
+@use 'sass:color';
+
+.Avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #fff;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+  line-height: 1;
+  flex: 0 0 auto;
+  overflow: hidden;
+  user-select: none;
+
+  &__Img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+}
+
+.AvatarStack {
+  display: inline-flex;
+  align-items: center;
+
+  &--overlap .AvatarStack__Item:not(:first-child) { margin-left: -6px; }
+
+  &__Item .Avatar { box-shadow: 0 0 0 2px #fff; }
+
+  &__More {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 24px;
+    padding: 0 6px;
+    margin-left: -6px;
+    border-radius: 12px;
+    background: #eef0f4;
+    color: #555;
+    font-size: 11px;
+    font-weight: 600;
+    box-shadow: 0 0 0 2px #fff;
+
+    &--btn {
+      border: none;
+      cursor: pointer;
+      &:hover { background: color.adjust(#eef0f4, $lightness: -5%); }
+    }
+  }
+}
