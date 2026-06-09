@@ -24,6 +24,7 @@ import TaskRefNode from './extensions/TaskRefExtension';
 import MentionNode from './extensions/MentionExtension';
 import DocRefNode from './extensions/DocRefExtension';
 import IssueRefNode from './extensions/IssueRefExtension';
+import SlashCommandsExtension from './extensions/SlashCommandsExtension';
 import { createImageUploadPlugin } from './extensions/ImageUploadPlugin';
 import BookmarkNode from './extensions/BookmarkExtension';
 import { createBookmarkPastePlugin } from './extensions/BookmarkPastePlugin';
@@ -144,6 +145,7 @@ function CollabEditorInner({
       MentionNode,
       DocRefNode,
       IssueRefNode,
+      SlashCommandsExtension.configure({ enabled: ['/t', '/ta', '/d', '/i'] }),
       BookmarkNode,
       BookmarkPaste,
       MarkdownPaste,

@@ -9,6 +9,7 @@ import MentionNode from '@/components/Canvas/extensions/MentionExtension';
 import TaskRefNode from '@/components/Canvas/extensions/TaskRefExtension';
 import { ResizableImage } from '@/components/Canvas/extensions/ResizableImageExtension';
 import { createImageUploadPlugin } from '@/components/Canvas/extensions/ImageUploadPlugin';
+import SlashCommandsExtension from '@/components/Canvas/extensions/SlashCommandsExtension';
 
 const lowlight = createLowlight(common);
 
@@ -48,6 +49,7 @@ export default function CommentEditor({
       CodeBlockLowlight.configure({ lowlight }),
       MentionNode,
       TaskRefNode,
+      SlashCommandsExtension.configure({ enabled: ['/t', '/ta'] }),
       ResizableImage,
     ];
     if (branchId) {

@@ -230,9 +230,9 @@
 
     // 태스크 레퍼런스 인라인 칩
     .task-ref {
-      display: inline-flex;
-      align-items: center;
-      gap: 3px;
+      display: inline;
+      -webkit-box-decoration-break: clone;
+      box-decoration-break: clone;
       padding: 1px 8px;
       border-radius: $radius-md;
       font-size: $font-size-xs;
@@ -242,16 +242,16 @@
       border: 1px solid transparent;
       cursor: pointer;
       vertical-align: baseline;
-      line-height: 1.6;
-      white-space: nowrap;
+      line-height: 1.8;
 
       &::before {
         content: '';
         display: inline-block;
         width: 12px;
         height: 12px;
-        flex-shrink: 0;
         background: currentColor;
+        margin-right: 4px;
+        vertical-align: -2px;
         mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='6' height='6' rx='1'/%3E%3Cpath d='m3 17 2 2 4-4'/%3E%3Cline x1='13' y1='6' x2='21' y2='6'/%3E%3Cline x1='13' y1='12' x2='21' y2='12'/%3E%3Cline x1='13' y1='18' x2='21' y2='18'/%3E%3C/svg%3E") no-repeat center / contain;
         -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='6' height='6' rx='1'/%3E%3Cpath d='m3 17 2 2 4-4'/%3E%3Cline x1='13' y1='6' x2='21' y2='6'/%3E%3Cline x1='13' y1='12' x2='21' y2='12'/%3E%3Cline x1='13' y1='18' x2='21' y2='18'/%3E%3C/svg%3E") no-repeat center / contain;
       }
@@ -263,9 +263,9 @@
 
     // 문서 레퍼런스 인라인 칩
     .doc-ref {
-      display: inline-flex;
-      align-items: center;
-      gap: 3px;
+      display: inline;
+      -webkit-box-decoration-break: clone;
+      box-decoration-break: clone;
       padding: 1px 8px;
       border-radius: $radius-md;
       font-size: $font-size-xs;
@@ -275,16 +275,16 @@
       border: 1px solid transparent;
       cursor: pointer;
       vertical-align: baseline;
-      line-height: 1.6;
-      white-space: nowrap;
+      line-height: 1.8;
 
       &::before {
         content: '';
         display: inline-block;
         width: 12px;
         height: 12px;
-        flex-shrink: 0;
         background: currentColor;
+        margin-right: 4px;
+        vertical-align: -2px;
         mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z'/%3E%3Cpath d='M14 2v4a2 2 0 0 0 2 2h4'/%3E%3Cpath d='M10 13H8'/%3E%3Cpath d='M16 17H8'/%3E%3Cpath d='M16 13h-2'/%3E%3C/svg%3E") no-repeat center / contain;
         -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z'/%3E%3Cpath d='M14 2v4a2 2 0 0 0 2 2h4'/%3E%3Cpath d='M10 13H8'/%3E%3Cpath d='M16 17H8'/%3E%3Cpath d='M16 13h-2'/%3E%3C/svg%3E") no-repeat center / contain;
       }
@@ -294,9 +294,9 @@
 
     // 이슈 레퍼런스 인라인 칩
     .issue-ref {
-      display: inline-flex;
-      align-items: center;
-      gap: 3px;
+      display: inline;
+      -webkit-box-decoration-break: clone;
+      box-decoration-break: clone;
       padding: 1px 8px;
       border-radius: $radius-md;
       font-size: $font-size-xs;
@@ -306,16 +306,16 @@
       border: 1px solid transparent;
       cursor: pointer;
       vertical-align: baseline;
-      line-height: 1.6;
-      white-space: nowrap;
+      line-height: 1.8;
 
       &::before {
         content: '';
         display: inline-block;
         width: 12px;
         height: 12px;
-        flex-shrink: 0;
         background: currentColor;
+        margin-right: 4px;
+        vertical-align: -2px;
         mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Ccircle cx='12' cy='12' r='1'/%3E%3C/svg%3E") no-repeat center / contain;
         -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Ccircle cx='12' cy='12' r='1'/%3E%3C/svg%3E") no-repeat center / contain;
       }
@@ -325,8 +325,8 @@
 
     // Ref 상태 뱃지 (Confluence 스타일)
     .ref-chip__badge {
-      display: inline-flex;
-      align-items: center;
+      display: inline-block;
+      vertical-align: 1px;
       margin-left: 4px;
       padding: 0 5px;
       border-radius: 3px;

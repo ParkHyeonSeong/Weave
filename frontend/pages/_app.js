@@ -23,6 +23,7 @@ import "@/styles/components/messenger/messengerUserList.scss";
 import "@/styles/components/messenger/messengerChatRoom.scss";
 import "@/styles/components/messenger/messengerNewChat.scss";
 import "@/styles/components/messenger/taskSearchPopup.scss";
+import "@/styles/components/canvas/slashCommandMenu.scss";
 import "@/styles/components/messenger/taskRefCard.scss";
 import "@/styles/components/messenger/docSearchPopup.scss";
 import "@/styles/components/messenger/docRefCard.scss";

@@ -177,6 +177,64 @@
     }
   }
 
+  // 인라인 task 칩 + 상태 뱃지 + 멘션 — 다른 surface와 동일한 Confluence 인라인 스타일
+  .task-ref {
+    display: inline;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+    padding: 1px 8px;
+    border-radius: $radius-md;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    background: $color-primary-subtle;
+    color: $color-primary;
+    border: 1px solid transparent;
+    cursor: pointer;
+    line-height: 1.8;
+
+    &::before {
+      content: '';
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      margin-right: 4px;
+      vertical-align: -2px;
+      background: currentColor;
+      mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='6' height='6' rx='1'/%3E%3Cpath d='m3 17 2 2 4-4'/%3E%3Cline x1='13' y1='6' x2='21' y2='6'/%3E%3Cline x1='13' y1='12' x2='21' y2='12'/%3E%3Cline x1='13' y1='18' x2='21' y2='18'/%3E%3C/svg%3E") no-repeat center / contain;
+      -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='6' height='6' rx='1'/%3E%3Cpath d='m3 17 2 2 4-4'/%3E%3Cline x1='13' y1='6' x2='21' y2='6'/%3E%3Cline x1='13' y1='12' x2='21' y2='12'/%3E%3Cline x1='13' y1='18' x2='21' y2='18'/%3E%3C/svg%3E") no-repeat center / contain;
+    }
+
+    &:hover { border-color: $color-primary; }
+    &.ProseMirror-selectednode { border-color: $color-primary; box-shadow: 0 0 0 2px rgba($color-primary, 0.2); }
+  }
+
+  .ref-chip__badge {
+    display: inline-block;
+    vertical-align: 1px;
+    margin-left: 4px;
+    padding: 0 5px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: $font-weight-medium;
+    line-height: 1.5;
+    white-space: nowrap;
+
+    &--todo { background: rgba(0, 0, 0, 0.06); color: $color-text-secondary; }
+    &--in_progress { background: $color-status-in-progress-bg; color: $color-status-in-progress; }
+    &--done { background: $color-success-bg; color: $color-success; }
+    &--cancelled { background: rgba(0, 0, 0, 0.06); color: $color-text-secondary; }
+    &--open { background: $color-status-in-progress-bg; color: $color-status-in-progress; }
+    &--closed { background: $color-success-bg; color: $color-success; }
+  }
+
+  .mention {
+    color: $color-primary;
+    background: rgba($color-primary, 0.1);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-weight: $font-weight-medium;
+  }
+
   &__Hint {
     font-size: 11px;
     color: $color-text-secondary;

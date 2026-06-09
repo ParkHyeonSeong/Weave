@@ -11,6 +11,7 @@ import { common, createLowlight } from 'lowlight';
 import CalloutExtension from '@/components/Canvas/extensions/CalloutExtension';
 import TaskRefNode from '@/components/Canvas/extensions/TaskRefExtension';
 import MentionNode from '@/components/Canvas/extensions/MentionExtension';
+import SlashCommandsExtension from '@/components/Canvas/extensions/SlashCommandsExtension';
 import { ResizableImage } from '@/components/Canvas/extensions/ResizableImageExtension';
 import { createImageUploadPlugin } from '@/components/Canvas/extensions/ImageUploadPlugin';
 import { createMarkdownPastePlugin } from '@/components/Canvas/extensions/MarkdownPastePlugin';
@@ -32,6 +33,7 @@ const makeBaseExtensions = (placeholder) => [
   CalloutExtension,
   TaskRefNode,
   MentionNode,
+  SlashCommandsExtension.configure({ enabled: ['/t', '/ta'] }),
   ResizableImage,
   MermaidExtension,
 ];

@@ -1,0 +1,27 @@
+@use '../../variables' as *;
+
+.SlashCommandMenu {
+  width:280px; max-width:88vw;
+  background:$color-bg; border:1px solid $color-border; border-radius:$radius-lg;
+  box-shadow:0 4px 12px rgba(0,0,0,0.1); overflow:hidden;
+
+  &__Header {
+    padding:$space-2 $space-3; font-size:$font-size-xs; font-weight:$font-weight-semibold;
+    color:$color-text-tertiary; border-bottom:1px solid $color-border;
+    text-transform:uppercase; letter-spacing:0.3px;
+  }
+  &__List { max-height:240px; overflow-y:auto; list-style:none; margin:0; padding:$space-1 0; }
+  &__Item {
+    display:flex; align-items:center; gap:$space-3; padding:$space-2 $space-3;
+    cursor:pointer; transition:background $transition-fast;
+    &:hover, &--active { background:$color-surface; }
+  }
+  &__Cmd {
+    font-size:$font-size-sm; font-weight:$font-weight-semibold; color:$color-primary;
+    font-family:'SFMono-Regular','Consolas','Liberation Mono','Menlo',monospace; min-width:28px;
+  }
+  &__Desc { font-size:$font-size-sm; color:$color-text-secondary; }
+
+  // 메신저: 입력창 위 absolute 컨테이너
+  &--messenger { position:absolute; bottom:100%; left:0; right:0; width:auto; margin-bottom:$space-1; z-index:10; }
+}

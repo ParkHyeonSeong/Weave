@@ -21,6 +21,7 @@ import { common, createLowlight } from 'lowlight';
 import CalloutExtension from './extensions/CalloutExtension';
 import TaskRefNode from './extensions/TaskRefExtension';
 import MentionNode from './extensions/MentionExtension';
+import SlashCommandsExtension from './extensions/SlashCommandsExtension';
 import { createImageUploadPlugin } from './extensions/ImageUploadPlugin';
 import BookmarkNode from './extensions/BookmarkExtension';
 import { createBookmarkPastePlugin } from './extensions/BookmarkPastePlugin';
@@ -93,6 +94,7 @@ export default function CanvasEditor({ content, onChange, canvasId }) {
     CalloutExtension,
     TaskRefNode,
     MentionNode,
+    SlashCommandsExtension.configure({ enabled: ['/t', '/ta'] }),
     BookmarkNode,
     BookmarkPaste,
     MarkdownPaste,

@@ -3,7 +3,7 @@ import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { ReactRenderer } from '@tiptap/react';
 import IssueRefPopup from './IssueRefPopup';
 
-const issueRefPluginKey = new PluginKey('issueRefSuggestion');
+export const issueRefPluginKey = new PluginKey('issueRefSuggestion');
 
 const IssueRefNode = Node.create({
   name: 'issueRef',
@@ -110,7 +110,7 @@ const IssueRefNode = Node.create({
                   null,
                   '\ufffc',
                 );
-                const match = textBefore.match(/\/i\s(.*)$/);
+                const match = textBefore.match(/^\/i\s?(.*)$/);
                 if (match) {
                   view.dispatch(view.state.tr.setMeta(issueRefPluginKey, {
                     active: true, keyword: match[1], from: newState.from,
@@ -124,24 +124,6 @@ const IssueRefNode = Node.create({
               return false;
             }
 
-            if (text === ' ') {
-              const $pos = state.doc.resolve(from);
-              const textBefore = $pos.parent.textBetween(
-                Math.max(0, from - $pos.start() - 2),
-                from - $pos.start(),
-                null,
-                '\ufffc',
-              );
-              if (textBefore === '/i' || textBefore.endsWith('/i')) {
-                const slashFrom = from - 2;
-                setTimeout(() => {
-                  view.dispatch(view.state.tr.setMeta(issueRefPluginKey, {
-                    active: true, keyword: '', from: slashFrom,
-                  }));
-                }, 0);
-                return false;
-              }
-            }
             return false;
           },
 

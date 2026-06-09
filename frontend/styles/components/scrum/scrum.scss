@@ -246,6 +246,7 @@
 // 그리드 셀과 회고 셀 모두 .ScrumCell 이라 한 번에 적용됨.
 // =========================================================================
 .ScrumCell {
+  .ProseMirror p { margin: 3px 0; }
   ul, ol { margin:4px 0; padding-left:1.2em; }
   ul[data-type="taskList"] {
     list-style:none; padding-left:0;
@@ -257,24 +258,24 @@
     }
   }
   .task-ref {
-    display:inline-flex; align-items:center; gap:3px; padding:1px 7px;
+    display:inline; padding:2px 7px; margin:1px 0;
     border-radius:$radius-md; font-size:$font-size-xs; font-weight:$font-weight-medium;
     background:$color-primary-subtle; color:$color-primary; border:1px solid transparent;
-    cursor:pointer; vertical-align:baseline; line-height:1.5; white-space:nowrap; max-width:100%;
+    cursor:pointer; line-height:1.8; -webkit-box-decoration-break:clone; box-decoration-break:clone;
     &::before {
-      content:''; display:inline-block; width:12px; height:12px; flex-shrink:0; background:currentColor;
+      content:''; display:inline-block; width:12px; height:12px; margin-right:4px; vertical-align:-2px; background:currentColor;
       -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='6' height='6' rx='1'/%3E%3Cpath d='m3 17 2 2 4-4'/%3E%3Cline x1='13' y1='6' x2='21' y2='6'/%3E%3Cline x1='13' y1='12' x2='21' y2='12'/%3E%3Cline x1='13' y1='18' x2='21' y2='18'/%3E%3C/svg%3E") no-repeat center / contain;
       mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='6' height='6' rx='1'/%3E%3Cpath d='m3 17 2 2 4-4'/%3E%3Cline x1='13' y1='6' x2='21' y2='6'/%3E%3Cline x1='13' y1='12' x2='21' y2='12'/%3E%3Cline x1='13' y1='18' x2='21' y2='18'/%3E%3C/svg%3E") no-repeat center / contain;
     }
     &:hover { border-color:$color-primary; }
   }
   .doc-ref {
-    display:inline-flex; align-items:center; gap:3px; padding:1px 7px;
+    display:inline; padding:2px 7px; margin:1px 0;
     border-radius:$radius-md; font-size:$font-size-xs; font-weight:$font-weight-medium;
     background:$color-ref-doc-bg; color:$color-ref-doc; border:1px solid transparent;
-    cursor:pointer; vertical-align:baseline; line-height:1.5; white-space:nowrap; max-width:100%;
+    cursor:pointer; line-height:1.8; -webkit-box-decoration-break:clone; box-decoration-break:clone;
     &::before {
-      content:''; display:inline-block; width:12px; height:12px; flex-shrink:0; background:currentColor;
+      content:''; display:inline-block; width:12px; height:12px; margin-right:4px; vertical-align:-2px; background:currentColor;
       -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z'/%3E%3Cpath d='M14 2v4a2 2 0 0 0 2 2h4'/%3E%3C/svg%3E") no-repeat center / contain;
       mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z'/%3E%3Cpath d='M14 2v4a2 2 0 0 0 2 2h4'/%3E%3C/svg%3E") no-repeat center / contain;
     }
@@ -285,7 +286,7 @@
     padding:1px 5px; border-radius:4px; font-weight:$font-weight-medium; white-space:nowrap;
   }
   .ref-chip__badge {
-    display:inline-flex; align-items:center; margin-left:4px; padding:0 5px;
+    display:inline-block; vertical-align:1px; margin-left:4px; padding:0 5px;
     border-radius:3px; font-size:10px; font-weight:$font-weight-medium; line-height:1.5; white-space:nowrap;
     &--todo { background:rgba(0,0,0,0.06); color:$color-text-secondary; }
     &--in_progress { background:$color-status-in-progress-bg; color:$color-status-in-progress; }
@@ -314,3 +315,17 @@
   background:color.adjust(#16A34A, $lightness:50%); border-radius:4px; padding:1px 6px;
 }
 .RetroMember .RetroCol__Body { min-height:110px; }
+
+// 스크럼 셀 포커스 툴바 (칸 위 부유)
+.ScrumCellToolbar {
+  display:inline-flex; align-items:center; gap:2px;
+  background:#1F2430; color:#fff; padding:4px; border-radius:9px;
+  box-shadow:0 6px 20px rgba(0,0,0,.22);
+  &__Btn {
+    width:28px; height:26px; display:inline-flex; align-items:center; justify-content:center;
+    border:none; background:transparent; color:#E5E7EB; border-radius:6px; cursor:pointer;
+    &:hover { background:rgba(255,255,255,.12); }
+    &.is-active { background:rgba(255,255,255,.20); color:#fff; }
+  }
+  &__Sep { width:1px; height:16px; background:rgba(255,255,255,.18); margin:0 3px; }
+}

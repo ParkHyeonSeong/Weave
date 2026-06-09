@@ -9,6 +9,8 @@ import DocRefCard from './DocRefCard';
 import IssueSearchPopup from './IssueSearchPopup';
 import IssueRefCard from './IssueRefCard';
 import MentionSearchPopup from './MentionSearchPopup';
+import SlashCommandMenu from '@/components/Canvas/extensions/SlashCommandMenu';
+import { filterSlashCommands } from '@/components/Canvas/extensions/slashCommands';
 
 const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
 const FILE_EXTENSIONS = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt', '.csv', '.zip'];
@@ -278,16 +280,7 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
     setPendingFiles([]);
   };
 
-  const SLASH_COMMANDS = [
-    { cmd: '/t', desc: 'Search my tasks' },
-    { cmd: '/ta', desc: 'Search all tasks' },
-    { cmd: '/d', desc: 'Search documents' },
-    { cmd: '/i', desc: 'Search issues' },
-  ];
-
-  const filteredSlashCommands = SLASH_COMMANDS.filter(
-    (c) => c.cmd.startsWith(input) || input === '/'
-  );
+  const filteredSlashCommands = filterSlashCommands(input);
 
   const handleKeyDown = (e) => {
     if (e.nativeEvent.isComposing) return;
@@ -722,22 +715,13 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
 
       <div className="MessengerChatRoom__Input">
         {showSlashMenu && filteredSlashCommands.length > 0 && (
-          <div className="SlashMenu">
-            <div className="SlashMenu__Header">Commands</div>
-            <ul className="SlashMenu__List">
-              {filteredSlashCommands.map((c, idx) => (
-                <li
-                  key={c.cmd}
-                  className={`SlashMenu__Item ${slashMenuIdx === idx ? 'SlashMenu__Item--active' : ''}`}
-                  onClick={() => handleSlashMenuSelect(c.cmd)}
-                  onMouseEnter={() => setSlashMenuIdx(idx)}
-                >
-                  <span className="SlashMenu__Cmd">{c.cmd}</span>
-                  <span className="SlashMenu__Desc">{c.desc}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
+          <SlashCommandMenu
+            className="SlashCommandMenu--messenger"
+            commands={filteredSlashCommands}
+            activeIndex={slashMenuIdx}
+            onSelect={(c) => handleSlashMenuSelect(c.cmd)}
+            onHover={setSlashMenuIdx}
+          />
         )}
         {mentionCommand && (
           <MentionSearchPopup

@@ -3,7 +3,7 @@ import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { ReactRenderer } from '@tiptap/react';
 import TaskRefPopup from './TaskRefPopup';
 
-const taskRefPluginKey = new PluginKey('taskRefSuggestion');
+export const taskRefPluginKey = new PluginKey('taskRefSuggestion');
 
 // snake_case key를 Title Case로 변환 (fallback용)
 const formatStatusKey = (key) => key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -134,16 +134,12 @@ const TaskRefNode = Node.create({
                   null,
                   '\ufffc',
                 );
-                // /t 또는 /ta 이후 키워드 추출
-                const matchT = textBefore.match(/\/t\s(.*)$/);
-                const matchTa = textBefore.match(/\/ta\s(.*)$/);
-                if (matchTa) {
+                // 선택된 mode에 맞는 토큰만으로 키워드 추출 (스페이스 없어도 동작)
+                const re = newState.mode === 'all' ? /^\/ta\s?(.*)$/ : /^\/t\s?(.*)$/;
+                const m = textBefore.match(re);
+                if (m) {
                   view.dispatch(view.state.tr.setMeta(taskRefPluginKey, {
-                    active: true, mode: 'all', keyword: matchTa[1], from: newState.from,
-                  }));
-                } else if (matchT) {
-                  view.dispatch(view.state.tr.setMeta(taskRefPluginKey, {
-                    active: true, mode: 'my', keyword: matchT[1], from: newState.from,
+                    active: true, mode: newState.mode, keyword: m[1], from: newState.from,
                   }));
                 } else {
                   view.dispatch(view.state.tr.setMeta(taskRefPluginKey, {
@@ -154,34 +150,6 @@ const TaskRefNode = Node.create({
               return false;
             }
 
-            // /t 또는 /ta 감지: 공백 입력 시 체크
-            if (text === ' ') {
-              const $pos = state.doc.resolve(from);
-              const textBefore = $pos.parent.textBetween(
-                Math.max(0, from - $pos.start() - 3),
-                from - $pos.start(),
-                null,
-                '\ufffc',
-              );
-              if (textBefore === '/ta' || textBefore.endsWith('/ta')) {
-                const slashFrom = from - 3;
-                setTimeout(() => {
-                  view.dispatch(view.state.tr.setMeta(taskRefPluginKey, {
-                    active: true, mode: 'all', keyword: '', from: slashFrom,
-                  }));
-                }, 0);
-                return false;
-              }
-              if (textBefore === '/t' || textBefore.endsWith('/t')) {
-                const slashFrom = from - 2;
-                setTimeout(() => {
-                  view.dispatch(view.state.tr.setMeta(taskRefPluginKey, {
-                    active: true, mode: 'my', keyword: '', from: slashFrom,
-                  }));
-                }, 0);
-                return false;
-              }
-            }
             return false;
           },
 
