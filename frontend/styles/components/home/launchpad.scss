@@ -45,10 +45,18 @@
     padding: $space-2;
     border-radius: $radius-xl;
     cursor: pointer;
+    user-select: none;       // 드래그/탭 중 텍스트 선택 방지
     transition: transform $transition-fast;
 
     &:hover { transform: translateY(-2px); }
     &:hover .Launchpad__Icon { box-shadow: $shadow-md; }
+
+    // 정렬 가능한 앱 타일만: 터치 드래그 시 스크롤 간섭 방지 + grabbing 커서.
+    // (browse 타일은 드래그 대상이 아니므로 touch-action을 막지 않아 모바일 스크롤 정상)
+    &--sortable {
+      touch-action: none;    // dnd-kit PointerSensor 권장(터치)
+      &:active { cursor: grabbing; }
+    }
   }
 
   &__Icon {
