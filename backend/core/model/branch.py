@@ -49,19 +49,28 @@ async def find_accessible(user_id: int, db: AsyncSession):
     """사용자가 접근 가능한 Branch 목록 (홈 카드 집계 필드 포함).
 
     각 branch dict 에 추가되는 필드:
-    - task_total / task_done / progress_percent (done = workflow_status category in done/cancelled)
-    - active_sprint_name (가장 최근 active sprint 이름, 없으면 None)
+    - progress_percent: 현재 active 스프린트 진행률(terminal/total). active 스프린트가
+      없거나 스프린트 태스크가 0이면 None.
+    - active_sprint_count: status='active' 스프린트 수
+    - active_sprint_name: active 스프린트가 정확히 1개일 때 그 이름, 아니면 None
+    - sprint_task_total: active 스프린트의 최상위 태스크 수 (칩 카운트)
+    - active_task_count: 브랜치 전체 최상위 미완료(non-terminal) 태스크 수 (빈 상태 칩)
     - member_count, members (상위 4명 [{name, color}])
 
-    집계는 단일 목록 쿼리에서 상관 서브쿼리로 처리하고, 멤버 미리보기만 별도
-    배치 쿼리 1회로 가져와 N+1 을 피한다.
+    terminal = workflow_status category in (done, cancelled). 카운트는 최상위
+    태스크(parent_task_id IS NULL)만. 집계는 단일 목록 쿼리 + 상관 서브쿼리,
+    멤버 미리보기만 별도 배치 1회로 N+1 회피.
     """
     result = await db.execute(text("""
         SELECT b.branch_id, b.branch_name, b.key, b.description,
                b.icon, b.color, b.visibility, b.created_at,
                bm.role AS my_role,
-               COALESCE(ta.task_total, 0) AS task_total,
-               COALESCE(ta.task_done, 0) AS task_done,
+               COALESCE(sa.sprint_task_total, 0) AS sprint_task_total,
+               COALESCE(sa.sprint_task_done, 0) AS sprint_task_done,
+               COALESCE(sa.active_task_count, 0) AS active_task_count,
+               (SELECT COUNT(*) FROM sprint s2
+                WHERE s2.branch_id = b.branch_id AND s2.status = 'active'
+               ) AS active_sprint_count,
                (SELECT s.sprint_name FROM sprint s
                 WHERE s.branch_id = b.branch_id AND s.status = 'active'
                 ORDER BY s.created_at DESC, s.sprint_id DESC
@@ -71,19 +80,25 @@ async def find_accessible(user_id: int, db: AsyncSession):
         FROM branch b
         INNER JOIN branch_member bm ON b.branch_id = bm.branch_id
         LEFT JOIN (
-            -- Caveat: tasks whose status has no matching workflow_status row fall back
-            -- to 'done' (mirrors core/model/task.py). Such orphan-status tasks are thus
-            -- counted as complete. Assumes every task.status maps to a workflow_status.
+            -- 스프린트 스코프 + 활성 집계. 최상위 태스크만(parent_task_id IS NULL).
+            -- Caveat: status에 매칭되는 workflow_status row가 없으면 'done'으로 폴백
+            -- (core/model/task.py 미러) → terminal 로 침.
             SELECT t.branch_id,
-                   COUNT(*) AS task_total,
+                   COUNT(*) FILTER (WHERE s.status = 'active') AS sprint_task_total,
                    COUNT(*) FILTER (
-                       WHERE COALESCE(ws.category, 'done') IN ('done', 'cancelled')
-                   ) AS task_done
+                       WHERE s.status = 'active'
+                         AND COALESCE(ws.category, 'done') IN ('done', 'cancelled')
+                   ) AS sprint_task_done,
+                   COUNT(*) FILTER (
+                       WHERE COALESCE(ws.category, 'done') NOT IN ('done', 'cancelled')
+                   ) AS active_task_count
             FROM task t
+            LEFT JOIN sprint s ON s.sprint_id = t.sprint_id
             LEFT JOIN workflow_status ws
                 ON ws.branch_id = t.branch_id AND ws.key = t.status
+            WHERE t.parent_task_id IS NULL
             GROUP BY t.branch_id
-        ) ta ON ta.branch_id = b.branch_id
+        ) sa ON sa.branch_id = b.branch_id
         WHERE bm.user_id = :user_id AND b.is_archived = FALSE
         ORDER BY b.branch_name
     """), {'user_id': user_id})
@@ -93,8 +108,14 @@ async def find_accessible(user_id: int, db: AsyncSession):
         return branches
 
     for b in branches:
-        total = b['task_total']
-        b['progress_percent'] = round(b['task_done'] / total * 100) if total else 0
+        st = b['sprint_task_total']
+        b['progress_percent'] = (
+            round(b['sprint_task_done'] / st * 100)
+            if b['active_sprint_count'] and st else None
+        )
+        if b['active_sprint_count'] != 1:
+            b['active_sprint_name'] = None
+        del b['sprint_task_done']   # 내부 계산용, 응답에서 제외
         b['members'] = []
 
     # 멤버 미리보기(상위 4명) 배치 조회 — branch 당 가입 순으로 4명까지.
