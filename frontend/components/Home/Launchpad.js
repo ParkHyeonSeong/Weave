@@ -24,7 +24,7 @@ const APP_REGISTRY = {
 const DEFAULT_ORDER = ['scrum', 'track', 'branch', 'canvas'];
 
 // browse는 앱이 아닌 부가 진입점 → 정렬 대상에서 제외하고 항상 마지막 고정.
-const BROWSE_TILE = { key: 'browse', label: '둘러보기', sub: '공개 브랜치', Icon: Compass, color: '#F59E0B', path: '/browse' };
+const BROWSE_TILE = { key: 'browse', label: '둘러보기', sub: '채널 탐색', Icon: Compass, color: '#F59E0B', path: '/browse' };
 
 // 저장본을 기본 순서와 머지: 알 수 없는 key는 버리고, 기본 순서에 있는데 저장본에 없는 key는
 // 뒤에 자동 추가(향후 새 앱 추가 시 자동 노출). 값 없으면 기본 순서.
