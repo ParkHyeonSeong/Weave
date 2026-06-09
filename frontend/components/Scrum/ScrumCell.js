@@ -3,6 +3,8 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import { Extension } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
+import TaskList from '@tiptap/extension-task-list';
+import TaskItem from '@tiptap/extension-task-item';
 import { ySyncPlugin, yUndoPlugin } from 'y-prosemirror';
 import TaskRefNode from '@/components/Canvas/extensions/TaskRefExtension';
 import DocRefNode from '@/components/Canvas/extensions/DocRefExtension';
@@ -22,8 +24,10 @@ function ScrumCellInner({ ydoc, fragmentKey, placeholder }) {
       addProseMirrorPlugins() { return [ySyncPlugin(fragment), yUndoPlugin()]; },
     });
     return [
-      StarterKit.configure({ history: false, codeBlock: false, heading: false, blockquote: false, horizontalRule: false, bulletList: false, orderedList: false }),
+      StarterKit.configure({ history: false, codeBlock: false, heading: false, blockquote: false, horizontalRule: false }),
       Placeholder.configure({ placeholder: placeholder || '' }),
+      TaskList,
+      TaskItem.configure({ nested: false }),
       TaskRefNode,
       DocRefNode,
       MentionNode,

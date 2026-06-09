@@ -24,9 +24,9 @@
 .ScrumGrid__PersonHead { display:flex; align-items:center; gap:6px; font-weight:800; padding:8px 4px 4px; }
 .ScrumGrid__Avatar { width:18px; height:18px; border-radius:50%; background:#16A34A; color:#fff; font-size:10px; display:flex; align-items:center; justify-content:center; }
 .ScrumGrid__RowLabel { font-size:11px; opacity:.6; display:flex; align-items:center; font-weight:700; }
-.ScrumGrid__CellWrap { border:1px solid color.adjust($color-border, $lightness:3%); border-radius:6px; margin:2px; min-height:34px; }
-.ScrumCell { padding:5px 7px; font-size:12px; min-height:24px; }
-.ScrumCell .ProseMirror { outline:none; min-height:20px; }
+.ScrumGrid__CellWrap { display:flex; flex-direction:column; border:1px solid color.adjust($color-border, $lightness:3%); border-radius:6px; margin:2px; min-height:34px; }
+.ScrumCell { display:flex; flex-direction:column; flex:1; padding:5px 7px; font-size:12px; min-height:24px; cursor:text; }
+.ScrumCell .ProseMirror { flex:1; outline:none; min-height:20px; }
 .ScrumCell--loading { min-height:34px; background:color.adjust($color-surface, $lightness:-1%); border-radius:6px; }
 .Scrum__ChipRow { display:flex; gap:6px; flex-wrap:wrap; }
 .Scrum__Chip { border:1px solid $color-border; border-radius:999px; padding:3px 10px; font-size:12px; background:#fff; cursor:pointer; }
@@ -55,7 +55,7 @@
 
 .RetroCol { display:flex; flex-direction:column; border:1px solid $color-border; border-radius:10px; overflow:hidden; background:$color-surface; }
 .RetroCol__Head { font-size:13px; font-weight:800; padding:8px 12px; border-bottom:1px solid $color-border; }
-.RetroCol__Body { flex:1; padding:6px 8px; min-height:200px; }
+.RetroCol__Body { display:flex; flex-direction:column; flex:1; padding:6px 8px; min-height:200px; }
 .RetroCol--keep .RetroCol__Head { color:#16A34A; background:color.adjust(#16A34A, $lightness:52%); border-bottom-color:color.adjust(#16A34A, $lightness:40%); }
 .RetroCol--problem .RetroCol__Head { color:#DC2626; background:color.adjust(#DC2626, $lightness:48%); border-bottom-color:color.adjust(#DC2626, $lightness:36%); }
 .RetroCol--try .RetroCol__Head { color:#2563EB; background:color.adjust(#2563EB, $lightness:46%); border-bottom-color:color.adjust(#2563EB, $lightness:34%); }
@@ -244,6 +244,16 @@
 // 그리드 셀과 회고 셀 모두 .ScrumCell 이라 한 번에 적용됨.
 // =========================================================================
 .ScrumCell {
+  ul, ol { margin:4px 0; padding-left:1.2em; }
+  ul[data-type="taskList"] {
+    list-style:none; padding-left:0;
+    li[data-type="taskItem"] {
+      display:flex; align-items:flex-start; gap:6px; margin:2px 0;
+      > label { flex-shrink:0; margin:0; input[type="checkbox"] { width:14px; height:14px; accent-color:#16A34A; cursor:pointer; } }
+      > div { flex:1; min-width:0; }
+      &[data-checked="true"] > div { text-decoration:line-through; color:$color-text-tertiary; }
+    }
+  }
   .task-ref {
     display:inline-flex; align-items:center; gap:3px; padding:1px 7px;
     border-radius:$radius-md; font-size:$font-size-xs; font-weight:$font-weight-medium;
