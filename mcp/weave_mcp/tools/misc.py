@@ -8,8 +8,13 @@ async def list_branches() -> Any:
     """List all branches (projects) the account can access.
 
     Call this first — other tools need a branch_id, which comes from here.
-    Each branch includes progress_percent, task_total, active_sprint_name and a
-    preview of its members.
+    Each branch includes:
+    - progress_percent: completion of the current active sprint(s) (terminal/total),
+      or null when the branch has no active sprint.
+    - active_sprint_count, active_sprint_name (set only when exactly one is active),
+      sprint_task_total: tasks in the active sprint(s).
+    - active_task_count: open (non-terminal) top-level tasks in the branch.
+    - a preview of its members.
     """
     return await get_client().call_json("GET", "/api/branches")
 
