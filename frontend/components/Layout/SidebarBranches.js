@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/router';
-import { Plus, GripVertical } from 'lucide-react';
+import { Plus, GripVertical, ChevronRight, ChevronDown } from 'lucide-react';
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
   DragOverlay,
@@ -168,7 +168,8 @@ export default function SidebarBranches({ onCreateBranch, savedOrder, onOrderCha
             {hiddenBranches.length > 0 && (
               <>
                 <button className="Sidebar__HiddenToggle" onClick={() => setShowHidden((s) => !s)}>
-                  {showHidden ? '숨긴 항목 숨기기' : `숨긴 항목 ${hiddenBranches.length}개 표시`}
+                  {showHidden ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                  숨긴 항목 {hiddenBranches.length}
                 </button>
                 {showHidden && hiddenBranches.map((branch) => (
                   <div key={branch.branch_id} className="Sidebar__BranchRow Sidebar__BranchRow--hidden">

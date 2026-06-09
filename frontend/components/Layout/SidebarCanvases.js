@@ -572,7 +572,8 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
           {hiddenCanvases.length > 0 && (
             <>
               <button className="Sidebar__HiddenToggle" onClick={() => setShowHidden((s) => !s)}>
-                {showHidden ? '숨긴 항목 숨기기' : `숨긴 항목 ${hiddenCanvases.length}개 표시`}
+                {showHidden ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                숨긴 항목 {hiddenCanvases.length}
               </button>
               {showHidden && hiddenCanvases.map((canvas) => (
                 <div key={canvas.canvas_id} className="Sidebar__BranchRow Sidebar__BranchRow--hidden">

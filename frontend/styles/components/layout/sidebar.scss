@@ -546,17 +546,29 @@
 }
 
 .Sidebar__HiddenToggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   width: 100%;
-  text-align: left;
-  padding: 6px $space-4;
+  margin-top: 2px;
+  padding: 5px $space-4;
+  border-radius: $radius-sm;
   font-size: $font-size-xs;
   color: $color-text-tertiary;
-  transition: color $transition-fast;
+  transition: color $transition-fast, background $transition-fast;
 
-  &:hover { color: $color-text; }
+  svg { flex-shrink: 0; opacity: 0.6; }
+  &:hover { color: $color-text-secondary; background: $color-surface; }
 }
 
-.Sidebar__BranchRow--hidden { opacity: 0.55; }
+// 펼친 숨김 항목: 들여쓰기로 토글 아래 묶음임을 시각적으로 표현
+.Sidebar__BranchRow--hidden {
+  opacity: 0.55;
+  padding-left: $space-3;
+  transition: opacity $transition-fast;
+
+  &:hover { opacity: 0.85; }
+}
 
 .Sidebar__UnhideBtn {
   flex-shrink: 0;
