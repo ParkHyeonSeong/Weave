@@ -174,17 +174,19 @@ export default function BranchHome() {
               onClick={() => router.push(`/branch/${b.branch_id}`)}
             >
               <div className="HCard__Top">
-                <ProgressRing value={b.progress_percent} color={b.color} />
+                {b.progress_percent !== null && (
+                  <ProgressRing value={b.progress_percent} color={b.color} />
+                )}
                 <div>
                   <div className="HCard__Title">{b.branch_name}</div>
                   <div className="HCard__Desc">{b.description}</div>
                 </div>
               </div>
               <div className="HCard__Foot">
-                <span className={`HChip ${b.active_sprint_name ? 'HChip--sprint' : 'HChip--muted'}`}>
-                  {b.active_sprint_name
-                    ? `${b.active_sprint_name} · ${b.task_total} 태스크`
-                    : `${b.task_total} 태스크`}
+                <span className={`HChip ${b.progress_percent !== null ? 'HChip--sprint' : 'HChip--muted'}`}>
+                  {b.progress_percent !== null
+                    ? `${b.active_sprint_count === 1 ? b.active_sprint_name : `스프린트 ${b.active_sprint_count}개`} · ${b.sprint_task_total} 태스크`
+                    : `스프린트 없음 · ${b.active_task_count} 활성`}
                 </span>
                 <AvatarSet members={b.members || []} />
               </div>
