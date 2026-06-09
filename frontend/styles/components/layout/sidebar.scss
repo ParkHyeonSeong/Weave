@@ -230,27 +230,7 @@
     margin: $space-1 0;
   }
 
-  // -- Drag handle --
-  &__DragHandle {
-    display: flex;
-    align-items: center;
-    flex-shrink: 0;
-    color: $color-text-tertiary;
-    opacity: 0;
-    cursor: grab;
-    transition: opacity $transition-fast;
-    touch-action: none;
-
-    &:active {
-      cursor: grabbing;
-    }
-  }
-
-  &__BranchItem:hover &__DragHandle,
-  &__BranchRow:hover &__DragHandle {
-    opacity: 1;
-  }
-
+  // -- Dragging item (overlay) --
   &__BranchItem--dragging {
     background: $color-surface;
     border: 1px solid $color-border;

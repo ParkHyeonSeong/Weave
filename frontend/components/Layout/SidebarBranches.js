@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/router';
-import { Plus, GripVertical, ChevronRight, ChevronDown } from 'lucide-react';
+import { Plus, ChevronRight, ChevronDown } from 'lucide-react';
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
   DragOverlay,
@@ -30,10 +30,9 @@ function SortableBranchItem({ branch, isActive, onHide }) {
       <button
         className={`Sidebar__BranchItem ${isActive ? 'Sidebar__BranchItem--active' : ''}`}
         onClick={() => router.push(`/branch/${branch.branch_id}`)}
+        {...attributes}
+        {...listeners}
       >
-        <span className="Sidebar__DragHandle" {...attributes} {...listeners}>
-          <GripVertical size={12} />
-        </span>
         <EntityIcon
           icon={branch.icon}
           color={branch.color}
