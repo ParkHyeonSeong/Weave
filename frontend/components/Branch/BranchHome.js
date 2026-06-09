@@ -174,7 +174,7 @@ export default function BranchHome() {
               onClick={() => router.push(`/branch/${b.branch_id}`)}
             >
               <div className="HCard__Top">
-                <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="HCard__TopText">
                   <div className="HCard__Title">{b.branch_name}</div>
                   <div className="HCard__Desc">{b.description}</div>
                 </div>

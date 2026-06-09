@@ -138,11 +138,11 @@ export default function TrackHome() {
               onClick={() => router.push(`/tracks/${t.track_id}`)}
             >
               <div className="HCard__Top">
-                <ProgressRing value={t.progress_percent} color={t.color} />
-                <div>
+                <div className="HCard__TopText">
                   <div className="HCard__Title">{t.track_name}</div>
                   <div className="HCard__Desc">{t.description}</div>
                 </div>
+                <ProgressRing value={t.progress_percent} color={t.color} />
               </div>
               <div className="HCard__Linked">
                 {(t.branches || []).map((br, i) => (

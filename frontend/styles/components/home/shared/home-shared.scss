@@ -476,6 +476,13 @@
     gap: $space-3;
   }
 
+  // 텍스트 블록이 남는 폭을 채워, 우측 데코(진행률 링)를 오른쪽 끝으로 밀어냄.
+  // min-width:0 으로 Desc 의 line-clamp 가 flex 자식 안에서 정상 동작.
+  &__TopText {
+    flex: 1;
+    min-width: 0;
+  }
+
   &__Title {
     font-size: $font-size-md;
     font-weight: $font-weight-bold;
