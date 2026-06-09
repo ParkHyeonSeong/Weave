@@ -174,13 +174,13 @@ export default function BranchHome() {
               onClick={() => router.push(`/branch/${b.branch_id}`)}
             >
               <div className="HCard__Top">
-                {b.progress_percent !== null && (
-                  <ProgressRing value={b.progress_percent} color={b.color} />
-                )}
-                <div>
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="HCard__Title">{b.branch_name}</div>
                   <div className="HCard__Desc">{b.description}</div>
                 </div>
+                {b.progress_percent !== null && (
+                  <ProgressRing value={b.progress_percent} color={b.color} />
+                )}
               </div>
               <div className="HCard__Foot">
                 <span className={`HChip ${b.progress_percent !== null ? 'HChip--sprint' : 'HChip--muted'}`}>
