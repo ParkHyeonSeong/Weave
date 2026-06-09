@@ -99,7 +99,12 @@ function TypstEditorInner({
         cmView.rectangularSelection(),
         cmView.crosshairCursor(),
         lang.indentOnInput(),
-        lang.bracketMatching(),
+        // bracketMatching 제외: 한글 IME 합성 중 이 플러그인이 데코레이션을
+        // changeset에 매핑(this.decorations.map(update.changes))하는데, Yjs 동기화로
+        // doc과 데코레이션 좌표가 어긋나면 "Position 1 is out of range for changeset
+        // of length 0" RangeError로 에디터가 통째로 깨진다(한글 첫 글자부터 발생).
+        // (@codemirror/language bracketMatcher의 composing 분기 — node_modules라 직접
+        //  수정 불가하므로 제외)
         lang.foldGutter(),
         lang.syntaxHighlighting(lang.defaultHighlightStyle, { fallback: true }),
         state.EditorState.allowMultipleSelections.of(true),

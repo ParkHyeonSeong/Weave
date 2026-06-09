@@ -12,12 +12,29 @@ async function getTypst() {
   if (initPromise) return initPromise;
 
   initPromise = (async () => {
-    const { $typst } = await import('@myriaddreamin/typst.ts');
+    const { $typst, preloadRemoteFonts } = await import('@myriaddreamin/typst.ts');
 
-    // WASM 바이너리를 public/wasm에서 fetch
+    // WASM 바이너리 + 폰트를 모두 로컬(public/)에서 로드 — CDN 의존 제거.
+    // 기본값은 cdn.jsdelivr.net에서 텍스트 폰트 17종을 Promise.all로 fetch하는데,
+    // 사내망/방화벽/오프라인에서 하나라도 실패하면 "Failed to fetch"로 컴파일 전체가
+    // 실패한다. assetUrlPrefix로 typst 기본 텍스트 폰트(Libertinus/NewCM/DejaVu)를
+    // 로컬 /fonts/에서 로드하고, 한글 글리프 fallback용으로 앱이 이미 번들한
+    // Pretendard(전체 한글 커버)를 추가 로드한다.
     $typst.setCompilerInitOptions({
       getModule: () =>
         fetch('/wasm/typst_ts_web_compiler_bg.wasm').then((r) => r.arrayBuffer()),
+      beforeBuild: [
+        preloadRemoteFonts(
+          [
+            '/assets/fonts/Pretendard-Regular.otf',
+            '/assets/fonts/Pretendard-Bold.otf',
+          ],
+          {
+            assets: ['text'],
+            assetUrlPrefix: { text: '/fonts/' },
+          }
+        ),
+      ],
     });
 
     $typst.setRendererInitOptions({
@@ -27,7 +44,13 @@ async function getTypst() {
 
     typstModule = $typst;
     return $typst;
-  })();
+  })().catch((err) => {
+    // init 실패(폰트/WASM fetch 등)를 영구 캐시하지 않는다. 캐시하면 일시적
+    // 네트워크 오류가 세션 내내 컴파일 불가로 굳어 새로고침해야만 복구된다.
+    // initPromise를 비워 다음 호출에서 재시도하도록 한다.
+    initPromise = null;
+    throw err;
+  });
 
   return initPromise;
 }
