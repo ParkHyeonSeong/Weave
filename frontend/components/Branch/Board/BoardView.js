@@ -214,6 +214,10 @@ export default function BoardView({ branchId, branchKey, taskTypes, workflowStat
         />
       </div>
 
+      {selectedSprint?.goal && (
+        <div className="BoardView__SprintGoal">{selectedSprint.goal}</div>
+      )}
+
       {/* 칸반 컬럼 */}
       <div className="BoardView__Columns">
         {(workflowStatuses || []).map((ws) => (

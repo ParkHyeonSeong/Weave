@@ -167,19 +167,26 @@ export default function TaskListSprint({
             </span>
           )}
           {collapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
-          <span className="TaskList__SprintName">{sprint.sprint_name}</span>
-          {!isBacklog && sprint.status && (
-            <span className={`TaskList__SprintBadge ${getStatusClass(sprint.status)}`}>
-              {getStatusLabel(sprint.status)}
-            </span>
-          )}
-          {!isBacklog && (sprint.start_date || sprint.end_date) && (
-            <span className="TaskList__SprintDate">
-              {formatSprintDate(sprint.start_date, sprint.end_date)}
-            </span>
-          )}
-          <span className="TaskList__SprintCount">{tasks.length}</span>
-          {startError && <span className="TaskList__SprintError">{startError}</span>}
+          <div className="TaskList__SprintText">
+            <div className="TaskList__SprintNameRow">
+              <span className="TaskList__SprintName">{sprint.sprint_name}</span>
+              {!isBacklog && sprint.status && (
+                <span className={`TaskList__SprintBadge ${getStatusClass(sprint.status)}`}>
+                  {getStatusLabel(sprint.status)}
+                </span>
+              )}
+              {!isBacklog && (sprint.start_date || sprint.end_date) && (
+                <span className="TaskList__SprintDate">
+                  {formatSprintDate(sprint.start_date, sprint.end_date)}
+                </span>
+              )}
+              <span className="TaskList__SprintCount">{tasks.length}</span>
+              {startError && <span className="TaskList__SprintError">{startError}</span>}
+            </div>
+            {!isBacklog && sprint.goal && (
+              <div className="TaskList__SprintGoal" title={sprint.goal}>{sprint.goal}</div>
+            )}
+          </div>
         </div>
         <div className="TaskList__SprintRight" onClick={(e) => e.stopPropagation()}>
           {!isBacklog && sprint.status === 'future' && (

@@ -102,6 +102,29 @@
     align-items: center;
     gap: $space-2;
     color: $color-text-secondary;
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__SprintText {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+  }
+
+  &__SprintNameRow {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+  }
+
+  &__SprintGoal {
+    font-size: 11px;
+    color: $color-text-tertiary;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   &__SprintName {
