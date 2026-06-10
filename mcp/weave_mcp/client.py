@@ -26,8 +26,11 @@ class WeaveClient:
     async def call_json(self, method: str, path: str, **kwargs):
         """Call the API and return a JSON-friendly result.
 
-        On success returns the parsed body (dict or list). On any failure returns a
-        dict with an "error" key so tools never raise into the MCP layer.
+        On success returns the parsed body (dict or list). On any failure — HTTP
+        error, network error, missing token, OR a business rejection the backend
+        returns as HTTP 200 + ``{"status": False}`` — returns a dict with an
+        "error" key so tools never raise into the MCP layer and never report a
+        rejected action as success.
         """
         if not self._settings.token:
             return {"error": "auth", "detail": "WEAVE_API_TOKEN is not set"}
@@ -38,9 +41,16 @@ class WeaveClient:
 
         if resp.is_success:
             try:
-                return resp.json()
+                body = resp.json()
             except ValueError:
                 return {"text": resp.text}
+            # Weave returns business/authorization failures as HTTP 200 with
+            # {"status": False, "message": ...} (e.g. NOT_MEMBER, FORBIDDEN,
+            # CIRCULAR_DEPENDENCY, cross-branch rejections). Surface those as
+            # errors so a rejected action is never reported to the model as success.
+            if isinstance(body, dict) and body.get("status") is False:
+                return {"error": "business", "detail": body.get("message", body)}
+            return body
 
         try:
             detail = resp.json()

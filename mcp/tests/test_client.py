@@ -63,3 +63,26 @@ async def test_call_json_missing_token_returns_auth_error():
     result = await c.call_json("GET", "/api/branches")
     await c.aclose()
     assert result["error"] == "auth"
+
+
+@respx.mock
+async def test_call_json_business_failure_200_returns_error_dict():
+    respx.post("http://test/api/branches/9/dependencies").mock(
+        return_value=httpx.Response(200, json={"status": False, "message": "CIRCULAR_DEPENDENCY"})
+    )
+    c = make_client()
+    result = await c.call_json("POST", "/api/branches/9/dependencies")
+    await c.aclose()
+    assert result["error"] == "business"
+    assert result["detail"] == "CIRCULAR_DEPENDENCY"
+
+
+@respx.mock
+async def test_call_json_status_true_returns_body_unchanged():
+    respx.get("http://test/api/auth/me").mock(
+        return_value=httpx.Response(200, json={"status": True, "profile": {"user_id": 1}})
+    )
+    c = make_client()
+    result = await c.call_json("GET", "/api/auth/me")
+    await c.aclose()
+    assert result == {"status": True, "profile": {"user_id": 1}}
