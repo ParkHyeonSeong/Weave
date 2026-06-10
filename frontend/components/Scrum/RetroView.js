@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { axios } from '@/library/_axios';
 import useScrumRetroCollab from '@/library/useScrumRetroCollab';
 import ScrumCell from './ScrumCell';
+import Avatar from '@/components/common/Avatar';
 
 const getProfile = () => { try { return JSON.parse(sessionStorage.getItem('profile') || '{}'); } catch { return {}; } };
 const COLS = [['keep', 'Keep · 잘한 것'], ['problem', 'Problem · 문제'], ['try', 'Try · 시도']];
@@ -38,7 +39,7 @@ export default function RetroView({ boardId, members = [] }) {
       {members.map((m) => (
         <div key={m.user_id} className="RetroMember">
           <div className="RetroMember__Head">
-            <span className="RetroMember__Avatar">{(m.username || '?').slice(0, 1)}</span>
+            <Avatar user={m} size={20} className="RetroMember__Avatar" />
             <span className="RetroMember__Name">{m.username}</span>
             {m.user_id === user?.user_id && <em className="RetroMember__You">나</em>}
           </div>

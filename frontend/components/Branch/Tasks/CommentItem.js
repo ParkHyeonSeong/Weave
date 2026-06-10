@@ -1,8 +1,8 @@
 import { useState, useMemo, memo } from 'react';
 import { Reply, Pencil, Trash2 } from 'lucide-react';
 import { sanitizeHtml } from '@/library/sanitize';
-import { userInitial, userColor } from '@/library/userAvatar';
 import { formatRelative } from '@/library/formatTime';
+import Avatar from '@/components/common/Avatar';
 import { buildMentionHtml } from '@/components/Canvas/extensions/MentionExtension';
 import ConfirmModal from '@/components/modal/ConfirmModal';
 import CommentEditor from './CommentEditor';
@@ -52,8 +52,6 @@ function CommentItem({
   const isMine = !comment.is_deleted && comment.author?.user_id === currentUserId;
   const isHighlighted = highlightActive && highlightCommentId === comment.comment_id;
 
-  const initial = userInitial(comment.author?.username);
-  const placeholderColor = userColor(comment.author?.user_id);
   const displayName = comment.author?.username ?? 'unknown';
 
   // 답글 prefill: depth 1에서 Reply 클릭 시 대상의 author를 자동 멘션
@@ -94,16 +92,7 @@ function CommentItem({
       className={`CommentItem CommentItem--depth-${depth}${isHighlighted ? ' CommentItem--highlight' : ''}`}
     >
       <div className="CommentItem__AvatarCol">
-        {comment.author?.avatar_url
-          ? <img className="CommentItem__Avatar" src={comment.author.avatar_url} alt="" />
-          : (
-            <div
-              className="CommentItem__AvatarPlaceholder"
-              style={{ background: placeholderColor }}
-            >
-              {initial}
-            </div>
-          )}
+        <Avatar user={comment.author} size="sm" />
       </div>
       <div className="CommentItem__Body">
         <div className="CommentItem__Header">

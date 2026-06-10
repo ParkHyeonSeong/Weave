@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { axios } from '@/library/_axios';
 import { Archive } from 'lucide-react';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
+import Avatar from '@/components/common/Avatar';
 import TaskFilterBar from '../TaskFilterBar';
 
 export default function ArchiveList({ branchId, branchKey, taskTypes, workflowStatuses, onSelectTask }) {
@@ -131,9 +132,7 @@ export default function ArchiveList({ branchId, branchKey, taskTypes, workflowSt
               )}
               <span className="ArchiveList__Date">{formatDate(task.updated_at || task.created_at)}</span>
               {mainAssignee && (
-                <span className="ArchiveList__Assignee" title={mainAssignee.username}>
-                  {mainAssignee.username.charAt(0).toUpperCase()}
-                </span>
+                <Avatar user={mainAssignee} size={22} />
               )}
             </div>
           );

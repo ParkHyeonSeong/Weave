@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Send, X } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import Avatar from '@/components/common/Avatar';
 
 export default function MessengerNewChat({ wsRef, onBack, onOpenRoom }) {
   const [users, setUsers] = useState([]);
@@ -125,9 +126,7 @@ export default function MessengerNewChat({ wsRef, onBack, onOpenRoom }) {
             className="MessengerNewChat__UserItem"
             onClick={() => toggleUser(user)}
           >
-            <div className="MessengerNewChat__Avatar">
-              {user.username.charAt(0).toUpperCase()}
-            </div>
+            <Avatar user={user} size={28} className="MessengerNewChat__Avatar" />
             <div className="MessengerNewChat__UserInfo">
               <span className="MessengerNewChat__UserName">{user.username}</span>
               <span className="MessengerNewChat__UserEmail">{user.email}</span>

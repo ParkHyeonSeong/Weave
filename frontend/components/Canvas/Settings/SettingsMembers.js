@@ -4,6 +4,7 @@ import { axios } from '@/library/_axios';
 import { UserPlus, X, Search, LogOut } from 'lucide-react';
 import CustomSelect from '@/components/common/CustomSelect';
 import ConfirmModal from '@/components/modal/ConfirmModal';
+import Avatar from '@/components/common/Avatar';
 
 const roleOptions = [
   { value: 'admin', label: 'Admin' },
@@ -172,9 +173,7 @@ export default function SettingsMembers({ canvasId, isAdmin }) {
         {members.map((member) => (
           <div key={member.user_id} className="SettingsMembers__Row">
             <span className="SettingsMembers__Col SettingsMembers__Col--name">
-              <span className="SettingsMembers__Avatar">
-                {member.username?.charAt(0).toUpperCase()}
-              </span>
+              <Avatar user={member} size="sm" />
               {member.username}
             </span>
             <span className="SettingsMembers__Col SettingsMembers__Col--email">

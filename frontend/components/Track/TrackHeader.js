@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { Workflow, Calendar, GitBranch, Settings, Share2, Star } from 'lucide-react';
 import EntityIcon from '@/components/common/EntityIcon';
 import EntityAppearancePopover from '@/components/common/EntityAppearancePopover';
+import AvatarStack from '@/components/common/AvatarStack';
 
 const VIEW_MODES = [
   { key: 'flow', label: 'Flow', icon: Workflow },
@@ -73,21 +74,12 @@ export default function TrackHeader({
         </div>
 
         <div className="TrackHeader__Actions">
-          <div className="TrackHeader__MemberStack">
-            {members.slice(0, 4).map((m, i) => (
-              <div
-                key={m.user_id}
-                className="TrackHeader__Member"
-                style={{ background: m.color, zIndex: members.length - i }}
-                title={`${m.username} · ${m.role}`}
-              >
-                {m.initial}
-              </div>
-            ))}
-            {members.length > 4 && (
-              <div className="TrackHeader__MemberMore">+{members.length - 4}</div>
-            )}
-          </div>
+          <AvatarStack
+            className="TrackHeader__MemberStack"
+            users={members}
+            max={4}
+            size="sm"
+          />
           <button className="TrackHeader__IconBtn" title="Star">
             <Star size={16} />
           </button>

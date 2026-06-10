@@ -218,26 +218,6 @@
     flex-shrink: 0;
   }
 
-  &__Avatar {
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: transparent; // overridden per-user via inline style
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 10px;
-    color: #fff;
-    font-weight: 600;
-    overflow: hidden;
-  }
-
-  &__AvatarImg {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
   &__Handle {
     width: 8px;
     height: 8px;

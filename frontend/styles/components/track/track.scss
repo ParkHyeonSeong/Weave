@@ -126,40 +126,11 @@ $track-border-soft: color.adjust($color-border, $lightness: 5%);
     padding-top: 4px;
   }
 
+  // 공용 <AvatarStack>를 감싸는 divider 처리만 유지 — 스택/이니셜/색은 .AvatarStack 담당.
   &__MemberStack {
-    display: flex;
-    align-items: center;
     padding-right: 6px;
     border-right: 1px solid $track-border;
     margin-right: 4px;
-  }
-
-  &__Member {
-    width: 26px; height: 26px;
-    border-radius: 50%;
-    border: 2px solid $track-paper;
-    color: #FFFFFF;
-    font-size: 11px;
-    font-weight: 600;
-    display: flex; align-items: center; justify-content: center;
-    margin-left: -7px;
-    transition: transform 150ms ease;
-    cursor: pointer;
-    &:first-child { margin-left: 0; }
-    &:hover { transform: translateY(-2px); }
-  }
-  &__MemberMore {
-    height: 26px;
-    min-width: 26px;
-    padding: 0 6px;
-    border-radius: 13px;
-    background: $track-border-soft;
-    color: $track-ink-soft;
-    font-size: 10.5px;
-    font-weight: 500;
-    display: flex; align-items: center; justify-content: center;
-    margin-left: -7px;
-    border: 2px solid $track-paper;
   }
 
   &__IconBtn {
@@ -898,13 +869,8 @@ $track-border-soft: color.adjust($color-border, $lightness: 5%);
     svg { opacity: 0.6; }
   }
 
+  // 흰 링만 유지 — 크기/색/이니셜은 공용 .Avatar가 담당.
   &__Avatar {
-    width: 19px; height: 19px;
-    border-radius: 50%;
-    color: #FFFFFF;
-    font-size: 10px;
-    font-weight: 600;
-    display: flex; align-items: center; justify-content: center;
     box-shadow: 0 0 0 2px #FFFFFF;
   }
 
@@ -1290,14 +1256,6 @@ $track-border-soft: color.adjust($color-border, $lightness: 5%);
     display: inline-flex;
     align-items: center;
     gap: 7px;
-  }
-  &__AssigneeAvatar {
-    width: 20px; height: 20px;
-    border-radius: 50%;
-    color: #FFFFFF;
-    font-size: 10.5px;
-    font-weight: 600;
-    display: flex; align-items: center; justify-content: center;
   }
 
   &__OriginLink {
@@ -1903,13 +1861,8 @@ $track-border-soft: color.adjust($color-border, $lightness: 5%);
     white-space: nowrap;
     padding-left: 4px;
   }
+  // 흰 링/축소방지만 유지 — 크기/색/이니셜은 공용 .Avatar가 담당.
   &__BarAvatar {
-    width: 18px; height: 18px;
-    border-radius: 50%;
-    color: #FFFFFF;
-    font-size: 9.5px;
-    font-weight: 600;
-    display: flex; align-items: center; justify-content: center;
     flex-shrink: 0;
     box-shadow: 0 0 0 1.5px #FFFFFF;
   }
@@ -2186,15 +2139,6 @@ $track-border-soft: color.adjust($color-border, $lightness: 5%);
     align-items: center;
     gap: 7px;
     max-width: 100%;
-  }
-  &__AssigneeAvatar {
-    width: 20px; height: 20px;
-    border-radius: 50%;
-    color: #FFFFFF;
-    font-size: 10px;
-    font-weight: 600;
-    display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0;
   }
   &__AssigneeName {
     font-size: 12px;

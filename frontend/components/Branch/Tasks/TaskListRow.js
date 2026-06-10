@@ -5,6 +5,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import CustomSelect from '@/components/common/CustomSelect';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
+import Avatar from '@/components/common/Avatar';
 
 const priorityOptions = [
   { value: 'urgent', label: 'Urgent', color: '#DC2626' },
@@ -198,7 +199,7 @@ export default function TaskListRow({ task, branchId, taskTypes, workflowStatuse
                 onClick={() => setAssigneeOpen((prev) => !prev)}
               >
                 {mainAssignee
-                  ? mainAssignee.username.charAt(0).toUpperCase()
+                  ? <Avatar user={mainAssignee} size={24} title={mainAssignee.username} />
                   : <User size={12} />
                 }
               </button>
@@ -239,9 +240,7 @@ export default function TaskListRow({ task, branchId, taskTypes, workflowStatuse
                     setAssigneeOpen(false);
                   }}
                 >
-                  <span className="TaskListRow__AssigneeAvatar">
-                    {(m.display_name || m.email).charAt(0).toUpperCase()}
-                  </span>
+                  <Avatar name={m.display_name || m.email} userId={m.user_id} size={24} />
                   <span>{m.display_name || m.email}</span>
                 </button>
               );

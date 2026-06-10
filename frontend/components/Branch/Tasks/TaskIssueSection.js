@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { Plus, MessageCircle, CircleDot, CheckCircle2 } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import { formatRelative } from '@/library/formatTime';
+import Avatar from '@/components/common/Avatar';
 
 export default function TaskIssueSection({ branchId, taskId, expanded = false }) {
   const router = useRouter();
@@ -73,7 +74,14 @@ export default function TaskIssueSection({ branchId, taskId, expanded = false })
                 <span className="TaskIssueSection__ItemTitle">{issue.title}</span>
                 {expanded && (
                   <span className="TaskIssueSection__ItemMeta">
-                    #{issue.issue_id} opened {formatRelative(issue.created_at)} by {issue.author_name}
+                    #{issue.issue_id} opened {formatRelative(issue.created_at)} by{' '}
+                    <Avatar
+                      name={issue.author_name}
+                      userId={issue.created_by}
+                      size="xs"
+                      className="TaskIssueSection__AuthorAvatar"
+                    />
+                    {issue.author_name}
                   </span>
                 )}
               </div>

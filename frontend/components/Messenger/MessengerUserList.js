@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Search } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import Avatar from '@/components/common/Avatar';
 
 export default function MessengerUserList({ onOpenRoom }) {
   const [users, setUsers] = useState([]);
@@ -98,9 +99,7 @@ export default function MessengerUserList({ onOpenRoom }) {
               onClick={() => handleStartDM(user.user_id)}
             >
               <div className="MessengerUserList__AvatarWrap">
-                <div className="MessengerUserList__Avatar">
-                  {user.username.charAt(0).toUpperCase()}
-                </div>
+                <Avatar user={user} size="md" />
                 {onlineSet.has(user.user_id) && (
                   <span className="MessengerUserList__Online" />
                 )}

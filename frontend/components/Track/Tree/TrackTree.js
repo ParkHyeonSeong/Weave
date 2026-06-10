@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, AlertCircle, Lock, CalendarDays } from 'lucide-react';
 import EntityIcon from '@/components/common/EntityIcon';
+import Avatar from '@/components/common/Avatar';
 
 function formatDue(date) {
   if (!date) return null;
@@ -154,9 +155,7 @@ export default function TrackTree({
                     <div className="TrackTree__Cell">
                       {it.assignees && it.assignees[0] ? (
                         <span className="TrackTree__Assignee">
-                          <span className="TrackTree__AssigneeAvatar" style={{ background: it.assignees[0].color }}>
-                            {it.assignees[0].initial}
-                          </span>
+                          <Avatar user={it.assignees[0]} size={20} />
                           <span className="TrackTree__AssigneeName">{it.assignees[0].username}</span>
                         </span>
                       ) : <span className="TrackTree__Empty">—</span>}

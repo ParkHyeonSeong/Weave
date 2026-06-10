@@ -129,16 +129,6 @@
   }
 
   &__Avatar {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background: $color-primary;
-    color: $color-text-inverse;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: $font-size-xs;
-    font-weight: $font-weight-semibold;
     flex-shrink: 0;
   }
 

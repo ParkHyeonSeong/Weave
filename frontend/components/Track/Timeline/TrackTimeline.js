@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState, useEffect } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 import EntityIcon from '@/components/common/EntityIcon';
+import Avatar from '@/components/common/Avatar';
 
 // 캘린더 유틸
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -365,12 +366,11 @@ export default function TrackTimeline({
                     <span className="TrackTimeline__BarLeft" />
                     <span className="TrackTimeline__BarTitle">{it.title}</span>
                     {it.assignees && it.assignees[0] && (
-                      <span
+                      <Avatar
                         className="TrackTimeline__BarAvatar"
-                        style={{ background: it.assignees[0].color }}
-                      >
-                        {it.assignees[0].initial}
-                      </span>
+                        user={it.assignees[0]}
+                        size={18}
+                      />
                     )}
                   </div>
                 );

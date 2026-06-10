@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { X, Check, RotateCcw, Trash2, MoreHorizontal, MessageSquare } from 'lucide-react';
 import { sanitizeHtml } from '@/library/sanitize';
 import { formatRelative } from '@/library/formatTime';
-import { userInitial, userColor } from '@/library/userAvatar';
+import Avatar from '@/components/common/Avatar';
 import IssueEditor from '@/components/Branch/Tasks/IssueEditor';
 
 
@@ -159,12 +159,7 @@ export default function AnnotationSidebar({
               {(ann.replies || []).map((reply) => (
                 <div key={reply.reply_id} className="AnnotationSidebar__Reply">
                   <div className="AnnotationSidebar__ReplyHeader">
-                    <div
-                      className="AnnotationSidebar__Avatar"
-                      style={{ background: userColor(reply.author_id) }}
-                    >
-                      {userInitial(reply.author_name)}
-                    </div>
+                    <Avatar user={reply} size="sm" />
                     <span className="AnnotationSidebar__AuthorName">{reply.author_name}</span>
                     <span className="AnnotationSidebar__Time">{formatRelative(reply.created_at)}</span>
 

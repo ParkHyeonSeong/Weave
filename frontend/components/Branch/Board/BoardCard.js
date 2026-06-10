@@ -1,4 +1,5 @@
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
+import Avatar from '@/components/common/Avatar';
 
 export default function BoardCard({ task, taskTypes, onClick }) {
   const typeConfig = (taskTypes || []).find((t) => t.type_key === task.task_type);
@@ -50,9 +51,7 @@ export default function BoardCard({ task, taskTypes, onClick }) {
         return (
           <div className="BoardCard__Bottom">
             {mainAssignee && (
-              <span className="BoardCard__Assignee" title={mainAssignee.username}>
-                {mainAssignee.username.charAt(0).toUpperCase()}
-              </span>
+              <Avatar user={mainAssignee} size={22} />
             )}
             {subCount > 0 && (
               <span className="BoardCard__SubCount">+{subCount}</span>

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { X, ChevronDown } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import DatePicker from '@/components/common/DatePicker';
+import Avatar from '@/components/common/Avatar';
 
 const COLORS = ['#5E6AD2', '#2563EB', '#DC2626', '#16A34A', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4'];
 
@@ -263,6 +264,7 @@ export default function ScheduleEventModal({ branchId, event, defaultDate, onClo
                         checked={selectedParticipants.has(member.user_id)}
                         onChange={() => toggleParticipant(member.user_id)}
                       />
+                      <Avatar user={member} size="xs" />
                       <span>{member.username}</span>
                     </label>
                   ))}

@@ -75,6 +75,17 @@
     gap: $space-2;
   }
 
+  &__Actor {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    min-width: 0;
+  }
+
+  &__Avatar {
+    flex-shrink: 0;
+  }
+
   &__Author {
     font-size: $font-size-xs;
     font-weight: $font-weight-semibold;

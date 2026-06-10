@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
-import { Search, User } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import Avatar from '@/components/common/Avatar';
 
 const MentionPopup = forwardRef(({ keyword, branchId, roomId, onSelect, onClose }, ref) => {
   const [users, setUsers] = useState([]);
@@ -71,7 +72,7 @@ const MentionPopup = forwardRef(({ keyword, branchId, roomId, onSelect, onClose 
             onClick={() => onSelect(user)}
             onMouseEnter={() => setActiveIdx(idx)}
           >
-            <User size={12} className="MentionPopup__ItemIcon" />
+            <Avatar user={user} size="xs" className="MentionPopup__ItemIcon" />
             <span className="MentionPopup__ItemName">{user.username}</span>
             <span className="MentionPopup__ItemEmail">{user.email}</span>
           </li>

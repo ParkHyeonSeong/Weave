@@ -259,20 +259,6 @@
     justify-content: flex-end;
   }
 
-  &__Assignee {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    background: $color-primary;
-    color: $color-text-inverse;
-    font-size: 10px;
-    font-weight: $font-weight-bold;
-    cursor: default;
-  }
-
   &__SubCount {
     font-size: 10px;
     font-weight: $font-weight-semibold;

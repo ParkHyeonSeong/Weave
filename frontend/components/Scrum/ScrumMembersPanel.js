@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { axios } from '@/library/_axios';
 import { UserPlus, X, Search, LogOut } from 'lucide-react';
 import CustomSelect from '@/components/common/CustomSelect';
+import Avatar from '@/components/common/Avatar';
 import { showToast } from '@/components/Layout/Toast';
 
 const ROLE_OPTIONS = [
@@ -226,9 +227,7 @@ export default function ScrumMembersPanel({ boardId, myRole, onChanged, onLeave 
               const canManage = isAdmin && !isLastAdminRow;
               return (
                 <div key={member.user_id} className="ScrumMembers__Row">
-                  <span className="ScrumMembers__Avatar">
-                    {member.username?.charAt(0).toUpperCase()}
-                  </span>
+                  <Avatar user={member} size={30} className="ScrumMembers__Avatar" />
                   <div className="ScrumMembers__Info">
                     <span className="ScrumMembers__Name">
                       {member.username}

@@ -227,20 +227,6 @@
     margin-bottom: $space-2;
   }
 
-  &__Avatar {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    background: transparent; // overridden per-user via inline style
-    color: #fff;
-    font-size: 11px;
-    font-weight: $font-weight-semibold;
-    flex-shrink: 0;
-  }
-
   &__AuthorName {
     font-size: $font-size-xs;
     font-weight: $font-weight-medium;

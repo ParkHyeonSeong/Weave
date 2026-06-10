@@ -1,6 +1,7 @@
 import { useRouter } from 'next/router';
 import { X, CalendarDays, Flag, ExternalLink, Lock, Layers, MessageSquare, GitBranch } from 'lucide-react';
 import { sanitizeHtml } from '@/library/sanitize';
+import Avatar from '@/components/common/Avatar';
 import { PRIORITIES } from '../mockData';
 
 function formatDateLong(date) {
@@ -86,9 +87,7 @@ export default function TrackItemDetail({ item, branch, workflowStatuses, onClos
           <dd>
             {item.assignees && item.assignees.length > 0 ? (
               <span className="TrackDetail__Assignee">
-                <span className="TrackDetail__AssigneeAvatar" style={{ background: item.assignees[0].color }}>
-                  {item.assignees[0].initial}
-                </span>
+                <Avatar user={item.assignees[0]} size={20} />
                 <span>{item.assignees[0].username}</span>
               </span>
             ) : <span className="TrackDetail__MetaEmpty">unassigned</span>}

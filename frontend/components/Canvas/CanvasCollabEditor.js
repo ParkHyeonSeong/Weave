@@ -33,6 +33,7 @@ import MermaidExtension from './extensions/MermaidExtension';
 import CanvasEditorToolbar from './CanvasEditorToolbar';
 import TableBubbleMenu from './TableBubbleMenu';
 import { axios } from '@/library/_axios';
+import { buildAvatarDOM } from '@/library/userAvatar';
 
 const lowlight = createLowlight(common);
 const MAX_PLAIN_TEXT_LENGTH = 60000;
@@ -81,17 +82,14 @@ function CollabEditorInner({
       },
     });
 
-    // 커스텀 커서 빌더: 볼드 캐럿 + 작은 원형 아바타
+    // 커스텀 커서 빌더: 볼드 캐럿 + 공용 아바타(buildAvatarDOM)
     const cursorBuilder = (user) => {
       const cursor = document.createElement('span');
       cursor.classList.add('collaboration-cursor__caret');
       cursor.style.borderColor = user.color;
 
-      const avatar = document.createElement('span');
+      const avatar = buildAvatarDOM(user);
       avatar.classList.add('collaboration-cursor__avatar');
-      avatar.style.backgroundColor = user.color;
-      avatar.textContent = (user.name || '?').charAt(0).toUpperCase();
-      avatar.setAttribute('title', user.name);
       cursor.appendChild(avatar);
 
       return cursor;

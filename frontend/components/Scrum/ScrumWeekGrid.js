@@ -1,5 +1,6 @@
 import { memo } from 'react';
 import ScrumCell from './ScrumCell';
+import Avatar from '@/components/common/Avatar';
 import { weekDates } from '@/library/isoWeek';
 
 const WD = ['월', '화', '수', '목', '금'];
@@ -23,7 +24,7 @@ function ScrumWeekGrid({ ydoc, members, isoYear, isoWeek }) {
       {members.map((m) => (
         <div key={m.user_id} className="ScrumGrid__Person">
           <div className="ScrumGrid__PersonHead">
-            <span className="ScrumGrid__Avatar">{(m.username || '?').slice(0, 1)}</span>
+            <Avatar user={m} size="xs" className="ScrumGrid__Avatar" />
             <span className="ScrumGrid__PersonName">{m.username}</span>
           </div>
           {ROWS.map(([rowKey, rowLabel]) => (

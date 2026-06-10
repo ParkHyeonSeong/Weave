@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { CalendarDays, Layers, X } from 'lucide-react';
 import EntityIcon from '@/components/common/EntityIcon';
+import Avatar from '@/components/common/Avatar';
 
 function formatDue(date) {
   if (!date) return null;
@@ -72,13 +73,11 @@ const CrossBranchTaskNode = memo(function CrossBranchTaskNode({ data, selected }
           </span>
         )}
         {assignees && assignees.length > 0 && (
-          <span
+          <Avatar
             className="TrackNode__Avatar"
-            style={{ background: assignees[0].color }}
-            title={assignees[0].username}
-          >
-            {assignees[0].initial}
-          </span>
+            user={assignees[0]}
+            size={19}
+          />
         )}
       </div>
 

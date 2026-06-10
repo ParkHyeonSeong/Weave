@@ -6,25 +6,6 @@
   align-items: center;
   gap: 4px;
 
-  &__Avatar {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    border: 2px solid;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 11px;
-    font-weight: $font-weight-bold;
-    color: white;
-    flex-shrink: 0;
-
-    // 겹침 효과
-    & + & {
-      margin-left: -6px;
-    }
-  }
-
   &__Count {
     font-size: $font-size-xs;
     color: $color-text-tertiary;

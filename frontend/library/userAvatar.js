@@ -1,5 +1,5 @@
 // 사용자 아바타 표현 헬퍼.
-// - userInitial: 이름의 첫 글자(대문자)
+// - avatarInitials: free-form 이름에서 1~2글자 이니셜(한글 성 제외 등)
 // - userColor: user_id를 안정적으로 같은 색에 매핑
 // 여러 컴포넌트에서 반복되던 패턴을 한 군데로 모았음.
 
@@ -62,10 +62,6 @@ export function avatarInitials(name) {
   }
   const letters = ((tokens[0] || s).match(/\p{L}/gu) || []);
   return letters.slice(0, 2).join('').toUpperCase();
-}
-
-export function userInitial(username) {
-  return (username || '?').charAt(0).toUpperCase();
 }
 
 export function userColor(userId, override) {

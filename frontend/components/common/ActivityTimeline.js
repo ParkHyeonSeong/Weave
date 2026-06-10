@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Clock, ArrowRight } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import { formatRelative } from '@/library/formatTime';
+import Avatar from '@/components/common/Avatar';
 
 /**
  * ActivityTimeline - Task/Canvas 페이지의 활동 이력 타임라인
@@ -117,12 +118,21 @@ export default function ActivityTimeline({ apiUrl, expanded = false }) {
 
 
 function ActivityItem({ activity }) {
-  const { actor_name, summary, changes, created_at } = activity;
+  const { actor_id, actor_name, actor_avatar, summary, changes, created_at } = activity;
 
   return (
     <div className="ActivityTimeline__Item">
       <div className="ActivityTimeline__ItemHeader">
-        <span className="ActivityTimeline__Author">{actor_name || 'Unknown'}</span>
+        <span className="ActivityTimeline__Actor">
+          <Avatar
+            name={actor_name}
+            userId={actor_id}
+            avatarUrl={actor_avatar}
+            size="xs"
+            className="ActivityTimeline__Avatar"
+          />
+          <span className="ActivityTimeline__Author">{actor_name || 'Unknown'}</span>
+        </span>
         <span className="ActivityTimeline__Time">{formatRelative(created_at)}</span>
       </div>
       <div className="ActivityTimeline__Summary">{summary}</div>

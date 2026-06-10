@@ -1,7 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { axios } from '@/library/_axios';
-import { userInitial, userColor } from '@/library/userAvatar';
 import TrackHeader from './TrackHeader';
 import SourcePickerSidebar from './SourcePicker/SourcePickerSidebar';
 import TrackFlowCanvas from './Flow/TrackFlowCanvas';
@@ -44,8 +43,6 @@ function normalizeItem(raw) {
     assignees: (raw.assignees || []).map((a) => ({
       user_id: a.user_id,
       username: a.username,
-      initial: userInitial(a.username),
-      color: userColor(a.user_id),
       role: a.role,
     })),
     description: raw.description || '',
@@ -195,8 +192,6 @@ export default function TrackDetail() {
       user_id: m.user_id,
       username: m.username,
       role: m.role,
-      initial: userInitial(m.username),
-      color: userColor(m.user_id),
     })),
     [members]
   );

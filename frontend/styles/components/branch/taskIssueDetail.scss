@@ -204,25 +204,9 @@
   }
 
   // -- 아바타 --
+  // 크기/색/이니셜은 공용 .Avatar(인라인 size)로 처리. 여기선 타임라인 레이어링만.
   &__Avatar {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background: transparent; // overridden per-user via inline style
-    color: #fff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 13px;
-    font-weight: $font-weight-bold;
-    flex-shrink: 0;
     z-index: 1;
-
-    &--sm {
-      width: 28px;
-      height: 28px;
-      font-size: 11px;
-    }
   }
 
   // -- 카드 (본문/댓글) --

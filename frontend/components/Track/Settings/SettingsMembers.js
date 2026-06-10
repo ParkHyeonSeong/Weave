@@ -4,6 +4,7 @@ import { axios } from '@/library/_axios';
 import { UserPlus, X, Search, LogOut } from 'lucide-react';
 import CustomSelect from '@/components/common/CustomSelect';
 import ConfirmModal from '@/components/modal/ConfirmModal';
+import Avatar from '@/components/common/Avatar';
 import { showToast } from '@/components/Layout/Toast';
 
 const ROLE_OPTIONS = [
@@ -215,9 +216,7 @@ export default function SettingsMembers({ trackId, isOwner }) {
           return (
             <div key={member.user_id} className="SettingsMembers__Row">
               <span className="SettingsMembers__Col SettingsMembers__Col--name">
-                <span className="SettingsMembers__Avatar">
-                  {member.username?.charAt(0).toUpperCase()}
-                </span>
+                <Avatar user={member} size={28} />
                 {member.username}
                 {isSelf && <em className="SettingsMembers__YouBadge">you</em>}
               </span>

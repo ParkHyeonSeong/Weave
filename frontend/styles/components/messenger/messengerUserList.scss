@@ -72,19 +72,6 @@
     flex-shrink: 0;
   }
 
-  &__Avatar {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background: $color-primary;
-    color: $color-text-inverse;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: $font-size-sm;
-    font-weight: $font-weight-semibold;
-  }
-
   &__Online {
     position: absolute;
     bottom: 0;

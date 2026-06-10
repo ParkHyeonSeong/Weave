@@ -121,6 +121,11 @@
     color: $color-text-tertiary;
   }
 
+  &__AuthorAvatar {
+    vertical-align: middle;
+    margin-right: 4px;
+  }
+
   &__CommentCount {
     display: flex;
     align-items: center;

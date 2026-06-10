@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { Search, User } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import Avatar from '@/components/common/Avatar';
 
 export default function MentionSearchPopup({ keyword, roomId, onSelect, onClose }) {
   const [users, setUsers] = useState([]);
@@ -64,7 +65,7 @@ export default function MentionSearchPopup({ keyword, roomId, onSelect, onClose 
             onClick={() => onSelect(user)}
             onMouseEnter={() => setActiveIdx(idx)}
           >
-            <User size={12} className="MentionSearchPopup__ItemIcon" />
+            <Avatar user={user} size="xs" className="MentionSearchPopup__ItemAvatar" />
             <span className="MentionSearchPopup__ItemName">{user.username}</span>
             <span className="MentionSearchPopup__ItemEmail">{user.email}</span>
           </li>

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 import { getWsBaseURL } from '@/library/_axios';
+import { userColor as avatarColor } from '@/library/userAvatar';
 
 /**
  * Yjs collaboration provider 관리 훅
@@ -16,15 +17,8 @@ export default function useCollabProvider(canvasId, pageId, user) {
   const [ydoc, setYdoc] = useState(null);
   const [provider, setProvider] = useState(null);
 
-  // 색상 생성 (user_id 기반 일관된 색상)
-  const userColor = useMemo(() => {
-    const colors = [
-      '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4',
-      '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F',
-      '#BB8FCE', '#85C1E9', '#F1948A', '#82E0AA',
-    ];
-    return colors[(user?.user_id || 0) % colors.length];
-  }, [user?.user_id]);
+  // 색상: 공용 아바타 팔레트와 동일하게 user_id 해시 (커서 caret과 아바타 색 일치)
+  const userColor = useMemo(() => avatarColor(user?.user_id), [user?.user_id]);
 
   useEffect(() => {
     if (!canvasId || !pageId || !user) return;
@@ -46,7 +40,7 @@ export default function useCollabProvider(canvasId, pageId, user) {
     prov.awareness.setLocalStateField('user', {
       name: user.username,
       color: userColor,
-      userId: user.user_id,
+      user_id: user.user_id,
     });
 
     // 연결 상태 이벤트
