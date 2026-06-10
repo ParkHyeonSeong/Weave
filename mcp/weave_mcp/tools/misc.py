@@ -41,6 +41,51 @@ async def get_branch_home_stats() -> Any:
 
 
 @mcp.tool
+async def get_branch(branch_id: int) -> Any:
+    """Get a single branch's detail, including your role in it."""
+    return await get_client().call_json("GET", f"/api/branches/{branch_id}")
+
+
+@mcp.tool
+async def create_branch(
+    branch_name: str,
+    key: str,
+    description: str | None = None,
+    visibility: str = "private",
+) -> Any:
+    """Create a new branch (project).
+
+    key is REQUIRED: 2-10 uppercase letters/numbers starting with a letter
+    (e.g. "CORE", "WEB2") — it's the task-number prefix, uppercased server-side.
+    visibility is "private" (default) or "public".
+    """
+    body = {"branch_name": branch_name, "key": key, "visibility": visibility}
+    body.update({k: v for k, v in {"description": description}.items() if v is not None})
+    return await get_client().call_json("POST", "/api/branches", json=body)
+
+
+@mcp.tool
+async def list_branch_members(branch_id: int) -> Any:
+    """List a branch's members (user_id, name, role).
+
+    Use this to resolve a person's name to the user_id needed for task assignees
+    or event participants.
+    """
+    return await get_client().call_json("GET", f"/api/branches/{branch_id}/members")
+
+
+@mcp.tool
+async def search_branch_non_members(branch_id: int, q: str = "") -> Any:
+    """Search users who are NOT yet members of a branch (candidates to invite).
+
+    q matches name/email.
+    """
+    return await get_client().call_json(
+        "GET", f"/api/branches/{branch_id}/members/search", params={"q": q}
+    )
+
+
+@mcp.tool
 async def list_my_tasks(
     status: str | None = None,
     priority: str | None = None,

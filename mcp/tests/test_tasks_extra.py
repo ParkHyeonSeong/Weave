@@ -30,6 +30,60 @@ async def test_update_task(fake_client):
     )
 
 
+async def test_create_task_with_assignees(fake_client):
+    fake_client.call_json.return_value = {"id": 11}
+    async with Client(_app.mcp) as client:
+        await client.call_tool(
+            "create_task",
+            {
+                "branch_id": 3,
+                "title": "Build",
+                "assignee_main": 7,
+                "assignee_sub": [8, 9],
+                "parent_task_id": 4,
+            },
+        )
+    fake_client.call_json.assert_awaited_once_with(
+        "POST",
+        "/api/branches/3/tasks",
+        json={"title": "Build", "parent_task_id": 4, "assignees": {"main": 7, "sub": [8, 9]}},
+    )
+
+
+async def test_update_task_with_assignee_main(fake_client):
+    fake_client.call_json.return_value = {"id": 5}
+    async with Client(_app.mcp) as client:
+        await client.call_tool(
+            "update_task", {"branch_id": 3, "task_id": 5, "assignee_main": 7}
+        )
+    fake_client.call_json.assert_awaited_once_with(
+        "PATCH", "/api/branches/3/tasks/5", json={"assignees": {"main": 7}}
+    )
+
+
+async def test_reorder_tasks_into_sprint(fake_client):
+    fake_client.call_json.return_value = {"status": True}
+    async with Client(_app.mcp) as client:
+        await client.call_tool(
+            "reorder_tasks",
+            {"branch_id": 3, "task_ids": [5, 6], "sprint_id": 7, "after_task_id": 4},
+        )
+    fake_client.call_json.assert_awaited_once_with(
+        "POST",
+        "/api/branches/3/tasks/reorder",
+        json={"task_ids": [5, 6], "sprint_id": 7, "after_task_id": 4},
+    )
+
+
+async def test_reorder_tasks_to_backlog(fake_client):
+    fake_client.call_json.return_value = {"status": True}
+    async with Client(_app.mcp) as client:
+        await client.call_tool("reorder_tasks", {"branch_id": 3, "task_ids": [5]})
+    fake_client.call_json.assert_awaited_once_with(
+        "POST", "/api/branches/3/tasks/reorder", json={"task_ids": [5]}
+    )
+
+
 async def test_delete_task(fake_client):
     fake_client.call_json.return_value = {"status": True}
     async with Client(_app.mcp) as client:

@@ -24,6 +24,39 @@ async def test_get_branch_home_stats(fake_client):
     fake_client.call_json.assert_awaited_once_with("GET", "/api/branches/home-stats")
 
 
+async def test_get_branch(fake_client):
+    fake_client.call_json.return_value = {"branch_id": 3}
+    async with Client(_app.mcp) as client:
+        await client.call_tool("get_branch", {"branch_id": 3})
+    fake_client.call_json.assert_awaited_once_with("GET", "/api/branches/3")
+
+
+async def test_create_branch(fake_client):
+    fake_client.call_json.return_value = {"branch_id": 9}
+    async with Client(_app.mcp) as client:
+        await client.call_tool("create_branch", {"branch_name": "Core", "key": "CORE"})
+    fake_client.call_json.assert_awaited_once_with(
+        "POST", "/api/branches",
+        json={"branch_name": "Core", "key": "CORE", "visibility": "private"},
+    )
+
+
+async def test_list_branch_members(fake_client):
+    fake_client.call_json.return_value = []
+    async with Client(_app.mcp) as client:
+        await client.call_tool("list_branch_members", {"branch_id": 3})
+    fake_client.call_json.assert_awaited_once_with("GET", "/api/branches/3/members")
+
+
+async def test_search_branch_non_members(fake_client):
+    fake_client.call_json.return_value = []
+    async with Client(_app.mcp) as client:
+        await client.call_tool("search_branch_non_members", {"branch_id": 3, "q": "amy"})
+    fake_client.call_json.assert_awaited_once_with(
+        "GET", "/api/branches/3/members/search", params={"q": "amy"}
+    )
+
+
 async def test_list_my_tasks_filters(fake_client):
     fake_client.call_json.return_value = []
     async with Client(_app.mcp) as client:

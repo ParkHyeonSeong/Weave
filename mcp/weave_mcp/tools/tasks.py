@@ -18,20 +18,41 @@ async def create_task(
     description: str | None = None,
     priority: str | None = None,
     status: str | None = None,
+    task_type: str | None = None,
     due_date: str | None = None,
+    start_date: str | None = None,
+    sprint_id: int | None = None,
+    epic_id: int | None = None,
+    parent_task_id: int | None = None,
+    assignee_main: int | None = None,
+    assignee_sub: list[int] | None = None,
+    label_ids: list[int] | None = None,
+    custom_fields: dict | None = None,
 ) -> Any:
     """Create a new task in a branch.
 
-    Only title is required. priority must be one of low/medium/high/urgent.
-    due_date is ISO format YYYY-MM-DD.
+    Only title is required. priority is low/medium/high/urgent (default medium).
+    status and task_type are validated against the branch's own config — get valid
+    values from list_workflow_statuses(branch_id) and list_task_types(branch_id).
+    Dates are ISO YYYY-MM-DD. assignee_main/assignee_sub are user ids (resolve names
+    via list_branch_members / search_branch_non_members, or "me" via get_current_user).
+    parent_task_id makes this a subtask; custom_fields keys come from list_task_types.
     """
     body = {"title": title}
     body.update({
         k: v for k, v in {
-            "description": description, "priority": priority,
-            "status": status, "due_date": due_date,
+            "description": description, "priority": priority, "status": status,
+            "task_type": task_type, "due_date": due_date, "start_date": start_date,
+            "sprint_id": sprint_id, "epic_id": epic_id, "parent_task_id": parent_task_id,
+            "label_ids": label_ids, "custom_fields": custom_fields,
         }.items() if v is not None
     })
+    assignees = {
+        k: v for k, v in {"main": assignee_main, "sub": assignee_sub}.items()
+        if v is not None
+    }
+    if assignees:
+        body["assignees"] = assignees
     return await get_client().call_json(
         "POST", f"/api/branches/{branch_id}/tasks", json=body
     )
@@ -67,26 +88,69 @@ async def update_task(
     description: str | None = None,
     status: str | None = None,
     priority: str | None = None,
+    task_type: str | None = None,
     sprint_id: int | None = None,
     epic_id: int | None = None,
     start_date: str | None = None,
     due_date: str | None = None,
+    assignee_main: int | None = None,
+    assignee_sub: list[int] | None = None,
     label_ids: list[int] | None = None,
+    custom_fields: dict | None = None,
 ) -> Any:
-    """Update fields of an existing task. All parameters are optional."""
+    """Update fields of an existing task. All parameters are optional; only the ones
+    you pass change.
+
+    status/task_type are validated against the branch's config (see
+    list_workflow_statuses / list_task_types). assignee_main/assignee_sub are user ids
+    (resolve via list_branch_members, or "me" via get_current_user). Dates are ISO.
+    NOTE: assignees REPLACE the whole set — pass assignee_main and assignee_sub together,
+    since providing only one clears the other.
+    """
     body = {k: v for k, v in {
         "title": title,
         "description": description,
         "status": status,
         "priority": priority,
+        "task_type": task_type,
         "sprint_id": sprint_id,
         "epic_id": epic_id,
         "start_date": start_date,
         "due_date": due_date,
         "label_ids": label_ids,
+        "custom_fields": custom_fields,
     }.items() if v is not None}
+    assignees = {
+        k: v for k, v in {"main": assignee_main, "sub": assignee_sub}.items()
+        if v is not None
+    }
+    if assignees:
+        body["assignees"] = assignees
     return await get_client().call_json(
         "PATCH", f"/api/branches/{branch_id}/tasks/{task_id}", json=body
+    )
+
+
+@mcp.tool
+async def reorder_tasks(
+    branch_id: int,
+    task_ids: list[int],
+    sprint_id: int | None = None,
+    after_task_id: int | None = None,
+) -> Any:
+    """Reorder tasks and/or move them between sprints (or to the backlog).
+
+    task_ids is the ordered block of tasks to place. sprint_id is the destination
+    sprint; omit it to move them to the backlog. after_task_id positions the block
+    right after that task; omit it to insert at the top.
+    """
+    body = {"task_ids": task_ids}
+    body.update({
+        k: v for k, v in {"sprint_id": sprint_id, "after_task_id": after_task_id}.items()
+        if v is not None
+    })
+    return await get_client().call_json(
+        "POST", f"/api/branches/{branch_id}/tasks/reorder", json=body
     )
 
 

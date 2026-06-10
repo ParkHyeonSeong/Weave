@@ -4,7 +4,7 @@ Exposes Weave project-management tools (tasks, sprints, epics, issues, docs, and
 Claude sessions over MCP (stdio). Talks to Weave's REST API only — the Weave backend is not
 modified. Each tool acts as the token's owner; `?` marks optional arguments.
 
-## Tools (59)
+## Tools (64)
 
 > The authoritative, always-current description of each tool is its docstring in
 > `weave_mcp/tools/*.py` (that's what the model reads). This list is the human-readable overview.
@@ -12,6 +12,9 @@ modified. Each tool acts as the token's owner; `?` marks optional arguments.
 **Branches & your work**
 - `get_current_user()` — the account this token acts as (user_id, email, username, role); resolves "me"/"my"
 - `list_branches()` — list branches (projects); call first to get a `branch_id`
+- `get_branch(branch_id)` — one branch's detail incl. your role
+- `create_branch(branch_name, key, description?, visibility?)` — `key`: 2-10 uppercase, starts with a letter
+- `list_branch_members(branch_id)` · `search_branch_non_members(branch_id, q?)` — resolve names → user ids
 - `get_branch_home_stats()` — open / in-progress / due-this-week / active-sprint counts across your branches
 - `list_my_tasks(status?, priority?, branch_id?)` — your assigned tasks across branches
 
@@ -22,8 +25,9 @@ modified. Each tool acts as the token's owner; `?` marks optional arguments.
 **Tasks**
 - `list_branch_tasks(branch_id, sprint_id?)` — all tasks in a branch
 - `get_task(branch_id, task_id)` — full task detail
-- `create_task(branch_id, title, description?, priority?, status?, due_date?)` — create a task
-- `update_task(branch_id, task_id, title?, description?, status?, priority?, sprint_id?, epic_id?, start_date?, due_date?, label_ids?)` — update a task
+- `create_task(branch_id, title, description?, priority?, status?, task_type?, due_date?, start_date?, sprint_id?, epic_id?, parent_task_id?, assignee_main?, assignee_sub?, label_ids?, custom_fields?)` — create a task
+- `update_task(branch_id, task_id, title?, description?, status?, priority?, task_type?, sprint_id?, epic_id?, start_date?, due_date?, assignee_main?, assignee_sub?, label_ids?, custom_fields?)` — update a task
+- `reorder_tasks(branch_id, task_ids, sprint_id?, after_task_id?)` — reorder / move tasks between sprints (omit `sprint_id` for backlog)
 - `delete_task(branch_id, task_id)` — delete a task
 
 **Task comments**
