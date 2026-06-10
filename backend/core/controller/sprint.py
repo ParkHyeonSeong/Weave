@@ -109,6 +109,10 @@ async def complete(sprint_id: int, body, branch_id: int, request: Request, db: A
     # 미완료 task 이동
     to_sprint_id = None
     if body.move_to and body.move_to != 'backlog':
+        # 형식 검증: sprint_id는 양의 정수이므로 isdigit()이면 충분.
+        # 비숫자('abc')·음수('-1')·공백·소수점 등은 int() 호출 전에 거부(500 방지).
+        if not body.move_to.isdigit():
+            return {'status': False, 'message': 'INVALID_MOVE_TARGET'}
         to_sprint_id = int(body.move_to)
         # cross-branch IDOR 방어: 이월 대상 sprint가 현재 branch 소속인지 검증
         if not await find_resource_in_branch(to_sprint_id, branch_id, 'sprint', db):

@@ -161,6 +161,51 @@ async def test_complete_backlog_carryover_succeeds(db_session):
 
 
 # ---------------------------------------------------------------------------
+# input validation — non-numeric move_to must not 500 (W3 / UNGUARDED_INT)
+# ---------------------------------------------------------------------------
+
+async def test_complete_rejects_non_numeric_move_to(db_session):
+    """move_to가 'backlog'도 정수 문자열도 아니면 int() ValueError(500) 대신 깔끔히 거부."""
+    alice = await _make_user(db_session, "alice_nm@idor.test", "alice_nm")
+    branch1 = await _make_branch(db_session, alice, name="B1", key="NMB1")
+    await _add_member(db_session, branch1, alice, "member")
+
+    sprint1 = await _make_sprint(db_session, branch1, alice, name="S1", status="active")
+    task1 = await _make_task(db_session, branch1, alice, sprint_id=sprint1, status="todo")
+
+    res = await ctrl.complete(
+        sprint1,
+        schema.SprintComplete(move_to="abc"),
+        branch1, _req(alice), db_session,
+    )
+    assert res["status"] is False
+    assert res["message"] == "INVALID_MOVE_TARGET"
+
+    # 거부됐으니 아무 것도 변하지 않아야 한다
+    assert await _task_sprint(db_session, task1) == sprint1
+    assert await _sprint_status(db_session, sprint1) == "active"
+
+
+async def test_complete_rejects_non_digit_edge_inputs(db_session):
+    """음수/공백/소수점 등 isdigit()이 아닌 입력도 동일하게 거부(500 아님)."""
+    alice = await _make_user(db_session, "alice_eg@idor.test", "alice_eg")
+    branch1 = await _make_branch(db_session, alice, name="B1", key="EGB1")
+    await _add_member(db_session, branch1, alice, "member")
+
+    for bad in ("-1", " 5", "3.0", "abc123"):
+        sprint1 = await _make_sprint(db_session, branch1, alice, name="S", status="active")
+        res = await ctrl.complete(
+            sprint1,
+            schema.SprintComplete(move_to=bad),
+            branch1, _req(alice), db_session,
+        )
+        assert res["status"] is False, f"move_to={bad!r} should be rejected"
+        assert res["message"] == "INVALID_MOVE_TARGET", f"move_to={bad!r}"
+        # 거부됐으니 sprint도 active 그대로
+        assert await _sprint_status(db_session, sprint1) == "active"
+
+
+# ---------------------------------------------------------------------------
 # regression — same-branch sprint carry-over still allowed
 # ---------------------------------------------------------------------------
 
