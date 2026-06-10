@@ -4,7 +4,7 @@ Exposes Weave project-management tools (tasks, sprints, epics, issues, docs, and
 Claude sessions over MCP (stdio). Talks to Weave's REST API only — the Weave backend is not
 modified. Each tool acts as the token's owner; `?` marks optional arguments.
 
-## Tools (64)
+## Tools (74)
 
 > The authoritative, always-current description of each tool is its docstring in
 > `weave_mcp/tools/*.py` (that's what the model reads). This list is the human-readable overview.
@@ -64,10 +64,16 @@ modified. Each tool acts as the token's owner; `?` marks optional arguments.
 - `list_labels(branch_id)` · `list_workflow_statuses(branch_id)` · `list_task_types(branch_id)`
 
 **Canvas (docs)**
-- `list_canvases()` · `get_canvas_page_tree(canvas_id)` · `get_canvas_page(canvas_id, page_id)`
-- `get_canvas_home_stats()` — total-docs / edited-this-week / starred counts across your canvases
-- `create_canvas_page(canvas_id, title, content?, parent_page_id?)`
-- `update_canvas_page(canvas_id, page_id, title?, content?)` — `content` replaces the whole page body
+- `list_canvases()` · `get_canvas(canvas_id)` · `get_canvas_home_stats()` — total-docs / edited-this-week / starred counts
+- `create_canvas(canvas_name, key, description?, visibility?, branch_id?)` — `key`: 2-10 uppercase, starts with a letter
+- `update_canvas(canvas_id, canvas_name?, key?, description?, visibility?, color?, icon?)` · `delete_canvas(canvas_id)` (archive)
+- `get_canvas_page_tree(canvas_id)` · `get_canvas_page(canvas_id, page_id)`
+- `create_canvas_page(canvas_id, title, content?, parent_page_id?, type?)` — `type`: document | folder | typst
+- `update_canvas_page(canvas_id, page_id, title?, content?, wide_mode?)` — `content` replaces the whole page body
+- `move_canvas_page(canvas_id, page_id, position, parent_page_id?)` · `delete_canvas_page(canvas_id, page_id)`
+- `list_canvas_annotations(canvas_id, page_id, status?)` — inline comment threads; `status`: open | resolved
+- `create_canvas_annotation(canvas_id, page_id, quoted_text, content, ...anchors?)`
+- `update_canvas_annotation(canvas_id, page_id, annotation_id, status)` (resolve/reopen) · `add_canvas_annotation_reply(canvas_id, page_id, annotation_id, content)`
 
 **Tracks** (cross-branch workflows)
 - `list_tracks()` — your tracks, each with `progress_percent`, item/branch/member counts and a linked-branch preview

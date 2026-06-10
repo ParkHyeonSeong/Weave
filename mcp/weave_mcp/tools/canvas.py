@@ -23,6 +23,68 @@ async def get_canvas_home_stats() -> Any:
 
 
 @mcp.tool
+async def create_canvas(
+    canvas_name: str,
+    key: str,
+    description: str | None = None,
+    visibility: str = "private",
+    branch_id: int | None = None,
+) -> Any:
+    """Create a new canvas (docs workspace).
+
+    key is REQUIRED: 2-10 uppercase letters/numbers starting with a letter
+    (uppercased server-side; duplicate keys are rejected). visibility is "private"
+    (default) or "public". branch_id optionally ties the canvas to a branch (you
+    must be a member of it). An intro overview page is created automatically.
+    """
+    body = {"canvas_name": canvas_name, "key": key, "visibility": visibility}
+    body.update({
+        k: v for k, v in {"description": description, "branch_id": branch_id}.items()
+        if v is not None
+    })
+    return await get_client().call_json("POST", "/api/canvases", json=body)
+
+
+@mcp.tool
+async def get_canvas(canvas_id: int) -> Any:
+    """Get a single canvas's metadata/detail."""
+    return await get_client().call_json("GET", f"/api/canvases/{canvas_id}")
+
+
+@mcp.tool
+async def update_canvas(
+    canvas_id: int,
+    canvas_name: str | None = None,
+    key: str | None = None,
+    description: str | None = None,
+    visibility: str | None = None,
+    color: str | None = None,
+    icon: str | None = None,
+) -> Any:
+    """Update canvas metadata; only provided fields change.
+
+    key (if set) must be 2-10 uppercase alnum starting with a letter; visibility is
+    "public"/"private"; color is #RRGGBB hex; icon is a "lucide:"/"emoji:"/"image:"
+    prefixed string or a bare lucide name.
+    """
+    body = {k: v for k, v in {
+        "canvas_name": canvas_name,
+        "key": key,
+        "description": description,
+        "visibility": visibility,
+        "color": color,
+        "icon": icon,
+    }.items() if v is not None}
+    return await get_client().call_json("PATCH", f"/api/canvases/{canvas_id}", json=body)
+
+
+@mcp.tool
+async def delete_canvas(canvas_id: int) -> Any:
+    """Archive (soft-delete) a canvas. Reversible — it can be restored later."""
+    return await get_client().call_json("DELETE", f"/api/canvases/{canvas_id}")
+
+
+@mcp.tool
 async def get_canvas_page_tree(canvas_id: int) -> Any:
     """Get the full page tree (hierarchy) for a canvas."""
     return await get_client().call_json(
@@ -44,17 +106,20 @@ async def create_canvas_page(
     title: str,
     content: str | None = None,
     parent_page_id: int | None = None,
+    type: str | None = None,
 ) -> Any:
     """Create a new page in a canvas.
 
-    Only title is required. content sets the initial page body.
-    parent_page_id nests the new page under an existing page.
+    Only title is required. content sets the initial page body (max 300k chars).
+    parent_page_id nests the new page under an existing page. type is one of
+    "document" (default), "folder", or "typst".
     """
     body = {"title": title}
     body.update({
         k: v for k, v in {
             "content": content,
             "parent_page_id": parent_page_id,
+            "type": type,
         }.items() if v is not None
     })
     return await get_client().call_json(
@@ -68,16 +133,130 @@ async def update_canvas_page(
     page_id: int,
     title: str | None = None,
     content: str | None = None,
+    wide_mode: bool | None = None,
 ) -> Any:
-    """Update a canvas page's title or content.
+    """Update a canvas page's title, content, or wide_mode layout.
 
-    WARNING: providing `content` replaces the entire page body — partial
-    updates are not supported; you must pass the full desired content.
+    WARNING: providing `content` replaces the entire page body (max 300k chars) —
+    partial updates are not supported; pass the full desired content. To change a
+    page's parent or order use move_canvas_page instead.
     """
     body = {k: v for k, v in {
         "title": title,
         "content": content,
+        "wide_mode": wide_mode,
     }.items() if v is not None}
     return await get_client().call_json(
         "PATCH", f"/api/canvases/{canvas_id}/pages/{page_id}", json=body
+    )
+
+
+@mcp.tool
+async def move_canvas_page(
+    canvas_id: int,
+    page_id: int,
+    position: int,
+    parent_page_id: int | None = None,
+) -> Any:
+    """Move/reorder a page in the canvas tree.
+
+    position (REQUIRED integer) is the order index within the new parent.
+    parent_page_id is the new parent; omit it to move the page to the top level.
+    This is the only way to change a page's parent (update_canvas_page cannot).
+    """
+    body = {"position": position}
+    body.update({
+        k: v for k, v in {"parent_page_id": parent_page_id}.items() if v is not None
+    })
+    return await get_client().call_json(
+        "PATCH", f"/api/canvases/{canvas_id}/pages/{page_id}/move", json=body
+    )
+
+
+@mcp.tool
+async def delete_canvas_page(canvas_id: int, page_id: int) -> Any:
+    """Delete a page from a canvas. There is no per-page restore, so use with care."""
+    return await get_client().call_json(
+        "DELETE", f"/api/canvases/{canvas_id}/pages/{page_id}"
+    )
+
+
+@mcp.tool
+async def list_canvas_annotations(
+    canvas_id: int,
+    page_id: int,
+    status: str | None = None,
+) -> Any:
+    """List annotation threads (inline comments anchored to text) on a canvas page.
+
+    status optionally filters by "open" or "resolved".
+    """
+    params = {k: v for k, v in {"status": status}.items() if v is not None}
+    return await get_client().call_json(
+        "GET",
+        f"/api/canvases/{canvas_id}/pages/{page_id}/annotations",
+        params=params,
+    )
+
+
+@mcp.tool
+async def create_canvas_annotation(
+    canvas_id: int,
+    page_id: int,
+    quoted_text: str,
+    content: str,
+    prefix_context: str | None = None,
+    suffix_context: str | None = None,
+    anchor_node_path: str | None = None,
+    anchor_offset: int | None = None,
+    anchor_length: int | None = None,
+) -> Any:
+    """Create an inline comment thread anchored to quoted text on a page.
+
+    quoted_text (the highlighted text, max 2000 chars) and content (the first
+    comment, non-empty HTML, max 10000 chars) are required. The anchor_* fields
+    pin the highlight to an exact location when known.
+    """
+    body = {"quoted_text": quoted_text, "content": content}
+    body.update({k: v for k, v in {
+        "prefix_context": prefix_context,
+        "suffix_context": suffix_context,
+        "anchor_node_path": anchor_node_path,
+        "anchor_offset": anchor_offset,
+        "anchor_length": anchor_length,
+    }.items() if v is not None})
+    return await get_client().call_json(
+        "POST",
+        f"/api/canvases/{canvas_id}/pages/{page_id}/annotations",
+        json=body,
+    )
+
+
+@mcp.tool
+async def update_canvas_annotation(
+    canvas_id: int,
+    page_id: int,
+    annotation_id: int,
+    status: str,
+) -> Any:
+    """Resolve or reopen an annotation thread. status must be "open" or "resolved"."""
+    return await get_client().call_json(
+        "PATCH",
+        f"/api/canvases/{canvas_id}/pages/{page_id}/annotations/{annotation_id}",
+        json={"status": status},
+    )
+
+
+@mcp.tool
+async def add_canvas_annotation_reply(
+    canvas_id: int,
+    page_id: int,
+    annotation_id: int,
+    content: str,
+) -> Any:
+    """Add a reply to an annotation thread. content is non-empty HTML (max 10000 chars)."""
+    return await get_client().call_json(
+        "POST",
+        f"/api/canvases/{canvas_id}/pages/{page_id}/annotations/{annotation_id}/replies",
+        json={"content": content},
     )
