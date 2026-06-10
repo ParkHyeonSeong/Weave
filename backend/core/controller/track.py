@@ -268,6 +268,19 @@ async def search_invite_candidates(track_id: int, query: str, request: Request,
     return {'status': True, 'users': users}
 
 
+async def leave(track_id: int, request: Request, db: AsyncSession):
+    """트랙 나가기 (본인)"""
+    user_id = request.state.payload.get('user_id')
+    role = await member_model.get_role(track_id, user_id, db)
+    if not role:
+        return {'status': False, 'message': 'NOT_TRACK_MEMBER'}
+    # 마지막 owner면 나갈 수 없음 (소유자 없는 트랙 방지)
+    if role == 'owner' and await member_model.count_owners(track_id, db) <= 1:
+        return {'status': False, 'message': 'CANNOT_LEAVE_LAST_OWNER'}
+    await member_model.remove(track_id, user_id, db)
+    return {'status': True}
+
+
 async def remove_member(track_id: int, target_user_id: int, request: Request,
                         db: AsyncSession):
     """멤버 제거 — owner이거나 본인(leave)"""

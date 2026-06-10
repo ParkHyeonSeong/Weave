@@ -114,6 +114,12 @@ async def update_member_role(track_id: int, user_id: int,
     return await track_controller.update_member_role(track_id, user_id, body, request, session)
 
 
+@router.post("/{track_id}/leave", summary="Track 나가기", dependencies=[Depends(require_login)])
+async def leave_track(track_id: int, request: Request,
+                      session: AsyncSession = Depends(db.session)):
+    return await track_controller.leave(track_id, request, session)
+
+
 @router.delete("/{track_id}/members/{user_id}", summary="멤버 제거",
                dependencies=[Depends(require_login)])
 async def remove_member(track_id: int, user_id: int, request: Request,
