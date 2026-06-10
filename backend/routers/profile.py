@@ -42,11 +42,13 @@ async def upload_avatar(request: Request, file: UploadFile = File(...),
 
 
 @router.delete("/avatar", summary="아바타 사진 제거", dependencies=[Depends(require_login)])
+@limiter.limit("5/minute")
 async def delete_avatar(request: Request, session: AsyncSession = Depends(db.session)):
     return await profile_controller.delete_avatar(request, session)
 
 
 @router.patch("/avatar-color", summary="아바타 색상 변경", dependencies=[Depends(require_login)])
+@limiter.limit("10/minute")
 async def update_avatar_color(body: profile_schema.UpdateAvatarColor, request: Request,
                               session: AsyncSession = Depends(db.session)):
     return await profile_controller.update_avatar_color(body, request, session)

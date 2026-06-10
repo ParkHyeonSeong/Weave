@@ -32,7 +32,7 @@ import { createMarkdownPastePlugin } from './extensions/MarkdownPastePlugin';
 import MermaidExtension from './extensions/MermaidExtension';
 import CanvasEditorToolbar from './CanvasEditorToolbar';
 import TableBubbleMenu from './TableBubbleMenu';
-import { axios } from '@/library/_axios';
+import { axios, getBaseURL } from '@/library/_axios';
 import { buildAvatarDOM } from '@/library/userAvatar';
 
 const lowlight = createLowlight(common);
@@ -88,7 +88,7 @@ function CollabEditorInner({
       cursor.classList.add('collaboration-cursor__caret');
       cursor.style.borderColor = user.color;
 
-      const avatar = buildAvatarDOM(user);
+      const avatar = buildAvatarDOM(user, getBaseURL());
       avatar.classList.add('collaboration-cursor__avatar');
       cursor.appendChild(avatar);
 

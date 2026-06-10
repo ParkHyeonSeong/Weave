@@ -85,12 +85,17 @@ export default function CanvasPageView({ onRefClick }) {
     return () => window.removeEventListener('canvas:ref_click', handler);
   }, [onRefClick]);
 
-  // sessionStorage에서 유저 정보 로드
+  // sessionStorage에서 유저 정보 로드 (아바타 변경 시 awareness 갱신 위해 profile:updated도 수신)
   useEffect(() => {
-    try {
-      const profile = JSON.parse(sessionStorage.getItem('profile') || '{}');
-      if (profile.user_id) setUser(profile);
-    } catch {}
+    const loadUser = () => {
+      try {
+        const profile = JSON.parse(sessionStorage.getItem('profile') || '{}');
+        if (profile.user_id) setUser(profile);
+      } catch {}
+    };
+    loadUser();
+    window.addEventListener('profile:updated', loadUser);
+    return () => window.removeEventListener('profile:updated', loadUser);
   }, []);
 
   // Edit 모드일 때만 WebSocket 연결

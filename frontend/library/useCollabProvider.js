@@ -8,7 +8,7 @@ import { userColor as avatarColor } from '@/library/userAvatar';
  * Yjs collaboration provider 관리 훅
  * @param {number} canvasId
  * @param {number} pageId
- * @param {object} user - { user_id, username }
+ * @param {object} user - { user_id, username, avatar_url?, avatar_color? }
  * @returns {{ ydoc, provider, status, connectedUsers }}
  */
 export default function useCollabProvider(canvasId, pageId, user) {
@@ -17,8 +17,11 @@ export default function useCollabProvider(canvasId, pageId, user) {
   const [ydoc, setYdoc] = useState(null);
   const [provider, setProvider] = useState(null);
 
-  // 색상: 공용 아바타 팔레트와 동일하게 user_id 해시 (커서 caret과 아바타 색 일치)
-  const userColor = useMemo(() => avatarColor(user?.user_id), [user?.user_id]);
+  // 색상: 공용 아바타 팔레트와 동일 (사용자 지정색 우선, 커서 caret과 아바타 색 일치)
+  const userColor = useMemo(
+    () => avatarColor(user?.user_id, user?.avatar_color),
+    [user?.user_id, user?.avatar_color],
+  );
 
   useEffect(() => {
     if (!canvasId || !pageId || !user) return;
@@ -36,11 +39,14 @@ export default function useCollabProvider(canvasId, pageId, user) {
       { connect: true }
     );
 
-    // Awareness에 사용자 정보 설정
+    // Awareness에 사용자 정보 설정 (사진은 프레즌스/커서 아바타에서 사용)
+    // 구버전 세션은 profile에 avatar_url이 없을 수 있어 별도 키로 폴백
+    const avatarUrl = user.avatar_url ?? sessionStorage.getItem('avatar_url') ?? null;
     prov.awareness.setLocalStateField('user', {
       name: user.username,
       color: userColor,
       user_id: user.user_id,
+      avatar_url: avatarUrl || null,
     });
 
     // 연결 상태 이벤트
@@ -74,7 +80,8 @@ export default function useCollabProvider(canvasId, pageId, user) {
       setYdoc(null);
       setProvider(null);
     };
-  }, [canvasId, pageId, user?.user_id]);
+    // 아바타 색/사진 변경 시 awareness를 새 값으로 다시 설정 (재연결 동반 — 변경은 드묾)
+  }, [canvasId, pageId, user?.user_id, user?.avatar_color, user?.avatar_url]);
 
   return {
     ydoc,

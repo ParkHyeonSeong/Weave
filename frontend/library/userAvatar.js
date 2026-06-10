@@ -70,12 +70,19 @@ export function userColor(userId, override) {
   return AVATAR_COLORS[Math.abs(Number(userId)) % AVATAR_COLORS.length];
 }
 
+// 서버가 발급하는 아바타 경로만 사진으로 신뢰한다.
+// (Y.js awareness 등 클라이언트 제어 채널로 외부 URL을 흘려보내
+// 다른 사용자 브라우저가 임의 도메인에 이미지 요청을 하게 되는 것 차단)
+function safeAvatarUrl(url) {
+  return typeof url === 'string' && url.startsWith('/') && !url.startsWith('//') ? url : null;
+}
+
 // user 객체(필드명이 화면마다 제각각)를 아바타 렌더에 필요한 표준 형태로 환원.
 export function avatarMarkup(user, baseUrl = '') {
   const u = user || {};
   const name = u.username ?? u.name ?? u.display_name ?? u.author_name ?? '';
   const id = u.user_id ?? u.id ?? u.author_id ?? null;
-  const url = u.avatar_url ?? u.avatarUrl ?? null;
+  const url = safeAvatarUrl(u.avatar_url ?? u.avatarUrl ?? null);
   const override = u.avatar_color ?? u.color ?? null;
   return {
     name,
@@ -93,15 +100,20 @@ export function buildAvatarDOM(user, baseUrl = '') {
   const el = document.createElement('span');
   el.className = 'Avatar Avatar--xs';
   el.setAttribute('title', m.title);
+  const renderInitials = () => {
+    el.replaceChildren();
+    el.style.background = m.color;
+    el.textContent = m.initials;
+  };
   if (m.src) {
     const img = document.createElement('img');
     img.className = 'Avatar__Img';
     img.src = m.src;
     img.alt = m.title;
+    img.onerror = renderInitials; // 깨진 사진은 이니셜로 폴백 (<Avatar>와 동일 동작)
     el.appendChild(img);
   } else {
-    el.style.background = m.color;
-    el.textContent = m.initials;
+    renderInitials();
   }
   return el;
 }

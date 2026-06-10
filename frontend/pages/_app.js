@@ -182,6 +182,7 @@ export default function App({ Component, pageProps }) {
   useEffect(() => {
     const handleExpired = () => {
       sessionStorage.removeItem('profile');
+      sessionStorage.removeItem('avatar_url');
       router.replace('/auth/login');
     };
     window.addEventListener('auth:expired', handleExpired);

@@ -206,7 +206,8 @@ export default function Profile() {
       if (res.data.status) {
         setAvatarUrl('');
         sessionStorage.removeItem('avatar_url');
-        syncProfileSession({});
+        // avatar_url은 별도 sessionStorage 키 — 이벤트로 헤더만 갱신
+        window.dispatchEvent(new CustomEvent('profile:updated'));
       } else {
         showAlert('Error', res.data.message);
       }
@@ -226,7 +227,9 @@ export default function Profile() {
     try {
       const res = await axios.patch('/profile/avatar-color', { color });
       if (res.data.status) {
-        syncProfileSession({ avatar_color: color });
+        const saved = res.data.avatar_color ?? null;
+        setAvatarColor(saved);
+        syncProfileSession({ avatar_color: saved });
       } else {
         setAvatarColor(prev);
         showAlert('Error', res.data.message);

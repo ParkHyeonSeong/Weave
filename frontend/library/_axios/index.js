@@ -6,6 +6,7 @@ const handleResponseFulfilled = (response) => {
   if (response.data?.message === 'NEED_LOGIN' && !isAuthExpiredDispatched) {
     isAuthExpiredDispatched = true;
     sessionStorage.removeItem('profile');
+    sessionStorage.removeItem('avatar_url');
     window.dispatchEvent(new CustomEvent('auth:expired'));
     setTimeout(() => { isAuthExpiredDispatched = false; }, 3000);
   }
@@ -16,6 +17,7 @@ const handleResponseRejected = (error) => {
   if (error.response?.status === 401 && !isAuthExpiredDispatched) {
     isAuthExpiredDispatched = true;
     sessionStorage.removeItem('profile');
+    sessionStorage.removeItem('avatar_url');
     window.dispatchEvent(new CustomEvent('auth:expired'));
     setTimeout(() => { isAuthExpiredDispatched = false; }, 3000);
   }

@@ -16,13 +16,14 @@ MAX_FILE_SIZE = 2 * 1024 * 1024  # 2MB
 
 def _remove_avatar_file(avatar_url: str):
     """업로드된 아바타 파일을 디스크에서 제거 (uploads 디렉토리 밖 경로는 무시)"""
-    # URL 경로(/api/uploads/...)에서 실제 파일 경로(uploads/...)로 변환
+    # URL 경로(/api/uploads/...)에서 실제 파일 경로(uploads/...)로 변환.
+    # realpath로 심볼릭 링크까지 해석해 uploads 밖을 가리키는 경로를 차단.
     rel = avatar_url.replace('/api/uploads/', 'uploads/').lstrip('/')
-    path = os.path.normpath(os.path.join(
+    path = os.path.realpath(os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
         rel
     ))
-    uploads_base = os.path.normpath(UPLOAD_DIR)
+    uploads_base = os.path.realpath(UPLOAD_DIR)
     if path.startswith(uploads_base + os.sep) and os.path.exists(path):
         os.remove(path)
 
@@ -54,6 +55,7 @@ async def update_username(body, request: Request, response: Response, db: AsyncS
             'email': user['email'],
             'username': body.username,
             'role': user['role'],
+            'avatar_url': user.get('avatar_url'),
             'avatar_color': user.get('avatar_color'),
         },
     }

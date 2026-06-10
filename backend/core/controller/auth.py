@@ -85,6 +85,9 @@ async def register(body, request: Request, response: Response, db: AsyncSession)
             'email': body.email,
             'username': body.username,
             'role': 'member',
+            # 같은 브라우저에서 계정 전환 시 이전 사용자의 아바타가 남지 않도록 명시
+            'avatar_url': None,
+            'avatar_color': None,
         },
     }
 
