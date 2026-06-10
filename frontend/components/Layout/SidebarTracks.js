@@ -12,8 +12,14 @@ import { CSS } from '@dnd-kit/utilities';
 import { axios } from '@/library/_axios';
 import EntityIcon from '@/components/common/EntityIcon';
 import SidebarItemActions from './SidebarItemActions';
+import useContextMenu from '@/components/common/useContextMenu';
+import ContextMenu from '@/components/common/ContextMenu';
+import useInlineRename from '@/components/common/useInlineRename';
+import { buildSpaceMenu } from './spaceMenu';
+import ConfirmModal from '@/components/modal/ConfirmModal';
+import { showToast } from '@/components/Layout/Toast';
 
-function SortableTrackItem({ track, isActive, onHide }) {  // isActive는 boolean (caller가 계산)
+function SortableTrackItem({ track, isActive, onMenu, rename }) {  // isActive는 boolean (caller가 계산)
   const router = useRouter();
   const {
     attributes, listeners, setNodeRef, transform, transition, isDragging,
@@ -25,11 +31,18 @@ function SortableTrackItem({ track, isActive, onHide }) {  // isActive는 boolea
     opacity: isDragging ? 0.4 : 1,
   };
 
+  const editing = rename.editingId === track.track_id;
+
   return (
-    <div ref={setNodeRef} style={style} className={`Sidebar__BranchRow ${isActive ? 'Sidebar__BranchRow--active' : ''}`}>
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`Sidebar__BranchRow ${isActive ? 'Sidebar__BranchRow--active' : ''}`}
+      onContextMenu={(e) => onMenu(e, track)}
+    >
       <button
         className={`Sidebar__BranchItem ${isActive ? 'Sidebar__BranchItem--active' : ''}`}
-        onClick={() => router.push(`/tracks/${track.track_id}`)}
+        onClick={() => { if (!editing) router.push(`/tracks/${track.track_id}`); }}
         {...attributes}
         {...listeners}
       >
@@ -39,10 +52,12 @@ function SortableTrackItem({ track, isActive, onHide }) {  // isActive는 boolea
           size={14}
           entityType="track"
         />
-        <span className="Sidebar__BranchName">{track.track_name}</span>
+        {editing
+          ? <input className="Sidebar__RenameInput" {...rename.inputProps} />
+          : <span className="Sidebar__BranchName">{track.track_name}</span>}
       </button>
       <div className="Sidebar__BranchActions">
-        <SidebarItemActions onHide={() => onHide(track.track_id)} />
+        <SidebarItemActions onMenu={(e) => onMenu(e, track)} />
       </div>
     </div>
   );
@@ -53,6 +68,16 @@ export default function SidebarTracks({ onCreateTrack, savedOrder, onOrderChange
   const [tracks, setTracks] = useState([]);
   const [activeItem, setActiveItem] = useState(null);
   const [showHidden, setShowHidden] = useState(false);
+
+  const ctx = useContextMenu();
+  const [leaveTarget, setLeaveTarget] = useState(null); // { id, name } | null
+  const rename = useInlineRename(async (id, name) => {
+    try {
+      await axios.patch(`/tracks/${id}`, { track_name: name });
+      fetchTracks();
+      window.dispatchEvent(new Event('track:updated'));
+    } catch {}
+  });
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -97,6 +122,41 @@ export default function SidebarTracks({ onCreateTrack, savedOrder, onOrderChange
   const hiddenTracks = useMemo(() => sortedTracks.filter((t) => hiddenSet.has(t.track_id)), [sortedTracks, hiddenSet]);
 
   const sortableIds = visibleTracks.map((t) => t.track_id);
+
+  const openMenu = (e, track) => {
+    const detailPath = `/tracks/${track.track_id}`;
+    ctx.open(e, buildSpaceMenu(
+      {
+        appType: 'track',
+        id: track.track_id,
+        name: track.track_name,
+        role: track.my_role,
+        isHidden: hiddenSet.has(track.track_id),
+      },
+      {
+        open: () => router.push(detailPath),
+        openNewTab: () => window.open(detailPath, '_blank'),
+        settings: () => router.push(`${detailPath}/settings`),
+        rename: () => rename.start(track.track_id, track.track_name),
+        members: () => router.push(`${detailPath}/settings`),
+        toggleHide: () => (hiddenSet.has(track.track_id) ? onUnhide(track.track_id) : onHide(track.track_id)),
+        archive: async () => {
+          try {
+            const res = await axios.delete(`/tracks/${track.track_id}`);
+            if (res.data.status) {
+              window.dispatchEvent(new Event('track:updated'));
+              fetchTracks();
+              // Toast(showToast)는 액션 버튼을 지원하지 않아 undo 없이 성공 알림만 표시.
+              showToast(`"${track.track_name}" 아카이브됨`);
+            } else {
+              showToast('아카이브 실패', 'error');
+            }
+          } catch {}
+        },
+        leave: () => setLeaveTarget({ id: track.track_id, name: track.track_name }),
+      },
+    ));
+  };
 
   const handleDragStart = (event) => {
     const item = visibleTracks.find((t) => t.track_id === event.active.id);
@@ -147,7 +207,8 @@ export default function SidebarTracks({ onCreateTrack, savedOrder, onOrderChange
                     // loose 비교(SidebarBranches와 동일 컨벤션)로 number/string 모두 매치.
                     // eslint-disable-next-line eqeqeq
                     isActive={router.pathname.startsWith('/tracks/') && router.query.id == track.track_id}
-                    onHide={onHide}
+                    onMenu={openMenu}
+                    rename={rename}
                   />
                 ))}
               </SortableContext>
@@ -174,7 +235,11 @@ export default function SidebarTracks({ onCreateTrack, savedOrder, onOrderChange
                   숨긴 항목 {hiddenTracks.length}
                 </button>
                 {showHidden && hiddenTracks.map((track) => (
-                  <div key={track.track_id} className="Sidebar__BranchRow Sidebar__BranchRow--hidden">
+                  <div
+                    key={track.track_id}
+                    className="Sidebar__BranchRow Sidebar__BranchRow--hidden"
+                    onContextMenu={(e) => openMenu(e, track)}
+                  >
                     <button className="Sidebar__BranchItem" onClick={() => router.push(`/tracks/${track.track_id}`)}>
                       <EntityIcon icon={track.icon} color={track.color} size={14} entityType="track" />
                       <span className="Sidebar__BranchName">{track.track_name}</span>
@@ -187,6 +252,29 @@ export default function SidebarTracks({ onCreateTrack, savedOrder, onOrderChange
           </>
         )}
       </div>
+
+      <ContextMenu {...ctx.props} />
+      <ConfirmModal
+        isOpen={!!leaveTarget}
+        onClose={() => setLeaveTarget(null)}
+        onConfirm={async () => {
+          const t = leaveTarget;
+          setLeaveTarget(null);
+          try {
+            const res = await axios.post(`/tracks/${t.id}/leave`);
+            if (res.data.status) {
+              window.dispatchEvent(new Event('track:updated'));
+              fetchTracks();
+            } else {
+              showToast('나가기 실패', 'error');
+            }
+          } catch {}
+        }}
+        title="트랙 나가기"
+        message={`"${leaveTarget?.name}"에서 나가시겠습니까?`}
+        confirmLabel="나가기"
+        variant="danger"
+      />
     </>
   );
 }
