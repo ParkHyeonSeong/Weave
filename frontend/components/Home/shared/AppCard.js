@@ -5,9 +5,9 @@ export function AvatarSet({ members = [], max = 4 }) {
   return <AvatarStack users={members} max={max} className="HCard__Avatars" />;
 }
 
-export default function AppCard({ accent = '#5E6AD2', onClick, children }) {
+export default function AppCard({ accent = '#5E6AD2', onClick, onContextMenu, children }) {
   return (
-    <button type="button" className="HCard" onClick={onClick}>
+    <button type="button" className="HCard" onClick={onClick} onContextMenu={onContextMenu}>
       <span className="HCard__Accent" style={{ background: accent }} />
       <div className="HCard__Body">{children}</div>
     </button>

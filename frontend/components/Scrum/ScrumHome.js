@@ -10,6 +10,11 @@ import HomeEmptyState from '@/components/Home/shared/HomeEmptyState';
 import AppCard from '@/components/Home/shared/AppCard';
 import CreateScrumBoard from '@/components/modal/CreateScrumBoard';
 import { useUiPrefs } from '@/library/UiPrefsContext';
+import useContextMenu from '@/components/common/useContextMenu';
+import ContextMenu from '@/components/common/ContextMenu';
+import { buildSpaceMenu } from '@/components/Layout/spaceMenu';
+import ConfirmModal from '@/components/modal/ConfirmModal';
+import { showToast } from '@/components/Layout/Toast';
 
 const getMyName = () => {
   try { return JSON.parse(sessionStorage.getItem('profile') || '{}').username || ''; } catch { return ''; }
@@ -18,7 +23,9 @@ const CADENCE_LABEL = { weekly: '매주', biweekly: '격주', every_n_weeks: 'N�
 
 export default function ScrumHome() {
   const router = useRouter();
-  const { isHidden } = useUiPrefs();
+  const { isHidden, hide, unhide } = useUiPrefs();
+  const ctx = useContextMenu();
+  const [leaveTarget, setLeaveTarget] = useState(null);
   const [boards, setBoards] = useState([]);
   const [query, setQuery] = useState('');
   const [view, setView] = useState('grid');
@@ -49,7 +56,44 @@ export default function ScrumHome() {
 
   const memberTotal = useMemo(() => boards.reduce((s, b) => s + (b.member_count || 0), 0), [boards]);
 
+  const openCardMenu = (e, b) => {
+    const id = b.board_id;
+    const detailPath = `/scrum/${id}`;
+    const settingsPath = `${detailPath}/settings`;
+    ctx.open(e, buildSpaceMenu(
+      {
+        appType: 'scrum',
+        id,
+        name: b.name,
+        role: b.my_role,
+        isHidden: isHidden('scrums', id),
+      },
+      {
+        open: () => router.push(detailPath),
+        openNewTab: () => window.open(detailPath, '_blank'),
+        settings: () => router.push(settingsPath),
+        rename: () => router.push(settingsPath),
+        members: () => router.push(settingsPath),
+        toggleHide: () => (isHidden('scrums', id) ? unhide('scrums', id) : hide('scrums', id)),
+        archive: async () => {
+          try {
+            const res = await axios.delete(`/scrum/${id}`);
+            if (res.data.status) {
+              fetchBoards();
+              window.dispatchEvent(new Event('scrum:updated'));
+              showToast(`"${b.name}" 아카이브됨`);
+            } else {
+              showToast('아카이브 실패', 'error');
+            }
+          } catch {}
+        },
+        leave: () => setLeaveTarget({ id, name: b.name }),
+      },
+    ));
+  };
+
   return (
+    <>
     <div className="HomeMain">
       <HomeHero
         greeting={me ? <>안녕하세요, {me}님 👋</> : <>오늘의 스크럼을 시작해볼까요 👋</>}
@@ -83,7 +127,7 @@ export default function ScrumHome() {
       ) : (
         <div className="HGrid">
           {filtered.map((b) => (
-            <AppCard key={b.board_id} accent={b.color} onClick={() => router.push(`/scrum/${b.board_id}`)}>
+            <AppCard key={b.board_id} accent={b.color} onClick={() => router.push(`/scrum/${b.board_id}`)} onContextMenu={(e) => openCardMenu(e, b)}>
               <div className="HCard__Top">
                 <div>
                   <div className="HCard__Title">{b.name}</div>
@@ -99,5 +143,29 @@ export default function ScrumHome() {
       )}
       {showCreate && <CreateScrumBoard onClose={() => setShowCreate(false)} onCreated={handleCreated} />}
     </div>
+
+      <ContextMenu {...ctx.props} />
+      <ConfirmModal
+        isOpen={!!leaveTarget}
+        onClose={() => setLeaveTarget(null)}
+        onConfirm={async () => {
+          const t = leaveTarget;
+          setLeaveTarget(null);
+          try {
+            const res = await axios.post(`/scrum/${t.id}/leave`);
+            if (res.data.status) {
+              fetchBoards();
+              window.dispatchEvent(new Event('scrum:updated'));
+            } else {
+              showToast('나가기 실패', 'error');
+            }
+          } catch {}
+        }}
+        title="보드 나가기"
+        message={`"${leaveTarget?.name}"에서 나가시겠습니까?`}
+        confirmLabel="나가기"
+        variant="danger"
+      />
+    </>
   );
 }

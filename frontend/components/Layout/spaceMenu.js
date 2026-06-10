@@ -12,7 +12,8 @@ export function buildSpaceMenu(space, h) {
   items.push({ id: 'open', group: 'open', icon: ArrowRight, label: '열기', onSelect: h.open });
   items.push({ id: 'open-new', group: 'open', icon: ExternalLink, label: '새 탭에서 열기', onSelect: h.openNewTab });
 
-  if (space.appType === 'canvas') {
+  // create 그룹은 생성 핸들러가 제공될 때만(사이드바). 홈 카드 등 미제공 표면은 생략.
+  if (space.appType === 'canvas' && h.addDoc) {
     items.push({ id: 'add-doc', group: 'create', icon: FileText, label: 'Document 추가', onSelect: h.addDoc });
     items.push({ id: 'add-typst', group: 'create', icon: FileCode, label: 'Typst 문서 추가', onSelect: h.addTypst });
     items.push({ id: 'add-folder', group: 'create', icon: FolderPlus, label: '폴더 추가', onSelect: h.addFolder });

@@ -11,6 +11,11 @@ import ProgressRing from '@/components/Home/shared/ProgressRing';
 import { useUiPrefs } from '@/library/UiPrefsContext';
 import AppCard from '@/components/Home/shared/AppCard';
 import CreateTrack from '@/components/modal/CreateTrack';
+import useContextMenu from '@/components/common/useContextMenu';
+import ContextMenu from '@/components/common/ContextMenu';
+import { buildSpaceMenu } from '@/components/Layout/spaceMenu';
+import ConfirmModal from '@/components/modal/ConfirmModal';
+import { showToast } from '@/components/Layout/Toast';
 
 const getMyName = () => {
   try {
@@ -25,7 +30,9 @@ const openCommandPalette = () => window.dispatchEvent(new CustomEvent('layout:op
 
 export default function TrackHome() {
   const router = useRouter();
-  const { isHidden } = useUiPrefs();
+  const { isHidden, hide, unhide } = useUiPrefs();
+  const ctx = useContextMenu();
+  const [leaveTarget, setLeaveTarget] = useState(null);
   const [tracks, setTracks] = useState([]);
   const [stats, setStats] = useState(null);
   const [query, setQuery] = useState('');
@@ -68,7 +75,44 @@ export default function TrackHome() {
     return base.filter((t) => t.track_name.toLowerCase().includes(q));
   }, [tracks, query, isHidden]);
 
+  const openCardMenu = (e, t) => {
+    const id = t.track_id;
+    const detailPath = `/tracks/${id}`;
+    const settingsPath = `${detailPath}/settings`;
+    ctx.open(e, buildSpaceMenu(
+      {
+        appType: 'track',
+        id,
+        name: t.track_name,
+        role: t.my_role,
+        isHidden: isHidden('tracks', id),
+      },
+      {
+        open: () => router.push(detailPath),
+        openNewTab: () => window.open(detailPath, '_blank'),
+        settings: () => router.push(settingsPath),
+        rename: () => router.push(settingsPath),
+        members: () => router.push(settingsPath),
+        toggleHide: () => (isHidden('tracks', id) ? unhide('tracks', id) : hide('tracks', id)),
+        archive: async () => {
+          try {
+            const res = await axios.delete(`/tracks/${id}`);
+            if (res.data.status) {
+              fetchTracks();
+              window.dispatchEvent(new Event('track:updated'));
+              showToast(`"${t.track_name}" 아카이브됨`);
+            } else {
+              showToast('아카이브 실패', 'error');
+            }
+          } catch {}
+        },
+        leave: () => setLeaveTarget({ id, name: t.track_name }),
+      },
+    ));
+  };
+
   return (
+    <>
     <div className="HomeMain">
       <HomeHero
         greeting={me ? <>안녕하세요, {me}님 👋</> : <>워크플로우 현황을 살펴볼까요 👋</>}
@@ -136,6 +180,7 @@ export default function TrackHome() {
               key={t.track_id}
               accent={t.color}
               onClick={() => router.push(`/tracks/${t.track_id}`)}
+              onContextMenu={(e) => openCardMenu(e, t)}
             >
               <div className="HCard__Top">
                 <div className="HCard__TopText">
@@ -172,5 +217,29 @@ export default function TrackHome() {
         />
       )}
     </div>
+
+      <ContextMenu {...ctx.props} />
+      <ConfirmModal
+        isOpen={!!leaveTarget}
+        onClose={() => setLeaveTarget(null)}
+        onConfirm={async () => {
+          const t = leaveTarget;
+          setLeaveTarget(null);
+          try {
+            const res = await axios.post(`/tracks/${t.id}/leave`);
+            if (res.data.status) {
+              fetchTracks();
+              window.dispatchEvent(new Event('track:updated'));
+            } else {
+              showToast('나가기 실패', 'error');
+            }
+          } catch {}
+        }}
+        title="트랙 나가기"
+        message={`"${leaveTarget?.name}"에서 나가시겠습니까?`}
+        confirmLabel="나가기"
+        variant="danger"
+      />
+    </>
   );
 }

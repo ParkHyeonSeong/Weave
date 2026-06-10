@@ -11,6 +11,11 @@ import HomeSkeleton from '@/components/Home/shared/HomeSkeleton';
 import HomeEmptyState from '@/components/Home/shared/HomeEmptyState';
 import AppCard, { AvatarSet } from '@/components/Home/shared/AppCard';
 import { useUiPrefs } from '@/library/UiPrefsContext';
+import useContextMenu from '@/components/common/useContextMenu';
+import ContextMenu from '@/components/common/ContextMenu';
+import { buildSpaceMenu } from '@/components/Layout/spaceMenu';
+import ConfirmModal from '@/components/modal/ConfirmModal';
+import { showToast } from '@/components/Layout/Toast';
 
 const DEFAULT_DOC_COLOR = '#16A34A';
 
@@ -50,7 +55,9 @@ const openCommandPalette = () => window.dispatchEvent(new CustomEvent('layout:op
 
 export default function CanvasHome() {
   const router = useRouter();
-  const { isHidden } = useUiPrefs();
+  const { isHidden, hide, unhide } = useUiPrefs();
+  const ctx = useContextMenu();
+  const [leaveTarget, setLeaveTarget] = useState(null);
   const [canvases, setCanvases] = useState([]);
   const [recentDocs, setRecentDocs] = useState([]);
   const [starredDocs, setStarredDocs] = useState([]);
@@ -107,6 +114,42 @@ export default function CanvasHome() {
     return base.filter((c) => c.canvas_name.toLowerCase().includes(q));
   }, [canvases, query, isHidden]);
 
+  const openCardMenu = (e, c) => {
+    const id = c.canvas_id;
+    const detailPath = `/canvas/${id}`;
+    const settingsPath = `${detailPath}/settings`;
+    ctx.open(e, buildSpaceMenu(
+      {
+        appType: 'canvas',
+        id,
+        name: c.canvas_name,
+        role: c.my_role,
+        isHidden: isHidden('canvases', id),
+      },
+      {
+        open: () => router.push(detailPath),
+        openNewTab: () => window.open(detailPath, '_blank'),
+        settings: () => router.push(settingsPath),
+        rename: () => router.push(settingsPath),
+        members: () => router.push(settingsPath),
+        toggleHide: () => (isHidden('canvases', id) ? unhide('canvases', id) : hide('canvases', id)),
+        archive: async () => {
+          try {
+            const res = await axios.delete(`/canvases/${id}`);
+            if (res.data.status) {
+              fetchCanvases();
+              window.dispatchEvent(new Event('canvas:created'));
+              showToast(`"${c.canvas_name}" 아카이브됨`);
+            } else {
+              showToast('아카이브 실패', 'error');
+            }
+          } catch {}
+        },
+        leave: () => setLeaveTarget({ id, name: c.canvas_name }),
+      },
+    ));
+  };
+
   const stripDocs = activeTab === 'starred' ? starredDocs : recentDocs;
   const stripItems = stripDocs.map((it) => ({
     title: it.title,
@@ -116,6 +159,7 @@ export default function CanvasHome() {
   }));
 
   return (
+    <>
     <div className="HomeMain">
       <HomeHero
         greeting={me ? <>안녕하세요, {me}님 👋</> : <>문서 작업을 이어가 볼까요 👋</>}
@@ -195,6 +239,7 @@ export default function CanvasHome() {
               key={c.canvas_id}
               accent={c.color}
               onClick={() => router.push(`/canvas/${c.canvas_id}`)}
+              onContextMenu={(e) => openCardMenu(e, c)}
             >
               <div className="HCard__Top">
                 <div className="HCard__IconBox" style={{ background: tintOf(c.color) }}>
@@ -219,5 +264,29 @@ export default function CanvasHome() {
         </div>
       )}
     </div>
+
+      <ContextMenu {...ctx.props} />
+      <ConfirmModal
+        isOpen={!!leaveTarget}
+        onClose={() => setLeaveTarget(null)}
+        onConfirm={async () => {
+          const t = leaveTarget;
+          setLeaveTarget(null);
+          try {
+            const res = await axios.post(`/canvases/${t.id}/leave`);
+            if (res.data.status) {
+              fetchCanvases();
+              window.dispatchEvent(new Event('canvas:created'));
+            } else {
+              showToast('나가기 실패', 'error');
+            }
+          } catch {}
+        }}
+        title="캔버스 나가기"
+        message={`"${leaveTarget?.name}"에서 나가시겠습니까?`}
+        confirmLabel="나가기"
+        variant="danger"
+      />
+    </>
   );
 }

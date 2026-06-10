@@ -11,6 +11,11 @@ import HomeEmptyState from '@/components/Home/shared/HomeEmptyState';
 import ProgressRing from '@/components/Home/shared/ProgressRing';
 import AppCard, { AvatarSet } from '@/components/Home/shared/AppCard';
 import { useUiPrefs } from '@/library/UiPrefsContext';
+import useContextMenu from '@/components/common/useContextMenu';
+import ContextMenu from '@/components/common/ContextMenu';
+import { buildSpaceMenu } from '@/components/Layout/spaceMenu';
+import ConfirmModal from '@/components/modal/ConfirmModal';
+import { showToast } from '@/components/Layout/Toast';
 
 const getRelativeTime = (dateStr) => {
   const now = new Date();
@@ -37,7 +42,9 @@ const openCommandPalette = () => window.dispatchEvent(new CustomEvent('layout:op
 
 export default function BranchHome() {
   const router = useRouter();
-  const { isHidden } = useUiPrefs();
+  const { isHidden, hide, unhide } = useUiPrefs();
+  const ctx = useContextMenu();
+  const [leaveTarget, setLeaveTarget] = useState(null);
   const [branches, setBranches] = useState([]);
   const [recentTasks, setRecentTasks] = useState([]);
   const [stats, setStats] = useState(null);
@@ -90,7 +97,44 @@ export default function BranchHome() {
     );
   }, [branches, query, isHidden]);
 
+  const openCardMenu = (e, b) => {
+    const id = b.branch_id;
+    const detailPath = `/branch/${id}`;
+    const settingsPath = `${detailPath}?tab=settings`;
+    ctx.open(e, buildSpaceMenu(
+      {
+        appType: 'branch',
+        id,
+        name: b.branch_name,
+        role: b.my_role,
+        isHidden: isHidden('branches', id),
+      },
+      {
+        open: () => router.push(detailPath),
+        openNewTab: () => window.open(detailPath, '_blank'),
+        settings: () => router.push(settingsPath),
+        rename: () => router.push(settingsPath),
+        members: () => router.push(settingsPath),
+        toggleHide: () => (isHidden('branches', id) ? unhide('branches', id) : hide('branches', id)),
+        archive: async () => {
+          try {
+            const res = await axios.delete(`/branches/${id}`);
+            if (res.data.status) {
+              fetchBranches();
+              window.dispatchEvent(new Event('branch:created'));
+              showToast(`"${b.branch_name}" 아카이브됨`);
+            } else {
+              showToast('아카이브 실패', 'error');
+            }
+          } catch {}
+        },
+        leave: () => setLeaveTarget({ id, name: b.branch_name }),
+      },
+    ));
+  };
+
   return (
+    <>
     <div className="HomeMain">
       <HomeHero
         greeting={me ? <>안녕하세요, {me}님 👋</> : <>안녕하세요 👋</>}
@@ -172,6 +216,7 @@ export default function BranchHome() {
               key={b.branch_id}
               accent={b.color}
               onClick={() => router.push(`/branch/${b.branch_id}`)}
+              onContextMenu={(e) => openCardMenu(e, b)}
             >
               <div className="HCard__Top">
                 <div className="HCard__TopText">
@@ -195,5 +240,29 @@ export default function BranchHome() {
         </div>
       )}
     </div>
+
+      <ContextMenu {...ctx.props} />
+      <ConfirmModal
+        isOpen={!!leaveTarget}
+        onClose={() => setLeaveTarget(null)}
+        onConfirm={async () => {
+          const t = leaveTarget;
+          setLeaveTarget(null);
+          try {
+            const res = await axios.post(`/branches/${t.id}/leave`);
+            if (res.data.status) {
+              fetchBranches();
+              window.dispatchEvent(new Event('branch:created'));
+            } else {
+              showToast('나가기 실패', 'error');
+            }
+          } catch {}
+        }}
+        title="브랜치 나가기"
+        message={`"${leaveTarget?.name}"에서 나가시겠습니까?`}
+        confirmLabel="나가기"
+        variant="danger"
+      />
+    </>
   );
 }
