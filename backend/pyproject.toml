@@ -5,6 +5,7 @@ description = "Weave - In-house project management platform API"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.135.1",
+    "starlette>=1.0.1",  # FastAPI 전이 의존 — BadHost(Host 헤더 미검증) CVE 패치 하한
     "uvicorn[standard]>=0.41.0",
     "pydantic>=2.12.5",
     "python-dotenv>=1.1.0",
@@ -12,12 +13,13 @@ dependencies = [
     "asyncpg>=0.30.0",
     "alembic>=1.15.2",
     "bcrypt>=4.0.0",
-    "PyJWT>=2.10.0",
+    "PyJWT>=2.13.0",  # 빈 HMAC 키 거부 등 CVE 패치 하한 (인증 핵심)
     "python-multipart>=0.0.20",
     "pycrdt>=0.12",
     "httpx>=0.28.0",
     "beautifulsoup4>=4.12.0",
-    "pywebpush>=2.0.0",
+    "pywebpush>=2.3.0",
+    "aiohttp>=3.14.0",  # pywebpush 전이 의존 — CookieJar 역직렬화/리다이렉트 쿠키 누설 CVE 패치 하한
     "slowapi>=0.1.9",
     "defusedxml>=0.7.1",
 ]
