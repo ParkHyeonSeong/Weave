@@ -48,3 +48,197 @@ async def list_track_items(track_id: int) -> Any:
     linked branches. For tasks scoped to a single branch use list_branch_tasks.
     """
     return await get_client().call_json("GET", f"/api/tracks/{track_id}/items")
+
+
+@mcp.tool
+async def create_track(
+    track_name: str,
+    description: str | None = None,
+    color: str | None = None,
+    icon: str | None = None,
+    visibility: str = "private",
+    default_view: str = "flow",
+    participating_branch_ids: list[int] | None = None,
+) -> Any:
+    """Create a new track (cross-branch workflow); you become its owner.
+
+    track_name is required (max 300 chars). visibility is "private" (default) or
+    "public". default_view is "flow" (default), "timeline", or "tree".
+    participating_branch_ids attaches branches at creation.
+    """
+    body = {"track_name": track_name, "visibility": visibility, "default_view": default_view}
+    body.update({k: v for k, v in {
+        "description": description,
+        "color": color,
+        "icon": icon,
+        "participating_branch_ids": participating_branch_ids,
+    }.items() if v is not None})
+    return await get_client().call_json("POST", "/api/tracks", json=body)
+
+
+@mcp.tool
+async def update_track(
+    track_id: int,
+    track_name: str | None = None,
+    description: str | None = None,
+    color: str | None = None,
+    icon: str | None = None,
+    visibility: str | None = None,
+    default_view: str | None = None,
+) -> Any:
+    """Update track metadata; only provided fields change.
+
+    color (if set) is #RRGGBB hex; visibility is "public"/"private"; default_view
+    is "flow"/"timeline"/"tree".
+    """
+    body = {k: v for k, v in {
+        "track_name": track_name,
+        "description": description,
+        "color": color,
+        "icon": icon,
+        "visibility": visibility,
+        "default_view": default_view,
+    }.items() if v is not None}
+    return await get_client().call_json("PATCH", f"/api/tracks/{track_id}", json=body)
+
+
+@mcp.tool
+async def delete_track(track_id: int) -> Any:
+    """Archive (soft-delete) a track. Reversible — it can be restored later."""
+    return await get_client().call_json("DELETE", f"/api/tracks/{track_id}")
+
+
+@mcp.tool
+async def add_track_branch(track_id: int, branch_id: int) -> Any:
+    """Attach a participating branch to a track."""
+    return await get_client().call_json(
+        "POST", f"/api/tracks/{track_id}/branches", json={"branch_id": branch_id}
+    )
+
+
+@mcp.tool
+async def remove_track_branch(track_id: int, branch_id: int) -> Any:
+    """Detach a participating branch from a track (may remove its sourced items)."""
+    return await get_client().call_json(
+        "DELETE", f"/api/tracks/{track_id}/branches/{branch_id}"
+    )
+
+
+@mcp.tool
+async def search_track_sources(
+    track_id: int,
+    q: str | None = None,
+    branch_id: int | None = None,
+    sprint_id: int | None = None,
+    epic_id: int | None = None,
+    status: str | None = None,
+    priority: str | None = None,
+    exclude_done: bool | None = None,
+    limit: int | None = None,
+) -> Any:
+    """Search candidate tasks (in the track's participating branches) to add as items.
+
+    Returns source_task_id values for add_track_item / add_track_items_bulk. Filters
+    are optional; results are capped (limit defaults to 50, max 200).
+    """
+    params = {k: v for k, v in {
+        "q": q,
+        "branch_id": branch_id,
+        "sprint_id": sprint_id,
+        "epic_id": epic_id,
+        "status": status,
+        "priority": priority,
+        "exclude_done": exclude_done,
+        "limit": limit,
+    }.items() if v is not None}
+    return await get_client().call_json(
+        "GET", f"/api/tracks/{track_id}/sources", params=params
+    )
+
+
+@mcp.tool
+async def add_track_item(
+    track_id: int,
+    source_task_id: int,
+    position_x: float | None = None,
+    position_y: float | None = None,
+) -> Any:
+    """Add a single task to a track as an item.
+
+    Side-effect: auto-joins the task's branch as a participating branch; duplicate
+    adds are ignored. position_x/position_y set the canvas placement.
+    """
+    body = {"source_task_id": source_task_id}
+    body.update({k: v for k, v in {
+        "position_x": position_x, "position_y": position_y,
+    }.items() if v is not None})
+    return await get_client().call_json(
+        "POST", f"/api/tracks/{track_id}/items", json=body
+    )
+
+
+@mcp.tool
+async def add_track_items_bulk(
+    track_id: int,
+    source_task_ids: list[int],
+    scope_mode: str | None = None,
+    scope_id: int | None = None,
+) -> Any:
+    """Add up to 200 tasks to a track at once.
+
+    scope_mode is "sprint", "epic", or "filter"; scope_id is REQUIRED when
+    scope_mode is "sprint" or "epic". Auto-joins participating branches and ignores
+    duplicates.
+    """
+    body = {"source_task_ids": source_task_ids}
+    body.update({k: v for k, v in {
+        "scope_mode": scope_mode, "scope_id": scope_id,
+    }.items() if v is not None})
+    return await get_client().call_json(
+        "POST", f"/api/tracks/{track_id}/items/bulk", json=body
+    )
+
+
+@mcp.tool
+async def delete_track_item(track_id: int, item_id: int) -> Any:
+    """Remove an item from a track (does not delete the underlying source task)."""
+    return await get_client().call_json(
+        "DELETE", f"/api/tracks/{track_id}/items/{item_id}"
+    )
+
+
+@mcp.tool
+async def list_track_links(track_id: int) -> Any:
+    """List the links (edges) between items in a track."""
+    return await get_client().call_json("GET", f"/api/tracks/{track_id}/links")
+
+
+@mcp.tool
+async def add_track_link(
+    track_id: int,
+    source_item_id: int,
+    target_item_id: int,
+    link_type: str | None = None,
+    materialize: bool | None = None,
+) -> Any:
+    """Create a link (edge) between two track items.
+
+    link_type is "flow_to" (default) or "relates_to". If materialize is true and
+    link_type is "flow_to", a real task dependency is also created between the
+    underlying tasks (skipped, with a reason, if it would form a cycle).
+    """
+    body = {"source_item_id": source_item_id, "target_item_id": target_item_id}
+    body.update({k: v for k, v in {
+        "link_type": link_type, "materialize": materialize,
+    }.items() if v is not None})
+    return await get_client().call_json(
+        "POST", f"/api/tracks/{track_id}/links", json=body
+    )
+
+
+@mcp.tool
+async def delete_track_link(track_id: int, link_id: int) -> Any:
+    """Delete a link (edge); also removes any dependency it materialized."""
+    return await get_client().call_json(
+        "DELETE", f"/api/tracks/{track_id}/links/{link_id}"
+    )

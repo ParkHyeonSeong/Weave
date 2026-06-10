@@ -4,7 +4,7 @@ Exposes Weave project-management tools (tasks, sprints, epics, issues, docs, and
 Claude sessions over MCP (stdio). Talks to Weave's REST API only — the Weave backend is not
 modified. Each tool acts as the token's owner; `?` marks optional arguments.
 
-## Tools (74)
+## Tools (86)
 
 > The authoritative, always-current description of each tool is its docstring in
 > `weave_mcp/tools/*.py` (that's what the model reads). This list is the human-readable overview.
@@ -78,7 +78,15 @@ modified. Each tool acts as the token's owner; `?` marks optional arguments.
 **Tracks** (cross-branch workflows)
 - `list_tracks()` — your tracks, each with `progress_percent`, item/branch/member counts and a linked-branch preview
 - `get_track(track_id)` · `get_track_home_stats()` — active-track / connected-branch / in-progress / due-this-week counts
-- `list_track_branches(track_id)` · `list_track_items(track_id)`
+- `create_track(track_name, description?, color?, icon?, visibility?, default_view?, participating_branch_ids?)` — `default_view`: flow | timeline | tree
+- `update_track(track_id, track_name?, description?, color?, icon?, visibility?, default_view?)` · `delete_track(track_id)` (archive)
+- `list_track_branches(track_id)` · `add_track_branch(track_id, branch_id)` · `remove_track_branch(track_id, branch_id)`
+- `search_track_sources(track_id, q?, branch_id?, sprint_id?, epic_id?, status?, priority?, exclude_done?, limit?)` — find candidate `source_task_id`s
+- `list_track_items(track_id)` · `add_track_item(track_id, source_task_id, position_x?, position_y?)`
+- `add_track_items_bulk(track_id, source_task_ids, scope_mode?, scope_id?)` — `scope_mode`: sprint | epic | filter (`scope_id` required for sprint/epic)
+- `delete_track_item(track_id, item_id)`
+- `list_track_links(track_id)` · `add_track_link(track_id, source_item_id, target_item_id, link_type?, materialize?)` — `link_type`: flow_to | relates_to
+- `delete_track_link(track_id, link_id)`
 
 **Notifications & stars**
 - `list_notifications()` · `mark_notification_read(notification_id)` · `list_starred(item_type?)`
