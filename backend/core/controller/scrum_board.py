@@ -155,6 +155,19 @@ async def search_invite_candidates(board_id: int, query: str, request: Request,
     return {'status': True, 'users': users}
 
 
+async def leave(board_id: int, request: Request, db: AsyncSession):
+    """스크럼 보드 나가기 (본인)"""
+    user_id = request.state.payload.get('user_id')
+    role = await member_model.get_role(board_id, user_id, db)
+    if not role:
+        return {'status': False, 'message': 'NOT_BOARD_MEMBER'}
+    # 마지막 admin이면 나갈 수 없음 (관리자 없는 보드 방지)
+    if role == 'admin' and await member_model.count_admins(board_id, db) <= 1:
+        return {'status': False, 'message': 'CANNOT_LEAVE_LAST_ADMIN'}
+    await member_model.remove(board_id, user_id, db)
+    return {'status': True}
+
+
 async def remove_member(board_id: int, target_user_id: int, request: Request,
                         db: AsyncSession):
     if not await board_model.find_by_id(board_id, db):

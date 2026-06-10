@@ -1,7 +1,9 @@
 from types import SimpleNamespace
 from sqlalchemy import text
 from core.controller import track as track_ctrl
+from core.controller import scrum_board as scrum_ctrl
 from core.model import track_member
+from core.model import scrum_member
 
 
 def _req(user_id):
@@ -69,3 +71,56 @@ async def test_track_leave_owner_with_other_owner_succeeds(db_session):
     assert res["status"] is True
     assert await track_member.get_role(tid, o1, db_session) is None
     assert await track_member.count_owners(tid, db_session) == 1
+
+
+async def _make_board(db, admin):
+    row = await db.execute(text(
+        "INSERT INTO scrum_board (name, visibility, created_by) "
+        "VALUES ('B', 'private', :u) RETURNING board_id"
+    ), {"u": admin})
+    return row.scalar_one()
+
+
+async def test_scrum_leave_removes_member(db_session):
+    admin = await _make_user(db_session, "so@s.local", "so")
+    mate = await _make_user(db_session, "sm@s.local", "sm")
+    bid = await _make_board(db_session, admin)
+    await scrum_member.add(bid, admin, "admin", db_session)
+    await scrum_member.add(bid, mate, "member", db_session)
+
+    res = await scrum_ctrl.leave(bid, _req(mate), db_session)
+    assert res["status"] is True
+    assert await scrum_member.get_role(bid, mate, db_session) is None
+
+
+async def test_scrum_leave_non_member_rejected(db_session):
+    admin = await _make_user(db_session, "so2@s.local", "so2")
+    stranger = await _make_user(db_session, "ss@s.local", "ss")
+    bid = await _make_board(db_session, admin)
+    await scrum_member.add(bid, admin, "admin", db_session)
+
+    res = await scrum_ctrl.leave(bid, _req(stranger), db_session)
+    assert res["status"] is False
+    assert res["message"] == "NOT_BOARD_MEMBER"
+
+
+async def test_scrum_leave_last_admin_blocked(db_session):
+    admin = await _make_user(db_session, "so3@s.local", "so3")
+    bid = await _make_board(db_session, admin)
+    await scrum_member.add(bid, admin, "admin", db_session)
+
+    res = await scrum_ctrl.leave(bid, _req(admin), db_session)
+    assert res["status"] is False
+    assert res["message"] == "CANNOT_LEAVE_LAST_ADMIN"
+
+
+async def test_scrum_leave_admin_with_other_admin_succeeds(db_session):
+    a1 = await _make_user(db_session, "so4a@s.local", "so4a")
+    a2 = await _make_user(db_session, "so4b@s.local", "so4b")
+    bid = await _make_board(db_session, a1)
+    await scrum_member.add(bid, a1, "admin", db_session)
+    await scrum_member.add(bid, a2, "admin", db_session)
+
+    res = await scrum_ctrl.leave(bid, _req(a1), db_session)
+    assert res["status"] is True
+    assert await scrum_member.get_role(bid, a1, db_session) is None

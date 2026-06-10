@@ -52,6 +52,12 @@ async def restore_board(board_id: int, request: Request,
     return await scrum_controller.restore(board_id, request, session)
 
 
+@router.post("/{board_id:int}/leave", summary="보드 나가기", dependencies=[Depends(require_login)])
+async def leave_board(board_id: int, request: Request,
+                      session: AsyncSession = Depends(db.session)):
+    return await scrum_controller.leave(board_id, request, session)
+
+
 @router.delete("/{board_id:int}/permanent", summary="보드 영구삭제", dependencies=[Depends(require_login)])
 async def permanent_board(board_id: int, request: Request,
                           session: AsyncSession = Depends(db.session)):
