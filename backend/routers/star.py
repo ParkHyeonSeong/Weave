@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import db_engine as db
 from library.validator import require_login
 from core.model import star as star_model
+from core.controller import star as star_controller
 
 router = APIRouter(dependencies=[Depends(require_login)])
 
@@ -17,11 +18,7 @@ class StarToggle(BaseModel):
 @router.post("", summary="Star 토글")
 async def toggle_star(body: StarToggle, request: Request,
                       session: AsyncSession = Depends(db.session)):
-    if body.item_type not in ('task', 'doc'):
-        return {'status': False, 'message': 'INVALID_ITEM_TYPE'}
-    user_id = request.state.payload.get('user_id')
-    result = await star_model.toggle(user_id, body.item_type, body.item_id, session)
-    return {'status': True, 'starred': result['starred']}
+    return await star_controller.toggle(body, request, session)
 
 
 @router.get("", summary="Star 목록")
@@ -36,6 +33,4 @@ async def get_starred(request: Request, limit: int = 20,
 @router.get("/check", summary="Star 여부 확인")
 async def check_starred(item_type: str, item_id: int, request: Request,
                         session: AsyncSession = Depends(db.session)):
-    user_id = request.state.payload.get('user_id')
-    starred = await star_model.is_starred(user_id, item_type, item_id, session)
-    return {'status': True, 'starred': starred}
+    return await star_controller.is_starred(item_type, item_id, request, session)

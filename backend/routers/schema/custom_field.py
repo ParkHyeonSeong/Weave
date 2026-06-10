@@ -34,5 +34,10 @@ class CustomFieldUpdate(BaseModel):
         return v
 
 
+class CustomFieldReorderItem(BaseModel):
+    id: int
+    sort_order: int
+
+
 class CustomFieldReorder(BaseModel):
-    items: List[dict]  # [{'id': ..., 'sort_order': ...}]
+    items: List[CustomFieldReorderItem]

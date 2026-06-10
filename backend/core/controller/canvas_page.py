@@ -9,12 +9,30 @@ from library import activity_service
 from library.mention_parser import extract_mention_user_ids
 
 
+async def _verify_parent_in_canvas(parent_page_id, canvas_id: int, db: AsyncSession):
+    """parent_page_id가 같은 canvas 소속인지 검증 (cross-canvas 트리 손상 차단).
+
+    문제 없으면 None, 위반이면 에러 dict를 반환한다.
+    """
+    if parent_page_id is None:
+        return None
+    parent_page = await page_model.find_by_id(parent_page_id, db)
+    if not parent_page or parent_page['canvas_id'] != canvas_id:
+        return {'status': False, 'message': 'PARENT_PAGE_NOT_FOUND'}
+    return None
+
+
 async def create(canvas_id: int, body, request: Request, db: AsyncSession):
     """Canvas 페이지/폴더 생성"""
     user_id = request.state.payload.get('user_id')
 
     if not await member_model.is_member(canvas_id, user_id, db):
         return {'status': False, 'message': 'NOT_CANVAS_MEMBER'}
+
+    # parent_page_id가 같은 canvas 소속인지 검증 (cross-canvas 트리 손상 차단)
+    err = await _verify_parent_in_canvas(body.parent_page_id, canvas_id, db)
+    if err:
+        return err
 
     position = await page_model.get_next_position(canvas_id, body.parent_page_id, db)
 
@@ -112,6 +130,11 @@ async def move(canvas_id: int, page_id: int, body, request: Request, db: AsyncSe
     if page['type'] == 'overview':
         return {'status': False, 'message': 'CANNOT_MOVE_OVERVIEW'}
 
+    # parent_page_id가 같은 canvas 소속인지 검증 (cross-canvas 이동 차단)
+    err = await _verify_parent_in_canvas(body.parent_page_id, canvas_id, db)
+    if err:
+        return err
+
     await page_model.move_page(
         page_id, canvas_id, body.parent_page_id, body.position, user_id, db
     )
@@ -134,6 +157,11 @@ async def copy(canvas_id: int, page_id: int, body, request: Request, db: AsyncSe
 
     if page['type'] in ('overview', 'folder'):
         return {'status': False, 'message': 'CANNOT_COPY_THIS_TYPE'}
+
+    # parent_page_id가 같은 canvas 소속인지 검증 (cross-canvas 복제 차단)
+    err = await _verify_parent_in_canvas(body.parent_page_id, canvas_id, db)
+    if err:
+        return err
 
     new_page_id = await page_model.copy_page(
         page_id, body.parent_page_id, user_id, db

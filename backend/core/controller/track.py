@@ -423,9 +423,16 @@ async def add_items_bulk(track_id: int, body, request: Request, db: AsyncSession
     if body.scope_mode in ('sprint', 'epic') and body.scope_id:
         owner_branch_id = await track_scope_model.resolve_scope_branch(
             body.scope_mode, body.scope_id, db)
-        if owner_branch_id:
-            await track_scope_model.add(
-                track_id, owner_branch_id, body.scope_mode, body.scope_id, db)
+        if not owner_branch_id:
+            return {'status': False, 'message': 'SCOPE_NOT_FOUND'}
+        # IDOR 방어: scope의 owner branch가 track의 participating branch에 속해야 함
+        if not await track_branch_model.is_participating(track_id, owner_branch_id, db):
+            return {'status': False, 'message': 'SCOPE_BRANCH_NOT_PARTICIPATING'}
+        # 사용자가 scope branch의 멤버여야 함 (task 멤버 검증과 동일 규칙)
+        if not await branch_member_model.is_member(owner_branch_id, user_id, db):
+            return {'status': False, 'message': 'NOT_SCOPE_BRANCH_MEMBER'}
+        await track_scope_model.add(
+            track_id, owner_branch_id, body.scope_mode, body.scope_id, db)
     else:
         # filter / 그 외 — 각 task의 sprint를 자동 scope로 (backlog는 skip)
         await track_scope_model.add_sprints_for_tasks(track_id, accepted_task_ids, db)

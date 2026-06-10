@@ -104,3 +104,19 @@ async def count_tasks_with_status(branch_id: int, key: str, db: AsyncSession) ->
         WHERE branch_id = :branch_id AND status = :key
     """), {'branch_id': branch_id, 'key': key})
     return result.scalar_one()
+
+
+async def count_ids_in_branch(branch_id: int, ids: list, db: AsyncSession) -> int:
+    """ids 중 해당 branch에 속하는 (중복 제거된) workflow_status 수를 단일 쿼리로 반환.
+
+    cross-branch IDOR 방어용 set-membership 체크. 호출부는 이 값을
+    set(ids) 크기와 비교해 전부 branch 소속인지 all-or-nothing 판정.
+    """
+    if not ids:
+        return 0
+    result = await db.execute(text("""
+        SELECT COUNT(DISTINCT workflow_status_id)
+        FROM workflow_status
+        WHERE branch_id = :branch_id AND workflow_status_id = ANY(:ids)
+    """), {'branch_id': branch_id, 'ids': list(ids)})
+    return result.scalar_one()

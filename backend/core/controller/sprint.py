@@ -3,6 +3,7 @@ from datetime import date
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.guard.branch_scope import find_resource_in_branch
 from core.model import sprint as sprint_model
 from core.model import branch_member as member_model
 from core.model import task as task_model
@@ -109,6 +110,9 @@ async def complete(sprint_id: int, body, branch_id: int, request: Request, db: A
     to_sprint_id = None
     if body.move_to and body.move_to != 'backlog':
         to_sprint_id = int(body.move_to)
+        # cross-branch IDOR 방어: 이월 대상 sprint가 현재 branch 소속인지 검증
+        if not await find_resource_in_branch(to_sprint_id, branch_id, 'sprint', db):
+            return {'status': False, 'message': 'TARGET_SPRINT_NOT_FOUND'}
 
     moved = await task_model.move_incomplete(sprint_id, to_sprint_id, db)
 

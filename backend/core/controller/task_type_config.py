@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.model import task_type_config as type_model
 from core.model import branch_member as member_model
+from core.guard.branch_scope import find_resource_in_branch
 
 
 async def get_list(branch_id: int, request: Request, db: AsyncSession):
@@ -49,6 +50,10 @@ async def update(branch_id: int, type_id: int, body, request: Request, db: Async
     role = await member_model.get_role(branch_id, user_id, db)
     if role != 'admin':
         return {'status': False, 'message': 'ADMIN_ONLY'}
+
+    # Branch 경계 검증: type_id가 해당 branch에 속하는지 확인 (cross-branch IDOR 차단)
+    if not await find_resource_in_branch(type_id, branch_id, 'task_type', db):
+        return {'status': False, 'message': 'TYPE_NOT_FOUND'}
 
     fields = body.model_dump(exclude_unset=True)
     if not fields:

@@ -6,9 +6,35 @@ from core.model import branch_member as member_model
 from core.model import task_type_config as type_model
 from core.model import workflow_status as ws_model
 from core.model import recent_view
+from core.guard.branch_scope import find_resource_in_branch
 from library import notification_service
 from library import activity_service
 from library.mention_parser import extract_mention_user_ids
+
+
+def _collect_assignee_ids(assignees) -> set[int]:
+    """AssigneeInput에서 main + sub user_id를 중복 없이 모은다.
+
+    결과는 set-equality 비교에만 쓰이므로 순서는 무의미하다.
+    """
+    ids = set()
+    if assignees.main:
+        ids.add(assignees.main)
+    ids.update(assignees.sub or [])
+    return ids
+
+
+async def _assignees_valid_for_branch(assignees, branch_id: int, db: AsyncSession) -> bool:
+    """지정된 모든 담당자가 해당 branch의 멤버인지 검증 (all-or-nothing).
+
+    담당자 없음(빈/None)은 정상으로 간주한다. 비멤버/미존재 user가
+    하나라도 섞이면 False.
+    """
+    assignee_ids = _collect_assignee_ids(assignees)
+    if not assignee_ids:
+        return True
+    valid_ids = await member_model.filter_users_in_branch(branch_id, list(assignee_ids), db)
+    return assignee_ids == set(valid_ids)
 
 
 async def create(body, branch_id: int, request: Request, db: AsyncSession):
@@ -26,6 +52,10 @@ async def create(body, branch_id: int, request: Request, db: AsyncSession):
     valid_status = await ws_model.find_by_key(branch_id, body.status, db)
     if not valid_status:
         return {'status': False, 'message': 'INVALID_STATUS'}
+
+    # 담당자 소속 검증 (모든 담당자가 branch 멤버여야 함)
+    if body.assignees and not await _assignees_valid_for_branch(body.assignees, branch_id, db):
+        return {'status': False, 'message': 'INVALID_ASSIGNEE'}
 
     # display_number 발급
     display_number = await task_model.next_display_number(branch_id, db)
@@ -147,6 +177,10 @@ async def update(task_id: int, body, branch_id: int, request: Request, db: Async
     if not task or task['branch_id'] != branch_id:
         return {'status': False, 'message': 'TASK_NOT_FOUND'}
 
+    # 담당자 소속 검증 (모델 변경 전, all-or-nothing)
+    if body.assignees is not None and not await _assignees_valid_for_branch(body.assignees, branch_id, db):
+        return {'status': False, 'message': 'INVALID_ASSIGNEE'}
+
     fields = body.model_dump(exclude_unset=True, exclude={'label_ids', 'assignees'})
 
     # status 동적 검증
@@ -229,6 +263,26 @@ async def reorder(body, branch_id: int, request: Request, db: AsyncSession):
     user_id = request.state.payload.get('user_id')
     if not await member_model.is_member(branch_id, user_id, db):
         return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+
+    # cross-branch IDOR 차단: 대상 sprint가 이 branch 소속인지 검증.
+    # sprint_id=None은 백로그 이동(정상 케이스)이므로 검증 생략.
+    if body.sprint_id is not None:
+        if not await find_resource_in_branch(body.sprint_id, branch_id, 'sprint', db):
+            return {'status': False, 'message': 'SPRINT_NOT_FOUND'}
+
+    # 참조 anchor(after_task_id)도 같은 branch task인지 검증 (있을 경우만).
+    if body.after_task_id is not None:
+        if not await find_resource_in_branch(body.after_task_id, branch_id, 'task', db):
+            return {'status': False, 'message': 'AFTER_TASK_NOT_FOUND'}
+
+    # cross-branch IDOR 차단: 재정렬 대상 task_ids가 모두 이 branch 소속인지
+    # 단일 쿼리 set-membership으로 검증 (all-or-nothing). 하나라도 외부/존재하지
+    # 않는 id면 sort_order를 일절 변경하지 않고 거부한다.
+    unique_ids = set(body.task_ids)
+    if unique_ids:
+        in_branch = await task_model.count_ids_in_branch(branch_id, unique_ids, db)
+        if in_branch != len(unique_ids):
+            return {'status': False, 'message': 'TASK_NOT_FOUND'}
 
     await task_model.reorder(branch_id, body.task_ids, body.sprint_id, body.after_task_id, db)
     return {'status': True}

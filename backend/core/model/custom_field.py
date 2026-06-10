@@ -67,9 +67,25 @@ async def delete(custom_field_id: int, db: AsyncSession):
 
 
 async def reorder(items: list, db: AsyncSession):
-    """순서 변경 - items: [{'id': ..., 'sort_order': ...}]"""
+    """순서 변경 - items: CustomFieldReorderItem(id, sort_order) 리스트"""
     for item in items:
         await db.execute(text("""
             UPDATE custom_field SET sort_order = :sort_order
             WHERE custom_field_id = :id
-        """), item)
+        """), {'id': item.id, 'sort_order': item.sort_order})
+
+
+async def count_ids_in_type(type_id: int, ids: list, db: AsyncSession) -> int:
+    """ids 중 해당 type에 속하는 (중복 제거된) custom_field 수를 단일 쿼리로 반환.
+
+    cross-branch IDOR 방어용 set-membership 체크. 호출부는 이 값을
+    set(ids) 크기와 비교해 전부 type 소속인지 all-or-nothing 판정.
+    """
+    if not ids:
+        return 0
+    result = await db.execute(text("""
+        SELECT COUNT(DISTINCT custom_field_id)
+        FROM custom_field
+        WHERE type_id = :type_id AND custom_field_id = ANY(:ids)
+    """), {'type_id': type_id, 'ids': list(ids)})
+    return result.scalar_one()

@@ -453,6 +453,22 @@ async def delete(task_id: int, db: AsyncSession):
     """), {'task_id': task_id})
 
 
+async def count_ids_in_branch(branch_id: int, task_ids: list, db: AsyncSession) -> int:
+    """task_ids 중 해당 branch에 속하는 (중복 제거된) task 수를 단일 쿼리로 반환.
+
+    cross-branch IDOR 방어용 set-membership 체크. 호출부는 이 값을
+    set(task_ids) 크기와 비교해 전부 branch 소속인지 all-or-nothing 판정.
+    """
+    if not task_ids:
+        return 0
+    result = await db.execute(text("""
+        SELECT COUNT(DISTINCT task_id)
+        FROM task
+        WHERE branch_id = :branch_id AND task_id = ANY(:task_ids)
+    """), {'branch_id': branch_id, 'task_ids': list(task_ids)})
+    return result.scalar_one()
+
+
 async def reorder(branch_id: int, task_ids: list, sprint_id, after_task_id, db: AsyncSession):
     """태스크 이동 + 순서 변경 (다중 지원)
     - task_ids: 이동할 태스크 ID 목록

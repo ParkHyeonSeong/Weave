@@ -3,13 +3,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.model import custom_field as cf_model
 from core.model import branch_member as member_model
-from core.model import task_type_config as type_model
+from core.guard.branch_scope import find_resource_in_branch
 
 
 async def _verify_type_belongs_to_branch(type_id: int, branch_id: int, db: AsyncSession):
     """task type이 해당 branch에 속하는지 확인"""
-    types = await type_model.find_by_branch(branch_id, db)
-    return any(t['type_id'] == type_id for t in types)
+    return await find_resource_in_branch(type_id, branch_id, 'task_type', db) is not None
 
 
 async def list_fields(branch_id: int, type_id: int, request: Request, db: AsyncSession):
@@ -58,6 +57,9 @@ async def update_field(branch_id: int, type_id: int, field_id: int, body, reques
     if role != 'admin':
         return {'status': False, 'message': 'ADMIN_ONLY'}
 
+    if not await _verify_type_belongs_to_branch(type_id, branch_id, db):
+        return {'status': False, 'message': 'TYPE_NOT_FOUND'}
+
     field = await cf_model.find_by_id(field_id, db)
     if not field or field['type_id'] != type_id:
         return {'status': False, 'message': 'FIELD_NOT_FOUND'}
@@ -77,6 +79,9 @@ async def delete_field(branch_id: int, type_id: int, field_id: int, request: Req
     if role != 'admin':
         return {'status': False, 'message': 'ADMIN_ONLY'}
 
+    if not await _verify_type_belongs_to_branch(type_id, branch_id, db):
+        return {'status': False, 'message': 'TYPE_NOT_FOUND'}
+
     field = await cf_model.find_by_id(field_id, db)
     if not field or field['type_id'] != type_id:
         return {'status': False, 'message': 'FIELD_NOT_FOUND'}
@@ -86,11 +91,20 @@ async def delete_field(branch_id: int, type_id: int, field_id: int, request: Req
 
 
 async def reorder_fields(branch_id: int, type_id: int, body, request: Request, db: AsyncSession):
-    """Custom field 순서 변경"""
+    """Custom field 순서 변경 (admin만)"""
     user_id = request.state.payload.get('user_id')
     role = await member_model.get_role(branch_id, user_id, db)
     if role != 'admin':
         return {'status': False, 'message': 'ADMIN_ONLY'}
+
+    if not await _verify_type_belongs_to_branch(type_id, branch_id, db):
+        return {'status': False, 'message': 'TYPE_NOT_FOUND'}
+
+    # IDOR 방어: 모든 items의 id가 type_id에 속하는 field인지 단일 COUNT 쿼리로
+    # 검증 (all-or-nothing). 빈 items는 통과(기존 동작 유지).
+    uniq = {item.id for item in body.items}
+    if uniq and await cf_model.count_ids_in_type(type_id, list(uniq), db) != len(uniq):
+        return {'status': False, 'message': 'FIELD_NOT_FOUND'}
 
     await cf_model.reorder(body.items, db)
     return {'status': True}

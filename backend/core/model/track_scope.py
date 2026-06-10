@@ -22,7 +22,7 @@ async def add_sprints_for_tasks(track_id: int, task_ids: list, db: AsyncSession)
         return
     await db.execute(text("""
         INSERT INTO track_scope (track_id, branch_id, scope_type, scope_id)
-        SELECT DISTINCT :track_id, t.branch_id, 'sprint', t.sprint_id
+        SELECT DISTINCT CAST(:track_id AS bigint), t.branch_id, 'sprint', t.sprint_id
         FROM task t
         WHERE t.task_id = ANY(:task_ids) AND t.sprint_id IS NOT NULL
         ON CONFLICT (track_id, branch_id, scope_type, scope_id) DO NOTHING

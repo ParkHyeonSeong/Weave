@@ -4,6 +4,7 @@ import uuid
 from fastapi import Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.model import branch_member as branch_member_model
 from core.model import canvas as canvas_model
 from core.model import canvas_member as member_model
 from core.model import canvas_page as page_model
@@ -22,6 +23,12 @@ ICON_MAX_SIZE = 2 * 1024 * 1024  # 2MB
 async def create(body, request: Request, db: AsyncSession):
     """Canvas 생성"""
     user_id = request.state.payload.get('user_id')
+
+    # branch에 붙이는 canvas면 그 branch 멤버인지 검증 (IDOR 방어).
+    # branch_id는 nullable(독립 canvas 허용)이므로 None이면 검증 건너뜀.
+    if body.branch_id is not None:
+        if not await branch_member_model.is_member(body.branch_id, user_id, db):
+            return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
 
     # key 중복 체크
     if await canvas_model.find_by_key(body.key, db):

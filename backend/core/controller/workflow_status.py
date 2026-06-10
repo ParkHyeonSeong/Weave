@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.model import workflow_status as ws_model
 from core.model import branch_member as member_model
+from core.guard.branch_scope import find_resource_in_branch
 
 
 async def list_statuses(branch_id: int, request: Request, db: AsyncSession):
@@ -51,6 +52,10 @@ async def update_status(branch_id: int, status_id: int, body, request: Request, 
     if role != 'admin':
         return {'status': False, 'message': 'ADMIN_ONLY'}
 
+    # IDOR 방어: status_id가 실제로 branch_id에 속하는지 검증
+    if await find_resource_in_branch(status_id, branch_id, 'workflow_status', db) is None:
+        return {'status': False, 'message': 'STATUS_NOT_FOUND'}
+
     fields = body.model_dump(exclude_unset=True)
     if not fields:
         return {'status': True}
@@ -94,6 +99,15 @@ async def reorder_statuses(branch_id: int, body, request: Request, db: AsyncSess
     role = await member_model.get_role(branch_id, user_id, db)
     if role != 'admin':
         return {'status': False, 'message': 'ADMIN_ONLY'}
+
+    # IDOR 방어: 모든 items의 id가 branch_id에 속하는지 단일 COUNT 쿼리로 검증
+    # (all-or-nothing). 누락/None id도 거부. 빈 items는 통과(기존 동작 유지).
+    req_ids = [item.get('id') for item in body.items]
+    if any(i is None for i in req_ids):
+        return {'status': False, 'message': 'STATUS_NOT_FOUND'}
+    uniq = set(req_ids)
+    if uniq and await ws_model.count_ids_in_branch(branch_id, list(uniq), db) != len(uniq):
+        return {'status': False, 'message': 'STATUS_NOT_FOUND'}
 
     await ws_model.reorder(body.items, db)
     return {'status': True}
