@@ -4,9 +4,20 @@ from .._app import mcp, get_client
 
 
 @mcp.tool
-async def list_notifications() -> Any:
-    """List all notifications for the current user."""
-    return await get_client().call_json("GET", "/api/notifications")
+async def list_notifications(limit: int | None = None, offset: int | None = None) -> Any:
+    """List the current user's notifications, newest first.
+
+    Results are paginated: limit is 1-100 (default 30), offset starts at 0. Page with
+    offset to get older notifications.
+    """
+    params = {k: v for k, v in {"limit": limit, "offset": offset}.items() if v is not None}
+    return await get_client().call_json("GET", "/api/notifications", params=params)
+
+
+@mcp.tool
+async def get_unread_notification_count() -> Any:
+    """Get the count of the current user's unread notifications."""
+    return await get_client().call_json("GET", "/api/notifications/unread-count")
 
 
 @mcp.tool
@@ -18,12 +29,18 @@ async def mark_notification_read(notification_id: int) -> Any:
 
 
 @mcp.tool
-async def list_starred(item_type: str | None = None) -> Any:
-    """List all starred items for the current user.
+async def mark_all_notifications_read() -> Any:
+    """Mark all of the current user's unread notifications as read."""
+    return await get_client().call_json("PATCH", "/api/notifications/read-all")
 
-    item_type filters by kind, e.g. "task" or "doc".
+
+@mcp.tool
+async def list_starred(item_type: str | None = None, limit: int | None = None) -> Any:
+    """List the current user's starred items (capped; default 20, max 50).
+
+    item_type filters by kind, e.g. "task" or "doc". limit adjusts the cap.
     """
-    params = {k: v for k, v in {"type": item_type}.items() if v is not None}
+    params = {k: v for k, v in {"type": item_type, "limit": limit}.items() if v is not None}
     return await get_client().call_json("GET", "/api/stars", params=params)
 
 

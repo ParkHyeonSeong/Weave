@@ -90,14 +90,24 @@ async def list_my_tasks(
     status: str | None = None,
     priority: str | None = None,
     branch_id: int | None = None,
+    status_category: str | None = None,
+    sort_by: str | None = None,
 ) -> Any:
     """List tasks assigned to the account across branches.
 
-    Optional filters: status, priority (low/medium/high/urgent), branch_id.
+    Optional filters: status, priority (low/medium/high/urgent), branch_id,
+    status_category (todo/in_progress/done). sort_by is "updated" (default), "created",
+    "priority", or "due_date".
     """
     params = {
         k: v
-        for k, v in {"status": status, "priority": priority, "branch_id": branch_id}.items()
+        for k, v in {
+            "status": status,
+            "priority": priority,
+            "branch_id": branch_id,
+            "status_category": status_category,
+            "sort_by": sort_by,
+        }.items()
         if v is not None
     }
     return await get_client().call_json("GET", "/api/my-tasks", params=params)

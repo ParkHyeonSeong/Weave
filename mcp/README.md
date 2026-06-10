@@ -4,7 +4,7 @@ Exposes Weave project-management tools (tasks, sprints, epics, issues, docs, and
 Claude sessions over MCP (stdio). Talks to Weave's REST API only — the Weave backend is not
 modified. Each tool acts as the token's owner; `?` marks optional arguments.
 
-## Tools (104)
+## Tools (119)
 
 > The authoritative, always-current description of each tool is its docstring in
 > `weave_mcp/tools/*.py` (that's what the model reads). This list is the human-readable overview.
@@ -16,7 +16,7 @@ modified. Each tool acts as the token's owner; `?` marks optional arguments.
 - `create_branch(branch_name, key, description?, visibility?)` — `key`: 2-10 uppercase, starts with a letter
 - `list_branch_members(branch_id)` · `search_branch_non_members(branch_id, q?)` — resolve names → user ids
 - `get_branch_home_stats()` — open / in-progress / due-this-week / active-sprint counts across your branches
-- `list_my_tasks(status?, priority?, branch_id?)` — your assigned tasks across branches
+- `list_my_tasks(status?, priority?, branch_id?, status_category?, sort_by?)` — your assigned tasks across branches
 
 **Search** (keyword lookup — find ids without listing everything; `query` capped at 100 chars)
 - `search_tasks(query, scope?)` — `scope`: "my" (default) | "all"
@@ -64,9 +64,12 @@ modified. Each tool acts as the token's owner; `?` marks optional arguments.
 - `update_epic(branch_id, epic_id, epic_name?, description?, status?, color?, start_date?, due_date?)`
 - `delete_epic(branch_id, epic_id)` · `list_epic_tasks(branch_id, epic_id)`
 
-**Branch config** (the valid values for task fields)
+**Branch config** (the valid values for task fields; status/type writes are admin-only)
 - `list_labels(branch_id)` · `list_workflow_statuses(branch_id)` · `list_task_types(branch_id)`
-- `create_label(branch_id, label_name, color?)` · `list_custom_fields(branch_id, type_id)` — custom-field keys for `create_task`/`update_task`
+- `create_label(branch_id, label_name, color?)` · `update_label(branch_id, label_id, label_name?, color?)` · `delete_label(branch_id, label_id)`
+- `create_workflow_status(branch_id, key, label, category, color?)` · `update_workflow_status(branch_id, status_id, label?, color?, category?, is_default?)` · `delete_workflow_status(branch_id, status_id)` · `reorder_workflow_statuses(branch_id, items)`
+- `create_task_type(branch_id, type_key, type_name, icon?, color?)` · `update_task_type(branch_id, type_id, type_name?, icon?, color?)` · `delete_task_type(branch_id, type_id)`
+- `list_custom_fields(branch_id, type_id)` · `create_custom_field(branch_id, type_id, field_name, field_type, field_options?, is_required?)` · `update_custom_field(branch_id, type_id, field_id, field_name?, field_type?, field_options?, is_required?)` · `delete_custom_field(branch_id, type_id, field_id)` · `reorder_custom_fields(branch_id, type_id, items)`
 
 **Canvas (docs)**
 - `list_canvases()` · `get_canvas(canvas_id)` · `get_canvas_home_stats()` — total-docs / edited-this-week / starred counts
@@ -94,8 +97,8 @@ modified. Each tool acts as the token's owner; `?` marks optional arguments.
 - `delete_track_link(track_id, link_id)`
 
 **Notifications & stars**
-- `list_notifications()` · `mark_notification_read(notification_id)`
-- `list_starred(item_type?)` · `toggle_star(item_type, item_id)` · `check_starred(item_type, item_id)` — `item_type`: task | doc
+- `list_notifications(limit?, offset?)` · `get_unread_notification_count()` · `mark_notification_read(notification_id)` · `mark_all_notifications_read()`
+- `list_starred(item_type?, limit?)` · `toggle_star(item_type, item_id)` · `check_starred(item_type, item_id)` — `item_type`: task | doc
 
 **Schedule** (branch calendar)
 - `list_schedule_events(branch_id, range_start, range_end)` — `range_start`/`range_end` are required ISO dates

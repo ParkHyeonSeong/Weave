@@ -7,7 +7,30 @@ async def test_list_notifications(fake_client):
     fake_client.call_json.return_value = {"status": True}
     async with Client(_app.mcp) as client:
         await client.call_tool("list_notifications", {})
-    fake_client.call_json.assert_awaited_once_with("GET", "/api/notifications")
+    fake_client.call_json.assert_awaited_once_with("GET", "/api/notifications", params={})
+
+
+async def test_list_notifications_paginated(fake_client):
+    fake_client.call_json.return_value = {"status": True}
+    async with Client(_app.mcp) as client:
+        await client.call_tool("list_notifications", {"limit": 50, "offset": 50})
+    fake_client.call_json.assert_awaited_once_with(
+        "GET", "/api/notifications", params={"limit": 50, "offset": 50}
+    )
+
+
+async def test_get_unread_notification_count(fake_client):
+    fake_client.call_json.return_value = {"status": True, "count": 3}
+    async with Client(_app.mcp) as client:
+        await client.call_tool("get_unread_notification_count", {})
+    fake_client.call_json.assert_awaited_once_with("GET", "/api/notifications/unread-count")
+
+
+async def test_mark_all_notifications_read(fake_client):
+    fake_client.call_json.return_value = {"status": True}
+    async with Client(_app.mcp) as client:
+        await client.call_tool("mark_all_notifications_read", {})
+    fake_client.call_json.assert_awaited_once_with("PATCH", "/api/notifications/read-all")
 
 
 async def test_mark_notification_read(fake_client):

@@ -66,6 +66,18 @@ async def test_list_my_tasks_filters(fake_client):
     )
 
 
+async def test_list_my_tasks_category_sort(fake_client):
+    fake_client.call_json.return_value = []
+    async with Client(_app.mcp) as client:
+        await client.call_tool(
+            "list_my_tasks", {"status_category": "in_progress", "sort_by": "due_date"}
+        )
+    fake_client.call_json.assert_awaited_once_with(
+        "GET", "/api/my-tasks",
+        params={"status_category": "in_progress", "sort_by": "due_date"},
+    )
+
+
 async def test_get_task(fake_client):
     fake_client.call_json.return_value = {"id": 5}
     async with Client(_app.mcp) as client:
