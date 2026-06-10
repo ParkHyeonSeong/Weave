@@ -4,6 +4,17 @@ from .._app import mcp, get_client
 
 
 @mcp.tool
+async def get_current_user() -> Any:
+    """Get the account this token acts as: {status, profile: {user_id, email, username, role}}.
+
+    Call this to resolve "me"/"my" — e.g. before assigning a task to yourself,
+    interpreting your own notifications/starred items, or checking whether you
+    have the admin role. The token always acts as exactly this one user.
+    """
+    return await get_client().call_json("GET", "/api/auth/me")
+
+
+@mcp.tool
 async def list_branches() -> Any:
     """List all branches (projects) the account can access.
 

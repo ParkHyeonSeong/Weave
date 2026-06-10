@@ -4,15 +4,20 @@ Exposes Weave project-management tools (tasks, sprints, epics, issues, docs, and
 Claude sessions over MCP (stdio). Talks to Weave's REST API only — the Weave backend is not
 modified. Each tool acts as the token's owner; `?` marks optional arguments.
 
-## Tools (48)
+## Tools (59)
 
 > The authoritative, always-current description of each tool is its docstring in
 > `weave_mcp/tools/*.py` (that's what the model reads). This list is the human-readable overview.
 
 **Branches & your work**
+- `get_current_user()` — the account this token acts as (user_id, email, username, role); resolves "me"/"my"
 - `list_branches()` — list branches (projects); call first to get a `branch_id`
 - `get_branch_home_stats()` — open / in-progress / due-this-week / active-sprint counts across your branches
 - `list_my_tasks(status?, priority?, branch_id?)` — your assigned tasks across branches
+
+**Search** (keyword lookup — find ids without listing everything; `query` capped at 100 chars)
+- `search_tasks(query, scope?)` — `scope`: "my" (default) | "all"
+- `search_docs(query)` · `search_issues(query)`
 
 **Tasks**
 - `list_branch_tasks(branch_id, sprint_id?)` — all tasks in a branch
@@ -67,6 +72,17 @@ modified. Each tool acts as the token's owner; `?` marks optional arguments.
 
 **Notifications & stars**
 - `list_notifications()` · `mark_notification_read(notification_id)` · `list_starred(item_type?)`
+
+**Schedule** (branch calendar)
+- `list_schedule_events(branch_id, range_start, range_end)` — `range_start`/`range_end` are required ISO dates
+- `create_schedule_event(branch_id, title, start_date, end_date?, description?, color?, participant_ids?)`
+- `update_schedule_event(branch_id, event_id, title?, start_date?, end_date?, description?, color?, participant_ids?)`
+- `delete_schedule_event(branch_id, event_id)`
+
+**Scrum** (weekly daily-scrum + retro boards)
+- `list_scrum_boards()` — call first to get a `board_id`
+- `get_scrum_board(board_id)` — board metadata only; daily-scrum/retro content is real-time (Yjs) and not over REST
+- `get_scrum_home_cards()` — cross-board cards (today's unwritten daily-scrum, due retros)
 
 ## Use it (recommended — no clone needed)
 

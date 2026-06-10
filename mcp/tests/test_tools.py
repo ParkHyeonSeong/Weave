@@ -3,6 +3,13 @@ from fastmcp import Client
 from weave_mcp import _app
 
 
+async def test_get_current_user(fake_client):
+    fake_client.call_json.return_value = {"status": True, "profile": {"user_id": 1}}
+    async with Client(_app.mcp) as client:
+        await client.call_tool("get_current_user", {})
+    fake_client.call_json.assert_awaited_once_with("GET", "/api/auth/me")
+
+
 async def test_list_branches(fake_client):
     fake_client.call_json.return_value = [{"id": 1, "name": "Core"}]
     async with Client(_app.mcp) as client:

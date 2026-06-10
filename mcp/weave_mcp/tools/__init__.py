@@ -8,3 +8,6 @@ from . import canvas  # noqa: F401
 from . import tracks  # noqa: F401
 from . import config  # noqa: F401
 from . import notify  # noqa: F401
+from . import search  # noqa: F401
+from . import schedule  # noqa: F401
+from . import scrum  # noqa: F401
