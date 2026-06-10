@@ -192,3 +192,54 @@ async def delete_task_comment(branch_id: int, task_id: int, comment_id: int) -> 
         "DELETE",
         f"/api/branches/{branch_id}/tasks/{task_id}/comments/{comment_id}",
     )
+
+
+@mcp.tool
+async def list_archived_tasks(branch_id: int) -> Any:
+    """List a branch's archived (done/cancelled) tasks.
+
+    list_branch_tasks excludes terminal tasks, so this is the way to see what was
+    completed (e.g. "what shipped last sprint").
+    """
+    return await get_client().call_json(
+        "GET", f"/api/branches/{branch_id}/tasks/archive"
+    )
+
+
+@mcp.tool
+async def list_task_pages(branch_id: int, task_id: int) -> Any:
+    """List the canvas pages (docs) linked to a task.
+
+    Each entry includes the link's own id (link_id), which unlink_task_page needs.
+    """
+    return await get_client().call_json(
+        "GET", f"/api/branches/{branch_id}/tasks/{task_id}/pages"
+    )
+
+
+@mcp.tool
+async def link_task_page(branch_id: int, task_id: int, page_id: int) -> Any:
+    """Link a canvas page (doc) to a task. page_id comes from Canvas tools or search_docs."""
+    return await get_client().call_json(
+        "POST",
+        f"/api/branches/{branch_id}/tasks/{task_id}/pages",
+        json={"page_id": page_id},
+    )
+
+
+@mcp.tool
+async def search_task_pages(branch_id: int, task_id: int, q: str) -> Any:
+    """Search canvas pages that can be linked to a task (typeahead). q must be non-empty."""
+    return await get_client().call_json(
+        "GET",
+        f"/api/branches/{branch_id}/tasks/{task_id}/pages/search",
+        params={"q": q},
+    )
+
+
+@mcp.tool
+async def unlink_task_page(branch_id: int, task_id: int, link_id: int) -> Any:
+    """Remove a task↔page link. link_id is the link's id from list_task_pages (not the page_id)."""
+    return await get_client().call_json(
+        "DELETE", f"/api/branches/{branch_id}/tasks/{task_id}/pages/{link_id}"
+    )

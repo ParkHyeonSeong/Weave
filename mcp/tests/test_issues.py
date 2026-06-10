@@ -53,3 +53,39 @@ async def test_delete_task_issue(fake_client):
     fake_client.call_json.assert_awaited_once_with(
         "DELETE", "/api/branches/1/tasks/2/issues/3"
     )
+
+
+async def test_add_issue_comment(fake_client):
+    fake_client.call_json.return_value = {"id": 5}
+    async with Client(_app.mcp) as client:
+        await client.call_tool(
+            "add_issue_comment",
+            {"branch_id": 1, "task_id": 2, "issue_id": 3, "content": "<p>hi</p>"},
+        )
+    fake_client.call_json.assert_awaited_once_with(
+        "POST", "/api/branches/1/tasks/2/issues/3/comments", json={"content": "<p>hi</p>"}
+    )
+
+
+async def test_update_issue_comment(fake_client):
+    fake_client.call_json.return_value = {"id": 5}
+    async with Client(_app.mcp) as client:
+        await client.call_tool(
+            "update_issue_comment",
+            {"branch_id": 1, "task_id": 2, "issue_id": 3, "comment_id": 5, "content": "<p>edit</p>"},
+        )
+    fake_client.call_json.assert_awaited_once_with(
+        "PATCH", "/api/branches/1/tasks/2/issues/3/comments/5", json={"content": "<p>edit</p>"}
+    )
+
+
+async def test_delete_issue_comment(fake_client):
+    fake_client.call_json.return_value = {"status": True}
+    async with Client(_app.mcp) as client:
+        await client.call_tool(
+            "delete_issue_comment",
+            {"branch_id": 1, "task_id": 2, "issue_id": 3, "comment_id": 5},
+        )
+    fake_client.call_json.assert_awaited_once_with(
+        "DELETE", "/api/branches/1/tasks/2/issues/3/comments/5"
+    )

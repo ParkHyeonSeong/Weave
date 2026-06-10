@@ -44,3 +44,12 @@ async def test_delete_epic(fake_client):
     fake_client.call_json.assert_awaited_once_with(
         "DELETE", "/api/branches/1/epics/3"
     )
+
+
+async def test_list_epic_tasks(fake_client):
+    fake_client.call_json.return_value = []
+    async with Client(_app.mcp) as client:
+        await client.call_tool("list_epic_tasks", {"branch_id": 1, "epic_id": 3})
+    fake_client.call_json.assert_awaited_once_with(
+        "GET", "/api/branches/1/epics/3/tasks"
+    )

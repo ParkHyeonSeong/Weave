@@ -81,3 +81,15 @@ async def delete_epic(branch_id: int, epic_id: int) -> Any:
     return await get_client().call_json(
         "DELETE", f"/api/branches/{branch_id}/epics/{epic_id}"
     )
+
+
+@mcp.tool
+async def list_epic_tasks(branch_id: int, epic_id: int) -> Any:
+    """List the tasks belonging to an epic.
+
+    list_branch_tasks can only filter by sprint, so this is the way to enumerate an
+    epic's tasks.
+    """
+    return await get_client().call_json(
+        "GET", f"/api/branches/{branch_id}/epics/{epic_id}/tasks"
+    )

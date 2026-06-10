@@ -92,3 +92,11 @@ async def complete_sprint(
         f"/api/branches/{branch_id}/sprints/{sprint_id}/complete",
         json={"move_to": move_to},
     )
+
+
+@mcp.tool
+async def get_sprint_task_counts(branch_id: int, sprint_id: int) -> Any:
+    """Get a sprint's task counts / progress summary without listing every task."""
+    return await get_client().call_json(
+        "GET", f"/api/branches/{branch_id}/sprints/{sprint_id}/task-counts"
+    )

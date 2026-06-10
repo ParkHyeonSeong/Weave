@@ -62,3 +62,42 @@ async def delete_task_issue(branch_id: int, task_id: int, issue_id: int) -> Any:
     return await get_client().call_json(
         "DELETE", f"/api/branches/{branch_id}/tasks/{task_id}/issues/{issue_id}"
     )
+
+
+@mcp.tool
+async def add_issue_comment(
+    branch_id: int, task_id: int, issue_id: int, content: str
+) -> Any:
+    """Add a comment to a task issue. content is non-empty HTML (max 10000 chars).
+
+    To read an issue's comments, use get_task_issue — they are embedded in the detail
+    (there is no separate comment-list endpoint).
+    """
+    return await get_client().call_json(
+        "POST",
+        f"/api/branches/{branch_id}/tasks/{task_id}/issues/{issue_id}/comments",
+        json={"content": content},
+    )
+
+
+@mcp.tool
+async def update_issue_comment(
+    branch_id: int, task_id: int, issue_id: int, comment_id: int, content: str
+) -> Any:
+    """Edit an existing issue comment. content is non-empty HTML (max 10000 chars)."""
+    return await get_client().call_json(
+        "PATCH",
+        f"/api/branches/{branch_id}/tasks/{task_id}/issues/{issue_id}/comments/{comment_id}",
+        json={"content": content},
+    )
+
+
+@mcp.tool
+async def delete_issue_comment(
+    branch_id: int, task_id: int, issue_id: int, comment_id: int
+) -> Any:
+    """Delete a single comment from a task issue."""
+    return await get_client().call_json(
+        "DELETE",
+        f"/api/branches/{branch_id}/tasks/{task_id}/issues/{issue_id}/comments/{comment_id}",
+    )

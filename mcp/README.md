@@ -4,7 +4,7 @@ Exposes Weave project-management tools (tasks, sprints, epics, issues, docs, and
 Claude sessions over MCP (stdio). Talks to Weave's REST API only — the Weave backend is not
 modified. Each tool acts as the token's owner; `?` marks optional arguments.
 
-## Tools (86)
+## Tools (104)
 
 > The authoritative, always-current description of each tool is its docstring in
 > `weave_mcp/tools/*.py` (that's what the model reads). This list is the human-readable overview.
@@ -28,7 +28,9 @@ modified. Each tool acts as the token's owner; `?` marks optional arguments.
 - `create_task(branch_id, title, description?, priority?, status?, task_type?, due_date?, start_date?, sprint_id?, epic_id?, parent_task_id?, assignee_main?, assignee_sub?, label_ids?, custom_fields?)` — create a task
 - `update_task(branch_id, task_id, title?, description?, status?, priority?, task_type?, sprint_id?, epic_id?, start_date?, due_date?, assignee_main?, assignee_sub?, label_ids?, custom_fields?)` — update a task
 - `reorder_tasks(branch_id, task_ids, sprint_id?, after_task_id?)` — reorder / move tasks between sprints (omit `sprint_id` for backlog)
+- `list_archived_tasks(branch_id)` — done/cancelled tasks (excluded from `list_branch_tasks`)
 - `delete_task(branch_id, task_id)` — delete a task
+- `list_task_pages(branch_id, task_id)` · `link_task_page(branch_id, task_id, page_id)` · `search_task_pages(branch_id, task_id, q)` · `unlink_task_page(branch_id, task_id, link_id)` — task ↔ Canvas page links
 
 **Task comments**
 - `list_task_comments(branch_id, task_id)`
@@ -41,6 +43,7 @@ modified. Each tool acts as the token's owner; `?` marks optional arguments.
 - `create_task_issue(branch_id, task_id, title, body?)`
 - `update_task_issue(branch_id, task_id, issue_id, title?, body?, status?)`
 - `delete_task_issue(branch_id, task_id, issue_id)`
+- `add_issue_comment(branch_id, task_id, issue_id, content)` · `update_issue_comment(..., comment_id, content)` · `delete_issue_comment(..., comment_id)` — comments are read via `get_task_issue`
 
 **Dependencies**
 - `list_task_dependencies(branch_id, task_id)`
@@ -53,15 +56,17 @@ modified. Each tool acts as the token's owner; `?` marks optional arguments.
 - `update_sprint(branch_id, sprint_id, sprint_name?, goal?, start_date?, end_date?, status?)`
 - `delete_sprint(branch_id, sprint_id)` · `start_sprint(branch_id, sprint_id)`
 - `complete_sprint(branch_id, sprint_id, move_to?)` — `move_to`: "backlog" or a sprint id
+- `get_sprint_task_counts(branch_id, sprint_id)` — progress summary without listing tasks
 
 **Epics**
 - `list_epics(branch_id)` · `get_epic(branch_id, epic_id)`
 - `create_epic(branch_id, epic_name, description?, status?, color?, start_date?, due_date?)`
 - `update_epic(branch_id, epic_id, epic_name?, description?, status?, color?, start_date?, due_date?)`
-- `delete_epic(branch_id, epic_id)`
+- `delete_epic(branch_id, epic_id)` · `list_epic_tasks(branch_id, epic_id)`
 
-**Branch config** (read — the valid values for task fields)
+**Branch config** (the valid values for task fields)
 - `list_labels(branch_id)` · `list_workflow_statuses(branch_id)` · `list_task_types(branch_id)`
+- `create_label(branch_id, label_name, color?)` · `list_custom_fields(branch_id, type_id)` — custom-field keys for `create_task`/`update_task`
 
 **Canvas (docs)**
 - `list_canvases()` · `get_canvas(canvas_id)` · `get_canvas_home_stats()` — total-docs / edited-this-week / starred counts
@@ -89,13 +94,15 @@ modified. Each tool acts as the token's owner; `?` marks optional arguments.
 - `delete_track_link(track_id, link_id)`
 
 **Notifications & stars**
-- `list_notifications()` · `mark_notification_read(notification_id)` · `list_starred(item_type?)`
+- `list_notifications()` · `mark_notification_read(notification_id)`
+- `list_starred(item_type?)` · `toggle_star(item_type, item_id)` · `check_starred(item_type, item_id)` — `item_type`: task | doc
 
 **Schedule** (branch calendar)
 - `list_schedule_events(branch_id, range_start, range_end)` — `range_start`/`range_end` are required ISO dates
 - `create_schedule_event(branch_id, title, start_date, end_date?, description?, color?, participant_ids?)`
 - `update_schedule_event(branch_id, event_id, title?, start_date?, end_date?, description?, color?, participant_ids?)`
 - `delete_schedule_event(branch_id, event_id)`
+- `list_event_tasks(branch_id, event_id)` · `link_event_task(branch_id, event_id, task_id)` · `search_event_tasks(branch_id, event_id, q)` · `unlink_event_task(branch_id, event_id, link_id)` — event ↔ task links
 
 **Scrum** (weekly daily-scrum + retro boards)
 - `list_scrum_boards()` — call first to get a `board_id`

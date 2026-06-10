@@ -85,3 +85,43 @@ async def delete_schedule_event(branch_id: int, event_id: int) -> Any:
     return await get_client().call_json(
         "DELETE", f"/api/branches/{branch_id}/schedule-events/{event_id}"
     )
+
+
+@mcp.tool
+async def list_event_tasks(branch_id: int, event_id: int) -> Any:
+    """List the tasks linked to a calendar event.
+
+    Each entry includes the link's own id (link_id), which unlink_event_task needs.
+    """
+    return await get_client().call_json(
+        "GET", f"/api/branches/{branch_id}/schedule-events/{event_id}/tasks"
+    )
+
+
+@mcp.tool
+async def link_event_task(branch_id: int, event_id: int, task_id: int) -> Any:
+    """Link a task to a calendar event."""
+    return await get_client().call_json(
+        "POST",
+        f"/api/branches/{branch_id}/schedule-events/{event_id}/tasks",
+        json={"task_id": task_id},
+    )
+
+
+@mcp.tool
+async def search_event_tasks(branch_id: int, event_id: int, q: str) -> Any:
+    """Search tasks that can be linked to a calendar event (typeahead). q must be non-empty."""
+    return await get_client().call_json(
+        "GET",
+        f"/api/branches/{branch_id}/schedule-events/{event_id}/tasks/search",
+        params={"q": q},
+    )
+
+
+@mcp.tool
+async def unlink_event_task(branch_id: int, event_id: int, link_id: int) -> Any:
+    """Remove an event↔task link. link_id is the link's id from list_event_tasks (not the task_id)."""
+    return await get_client().call_json(
+        "DELETE",
+        f"/api/branches/{branch_id}/schedule-events/{event_id}/tasks/{link_id}",
+    )

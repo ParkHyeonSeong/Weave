@@ -91,6 +91,53 @@ async def test_delete_task(fake_client):
     fake_client.call_json.assert_awaited_once_with("DELETE", "/api/branches/3/tasks/5")
 
 
+async def test_list_archived_tasks(fake_client):
+    fake_client.call_json.return_value = []
+    async with Client(_app.mcp) as client:
+        await client.call_tool("list_archived_tasks", {"branch_id": 3})
+    fake_client.call_json.assert_awaited_once_with("GET", "/api/branches/3/tasks/archive")
+
+
+async def test_list_task_pages(fake_client):
+    fake_client.call_json.return_value = []
+    async with Client(_app.mcp) as client:
+        await client.call_tool("list_task_pages", {"branch_id": 3, "task_id": 5})
+    fake_client.call_json.assert_awaited_once_with("GET", "/api/branches/3/tasks/5/pages")
+
+
+async def test_link_task_page(fake_client):
+    fake_client.call_json.return_value = {"status": True}
+    async with Client(_app.mcp) as client:
+        await client.call_tool(
+            "link_task_page", {"branch_id": 3, "task_id": 5, "page_id": 8}
+        )
+    fake_client.call_json.assert_awaited_once_with(
+        "POST", "/api/branches/3/tasks/5/pages", json={"page_id": 8}
+    )
+
+
+async def test_search_task_pages(fake_client):
+    fake_client.call_json.return_value = []
+    async with Client(_app.mcp) as client:
+        await client.call_tool(
+            "search_task_pages", {"branch_id": 3, "task_id": 5, "q": "spec"}
+        )
+    fake_client.call_json.assert_awaited_once_with(
+        "GET", "/api/branches/3/tasks/5/pages/search", params={"q": "spec"}
+    )
+
+
+async def test_unlink_task_page(fake_client):
+    fake_client.call_json.return_value = {"status": True}
+    async with Client(_app.mcp) as client:
+        await client.call_tool(
+            "unlink_task_page", {"branch_id": 3, "task_id": 5, "link_id": 9}
+        )
+    fake_client.call_json.assert_awaited_once_with(
+        "DELETE", "/api/branches/3/tasks/5/pages/9"
+    )
+
+
 async def test_list_task_comments(fake_client):
     fake_client.call_json.return_value = []
     async with Client(_app.mcp) as client:

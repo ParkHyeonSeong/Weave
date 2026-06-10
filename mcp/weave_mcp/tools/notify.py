@@ -25,3 +25,28 @@ async def list_starred(item_type: str | None = None) -> Any:
     """
     params = {k: v for k, v in {"type": item_type}.items() if v is not None}
     return await get_client().call_json("GET", "/api/stars", params=params)
+
+
+@mcp.tool
+async def toggle_star(item_type: str, item_id: int) -> Any:
+    """TOGGLE a star on a task or doc for the current user.
+
+    item_type is "task" (item_id = task_id) or "doc" (item_id = canvas page_id).
+    This TOGGLES: calling it again unstars. The response's "starred" field is the
+    resulting state — call check_starred first if you need deterministic add/remove.
+    """
+    return await get_client().call_json(
+        "POST", "/api/stars", json={"item_type": item_type, "item_id": item_id}
+    )
+
+
+@mcp.tool
+async def check_starred(item_type: str, item_id: int) -> Any:
+    """Check whether the current user has starred a task or doc.
+
+    item_type is "task" or "doc". Returns {"status": True, "starred": bool}; a
+    "message" with status False means an access/validation failure, not "not starred".
+    """
+    return await get_client().call_json(
+        "GET", "/api/stars/check", params={"item_type": item_type, "item_id": item_id}
+    )

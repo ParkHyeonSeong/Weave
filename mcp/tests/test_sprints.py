@@ -55,3 +55,14 @@ async def test_complete_sprint(fake_client):
     fake_client.call_json.assert_awaited_once_with(
         "POST", "/api/branches/1/sprints/2/complete", json={"move_to": "backlog"}
     )
+
+
+async def test_get_sprint_task_counts(fake_client):
+    fake_client.call_json.return_value = {"status": True}
+    async with Client(_app.mcp) as client:
+        await client.call_tool(
+            "get_sprint_task_counts", {"branch_id": 1, "sprint_id": 2}
+        )
+    fake_client.call_json.assert_awaited_once_with(
+        "GET", "/api/branches/1/sprints/2/task-counts"
+    )
