@@ -26,10 +26,11 @@ class CanvasPageCreate(BaseModel):
 
 
 class CanvasPageUpdate(BaseModel):
+    # 부모 변경(parent_page_id)과 위치 변경(position)은 트리 무결성 검증이 필요한
+    # move 전용 작업이므로 update 스키마에서 제외한다 (CP-002). 부모 변경은
+    # /move 엔드포인트(_verify_parent_in_canvas + 사이클 검사)를 통해서만 가능.
     title: Optional[str] = None
     content: Optional[str] = None
-    parent_page_id: Optional[int] = None
-    position: Optional[int] = None
     wide_mode: Optional[bool] = None
 
     @field_validator('content')

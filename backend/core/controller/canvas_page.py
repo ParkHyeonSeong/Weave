@@ -135,6 +135,11 @@ async def move(canvas_id: int, page_id: int, body, request: Request, db: AsyncSe
     if err:
         return err
 
+    # 트리 사이클 차단 (self-parent / descendant-parent) — CP-001
+    if body.parent_page_id is not None and \
+            await page_model.is_circular_parent(page_id, body.parent_page_id, db):
+        return {'status': False, 'message': 'PARENT_CYCLE'}
+
     await page_model.move_page(
         page_id, canvas_id, body.parent_page_id, body.position, user_id, db
     )

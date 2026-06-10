@@ -18,6 +18,9 @@ import { CSS } from '@dnd-kit/utilities';
 import { axios } from '@/library/_axios';
 import EntityIcon from '@/components/common/EntityIcon';
 
+// 트리 렌더 재귀의 조상 page_id 집합 기본값 (parent_page_id 순환 시 무한 재귀 방지용)
+const EMPTY_ANCESTORS = [];
+
 // 포인터가 아이템 위에 있으면 pointerWithin, 아이템 사이(갭)이면 closestCenter 폴백
 const treeCollisionDetection = (args) => {
   const pointer = pointerWithin(args);
@@ -116,8 +119,12 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
   // 자기 자신의 하위 폴더로 이동 방지
   const isDescendantOf = useCallback((parentId, targetId) => {
     let current = pages.find((p) => p.page_id === targetId);
+    // visited: parent_page_id 데이터에 순환(cycle)이 있어도 무한 루프 방지
+    const visited = new Set();
     while (current) {
       if (current.page_id === parentId) return true;
+      if (visited.has(current.page_id)) break;
+      visited.add(current.page_id);
       if (!current.parent_page_id) break;
       current = pages.find((p) => p.page_id === current.parent_page_id);
     }
@@ -491,6 +498,7 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
                         page={page}
                         canvasId={canvas.canvas_id}
                         depth={0}
+                        ancestorIds={EMPTY_ANCESTORS}
                         expandedFolders={expandedFolders}
                         toggleFolder={toggleFolder}
                         getChildren={getChildren}
@@ -799,7 +807,7 @@ function CanvasRow({ canvas, isActive, isExpanded, onToggle, onAddDocument, onAd
 }
 
 function SidebarPageItem({
-  page, canvasId, depth, expandedFolders, toggleFolder, getChildren, router,
+  page, canvasId, depth, ancestorIds, expandedFolders, toggleFolder, getChildren, router,
   onFolderAdd, onQuickCreate, onDeletePage,
   onRenamePage, onCopyPage, onCopyLink, onMovePage,
   renamingPage, onRenameSubmit, onRenameCancel,
@@ -821,7 +829,18 @@ function SidebarPageItem({
 
   const isFolder = page.type === 'folder';
   const isExpanded = expandedFolders[page.page_id];
-  const children = isFolder ? getChildren(page.page_id) : [];
+  // parent_page_id 데이터에 순환이 있어도 무한 재귀를 막기 위해
+  // 현재 렌더 경로의 조상(또는 자기 자신)인 페이지는 자식으로 다시 그리지 않음
+  const children = isFolder
+    ? getChildren(page.page_id).filter(
+        (c) => c.page_id !== page.page_id && !ancestorIds.includes(c.page_id),
+      )
+    : [];
+  // 자식 렌더에 넘길 조상 집합 (자기 자신 포함)
+  const childAncestorIds = useMemo(
+    () => [...ancestorIds, page.page_id],
+    [ancestorIds, page.page_id],
+  );
   const isRenaming = renamingPage?.pageId === page.page_id;
 
   // 이름변경 모드 진입 시 title 세팅
@@ -1019,6 +1038,7 @@ function SidebarPageItem({
               page={child}
               canvasId={canvasId}
               depth={depth + 1}
+              ancestorIds={childAncestorIds}
               expandedFolders={expandedFolders}
               toggleFolder={toggleFolder}
               getChildren={getChildren}

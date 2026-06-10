@@ -70,8 +70,17 @@ async def find_tree(canvas_id: int, db: AsyncSession):
     return [dict(row._mapping) for row in rows]
 
 
+# update()로 변경 가능한 필드 화이트리스트.
+# parent_page_id/position은 트리 무결성(사이클·cross-canvas) 검증이 필요하므로
+# 부모/위치 변경은 move_page() 전용이며 여기서는 의도적으로 제외한다 (CP-002).
+_UPDATABLE_FIELDS = frozenset({'title', 'content', 'wide_mode'})
+
+
 async def update(page_id: int, fields: dict, updated_by: int, db: AsyncSession):
-    """페이지 수정"""
+    """페이지 수정 (화이트리스트 필드만 — parent_page_id/position 제외)"""
+    fields = {k: v for k, v in fields.items() if k in _UPDATABLE_FIELDS}
+    if not fields:
+        return
     fields['updated_by'] = updated_by
     set_clauses = ', '.join(f'{k} = :{k}' for k in fields)
     params = {**fields, 'page_id': page_id}
@@ -79,6 +88,38 @@ async def update(page_id: int, fields: dict, updated_by: int, db: AsyncSession):
         UPDATE canvas_page SET {set_clauses}, updated_at = NOW()
         WHERE page_id = :page_id
     """), params)
+
+
+async def is_circular_parent(page_id: int, new_parent_id, db: AsyncSession) -> bool:
+    """page_id의 부모를 new_parent_id로 바꾸면 사이클이 생기는지 검사 (True = 사이클).
+
+    - new_parent_id is None → 루트로 이동이므로 사이클 불가 (False).
+    - new_parent_id == page_id → self-parent (True).
+    - 그 외: new_parent_id에서 parent_page_id 체인을 위로(조상 방향) 따라가
+      page_id가 나오면 new_parent가 page의 후손이므로 사이클 (True).
+
+    task_dependency.check_circular의 재귀 CTE 패턴을 따르되, 이미 사이클이
+    DB에 들어있어도 헬퍼 자체가 무한 루프하지 않도록 UNION(중복 제거) +
+    깊이 제한(depth)을 둔다.
+    """
+    if new_parent_id is None:
+        return False
+    if new_parent_id == page_id:
+        return True
+    result = await db.execute(text("""
+        WITH RECURSIVE ancestors AS (
+            SELECT page_id, parent_page_id, 1 AS depth
+            FROM canvas_page
+            WHERE page_id = :new_parent_id
+            UNION
+            SELECT cp.page_id, cp.parent_page_id, a.depth + 1
+            FROM canvas_page cp
+            INNER JOIN ancestors a ON cp.page_id = a.parent_page_id
+            WHERE a.depth < 10000
+        )
+        SELECT EXISTS (SELECT 1 FROM ancestors WHERE page_id = :page_id)
+    """), {'new_parent_id': new_parent_id, 'page_id': page_id})
+    return result.scalar_one()
 
 
 async def move_page(page_id: int, canvas_id: int, new_parent_id, new_position: int,

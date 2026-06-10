@@ -21,6 +21,8 @@ export default function PageMoveModal({ isOpen, onClose, onConfirm, pages, curre
     ids.add(currentPageId);
     const collect = (parentId) => {
       pages.filter((p) => p.parent_page_id === parentId).forEach((p) => {
+        // 이미 수집된 노드는 재방문하지 않음 → parent_page_id 순환 시 무한 재귀 방지
+        if (ids.has(p.page_id)) return;
         ids.add(p.page_id);
         collect(p.page_id);
       });
@@ -37,10 +39,16 @@ export default function PageMoveModal({ isOpen, onClose, onConfirm, pages, curre
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const renderFolder = (folder, depth = 0) => {
+  const renderFolder = (folder, depth = 0, ancestorIds = []) => {
     const isDisabled = disabledIds.has(folder.page_id);
     const isExpand = expanded[folder.page_id];
-    const childFolders = folders.filter((f) => f.parent_page_id === folder.page_id);
+    // parent_page_id 순환 시 무한 재귀를 막기 위해 조상(또는 자기 자신) 폴더는 자식으로 제외
+    const childFolders = folders.filter(
+      (f) => f.parent_page_id === folder.page_id
+        && f.page_id !== folder.page_id
+        && !ancestorIds.includes(f.page_id),
+    );
+    const childAncestorIds = [...ancestorIds, folder.page_id];
 
     return (
       <div key={folder.page_id}>
@@ -63,7 +71,7 @@ export default function PageMoveModal({ isOpen, onClose, onConfirm, pages, curre
           {isExpand ? <FolderOpen size={14} /> : <Folder size={14} />}
           <span>{folder.title}</span>
         </button>
-        {isExpand && childFolders.map((child) => renderFolder(child, depth + 1))}
+        {isExpand && childFolders.map((child) => renderFolder(child, depth + 1, childAncestorIds))}
       </div>
     );
   };
