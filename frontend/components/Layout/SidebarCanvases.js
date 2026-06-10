@@ -2,11 +2,16 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import {
   Plus, ChevronRight, ChevronDown,
-  FileText, FileCode, Folder, FolderOpen, FolderPlus, MoreHorizontal, Settings, EyeOff,
+  FileText, FileCode, Folder, FolderOpen, FolderPlus, MoreHorizontal,
   Trash2, Pencil, Copy, Link, FolderInput,
 } from 'lucide-react';
 import ConfirmModal from '@/components/modal/ConfirmModal';
 import PageMoveModal from '@/components/modal/PageMoveModal';
+import useContextMenu from '@/components/common/useContextMenu';
+import ContextMenu from '@/components/common/ContextMenu';
+import useInlineRename from '@/components/common/useInlineRename';
+import { buildSpaceMenu } from './spaceMenu';
+import { showToast } from '@/components/Layout/Toast';
 import {
   DndContext, closestCenter, pointerWithin, PointerSensor, useSensor, useSensors,
   DragOverlay, useDraggable, useDroppable,
@@ -440,6 +445,58 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
     onOrderChange(newOrder);
   };
 
+  // 캔버스 row 공용 컨텍스트 메뉴 (우클릭 + ⋯ 버튼 공용)
+  const ctx = useContextMenu();
+  const [leaveTarget, setLeaveTarget] = useState(null); // { id, name } | null
+  const renameCanvas = useInlineRename(async (id, name) => {
+    try {
+      await axios.patch(`/canvases/${id}`, { canvas_name: name });
+      fetchCanvases();
+      window.dispatchEvent(new Event('canvas:created'));
+    } catch {}
+  });
+
+  const openCanvasMenu = (e, canvas) => {
+    const detailPath = `/canvas/${canvas.canvas_id}`;
+    ctx.open(e, buildSpaceMenu(
+      {
+        appType: 'canvas',
+        id: canvas.canvas_id,
+        name: canvas.canvas_name,
+        role: canvas.my_role,
+        isHidden: hiddenSet.has(canvas.canvas_id),
+      },
+      {
+        open: () => { setExpandedId(canvas.canvas_id); router.push(detailPath); },
+        openNewTab: () => window.open(detailPath, '_blank'),
+        settings: () => router.push(`${detailPath}/settings`),
+        rename: () => renameCanvas.start(canvas.canvas_id, canvas.canvas_name),
+        members: () => router.push(`${detailPath}/settings`),
+        toggleHide: () => (hiddenSet.has(canvas.canvas_id) ? onUnhide(canvas.canvas_id) : onHide(canvas.canvas_id)),
+        addDoc: () => handleQuickCreate(canvas.canvas_id, 'document'),
+        addTypst: () => handleQuickCreate(canvas.canvas_id, 'typst'),
+        addFolder: () => {
+          setExpandedId(canvas.canvas_id);
+          setInlineCreate({ canvasId: canvas.canvas_id, type: 'folder' });
+          setInlineTitle('');
+        },
+        archive: async () => {
+          try {
+            const res = await axios.delete(`/canvases/${canvas.canvas_id}`);
+            if (res.data.status) {
+              window.dispatchEvent(new Event('canvas:created'));
+              fetchCanvases();
+              showToast(`"${canvas.canvas_name}" 아카이브됨`);
+            } else {
+              showToast('아카이브 실패', 'error');
+            }
+          } catch {}
+        },
+        leave: () => setLeaveTarget({ id: canvas.canvas_id, name: canvas.canvas_name }),
+      },
+    ));
+  };
+
   const rootChildren = getChildren(null);
 
   return (
@@ -479,7 +536,8 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
                   setInlineTitle('');
                 }}
                 onAddTypst={() => handleQuickCreate(canvas.canvas_id, 'typst')}
-                onHide={onHide}
+                onMenu={openCanvasMenu}
+                rename={renameCanvas}
               />
 
               {expandedId === canvas.canvas_id && (
@@ -584,7 +642,11 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
                 숨긴 항목 {hiddenCanvases.length}
               </button>
               {showHidden && hiddenCanvases.map((canvas) => (
-                <div key={canvas.canvas_id} className="Sidebar__BranchRow Sidebar__BranchRow--hidden">
+                <div
+                  key={canvas.canvas_id}
+                  className="Sidebar__BranchRow Sidebar__BranchRow--hidden"
+                  onContextMenu={(e) => openCanvasMenu(e, canvas)}
+                >
                   <button className="Sidebar__BranchItem" onClick={() => router.push(`/canvas/${canvas.canvas_id}`)}>
                     <EntityIcon icon={canvas.icon} color={canvas.color} size={14} entityType="canvas" />
                     <span className="Sidebar__BranchName">{canvas.canvas_name}</span>
@@ -661,41 +723,63 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
           </button>
         </div>
       )}
+
+      {/* 캔버스 row 공용 컨텍스트 메뉴 */}
+      <ContextMenu {...ctx.props} />
+
+      {/* 캔버스 나가기 확인 (페이지 삭제 ConfirmModal과 별개 상태) */}
+      <ConfirmModal
+        isOpen={!!leaveTarget}
+        onClose={() => setLeaveTarget(null)}
+        onConfirm={async () => {
+          const t = leaveTarget;
+          setLeaveTarget(null);
+          try {
+            const res = await axios.post(`/canvases/${t.id}/leave`);
+            if (res.data.status) {
+              window.dispatchEvent(new Event('canvas:created'));
+              fetchCanvases();
+            } else {
+              showToast('나가기 실패', 'error');
+            }
+          } catch {}
+        }}
+        title="캔버스 나가기"
+        message={`"${leaveTarget?.name}"에서 나가시겠습니까?`}
+        confirmLabel="나가기"
+        variant="danger"
+      />
     </>
   );
 }
 
 // 캔버스 제목 row + 호버 시 더보기/+ 버튼
-function CanvasRow({ canvas, isActive, isExpanded, onToggle, onAddDocument, onAddFolder, onAddTypst, onHide }) {
-  const router = useRouter();
+function CanvasRow({ canvas, isActive, isExpanded, onToggle, onAddDocument, onAddFolder, onAddTypst, onMenu, rename }) {
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [addMenuPos, setAddMenuPos] = useState(null);
-  const [showMoreMenu, setShowMoreMenu] = useState(false);
-  const [moreMenuPos, setMoreMenuPos] = useState(null);
   const addMenuRef = useRef(null);
   const addBtnRef = useRef(null);
-  const moreMenuRef = useRef(null);
-  const moreBtnRef = useRef(null);
 
   const {
     attributes, listeners, setNodeRef, transform, transition, isDragging,
   } = useSortable({ id: canvas.canvas_id });
 
-  // 외부 클릭 또는 스크롤 시 메뉴 닫기
+  const editing = rename.editingId === canvas.canvas_id;
+
+  // 외부 클릭 또는 스크롤 시 추가 메뉴 닫기
   useEffect(() => {
-    if (!showAddMenu && !showMoreMenu) return;
+    if (!showAddMenu) return;
     const handleClick = (e) => {
-      if (showAddMenu && addMenuRef.current && !addMenuRef.current.contains(e.target)) setShowAddMenu(false);
-      if (showMoreMenu && moreMenuRef.current && !moreMenuRef.current.contains(e.target)) setShowMoreMenu(false);
+      if (addMenuRef.current && !addMenuRef.current.contains(e.target)) setShowAddMenu(false);
     };
-    const handleScroll = () => { setShowAddMenu(false); setShowMoreMenu(false); };
+    const handleScroll = () => setShowAddMenu(false);
     document.addEventListener('mousedown', handleClick);
     document.addEventListener('scroll', handleScroll, true);
     return () => {
       document.removeEventListener('mousedown', handleClick);
       document.removeEventListener('scroll', handleScroll, true);
     };
-  }, [showAddMenu, showMoreMenu]);
+  }, [showAddMenu]);
 
   const rowStyle = {
     transform: CSS.Transform.toString(transform),
@@ -708,10 +792,11 @@ function CanvasRow({ canvas, isActive, isExpanded, onToggle, onAddDocument, onAd
       ref={setNodeRef}
       style={rowStyle}
       className={`Sidebar__BranchRow ${isActive ? 'Sidebar__BranchRow--active' : ''}`}
+      onContextMenu={(e) => onMenu(e, canvas)}
     >
       <button
         className={`Sidebar__BranchItem ${isActive ? 'Sidebar__BranchItem--active' : ''}`}
-        onClick={onToggle}
+        onClick={() => { if (!editing) onToggle(); }}
         {...attributes}
         {...listeners}
       >
@@ -724,47 +809,21 @@ function CanvasRow({ canvas, isActive, isExpanded, onToggle, onAddDocument, onAd
           size={14}
           entityType="canvas"
         />
-        <span className="Sidebar__BranchName">{canvas.canvas_name}</span>
+        {editing
+          ? <input className="Sidebar__RenameInput" {...rename.inputProps} />
+          : <span className="Sidebar__BranchName">{canvas.canvas_name}</span>}
       </button>
 
       <div className="Sidebar__BranchActions">
-        {/* 더보기 메뉴 */}
-        <div ref={moreMenuRef}>
-          <button
-            ref={moreBtnRef}
-            className="Sidebar__BranchAddBtn"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (!showMoreMenu && moreBtnRef.current) {
-                const rect = moreBtnRef.current.getBoundingClientRect();
-                const top = Math.min(rect.top, window.innerHeight - 60);
-                setMoreMenuPos({ top, left: rect.right + 4 });
-              }
-              setShowMoreMenu(!showMoreMenu);
-            }}
-            title="More"
-          >
-            <MoreHorizontal size={13} />
-          </button>
-          {showMoreMenu && moreMenuPos && (
-            <div className="Sidebar__FixedMenu" style={{ top: moreMenuPos.top, left: moreMenuPos.left }}>
-              <button
-                className="Sidebar__AddMenuItem"
-                onClick={() => { setShowMoreMenu(false); router.push(`/canvas/${canvas.canvas_id}/settings`); }}
-              >
-                <Settings size={13} />
-                Settings
-              </button>
-              <button
-                className="Sidebar__AddMenuItem"
-                onClick={() => { setShowMoreMenu(false); onHide(canvas.canvas_id); }}
-              >
-                <EyeOff size={13} />
-                숨기기
-              </button>
-            </div>
-          )}
-        </div>
+        {/* 더보기 메뉴 (공용 컨텍스트 메뉴 오픈) */}
+        <button
+          className="Sidebar__BranchAddBtn"
+          onClick={(e) => { e.stopPropagation(); onMenu(e, canvas); }}
+          title="더보기"
+          aria-label="더보기"
+        >
+          <MoreHorizontal size={13} />
+        </button>
 
         {/* 추가 메뉴 */}
         <div ref={addMenuRef}>

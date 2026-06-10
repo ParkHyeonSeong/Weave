@@ -19,7 +19,8 @@ export function buildSpaceMenu(space, h) {
   }
 
   items.push({ id: 'settings', group: 'edit', icon: Settings, label: '설정', onSelect: h.settings });
-  if (isAdmin) {
+  // 숨긴 행은 인라인 rename 입력칸을 렌더하지 않으므로 rename 항목을 노출하지 않음.
+  if (isAdmin && !space.isHidden) {
     items.push({ id: 'rename', group: 'edit', icon: Pencil, label: '이름 변경', onSelect: h.rename });
   }
 
