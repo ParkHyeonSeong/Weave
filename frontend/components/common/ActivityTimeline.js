@@ -118,7 +118,7 @@ export default function ActivityTimeline({ apiUrl, expanded = false }) {
 
 
 function ActivityItem({ activity }) {
-  const { actor_id, actor_name, actor_avatar, summary, changes, created_at } = activity;
+  const { actor_id, actor_name, actor_avatar, actor_avatar_color, summary, changes, created_at } = activity;
 
   return (
     <div className="ActivityTimeline__Item">
@@ -128,6 +128,7 @@ function ActivityItem({ activity }) {
             name={actor_name}
             userId={actor_id}
             avatarUrl={actor_avatar}
+            avatarColor={actor_avatar_color}
             size="xs"
             className="ActivityTimeline__Avatar"
           />
@@ -158,8 +159,34 @@ function ChangeDetail({ change }) {
 
   // 집합형 (assignees, labels)
   if (added || removed) {
-    const addedNames = (added || []).map((a) => a.username || a.label_name || '?');
-    const removedNames = (removed || []).map((r) => r.username || r.label_name || '?');
+    // assignees는 user_id를 가지므로 일관성을 위해 작은 아바타 칩으로 표시,
+    // labels 등 사람이 아닌 항목은 기존처럼 이름 텍스트로 표시.
+    const isPeople = field === 'assignees';
+    const addedItems = added || [];
+    const removedItems = removed || [];
+
+    if (isPeople) {
+      const renderChips = (items, sign, cls) => items.length > 0 && (
+        <span className={`${cls} ActivityTimeline__ChangeChips`}>
+          {sign}
+          {items.map((p) => (
+            <span key={p.user_id} className="ActivityTimeline__ChangeChip">
+              <Avatar user={p} size="xs" className="ActivityTimeline__Avatar" />
+              {p.username || '?'}
+            </span>
+          ))}
+        </span>
+      );
+      return (
+        <div className="ActivityTimeline__ChangeRow">
+          {renderChips(addedItems, '+', 'ActivityTimeline__ChangeAdded')}
+          {renderChips(removedItems, '-', 'ActivityTimeline__ChangeRemoved')}
+        </div>
+      );
+    }
+
+    const addedNames = addedItems.map((a) => a.username || a.label_name || '?');
+    const removedNames = removedItems.map((r) => r.username || r.label_name || '?');
     return (
       <div className="ActivityTimeline__ChangeRow">
         {addedNames.length > 0 && (

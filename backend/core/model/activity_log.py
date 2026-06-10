@@ -48,7 +48,8 @@ async def find_by_entity(entity_type: str, entity_id: int,
     result = await db.execute(text("""
         SELECT al.log_id, al.entity_type, al.entity_id, al.action,
                al.changes, al.summary, al.created_at,
-               al.actor_id, u.username AS actor_name, u.avatar_url AS actor_avatar
+               al.actor_id, u.username AS actor_name,
+               u.avatar_url AS actor_avatar, u.avatar_color AS actor_avatar_color
         FROM activity_log al
         LEFT JOIN "user" u ON al.actor_id = u.user_id
         WHERE al.entity_type = :entity_type AND al.entity_id = :entity_id
@@ -69,7 +70,8 @@ async def find_by_branch(branch_id: int, limit: int = 30, offset: int = 0,
     result = await db.execute(text("""
         SELECT al.log_id, al.entity_type, al.entity_id, al.action,
                al.changes, al.summary, al.created_at,
-               al.actor_id, u.username AS actor_name, u.avatar_url AS actor_avatar
+               al.actor_id, u.username AS actor_name,
+               u.avatar_url AS actor_avatar, u.avatar_color AS actor_avatar_color
         FROM activity_log al
         LEFT JOIN "user" u ON al.actor_id = u.user_id
         WHERE al.branch_id = :branch_id
@@ -85,7 +87,8 @@ async def find_by_canvas(canvas_id: int, limit: int = 30, offset: int = 0,
     result = await db.execute(text("""
         SELECT al.log_id, al.entity_type, al.entity_id, al.action,
                al.changes, al.summary, al.created_at,
-               al.actor_id, u.username AS actor_name, u.avatar_url AS actor_avatar
+               al.actor_id, u.username AS actor_name,
+               u.avatar_url AS actor_avatar, u.avatar_color AS actor_avatar_color
         FROM activity_log al
         LEFT JOIN "user" u ON al.actor_id = u.user_id
         WHERE al.canvas_id = :canvas_id

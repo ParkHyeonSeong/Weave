@@ -6,6 +6,7 @@ import useScrumWeekCollab from '@/library/useScrumWeekCollab';
 import ScrumWeekGrid from './ScrumWeekGrid';
 import RetroView from './RetroView';
 import ScrumMembersModal from './ScrumMembersModal';
+import Avatar from '@/components/common/Avatar';
 import { currentISOWeek, addWeeks, weekDates } from '@/library/isoWeek';
 
 const getProfile = () => {
@@ -23,7 +24,7 @@ export default function ScrumBoardView() {
     && new URLSearchParams(window.location.search).get('tab') === 'retro') ? 'retro' : 'board');
   const [err, setErr] = useState('');
   const [showMembers, setShowMembers] = useState(false);
-  const user = useMemo(() => { const p = getProfile(); return p.user_id ? { user_id: p.user_id, username: p.username } : null; }, []);
+  const user = useMemo(() => { const p = getProfile(); return p.user_id ? { user_id: p.user_id, username: p.username, avatar_url: p.avatar_url, avatar_color: p.avatar_color } : null; }, []);
 
   // 보드 상세 + 멤버
   const refetchBoard = useCallback(async () => {
@@ -85,7 +86,14 @@ export default function ScrumBoardView() {
           {tab === 'board' && status === 'connected' && connectedUsers.length > 0 && (
             <span className="ScrumBoard__Live">
               {connectedUsers.slice(0, 5).map((u) => (
-                <span key={u.clientId} className="ScrumBoard__Dot" style={{ background: u.color }} title={u.name} />
+                <Avatar
+                  key={u.clientId}
+                  name={u.name}
+                  userId={u.userId}
+                  avatarUrl={u.avatar_url}
+                  avatarColor={u.avatar_color}
+                  size="xs"
+                />
               ))}
               <span className="ScrumBoard__LiveText">편집 중 {connectedUsers.length}</span>
             </span>

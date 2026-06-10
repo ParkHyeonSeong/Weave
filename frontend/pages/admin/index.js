@@ -8,6 +8,7 @@ import Alert from '@/components/modal/Alert';
 import AddMember from '@/components/modal/AddMember';
 import ResetPassword from '@/components/modal/ResetPassword';
 import ConfirmModal from '@/components/modal/ConfirmModal';
+import Avatar from '@/components/common/Avatar';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -197,7 +198,12 @@ export default function AdminPage() {
                 <tbody>
                   {pendingUsers.map(user => (
                     <tr key={user.user_id}>
-                      <td>{user.username}</td>
+                      <td>
+                        <div className="Admin__NameCell">
+                          <Avatar user={user} size="sm" />
+                          {user.username}
+                        </div>
+                      </td>
                       <td>{user.email}</td>
                       <td>{formatDate(user.created_at)}</td>
                       <td className="Admin__Actions">
@@ -242,7 +248,12 @@ export default function AdminPage() {
                   const isSelf = user.user_id === myUserId;
                   return (
                     <tr key={user.user_id}>
-                      <td>{user.username}</td>
+                      <td>
+                        <div className="Admin__NameCell">
+                          <Avatar user={user} size="sm" />
+                          {user.username}
+                        </div>
+                      </td>
                       <td>{user.email}</td>
                       <td>
                         {isSelf ? (

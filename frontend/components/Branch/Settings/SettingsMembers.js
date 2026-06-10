@@ -150,6 +150,7 @@ export default function SettingsMembers({ branchId, isAdmin }) {
                     className="SettingsMembers__SearchItem"
                     onClick={() => handleInvite(user.user_id)}
                   >
+                    <Avatar user={user} size="sm" />
                     <div className="SettingsMembers__SearchItemInfo">
                       <span className="SettingsMembers__SearchItemName">{user.username}</span>
                       <span className="SettingsMembers__SearchItemEmail">{user.email}</span>

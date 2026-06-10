@@ -83,7 +83,8 @@ async def find_by_id(task_id: int, db: AsyncSession):
                s.sprint_name,
                (SELECT COUNT(*) FROM task_issue ti WHERE ti.task_id = t.task_id) AS issue_count,
                cu.username AS creator_username,
-               cu.avatar_url AS creator_avatar_url
+               cu.avatar_url AS creator_avatar_url,
+               cu.avatar_color AS creator_avatar_color
         FROM task t
         INNER JOIN branch b ON t.branch_id = b.branch_id
         LEFT JOIN epic e ON t.epic_id = e.epic_id
@@ -101,10 +102,12 @@ async def find_by_id(task_id: int, db: AsyncSession):
     # creator 중첩 객체 구성 — JOIN에서 user 못 찾으면 (soft-delete 등) creator=None 처리
     creator_username = task.pop('creator_username', None)
     creator_avatar_url = task.pop('creator_avatar_url', None)
+    creator_avatar_color = task.pop('creator_avatar_color', None)
     task['creator'] = {
         'user_id': task['created_by'],
         'username': creator_username,
         'avatar_url': creator_avatar_url,
+        'avatar_color': creator_avatar_color,
     } if task['created_by'] and creator_username else None
 
     # 라벨 조회

@@ -143,6 +143,22 @@
     font-weight: $font-weight-medium;
   }
 
+  // 담당자 추가/제거를 작은 아바타 칩으로 표시
+  &__ChangeChips {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: $space-1;
+  }
+
+  &__ChangeChip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: $color-text;
+    font-weight: $font-weight-medium;
+  }
+
   &__More {
     font-size: $font-size-xs;
     color: $color-primary;

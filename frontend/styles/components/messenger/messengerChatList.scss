@@ -47,6 +47,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: $space-3;
     padding: $space-3 $space-4;
     transition: background $transition-fast;
     text-align: left;
@@ -63,6 +64,12 @@
         background: $color-primary-subtle;
       }
     }
+  }
+
+  &__ItemAvatar {
+    position: relative;
+    flex-shrink: 0;
+    line-height: 0;
   }
 
   &__ItemInfo {
@@ -93,12 +100,15 @@
   }
 
   &__Online {
-    display: inline-block;
-    width: 8px;
-    height: 8px;
+    position: absolute;
+    bottom: -1px;
+    right: -1px;
+    width: 9px;
+    height: 9px;
     border-radius: 50%;
-    background: #16A34A;
-    flex-shrink: 0;
+    background: $color-success;
+    border: 2px solid $color-bg;
+    box-sizing: content-box;
   }
 
   &__ItemTime {

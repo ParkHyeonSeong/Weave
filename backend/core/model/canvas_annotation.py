@@ -42,7 +42,7 @@ async def find_by_page(page_id: int, status: str | None, db: AsyncSession):
                a.anchor_node_path, a.anchor_offset, a.anchor_length,
                a.status, a.resolved_by, a.resolved_at,
                a.created_at, a.updated_at,
-               u.username AS author_name,
+               u.username AS author_name, u.avatar_url, u.avatar_color,
                (SELECT COUNT(*) FROM canvas_annotation_reply r
                 WHERE r.annotation_id = a.annotation_id) AS reply_count
         FROM canvas_annotation a
@@ -61,7 +61,7 @@ async def find_by_id(annotation_id: int, db: AsyncSession):
                a.anchor_node_path, a.anchor_offset, a.anchor_length,
                a.status, a.resolved_by, a.resolved_at,
                a.created_at, a.updated_at,
-               u.username AS author_name
+               u.username AS author_name, u.avatar_url, u.avatar_color
         FROM canvas_annotation a
         INNER JOIN "user" u ON a.created_by = u.user_id
         WHERE a.annotation_id = :annotation_id
@@ -119,7 +119,7 @@ async def find_replies(annotation_id: int, db: AsyncSession):
     result = await db.execute(text("""
         SELECT r.reply_id, r.annotation_id, r.author_id, r.content,
                r.created_at, r.updated_at,
-               u.username AS author_name
+               u.username AS author_name, u.avatar_url, u.avatar_color
         FROM canvas_annotation_reply r
         INNER JOIN "user" u ON r.author_id = u.user_id
         WHERE r.annotation_id = :annotation_id

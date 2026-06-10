@@ -262,6 +262,8 @@ export default function TaskIssueDetail() {
           <Avatar
             name={issue.author_name}
             userId={issue.created_by}
+            avatarUrl={issue.author_avatar_url}
+            avatarColor={issue.author_avatar_color}
             size="md"
             className="IssueDetail__Avatar"
           />
@@ -321,6 +323,8 @@ export default function TaskIssueDetail() {
               <Avatar
                 name={comment.author_name}
                 userId={comment.author_id}
+                avatarUrl={comment.author_avatar_url}
+                avatarColor={comment.author_avatar_color}
                 size="md"
                 className="IssueDetail__Avatar"
               />

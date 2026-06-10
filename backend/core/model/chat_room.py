@@ -46,24 +46,22 @@ async def find_rooms_by_user(user_id: int, db: AsyncSession):
                (SELECT cm3.created_at FROM chat_message cm3
                 WHERE cm3.room_id = cr.room_id
                 ORDER BY cm3.created_at DESC LIMIT 1) AS last_message_at,
-               CASE WHEN cr.room_type = 'dm' THEN
-                   (SELECT crm2.user_id FROM chat_room_member crm2
-                    WHERE crm2.room_id = cr.room_id AND crm2.user_id != :user_id
-                    LIMIT 1)
-               ELSE NULL END AS dm_partner_id,
-               CASE WHEN cr.room_type = 'dm' THEN
-                   (SELECT u.username FROM chat_room_member crm2
-                    INNER JOIN "user" u ON crm2.user_id = u.user_id
-                    WHERE crm2.room_id = cr.room_id AND crm2.user_id != :user_id
-                    LIMIT 1)
-               ELSE NULL END AS dm_partner_name,
-               CASE WHEN cr.room_type = 'dm' THEN
-                   (SELECT crm3.last_read_at FROM chat_room_member crm3
-                    WHERE crm3.room_id = cr.room_id AND crm3.user_id != :user_id
-                    LIMIT 1)
-               ELSE NULL END AS dm_partner_last_read_at
+               dmp.user_id AS dm_partner_id,
+               dmp.username AS dm_partner_name,
+               dmp.avatar_url AS dm_partner_avatar_url,
+               dmp.avatar_color AS dm_partner_avatar_color,
+               dmp.last_read_at AS dm_partner_last_read_at
         FROM chat_room cr
         INNER JOIN chat_room_member crm ON cr.room_id = crm.room_id
+        -- DM 상대(이름·아바타·읽음시각)를 한 행에서 일관되게 — 여러 서브쿼리가
+        -- 서로 다른 멤버로 갈라지는 것 방지(상대가 둘 이상이어도 같은 행 사용)
+        LEFT JOIN LATERAL (
+            SELECT u.user_id, u.username, u.avatar_url, u.avatar_color, dmm.last_read_at
+            FROM chat_room_member dmm
+            INNER JOIN "user" u ON dmm.user_id = u.user_id
+            WHERE dmm.room_id = cr.room_id AND dmm.user_id != :user_id
+            LIMIT 1
+        ) dmp ON cr.room_type = 'dm'
         WHERE crm.user_id = :user_id
           AND EXISTS (SELECT 1 FROM chat_message cm4
                       WHERE cm4.room_id = cr.room_id)

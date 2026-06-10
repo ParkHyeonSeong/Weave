@@ -246,7 +246,7 @@ export default function TaskFilterBar({
       <div className="TaskFilterBar__Members">
         <button
           type="button"
-          className={`TaskFilterBar__Avatar TaskFilterBar__Avatar--unassigned ${selectedUserIds.has(0) ? 'TaskFilterBar__Avatar--selected' : ''}`}
+          className={`TaskFilterBar__Unassigned ${selectedUserIds.has(0) ? 'TaskFilterBar__Unassigned--selected' : ''}`}
           title="Unassigned"
           onClick={() => onToggleUser(0)}
         >

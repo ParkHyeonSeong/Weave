@@ -94,7 +94,7 @@ async def set_participants(schedule_event_id: int, user_ids: list, db: AsyncSess
 async def find_participants(schedule_event_id: int, db: AsyncSession):
     """이벤트 참석자 목록"""
     result = await db.execute(text("""
-        SELECT u.user_id, u.username
+        SELECT u.user_id, u.username, u.avatar_url, u.avatar_color
         FROM schedule_event_participant sep
         INNER JOIN "user" u ON sep.user_id = u.user_id
         WHERE sep.schedule_event_id = :schedule_event_id

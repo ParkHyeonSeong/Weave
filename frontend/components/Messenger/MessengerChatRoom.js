@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, Fragment } from 'react';
 import { ArrowLeft, Send, Pencil, Check, X, Paperclip, File as FileIcon, Download } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import { formatMessageTime } from '@/library/formatTime';
+import Avatar from '@/components/common/Avatar';
 import TaskSearchPopup from './TaskSearchPopup';
 import TaskRefCard from './TaskRefCard';
 import DocSearchPopup from './DocSearchPopup';
@@ -646,6 +647,9 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
           }
           return messages.map((msg, idx) => {
             const showTime = shouldShowTime(idx);
+            const isMine = msg.sender_id === myUserId;
+            // 보낸 사람이 바뀌는 첫 메시지에만 아바타/이름 노출 (연속 메시지는 여백 정렬)
+            const isFirstOfRun = idx === 0 || messages[idx - 1].sender_id !== msg.sender_id;
             return (
               <Fragment key={msg.message_id}>
                 {showUnreadDivider && idx === firstUnreadIdx && (
@@ -655,10 +659,26 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
                 )}
                 <div
                   className={`MessengerChatRoom__Msg ${
-                    msg.sender_id === myUserId ? 'MessengerChatRoom__Msg--mine' : ''
+                    isMine ? 'MessengerChatRoom__Msg--mine' : ''
                   }`}
                 >
-              {msg.sender_id !== myUserId && (idx === 0 || messages[idx - 1].sender_id !== msg.sender_id) && (
+              {!isMine && (
+                <div className="MessengerChatRoom__MsgAvatar">
+                  {isFirstOfRun && (
+                    <Avatar
+                      user={{
+                        name: msg.sender_name,
+                        id: msg.sender_id,
+                        avatar_url: msg.sender_avatar_url,
+                        avatar_color: msg.sender_avatar_color,
+                      }}
+                      size="sm"
+                    />
+                  )}
+                </div>
+              )}
+              <div className="MessengerChatRoom__MsgBody">
+              {!isMine && isFirstOfRun && (
                 <span className="MessengerChatRoom__MsgSender">{msg.sender_name}</span>
               )}
               {msg.task_ref && (
@@ -678,7 +698,7 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
               )}
               {renderAttachments(msg.attachments)}
               <div className="MessengerChatRoom__MsgRow">
-                {msg.sender_id === myUserId && (() => {
+                {isMine && (() => {
                   const unread = getUnreadCount(msg);
                   if (!unread && !showTime) return null;
                   return (
@@ -699,11 +719,12 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
                     {renderContent(msg.content)}
                   </div>
                 ) : null}
-                {msg.sender_id !== myUserId && showTime && (
+                {!isMine && showTime && (
                   <span className="MessengerChatRoom__MsgTime">
                     {formatMessageTime(msg.created_at)}
                   </span>
                 )}
+              </div>
               </div>
               </div>
             </Fragment>

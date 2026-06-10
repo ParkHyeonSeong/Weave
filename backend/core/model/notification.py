@@ -33,7 +33,8 @@ async def find_by_user(user_id: int, limit: int = 30, offset: int = 0, db: Async
     result = await db.execute(text("""
         SELECT n.notification_id, n.type, n.actor_id, n.title, n.link,
                n.entity_type, n.entity_id, n.is_read, n.created_at,
-               u.username AS actor_name
+               u.username AS actor_name,
+               u.avatar_url AS actor_avatar_url, u.avatar_color AS actor_avatar_color
         FROM notification n
         LEFT JOIN "user" u ON n.actor_id = u.user_id
         WHERE n.user_id = :user_id

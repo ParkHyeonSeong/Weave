@@ -29,7 +29,7 @@ async def find_by_id(comment_id: int, db: AsyncSession):
         SELECT c.comment_id, c.task_id, c.parent_comment_id, c.author_id,
                c.content, c.is_edited,
                c.created_at, c.updated_at, c.deleted_at,
-               u.username, u.avatar_url
+               u.username, u.avatar_url, u.avatar_color
         FROM task_comment c
         INNER JOIN "user" u ON c.author_id = u.user_id
         WHERE c.comment_id = :comment_id
@@ -59,7 +59,7 @@ async def find_by_task(task_id: int, db: AsyncSession):
         SELECT c.comment_id, c.task_id, c.parent_comment_id, c.author_id,
                c.content, c.is_edited,
                c.created_at, c.updated_at, c.deleted_at,
-               u.username, u.avatar_url
+               u.username, u.avatar_url, u.avatar_color
         FROM task_comment c
         INNER JOIN "user" u ON c.author_id = u.user_id
         LEFT JOIN child_count cc ON cc.parent_comment_id = c.comment_id

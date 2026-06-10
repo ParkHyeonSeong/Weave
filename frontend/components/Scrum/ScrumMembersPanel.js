@@ -203,6 +203,7 @@ export default function ScrumMembersPanel({ boardId, myRole, onChanged, onLeave 
                       className="ScrumMembers__SearchItem"
                       onClick={() => handleInvite(u.user_id)}
                     >
+                      <Avatar user={u} size={30} className="ScrumMembers__SearchItemAvatar" />
                       <div className="ScrumMembers__SearchItemInfo">
                         <span className="ScrumMembers__SearchItemName">{u.username}</span>
                         <span className="ScrumMembers__SearchItemEmail">{u.email}</span>

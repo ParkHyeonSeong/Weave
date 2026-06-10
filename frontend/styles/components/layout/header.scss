@@ -198,15 +198,39 @@
     color: $color-text-tertiary;
   }
 
+  // 사람 아바타가 주, 알림 타입 아이콘은 작은 배지로 강등.
+  &__NotiAvatar {
+    position: relative;
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+  }
+
+  // 행위자 없는 시스템 알림: 타입 아이콘을 아바타와 같은 크기의 중립 원/사각에 표시
   &__NotiIcon {
     flex-shrink: 0;
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: $radius-md;
     background: $color-surface;
+    color: $color-text-tertiary;
+  }
+
+  &__NotiTypeBadge {
+    position: absolute;
+    right: -3px;
+    bottom: -3px;
+    width: 14px;
+    height: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: $color-surface;
+    border: 1px solid $color-bg;
     color: $color-text-tertiary;
   }
 

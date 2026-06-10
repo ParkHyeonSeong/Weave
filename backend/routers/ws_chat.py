@@ -12,6 +12,7 @@ from core.model import chat_attachment as attachment_model
 from core.model import task as task_model
 from core.model import canvas_page as canvas_page_model
 from core.model import task_issue as issue_model
+from core.model import user as user_model
 from library import notification_service
 import db_engine as db
 
@@ -53,6 +54,12 @@ async def websocket_chat(ws: WebSocket):
             'status': 'online',
         })
 
+    # 보낸 사람 아바타 — 연결당 1회만 조회해 모든 메시지 broadcast에 재사용
+    # (라이브 메시지가 reload 후 find_by_room 결과와 같은 아바타를 갖도록)
+    sender_avatar_url = None
+    sender_avatar_color = None
+    sender_avatar_loaded = False
+
     try:
         while True:
             raw = await ws.receive_text()
@@ -79,6 +86,14 @@ async def websocket_chat(ws: WebSocket):
                     # 멤버 확인
                     if not await member_model.is_member(room_id, user_id, session):
                         continue
+
+                    # 보낸 사람 아바타 1회 조회 (이후 메시지는 캐시 재사용)
+                    if not sender_avatar_loaded:
+                        sender = await user_model.find_by_id(user_id, session)
+                        if sender:
+                            sender_avatar_url = sender.get('avatar_url')
+                            sender_avatar_color = sender.get('avatar_color')
+                        sender_avatar_loaded = True
 
                     # 메시지 저장
                     msg = await message_model.create(
@@ -167,6 +182,8 @@ async def websocket_chat(ws: WebSocket):
                             'room_id': msg['room_id'],
                             'sender_id': msg['sender_id'],
                             'sender_name': username,
+                            'sender_avatar_url': sender_avatar_url,
+                            'sender_avatar_color': sender_avatar_color,
                             'content': msg['content'],
                             'created_at': msg['created_at'],
                             'task_ref': task_ref,

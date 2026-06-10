@@ -78,6 +78,8 @@ export default function TaskIssueSection({ branchId, taskId, expanded = false })
                     <Avatar
                       name={issue.author_name}
                       userId={issue.created_by}
+                      avatarUrl={issue.author_avatar_url}
+                      avatarColor={issue.author_avatar_color}
                       size="xs"
                       className="TaskIssueSection__AuthorAvatar"
                     />

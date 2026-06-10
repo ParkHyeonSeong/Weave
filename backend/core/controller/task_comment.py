@@ -54,6 +54,7 @@ def _hydrate(row: dict) -> dict:
             'user_id': row['author_id'],
             'username': row['username'],
             'avatar_url': row.get('avatar_url'),
+            'avatar_color': row.get('avatar_color'),
         },
     }
 

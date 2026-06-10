@@ -63,12 +63,16 @@ async def notify(user_id: int, ntype: str, actor_id: int, title: str,
     noti_id = await noti_model.create(user_id, ntype, actor_id, title, link, entity_type, entity_id, db)
     unread = await noti_model.count_unread(user_id, db)
 
-    # actor_name 조회
+    # actor 조회 (이름 + 아바타) — 라이브 payload를 reload 후(find_by_user)와 동일하게
     actor_name = None
+    actor_avatar_url = None
+    actor_avatar_color = None
     if actor_id:
         actor = await user_model.find_by_id(actor_id, db)
         if actor:
             actor_name = actor['username']
+            actor_avatar_url = actor.get('avatar_url')
+            actor_avatar_color = actor.get('avatar_color')
 
     await manager.send_to_user(user_id, {
         'type': 'notification',
@@ -77,6 +81,8 @@ async def notify(user_id: int, ntype: str, actor_id: int, title: str,
             'type': ntype,
             'actor_id': actor_id,
             'actor_name': actor_name,
+            'actor_avatar_url': actor_avatar_url,
+            'actor_avatar_color': actor_avatar_color,
             'title': title,
             'link': link,
             'entity_type': entity_type,

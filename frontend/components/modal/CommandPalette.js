@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import { useUiPrefs } from '@/library/UiPrefsContext';
+import Avatar from '@/components/common/Avatar';
 
 // --- Command 모드 액션 ---
 const ACTIONS = [
@@ -273,7 +274,12 @@ function renderItem(item) {
           >
             {item.data.status_label || formatStatusKey(item.data.status)}
           </span>
-          {main && <span className="CommandPalette__ItemMeta">{main.username}</span>}
+          {main && (
+            <span className="CommandPalette__ItemMeta CommandPalette__ItemAssignee">
+              <Avatar user={main} size="xs" />
+              {main.username}
+            </span>
+          )}
         </>
       );
     }
@@ -299,7 +305,7 @@ function renderItem(item) {
     case 'search-member':
       return (
         <>
-          <User size={14} className="CommandPalette__ItemIcon" />
+          <Avatar user={item.data} size="sm" />
           <span className="CommandPalette__ItemLabel">{item.data.username}</span>
           <span className="CommandPalette__ItemMeta">{item.data.email}</span>
         </>

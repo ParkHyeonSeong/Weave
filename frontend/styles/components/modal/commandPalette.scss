@@ -131,6 +131,16 @@
     white-space: nowrap;
   }
 
+  &__ItemAssignee {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+
+    .Avatar {
+      flex-shrink: 0;
+    }
+  }
+
   &__StatusDot {
     width: 8px;
     height: 8px;

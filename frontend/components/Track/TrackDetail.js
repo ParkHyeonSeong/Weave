@@ -43,6 +43,8 @@ function normalizeItem(raw) {
     assignees: (raw.assignees || []).map((a) => ({
       user_id: a.user_id,
       username: a.username,
+      avatar_url: a.avatar_url,
+      avatar_color: a.avatar_color,
       role: a.role,
     })),
     description: raw.description || '',
@@ -191,6 +193,8 @@ export default function TrackDetail() {
     () => members.map((m) => ({
       user_id: m.user_id,
       username: m.username,
+      avatar_url: m.avatar_url,
+      avatar_color: m.avatar_color,
       role: m.role,
     })),
     [members]

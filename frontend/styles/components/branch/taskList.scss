@@ -410,19 +410,21 @@
     gap: 4px;
   }
 
-  &__Avatar {
+  // "Unassigned"는 사람이 아니라 중립 <User> 아이콘을 유지하되,
+  // 옆에 붙는 Avatar(sm·24px) 멤버 칩과 같은 원형·크기·뉴트럴 톤으로 맞춘다.
+  &__Unassigned {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
+    padding: 0;
     border-radius: 50%;
-    background: $color-primary;
-    color: $color-text-inverse;
-    font-size: 11px;
-    font-weight: $font-weight-bold;
+    background: $color-surface-hover;
+    color: $color-text-tertiary;
     cursor: pointer;
-    border: 2px solid transparent;
+    border: none;
+    line-height: 0;
     transition: all $transition-fast;
 
     &:hover {
@@ -430,21 +432,7 @@
     }
 
     &--selected {
-      border-color: $color-primary;
-      box-shadow: 0 0 0 2px rgba($color-primary, 0.25);
-    }
-
-    &--unassigned {
-      background: transparent;
-      border: 2px dashed $color-text-tertiary;
-      color: $color-text-tertiary;
-
-      &.TaskFilterBar__Avatar--selected {
-        border-style: solid;
-        border-color: $color-primary;
-        color: $color-primary;
-        box-shadow: 0 0 0 2px rgba($color-primary, 0.25);
-      }
+      box-shadow: 0 0 0 2px $color-primary;
     }
   }
 

@@ -23,6 +23,7 @@ async def find_by_room(room_id: int, limit: int, offset: int, db: AsyncSession):
     result = await db.execute(text("""
         SELECT cm.message_id, cm.room_id, cm.sender_id, cm.content, cm.created_at,
                u.username AS sender_name,
+               u.avatar_url AS sender_avatar_url, u.avatar_color AS sender_avatar_color,
                t.task_id AS ref_task_id, t.branch_id AS ref_branch_id,
                t.display_number AS ref_display_number,
                t.title AS ref_task_title, t.status AS ref_task_status,

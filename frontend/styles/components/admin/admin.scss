@@ -105,6 +105,13 @@
     }
   }
 
+  // -- 이름 + 아바타 셀 --
+  &__NameCell {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+  }
+
   // -- 상태 뱃지 --
   &__Badge {
     display: inline-block;

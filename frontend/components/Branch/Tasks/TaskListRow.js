@@ -240,7 +240,7 @@ export default function TaskListRow({ task, branchId, taskTypes, workflowStatuse
                     setAssigneeOpen(false);
                   }}
                 >
-                  <Avatar name={m.display_name || m.email} userId={m.user_id} size={24} />
+                  <Avatar user={m} size={24} />
                   <span>{m.display_name || m.email}</span>
                 </button>
               );

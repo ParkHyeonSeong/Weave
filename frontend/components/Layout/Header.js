@@ -179,9 +179,27 @@ export default function Header({ isMobile, hasSidebar = false, onToggleSidebar, 
                         className={`Header__NotiItem ${!noti.is_read ? 'Header__NotiItem--unread' : ''}`}
                         onClick={() => handleNotiClick(noti)}
                       >
-                        <div className="Header__NotiIcon">
-                          <Icon size={14} />
-                        </div>
+                        {noti.actor_id ? (
+                          <div className="Header__NotiAvatar">
+                            <Avatar
+                              user={{
+                                name: noti.actor_name,
+                                id: noti.actor_id,
+                                avatar_url: noti.actor_avatar_url,
+                                avatar_color: noti.actor_avatar_color,
+                              }}
+                              size="sm"
+                            />
+                            <span className="Header__NotiTypeBadge">
+                              <Icon size={10} />
+                            </span>
+                          </div>
+                        ) : (
+                          // 행위자 없는 시스템 알림은 타입 아이콘을 메인 그래픽으로
+                          <div className="Header__NotiIcon">
+                            <Icon size={14} />
+                          </div>
+                        )}
                         <div className="Header__NotiBody">
                           <div className="Header__NotiItemTop">
                             <span className="Header__NotiSender">{noti.actor_name || 'System'}</span>

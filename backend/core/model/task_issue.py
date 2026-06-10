@@ -17,6 +17,7 @@ async def find_by_task(task_id: int, db: AsyncSession):
     result = await db.execute(text("""
         SELECT i.issue_id, i.title, i.status, i.created_by, i.created_at,
                u.username AS author_name,
+               u.avatar_url AS author_avatar_url, u.avatar_color AS author_avatar_color,
                (SELECT COUNT(*) FROM task_issue_comment c WHERE c.issue_id = i.issue_id) AS comment_count
         FROM task_issue i
         INNER JOIN "user" u ON i.created_by = u.user_id
@@ -31,7 +32,8 @@ async def find_by_id(issue_id: int, db: AsyncSession):
     result = await db.execute(text("""
         SELECT i.issue_id, i.task_id, i.title, i.body, i.status,
                i.created_by, i.created_at, i.updated_at,
-               u.username AS author_name
+               u.username AS author_name,
+               u.avatar_url AS author_avatar_url, u.avatar_color AS author_avatar_color
         FROM task_issue i
         INNER JOIN "user" u ON i.created_by = u.user_id
         WHERE i.issue_id = :issue_id
@@ -144,7 +146,8 @@ async def find_comments(issue_id: int, db: AsyncSession):
     result = await db.execute(text("""
         SELECT c.comment_id, c.issue_id, c.author_id, c.content,
                c.created_at, c.updated_at,
-               u.username AS author_name
+               u.username AS author_name,
+               u.avatar_url AS author_avatar_url, u.avatar_color AS author_avatar_color
         FROM task_issue_comment c
         INNER JOIN "user" u ON c.author_id = u.user_id
         WHERE c.issue_id = :issue_id

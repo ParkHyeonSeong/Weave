@@ -12,7 +12,7 @@ const COLS = [['keep', 'Keep · 잘한 것'], ['problem', 'Problem · 문제'], 
 export default function RetroView({ boardId, members = [] }) {
   const [retro, setRetro] = useState(null);
   const [manual, setManual] = useState(false);
-  const user = useMemo(() => { const p = getProfile(); return p.user_id ? { user_id: p.user_id, username: p.username } : null; }, []);
+  const user = useMemo(() => { const p = getProfile(); return p.user_id ? { user_id: p.user_id, username: p.username, avatar_url: p.avatar_url, avatar_color: p.avatar_color } : null; }, []);
 
   useEffect(() => {
     if (!boardId) return;

@@ -145,6 +145,7 @@
     justify-content: space-between;
     cursor: pointer;
     gap: $space-2;
+    min-width: 0;
 
     span {
       overflow: hidden;
@@ -156,6 +157,25 @@
       flex-shrink: 0;
       color: $color-text-tertiary;
     }
+  }
+
+  &__SubAssigneeSummary {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    min-width: 0;
+    overflow: visible;
+
+    .AvatarStack {
+      flex-shrink: 0;
+    }
+  }
+
+  &__SubAssigneeNames {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   &__SubAssigneePlaceholder {
@@ -189,6 +209,16 @@
 
     input[type="checkbox"] {
       accent-color: $color-primary;
+    }
+
+    .Avatar {
+      flex-shrink: 0;
+    }
+
+    span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
   }
 

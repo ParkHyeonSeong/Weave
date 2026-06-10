@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { X, ChevronDown } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import DatePicker from '@/components/common/DatePicker';
+import Avatar from '@/components/common/Avatar';
+import AvatarStack from '@/components/common/AvatarStack';
 
 export default function TaskModal({ branchId, branchKey, task, defaultSprintId, onClose }) {
   const isEdit = !!task;
@@ -406,9 +408,7 @@ function SubAssigneeSelect({ members, selectedIds, onChange }) {
     );
   };
 
-  const selectedNames = members
-    .filter((m) => selectedIds.includes(m.user_id))
-    .map((m) => m.username);
+  const selectedMembers = members.filter((m) => selectedIds.includes(m.user_id));
 
   return (
     <div className="TaskModal__Field" ref={ref}>
@@ -418,9 +418,16 @@ function SubAssigneeSelect({ members, selectedIds, onChange }) {
         className="TaskModal__Select TaskModal__SubAssigneeBtn"
         onClick={() => setOpen((prev) => !prev)}
       >
-        <span className={selectedNames.length > 0 ? '' : 'TaskModal__SubAssigneePlaceholder'}>
-          {selectedNames.length > 0 ? selectedNames.join(', ') : 'None'}
-        </span>
+        {selectedMembers.length > 0 ? (
+          <span className="TaskModal__SubAssigneeSummary">
+            <AvatarStack users={selectedMembers} size="xs" max={5} />
+            <span className="TaskModal__SubAssigneeNames">
+              {selectedMembers.map((m) => m.username).join(', ')}
+            </span>
+          </span>
+        ) : (
+          <span className="TaskModal__SubAssigneePlaceholder">None</span>
+        )}
         <ChevronDown size={14} />
       </button>
       {open && members.length > 0 && (
@@ -432,6 +439,7 @@ function SubAssigneeSelect({ members, selectedIds, onChange }) {
                 checked={selectedIds.includes(m.user_id)}
                 onChange={() => toggle(m.user_id)}
               />
+              <Avatar user={m} size="xs" />
               <span>{m.username}</span>
             </label>
           ))}

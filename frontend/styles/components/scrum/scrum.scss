@@ -8,9 +8,10 @@
 .ScrumBoard__WeekNav button { border:1px solid $color-border; border-radius:7px; padding:3px 6px; background:#fff; cursor:pointer; }
 .ScrumBoard__WeekLabel { font-weight:700; font-size:13px; }
 .ScrumBoard__Presence { margin-left:auto; display:flex; align-items:center; gap:10px; }
-.ScrumBoard__Live { display:flex; align-items:center; gap:4px; }
-.ScrumBoard__Dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:3px; }
-.ScrumBoard__LiveText { font-size:12px; opacity:.7; }
+// 색/사진은 <Avatar size="xs">가 처리. 여기선 살짝 겹치게만.
+.ScrumBoard__Live { display:flex; align-items:center; }
+.ScrumBoard__Live .Avatar { margin-right:-5px; box-shadow:0 0 0 2px $color-surface; }
+.ScrumBoard__LiveText { font-size:12px; opacity:.7; margin-left:9px; }
 .ScrumBoard__Loading,
 .ScrumBoard__Empty,
 .ScrumBoard__Error { padding:24px 18px; font-size:13px; opacity:.7; }
@@ -167,7 +168,9 @@
   &:hover { background:$color-surface-hover; }
   svg { color:#16A34A; flex-shrink:0; }
 }
-.ScrumMembers__SearchItemInfo { display:flex; flex-direction:column; gap:1px; min-width:0; }
+// 색/크기/폰트는 <Avatar>가 인라인으로 칠함(user_id 해시). 여기선 레이아웃만.
+.ScrumMembers__SearchItemAvatar { flex-shrink:0; }
+.ScrumMembers__SearchItemInfo { display:flex; flex-direction:column; gap:1px; flex:1; min-width:0; }
 .ScrumMembers__SearchItemName { font-size:13px; font-weight:600; }
 .ScrumMembers__SearchItemEmail {
   font-size:12px; color:$color-text-tertiary;

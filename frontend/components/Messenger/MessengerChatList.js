@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Plus } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import { formatMessageTime } from '@/library/formatTime';
+import Avatar from '@/components/common/Avatar';
 
 export default function MessengerChatList({ onOpenRoom, onNewChat, activeRoomId }) {
   const [rooms, setRooms] = useState([]);
@@ -84,12 +85,23 @@ export default function MessengerChatList({ onOpenRoom, onNewChat, activeRoomId 
               className={`MessengerChatList__Item ${activeRoomId === room.room_id ? 'MessengerChatList__Item--active' : ''}`}
               onClick={() => onOpenRoom(room.room_id)}
             >
+              <div className="MessengerChatList__ItemAvatar">
+                <Avatar
+                  user={{
+                    name: room.dm_partner_name || room.room_name,
+                    id: room.dm_partner_id,
+                    avatar_url: room.dm_partner_avatar_url,
+                    avatar_color: room.dm_partner_avatar_color,
+                  }}
+                  size="sm"
+                />
+                {room.dm_partner_id && onlineSet.has(room.dm_partner_id) && (
+                  <span className="MessengerChatList__Online" />
+                )}
+              </div>
               <div className="MessengerChatList__ItemInfo">
                 <div className="MessengerChatList__ItemTop">
                   <span className="MessengerChatList__ItemName">
-                    {room.dm_partner_id && onlineSet.has(room.dm_partner_id) && (
-                      <span className="MessengerChatList__Online" />
-                    )}
                     {room.dm_partner_name || room.room_name || 'Direct Message'}
                   </span>
                   {room.last_message_at && (
