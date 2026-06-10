@@ -643,6 +643,7 @@ async def find_by_assignee(user_id: int, status: str, status_category: str, prio
                ws.label AS status_label, ws.color AS status_color, ws.category AS status_category
         FROM task t
         INNER JOIN branch b ON t.branch_id = b.branch_id
+        INNER JOIN branch_member bm ON bm.branch_id = t.branch_id AND bm.user_id = :user_id
         LEFT JOIN workflow_status ws ON ws.branch_id = t.branch_id AND ws.key = t.status
         WHERE t.task_id IN (SELECT task_id FROM task_assignee WHERE user_id = :user_id)
               {filter_clause}
