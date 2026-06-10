@@ -12,8 +12,14 @@ import { CSS } from '@dnd-kit/utilities';
 import { axios } from '@/library/_axios';
 import EntityIcon from '@/components/common/EntityIcon';
 import SidebarItemActions from './SidebarItemActions';
+import useContextMenu from '@/components/common/useContextMenu';
+import ContextMenu from '@/components/common/ContextMenu';
+import useInlineRename from '@/components/common/useInlineRename';
+import { buildSpaceMenu } from './spaceMenu';
+import ConfirmModal from '@/components/modal/ConfirmModal';
+import { showToast } from '@/components/Layout/Toast';
 
-function SortableBranchItem({ branch, isActive, onHide }) {
+function SortableBranchItem({ branch, isActive, onMenu, rename }) {
   const router = useRouter();
   const {
     attributes, listeners, setNodeRef, transform, transition, isDragging,
@@ -25,11 +31,18 @@ function SortableBranchItem({ branch, isActive, onHide }) {
     opacity: isDragging ? 0.4 : 1,
   };
 
+  const editing = rename.editingId === branch.branch_id;
+
   return (
-    <div ref={setNodeRef} style={style} className={`Sidebar__BranchRow ${isActive ? 'Sidebar__BranchRow--active' : ''}`}>
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`Sidebar__BranchRow ${isActive ? 'Sidebar__BranchRow--active' : ''}`}
+      onContextMenu={(e) => onMenu(e, branch)}
+    >
       <button
         className={`Sidebar__BranchItem ${isActive ? 'Sidebar__BranchItem--active' : ''}`}
-        onClick={() => router.push(`/branch/${branch.branch_id}`)}
+        onClick={() => { if (!editing) router.push(`/branch/${branch.branch_id}`); }}
         {...attributes}
         {...listeners}
       >
@@ -39,10 +52,12 @@ function SortableBranchItem({ branch, isActive, onHide }) {
           size={14}
           entityType="branch"
         />
-        <span className="Sidebar__BranchName">{branch.branch_name}</span>
+        {editing
+          ? <input className="Sidebar__RenameInput" {...rename.inputProps} />
+          : <span className="Sidebar__BranchName">{branch.branch_name}</span>}
       </button>
       <div className="Sidebar__BranchActions">
-        <SidebarItemActions onHide={() => onHide(branch.branch_id)} />
+        <SidebarItemActions onMenu={(e) => onMenu(e, branch)} />
       </div>
     </div>
   );
@@ -53,6 +68,16 @@ export default function SidebarBranches({ onCreateBranch, savedOrder, onOrderCha
   const [branches, setBranches] = useState([]);
   const [activeItem, setActiveItem] = useState(null);
   const [showHidden, setShowHidden] = useState(false);
+
+  const ctx = useContextMenu();
+  const [leaveTarget, setLeaveTarget] = useState(null); // { id, name } | null
+  const rename = useInlineRename(async (id, name) => {
+    try {
+      await axios.patch(`/branches/${id}`, { branch_name: name });
+      fetchBranches();
+      window.dispatchEvent(new Event('branch:created'));
+    } catch {}
+  });
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -96,6 +121,41 @@ export default function SidebarBranches({ onCreateBranch, savedOrder, onOrderCha
   const hiddenBranches = useMemo(() => sortedBranches.filter((b) => hiddenSet.has(b.branch_id)), [sortedBranches, hiddenSet]);
 
   const sortableIds = visibleBranches.map((b) => b.branch_id);
+
+  const openMenu = (e, branch) => {
+    const detailPath = `/branch/${branch.branch_id}`;
+    ctx.open(e, buildSpaceMenu(
+      {
+        appType: 'branch',
+        id: branch.branch_id,
+        name: branch.branch_name,
+        role: branch.my_role,
+        isHidden: hiddenSet.has(branch.branch_id),
+      },
+      {
+        open: () => router.push(detailPath),
+        openNewTab: () => window.open(detailPath, '_blank'),
+        settings: () => router.push(`${detailPath}?tab=settings`),
+        rename: () => rename.start(branch.branch_id, branch.branch_name),
+        members: () => router.push(`${detailPath}?tab=settings`),
+        toggleHide: () => (hiddenSet.has(branch.branch_id) ? onUnhide(branch.branch_id) : onHide(branch.branch_id)),
+        archive: async () => {
+          try {
+            const res = await axios.delete(`/branches/${branch.branch_id}`);
+            if (res.data.status) {
+              window.dispatchEvent(new Event('branch:created'));
+              fetchBranches();
+              // Toast(showToast)는 액션 버튼을 지원하지 않아 undo 없이 성공 알림만 표시.
+              showToast(`"${branch.branch_name}" 아카이브됨`);
+            } else {
+              showToast('아카이브 실패', 'error');
+            }
+          } catch {}
+        },
+        leave: () => setLeaveTarget({ id: branch.branch_id, name: branch.branch_name }),
+      },
+    ));
+  };
 
   const handleDragStart = (event) => {
     const item = visibleBranches.find((b) => b.branch_id === event.active.id);
@@ -144,7 +204,8 @@ export default function SidebarBranches({ onCreateBranch, savedOrder, onOrderCha
                     key={branch.branch_id}
                     branch={branch}
                     isActive={router.query.id == branch.branch_id}
-                    onHide={onHide}
+                    onMenu={openMenu}
+                    rename={rename}
                   />
                 ))}
               </SortableContext>
@@ -171,7 +232,11 @@ export default function SidebarBranches({ onCreateBranch, savedOrder, onOrderCha
                   숨긴 항목 {hiddenBranches.length}
                 </button>
                 {showHidden && hiddenBranches.map((branch) => (
-                  <div key={branch.branch_id} className="Sidebar__BranchRow Sidebar__BranchRow--hidden">
+                  <div
+                    key={branch.branch_id}
+                    className="Sidebar__BranchRow Sidebar__BranchRow--hidden"
+                    onContextMenu={(e) => openMenu(e, branch)}
+                  >
                     <button className="Sidebar__BranchItem" onClick={() => router.push(`/branch/${branch.branch_id}`)}>
                       <EntityIcon icon={branch.icon} color={branch.color} size={14} entityType="branch" />
                       <span className="Sidebar__BranchName">{branch.branch_name}</span>
@@ -184,6 +249,29 @@ export default function SidebarBranches({ onCreateBranch, savedOrder, onOrderCha
           </>
         )}
       </div>
+
+      <ContextMenu {...ctx.props} />
+      <ConfirmModal
+        isOpen={!!leaveTarget}
+        onClose={() => setLeaveTarget(null)}
+        onConfirm={async () => {
+          const t = leaveTarget;
+          setLeaveTarget(null);
+          try {
+            const res = await axios.post(`/branches/${t.id}/leave`);
+            if (res.data.status) {
+              window.dispatchEvent(new Event('branch:created'));
+              fetchBranches();
+            } else {
+              showToast('나가기 실패', 'error');
+            }
+          } catch {}
+        }}
+        title="브랜치 나가기"
+        message={`"${leaveTarget?.name}"에서 나가시겠습니까?`}
+        confirmLabel="나가기"
+        variant="danger"
+      />
     </>
   );
 }

@@ -251,6 +251,18 @@
     text-overflow: ellipsis;
   }
 
+  &__RenameInput {
+    flex: 1;
+    min-width: 0;
+    border: 1px solid $color-primary;
+    border-radius: 5px;
+    padding: 1px 5px;
+    font: inherit;
+    color: inherit;
+    background: $color-bg;
+    outline: none;
+  }
+
   // -- Canvas expand icon --
   &__ExpandIcon {
     display: flex;
