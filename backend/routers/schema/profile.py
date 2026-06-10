@@ -1,6 +1,8 @@
 from typing import List, Optional
 from pydantic import BaseModel, field_validator
 
+from library.user_avatar import AVATAR_COLORS
+
 
 class UpdateUsername(BaseModel):
     username: str
@@ -38,6 +40,19 @@ class ForceChangePassword(BaseModel):
     def validate_new_password(cls, v):
         if len(v) < 6:
             raise ValueError('password must be at least 6 characters')
+        return v
+
+
+class UpdateAvatarColor(BaseModel):
+    color: Optional[str] = None  # None = 자동(해시 색)으로 복귀
+
+    @field_validator('color')
+    @classmethod
+    def validate_color(cls, v):
+        if v is None:
+            return None
+        if v not in AVATAR_COLORS:
+            raise ValueError('invalid avatar color')
         return v
 
 

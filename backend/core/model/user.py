@@ -15,7 +15,8 @@ async def create(email: str, password_hash: bytes, username: str, db: AsyncSessi
 async def find_by_email(email: str, db: AsyncSession):
     """이메일로 사용자 조회"""
     result = await db.execute(text("""
-        SELECT user_id, email, password, username, role, status, created_at, must_change_password
+        SELECT user_id, email, password, username, role, status, created_at, must_change_password,
+               avatar_url, avatar_color
         FROM "user"
         WHERE email = :email AND deleted_at IS NULL
     """), {'email': email})
@@ -44,7 +45,7 @@ async def update_login(user_id: int, ip: str, db: AsyncSession):
 async def find_all(db: AsyncSession):
     """전체 사용자 목록 (비밀번호 제외, 삭제된 사용자 제외)"""
     result = await db.execute(text("""
-        SELECT user_id, email, username, role, status, avatar_url, created_at, last_login_at
+        SELECT user_id, email, username, role, status, avatar_url, avatar_color, created_at, last_login_at
         FROM "user"
         WHERE deleted_at IS NULL
         ORDER BY created_at DESC
@@ -56,7 +57,7 @@ async def find_all(db: AsyncSession):
 async def find_by_id(user_id: int, db: AsyncSession):
     """사용자 ID로 조회 (비밀번호 제외)"""
     result = await db.execute(text("""
-        SELECT user_id, email, username, role, status, avatar_url, created_at, last_login_at
+        SELECT user_id, email, username, role, status, avatar_url, avatar_color, created_at, last_login_at
         FROM "user"
         WHERE user_id = :user_id
     """), {'user_id': user_id})
@@ -115,7 +116,7 @@ async def search_active(query: str, exclude_user_id: int, limit: int = 10,
                          db: AsyncSession = None):
     """active 사용자 중 username 검색 (본인 제외)"""
     result = await db.execute(text("""
-        SELECT user_id, username, email
+        SELECT user_id, username, email, avatar_url, avatar_color
         FROM "user"
         WHERE status = 'active'
           AND deleted_at IS NULL
@@ -143,6 +144,15 @@ async def update_avatar(user_id: int, avatar_url: str, db: AsyncSession):
         SET avatar_url = :avatar_url
         WHERE user_id = :user_id
     """), {'user_id': user_id, 'avatar_url': avatar_url})
+
+
+async def update_avatar_color(user_id: int, color, db: AsyncSession):
+    """아바타 색상 변경 (None이면 자동 해시 색으로 복귀)"""
+    await db.execute(text("""
+        UPDATE "user"
+        SET avatar_color = :color
+        WHERE user_id = :user_id
+    """), {'user_id': user_id, 'color': color})
 
 
 async def get_ui_prefs(user_id: int, db: AsyncSession):

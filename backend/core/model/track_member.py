@@ -37,7 +37,7 @@ async def find_by_track(track_id: int, db: AsyncSession):
     """Track 멤버 목록"""
     result = await db.execute(text("""
         SELECT tm.user_id, tm.role, tm.joined_at,
-               u.username, u.email, u.avatar_url
+               u.username, u.email, u.avatar_url, u.avatar_color
         FROM track_member tm
         INNER JOIN "user" u ON tm.user_id = u.user_id
         WHERE tm.track_id = :track_id
@@ -74,7 +74,7 @@ async def count_owners(track_id: int, db: AsyncSession) -> int:
 async def search_non_members(track_id: int, query: str, db: AsyncSession):
     """초대 가능한 사용자 검색 (아직 멤버가 아닌 active 유저, username/email ILIKE)"""
     result = await db.execute(text("""
-        SELECT u.user_id, u.username, u.email
+        SELECT u.user_id, u.username, u.email, u.avatar_url, u.avatar_color
         FROM "user" u
         WHERE u.status = 'active'
           AND u.user_id NOT IN (

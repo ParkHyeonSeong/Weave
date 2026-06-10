@@ -35,7 +35,8 @@ async def is_member(board_id: int, user_id: int, db: AsyncSession) -> bool:
 
 async def find_by_board(board_id: int, db: AsyncSession):
     result = await db.execute(text("""
-        SELECT sm.user_id, sm.role, sm.joined_at, u.username, u.email
+        SELECT sm.user_id, sm.role, sm.joined_at,
+               u.username, u.email, u.avatar_url, u.avatar_color
         FROM scrum_member sm
         INNER JOIN "user" u ON u.user_id = sm.user_id
         WHERE sm.board_id = :board_id
@@ -69,7 +70,7 @@ async def count_admins(board_id: int, db: AsyncSession) -> int:
 async def search_non_members(board_id: int, query: str, db: AsyncSession):
     """초대 가능한 사용자 검색 (아직 멤버 아닌 active 유저, username/email ILIKE, 최대 10)"""
     result = await db.execute(text("""
-        SELECT u.user_id, u.username, u.email
+        SELECT u.user_id, u.username, u.email, u.avatar_url, u.avatar_color
         FROM "user" u
         WHERE u.status = 'active'
           AND u.user_id NOT IN (SELECT user_id FROM scrum_member WHERE board_id = :board_id)

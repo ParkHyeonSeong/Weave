@@ -15,7 +15,7 @@ async def find_by_room(room_id: int, db: AsyncSession):
     """채팅방 멤버 목록"""
     result = await db.execute(text("""
         SELECT crm.user_id, crm.joined_at, crm.last_read_at,
-               u.username, u.email
+               u.username, u.email, u.avatar_url, u.avatar_color
         FROM chat_room_member crm
         INNER JOIN "user" u ON crm.user_id = u.user_id
         WHERE crm.room_id = :room_id
@@ -38,7 +38,7 @@ async def search_room_members(room_id: int, query: str, exclude_user_id: int,
                                limit: int = 10, db: AsyncSession = None):
     """채팅방 멤버 중 username 검색 (본인 제외)"""
     result = await db.execute(text("""
-        SELECT u.user_id, u.username, u.email
+        SELECT u.user_id, u.username, u.email, u.avatar_url, u.avatar_color
         FROM chat_room_member crm
         INNER JOIN "user" u ON crm.user_id = u.user_id
         WHERE crm.room_id = :room_id

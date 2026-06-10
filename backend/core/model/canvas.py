@@ -1,18 +1,7 @@
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# 기여자 아바타 색상 — branch.py / 프론트 library/userAvatar.js 의 팔레트와 동일.
-# user_id 를 안정적으로 같은 색에 매핑(흰 텍스트와 WCAG AA 대비 확보된 톤).
-_AVATAR_COLORS = [
-    '#5E6AD2', '#059669', '#B45309', '#9333EA',
-    '#BE185D', '#0369A1', '#DC2626',
-]
-
-
-def _user_color(user_id) -> str:
-    if user_id is None:
-        return '#9CA3AF'
-    return _AVATAR_COLORS[abs(int(user_id)) % len(_AVATAR_COLORS)]
+from library.user_avatar import user_color
 
 
 async def create(canvas_name: str, key: str, description: str,
@@ -93,9 +82,9 @@ async def find_accessible(user_id: int, db: AsyncSession):
     # distinct 사용자. created_by/updated_by 를 UNION 해 첫 활동 순으로 4명까지.
     canvas_ids = [c['canvas_id'] for c in canvases]
     contrib_result = await db.execute(text("""
-        SELECT canvas_id, user_id, username, total
+        SELECT canvas_id, user_id, username, avatar_url, avatar_color, total
         FROM (
-            SELECT cw.canvas_id, cw.user_id, u.username, cw.first_seen,
+            SELECT cw.canvas_id, cw.user_id, u.username, u.avatar_url, u.avatar_color, cw.first_seen,
                    COUNT(*) OVER (PARTITION BY cw.canvas_id) AS total,
                    ROW_NUMBER() OVER (
                        PARTITION BY cw.canvas_id
@@ -128,7 +117,8 @@ async def find_accessible(user_id: int, db: AsyncSession):
         c['contributor_count'] = m['total']
         c['contributors'].append({
             'name': m['username'],
-            'color': _user_color(m['user_id']),
+            'avatar_url': m['avatar_url'],
+            'color': user_color(m['user_id'], m.get('avatar_color')),
         })
 
     return canvases

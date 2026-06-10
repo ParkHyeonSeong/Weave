@@ -82,6 +82,12 @@ export default function Login() {
           return;
         }
         sessionStorage.setItem('profile', JSON.stringify(response.data.profile));
+        if (response.data.profile.avatar_url) {
+          sessionStorage.setItem('avatar_url', response.data.profile.avatar_url);
+        } else {
+          // 이전 세션 사용자의 사진이 남아 다른 계정에 노출되는 것 방지
+          sessionStorage.removeItem('avatar_url');
+        }
 
         // 비밀번호 변경 강제
         if (response.data.profile.must_change_password) {

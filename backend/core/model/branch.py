@@ -1,18 +1,7 @@
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# 멤버 아바타 색상 — 프론트 library/userAvatar.js 의 AVATAR_COLORS 와 동일하게 유지.
-# user_id 를 안정적으로 같은 색에 매핑(흰 텍스트와 WCAG AA 대비 확보된 톤).
-_AVATAR_COLORS = [
-    '#5E6AD2', '#059669', '#B45309', '#9333EA',
-    '#BE185D', '#0369A1', '#DC2626',
-]
-
-
-def _user_color(user_id) -> str:
-    if user_id is None:
-        return '#9CA3AF'
-    return _AVATAR_COLORS[abs(int(user_id)) % len(_AVATAR_COLORS)]
+from library.user_avatar import user_color
 
 
 async def create(branch_name: str, key: str, description: str,
@@ -121,9 +110,9 @@ async def find_accessible(user_id: int, db: AsyncSession):
     # 멤버 미리보기(상위 4명) 배치 조회 — branch 당 가입 순으로 4명까지.
     branch_ids = [b['branch_id'] for b in branches]
     members_result = await db.execute(text("""
-        SELECT branch_id, user_id, username
+        SELECT branch_id, user_id, username, avatar_url, avatar_color
         FROM (
-            SELECT bm.branch_id, bm.user_id, u.username,
+            SELECT bm.branch_id, bm.user_id, u.username, u.avatar_url, u.avatar_color,
                    ROW_NUMBER() OVER (
                        PARTITION BY bm.branch_id
                        ORDER BY bm.joined_at, bm.user_id
@@ -141,7 +130,8 @@ async def find_accessible(user_id: int, db: AsyncSession):
         m = row._mapping
         by_branch[m['branch_id']]['members'].append({
             'name': m['username'],
-            'color': _user_color(m['user_id']),
+            'avatar_url': m['avatar_url'],
+            'color': user_color(m['user_id'], m.get('avatar_color')),
         })
 
     return branches

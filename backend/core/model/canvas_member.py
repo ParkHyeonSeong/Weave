@@ -23,7 +23,7 @@ async def find_by_canvas(canvas_id: int, db: AsyncSession):
     """Canvas 멤버 목록"""
     result = await db.execute(text("""
         SELECT cm.user_id, cm.role, cm.joined_at,
-               u.username, u.email
+               u.username, u.email, u.avatar_url, u.avatar_color
         FROM canvas_member cm
         INNER JOIN "user" u ON cm.user_id = u.user_id
         WHERE cm.canvas_id = :canvas_id
@@ -71,7 +71,7 @@ async def count_admins(canvas_id: int, db: AsyncSession) -> int:
 async def search_non_members(canvas_id: int, query: str, db: AsyncSession):
     """초대 가능한 사용자 검색 (아직 멤버가 아닌 active 유저)"""
     result = await db.execute(text("""
-        SELECT u.user_id, u.username, u.email
+        SELECT u.user_id, u.username, u.email, u.avatar_url, u.avatar_color
         FROM "user" u
         WHERE u.status = 'active'
           AND u.user_id NOT IN (

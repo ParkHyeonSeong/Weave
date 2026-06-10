@@ -119,7 +119,7 @@ async def find_by_id(task_id: int, db: AsyncSession):
 
     # 담당자 조회
     assignees_result = await db.execute(text("""
-        SELECT ta.user_id, u.username, ta.role
+        SELECT ta.user_id, u.username, u.avatar_url, u.avatar_color, ta.role
         FROM task_assignee ta
         INNER JOIN "user" u ON ta.user_id = u.user_id
         WHERE ta.task_id = :task_id
@@ -192,7 +192,7 @@ async def find_by_branch(branch_id: int, sprint_id, db: AsyncSession):
 
         # 담당자 일괄 조회
         assignees_result = await db.execute(text("""
-            SELECT ta.task_id, ta.user_id, u.username, ta.role
+            SELECT ta.task_id, ta.user_id, u.username, u.avatar_url, u.avatar_color, ta.role
             FROM task_assignee ta
             INNER JOIN "user" u ON ta.user_id = u.user_id
             WHERE ta.task_id = ANY(:task_ids)
@@ -204,6 +204,8 @@ async def find_by_branch(branch_id: int, sprint_id, db: AsyncSession):
             assignee_map.setdefault(ad['task_id'], []).append({
                 'user_id': ad['user_id'],
                 'username': ad['username'],
+                'avatar_url': ad.get('avatar_url'),
+                'avatar_color': ad.get('avatar_color'),
                 'role': ad['role'],
             })
 
@@ -263,7 +265,7 @@ async def find_for_board(branch_id: int, sprint_id, db: AsyncSession):
 
         # 담당자 일괄 조회
         assignees_result = await db.execute(text("""
-            SELECT ta.task_id, ta.user_id, u.username, ta.role
+            SELECT ta.task_id, ta.user_id, u.username, u.avatar_url, u.avatar_color, ta.role
             FROM task_assignee ta
             INNER JOIN "user" u ON ta.user_id = u.user_id
             WHERE ta.task_id = ANY(:task_ids)
@@ -275,6 +277,8 @@ async def find_for_board(branch_id: int, sprint_id, db: AsyncSession):
             assignee_map.setdefault(ad['task_id'], []).append({
                 'user_id': ad['user_id'],
                 'username': ad['username'],
+                'avatar_url': ad.get('avatar_url'),
+                'avatar_color': ad.get('avatar_color'),
                 'role': ad['role'],
             })
 
@@ -360,7 +364,7 @@ async def find_archived(branch_id: int, db: AsyncSession):
 
         # 담당자 일괄 조회
         assignees_result = await db.execute(text("""
-            SELECT ta.task_id, ta.user_id, u.username, ta.role
+            SELECT ta.task_id, ta.user_id, u.username, u.avatar_url, u.avatar_color, ta.role
             FROM task_assignee ta
             INNER JOIN "user" u ON ta.user_id = u.user_id
             WHERE ta.task_id = ANY(:task_ids)
@@ -372,6 +376,8 @@ async def find_archived(branch_id: int, db: AsyncSession):
             assignee_map.setdefault(ad['task_id'], []).append({
                 'user_id': ad['user_id'],
                 'username': ad['username'],
+                'avatar_url': ad.get('avatar_url'),
+                'avatar_color': ad.get('avatar_color'),
                 'role': ad['role'],
             })
 
@@ -405,7 +411,7 @@ async def find_subtasks(parent_task_id: int, db: AsyncSession):
     if tasks:
         task_ids = [t['task_id'] for t in tasks]
         assignees_result = await db.execute(text("""
-            SELECT ta.task_id, ta.user_id, u.username, ta.role
+            SELECT ta.task_id, ta.user_id, u.username, u.avatar_url, u.avatar_color, ta.role
             FROM task_assignee ta
             INNER JOIN "user" u ON ta.user_id = u.user_id
             WHERE ta.task_id = ANY(:task_ids)
@@ -417,6 +423,8 @@ async def find_subtasks(parent_task_id: int, db: AsyncSession):
             assignee_map.setdefault(ad['task_id'], []).append({
                 'user_id': ad['user_id'],
                 'username': ad['username'],
+                'avatar_url': ad.get('avatar_url'),
+                'avatar_color': ad.get('avatar_color'),
                 'role': ad['role'],
             })
         for task in tasks:
@@ -576,7 +584,7 @@ async def search_for_chat(user_id: int, keyword: str, my_only: bool, db: AsyncSe
     if tasks:
         task_ids = [t['task_id'] for t in tasks]
         assignees_result = await db.execute(text("""
-            SELECT ta.task_id, ta.user_id, u.username, ta.role
+            SELECT ta.task_id, ta.user_id, u.username, u.avatar_url, u.avatar_color, ta.role
             FROM task_assignee ta
             INNER JOIN "user" u ON ta.user_id = u.user_id
             WHERE ta.task_id = ANY(:task_ids)
@@ -588,6 +596,8 @@ async def search_for_chat(user_id: int, keyword: str, my_only: bool, db: AsyncSe
             assignee_map.setdefault(ad['task_id'], []).append({
                 'user_id': ad['user_id'],
                 'username': ad['username'],
+                'avatar_url': ad.get('avatar_url'),
+                'avatar_color': ad.get('avatar_color'),
                 'role': ad['role'],
             })
         for task in tasks:
@@ -651,7 +661,7 @@ async def find_by_assignee(user_id: int, status: str, status_category: str, prio
 
         # 담당자 일괄 조회
         assignees_result = await db.execute(text("""
-            SELECT ta.task_id, ta.user_id, u.username, ta.role
+            SELECT ta.task_id, ta.user_id, u.username, u.avatar_url, u.avatar_color, ta.role
             FROM task_assignee ta
             INNER JOIN "user" u ON ta.user_id = u.user_id
             WHERE ta.task_id = ANY(:task_ids)
@@ -663,6 +673,8 @@ async def find_by_assignee(user_id: int, status: str, status_category: str, prio
             assignee_map.setdefault(ad['task_id'], []).append({
                 'user_id': ad['user_id'],
                 'username': ad['username'],
+                'avatar_url': ad.get('avatar_url'),
+                'avatar_color': ad.get('avatar_color'),
                 'role': ad['role'],
             })
 

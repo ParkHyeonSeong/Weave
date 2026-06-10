@@ -14,6 +14,19 @@ ALLOWED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
 MAX_FILE_SIZE = 2 * 1024 * 1024  # 2MB
 
 
+def _remove_avatar_file(avatar_url: str):
+    """업로드된 아바타 파일을 디스크에서 제거 (uploads 디렉토리 밖 경로는 무시)"""
+    # URL 경로(/api/uploads/...)에서 실제 파일 경로(uploads/...)로 변환
+    rel = avatar_url.replace('/api/uploads/', 'uploads/').lstrip('/')
+    path = os.path.normpath(os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+        rel
+    ))
+    uploads_base = os.path.normpath(UPLOAD_DIR)
+    if path.startswith(uploads_base + os.sep) and os.path.exists(path):
+        os.remove(path)
+
+
 async def get_profile(request: Request, db: AsyncSession):
     """내 프로필 조회"""
     user_id = request.state.payload.get('user_id')
@@ -41,6 +54,7 @@ async def update_username(body, request: Request, response: Response, db: AsyncS
             'email': user['email'],
             'username': body.username,
             'role': user['role'],
+            'avatar_color': user.get('avatar_color'),
         },
     }
 
@@ -117,15 +131,7 @@ async def upload_avatar(file: UploadFile, request: Request, db: AsyncSession):
 
     # 기존 아바타 삭제
     if user.get('avatar_url'):
-        # URL 경로(/api/uploads/...)에서 실제 파일 경로(uploads/...)로 변환
-        rel = user['avatar_url'].replace('/api/uploads/', 'uploads/').lstrip('/')
-        old_path = os.path.normpath(os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-            rel
-        ))
-        uploads_base = os.path.normpath(UPLOAD_DIR)
-        if old_path.startswith(uploads_base) and os.path.exists(old_path):
-            os.remove(old_path)
+        _remove_avatar_file(user['avatar_url'])
 
     # 고유 파일명 생성 및 저장
     filename = f"{user_id}_{uuid.uuid4().hex[:8]}{ext}"
@@ -137,3 +143,28 @@ async def upload_avatar(file: UploadFile, request: Request, db: AsyncSession):
     await user_model.update_avatar(user_id, avatar_url, db)
 
     return {'status': True, 'avatar_url': avatar_url}
+
+
+async def delete_avatar(request: Request, db: AsyncSession):
+    """아바타 사진 제거 (색상 설정은 유지)"""
+    user_id = request.state.payload.get('user_id')
+    user = await user_model.find_by_id(user_id, db)
+    if not user:
+        return {'status': False, 'message': 'USER_NOT_FOUND'}
+
+    if user.get('avatar_url'):
+        _remove_avatar_file(user['avatar_url'])
+
+    await user_model.update_avatar(user_id, None, db)
+    return {'status': True}
+
+
+async def update_avatar_color(body, request: Request, db: AsyncSession):
+    """아바타 색상 변경 (None = 자동 해시 색)"""
+    user_id = request.state.payload.get('user_id')
+    user = await user_model.find_by_id(user_id, db)
+    if not user:
+        return {'status': False, 'message': 'USER_NOT_FOUND'}
+
+    await user_model.update_avatar_color(user_id, body.color, db)
+    return {'status': True, 'avatar_color': body.color}

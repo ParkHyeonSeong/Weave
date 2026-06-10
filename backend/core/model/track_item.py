@@ -128,7 +128,7 @@ async def find_by_track(track_id: int, user_id: int, db: AsyncSession):
     # 담당자 일괄 hydrate (접근 가능한 task에 한해)
     if accessible_task_ids:
         assignees_result = await db.execute(text("""
-            SELECT ta.task_id, ta.user_id, u.username, u.avatar_url, ta.role
+            SELECT ta.task_id, ta.user_id, u.username, u.avatar_url, u.avatar_color, ta.role
             FROM task_assignee ta
             INNER JOIN "user" u ON ta.user_id = u.user_id
             WHERE ta.task_id = ANY(:ids)
@@ -141,6 +141,7 @@ async def find_by_track(track_id: int, user_id: int, db: AsyncSession):
                 'user_id': ad['user_id'],
                 'username': ad['username'],
                 'avatar_url': ad.get('avatar_url'),
+                'avatar_color': ad.get('avatar_color'),
                 'role': ad['role'],
             })
         for item in items:

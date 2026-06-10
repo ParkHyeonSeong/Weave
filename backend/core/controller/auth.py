@@ -122,6 +122,8 @@ async def login(body, request: Request, response: Response, db: AsyncSession):
         'email': user['email'],
         'username': user['username'],
         'role': role,
+        'avatar_url': user.get('avatar_url'),
+        'avatar_color': user.get('avatar_color'),
     }
 
     # 비밀번호 변경 강제 플래그

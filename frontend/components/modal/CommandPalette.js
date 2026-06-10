@@ -171,6 +171,7 @@ export default function CommandPalette({ onClose }) {
       case 'logout':
         axios.post('/auth/logout').catch(() => {});
         sessionStorage.removeItem('profile');
+        sessionStorage.removeItem('avatar_url');
         sessionStorage.removeItem('app_initialized');
         router.replace('/auth/login');
         onClose();

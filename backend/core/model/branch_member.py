@@ -36,7 +36,7 @@ async def find_by_branch(branch_id: int, db: AsyncSession):
     """Branch 멤버 목록"""
     result = await db.execute(text("""
         SELECT bm.user_id, bm.role, bm.joined_at,
-               u.username, u.email
+               u.username, u.email, u.avatar_url, u.avatar_color
         FROM branch_member bm
         INNER JOIN "user" u ON bm.user_id = u.user_id
         WHERE bm.branch_id = :branch_id
@@ -85,7 +85,7 @@ async def search_members(branch_id: int, query: str, exclude_user_id: int,
                           limit: int = 10, db: AsyncSession = None):
     """Branch 멤버 중 username 검색 (본인 제외)"""
     result = await db.execute(text("""
-        SELECT u.user_id, u.username, u.email
+        SELECT u.user_id, u.username, u.email, u.avatar_url, u.avatar_color
         FROM branch_member bm
         INNER JOIN "user" u ON bm.user_id = u.user_id
         WHERE bm.branch_id = :branch_id
@@ -114,7 +114,7 @@ async def filter_users_in_branch(branch_id: int, user_ids: list[int],
 async def search_non_members(branch_id: int, query: str, db: AsyncSession):
     """초대 가능한 사용자 검색 (아직 멤버가 아닌 active 유저)"""
     result = await db.execute(text("""
-        SELECT u.user_id, u.username, u.email
+        SELECT u.user_id, u.username, u.email, u.avatar_url, u.avatar_color
         FROM "user" u
         WHERE u.status = 'active'
           AND u.user_id NOT IN (

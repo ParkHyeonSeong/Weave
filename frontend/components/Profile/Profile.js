@@ -1,15 +1,29 @@
 import { useState, useEffect, useRef } from 'react';
-import { User, Mail, Lock, Eye, EyeOff, Camera } from 'lucide-react';
+import { User, Mail, Lock, Eye, EyeOff, Camera, Trash2 } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import Alert from '@/components/modal/Alert';
 import ProfileTokens from '@/components/Profile/ProfileTokens';
 import Avatar from '@/components/common/Avatar';
+import { AVATAR_COLORS } from '@/library/userAvatar';
+
+// sessionStorage의 profile 객체에 변경분을 병합하고 헤더 동기화 이벤트 발생
+function syncProfileSession(patch) {
+  try {
+    const profile = JSON.parse(sessionStorage.getItem('profile') || '{}');
+    sessionStorage.setItem('profile', JSON.stringify({ ...profile, ...patch }));
+  } catch {}
+  window.dispatchEvent(new CustomEvent('profile:updated'));
+}
 
 export default function Profile() {
   // 프로필 정보
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
+  const [userId, setUserId] = useState(null);
+  const [avatarColor, setAvatarColor] = useState(null);
+  const [colorSaving, setColorSaving] = useState(false);
+  const [avatarDeleting, setAvatarDeleting] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // 이름 변경
@@ -53,6 +67,8 @@ export default function Profile() {
         setUsername(user.username);
         setNewUsername(user.username);
         setAvatarUrl(user.avatar_url || '');
+        setUserId(user.user_id ?? null);
+        setAvatarColor(user.avatar_color || null);
         if (user.avatar_url) {
           sessionStorage.setItem('avatar_url', user.avatar_url);
         }
@@ -181,6 +197,48 @@ export default function Profile() {
     }
   };
 
+  // 아바타 사진 제거
+  const handleAvatarDelete = async () => {
+    if (avatarDeleting) return;
+    setAvatarDeleting(true);
+    try {
+      const res = await axios.delete('/profile/avatar');
+      if (res.data.status) {
+        setAvatarUrl('');
+        sessionStorage.removeItem('avatar_url');
+        syncProfileSession({});
+      } else {
+        showAlert('Error', res.data.message);
+      }
+    } catch {
+      showAlert('Error', 'Failed to remove avatar.');
+    } finally {
+      setAvatarDeleting(false);
+    }
+  };
+
+  // 아바타 색상 선택 (null = 자동 해시 색)
+  const handleColorSelect = async (color) => {
+    if (colorSaving || color === avatarColor) return;
+    setColorSaving(true);
+    const prev = avatarColor;
+    setAvatarColor(color); // 즉시 미리보기 반영
+    try {
+      const res = await axios.patch('/profile/avatar-color', { color });
+      if (res.data.status) {
+        syncProfileSession({ avatar_color: color });
+      } else {
+        setAvatarColor(prev);
+        showAlert('Error', res.data.message);
+      }
+    } catch {
+      setAvatarColor(prev);
+      showAlert('Error', 'Failed to update avatar color.');
+    } finally {
+      setColorSaving(false);
+    }
+  };
+
   if (loading) return null;
 
   return (
@@ -192,7 +250,14 @@ export default function Profile() {
         <h2 className="Profile__SectionTitle">Avatar</h2>
         <div className="Profile__AvatarArea">
           <div className="Profile__AvatarPreview" onClick={handleAvatarClick}>
-            <Avatar name={username} avatarUrl={avatarUrl} size={80} className="Profile__AvatarMain" />
+            <Avatar
+              name={username}
+              userId={userId}
+              avatarUrl={avatarUrl}
+              avatarColor={avatarColor}
+              size={80}
+              className="Profile__AvatarMain"
+            />
             <div className="Profile__AvatarOverlay">
               {avatarUploading ? (
                 <span className="Profile__AvatarSpinner" />
@@ -208,7 +273,41 @@ export default function Profile() {
             onChange={handleAvatarChange}
             hidden
           />
-          <p className="Profile__AvatarHint">Click to upload (JPG, PNG, GIF, WebP, max 2MB)</p>
+          <div className="Profile__AvatarSide">
+            <p className="Profile__AvatarHint">Click to upload (JPG, PNG, GIF, WebP, max 2MB)</p>
+            {avatarUrl && (
+              <button
+                type="button"
+                className="Profile__AvatarRemoveBtn"
+                onClick={handleAvatarDelete}
+                disabled={avatarDeleting}
+              >
+                <Trash2 size={13} />
+                {avatarDeleting ? 'Removing...' : 'Remove photo'}
+              </button>
+            )}
+            <div className="Profile__ColorLabel">사진 없을 때 색</div>
+            <div className="Profile__ColorRow">
+              <button
+                type="button"
+                className={`Profile__ColorAuto ${avatarColor == null ? 'Profile__ColorAuto--selected' : ''}`}
+                title="자동 (계정 기본 색)"
+                onClick={() => handleColorSelect(null)}
+              >
+                자동
+              </button>
+              {AVATAR_COLORS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  className={`Profile__ColorSwatch ${avatarColor === c ? 'Profile__ColorSwatch--selected' : ''}`}
+                  style={{ background: c }}
+                  title={c}
+                  onClick={() => handleColorSelect(c)}
+                />
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 

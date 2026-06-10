@@ -41,6 +41,17 @@ async def upload_avatar(request: Request, file: UploadFile = File(...),
     return await profile_controller.upload_avatar(file, request, session)
 
 
+@router.delete("/avatar", summary="아바타 사진 제거", dependencies=[Depends(require_login)])
+async def delete_avatar(request: Request, session: AsyncSession = Depends(db.session)):
+    return await profile_controller.delete_avatar(request, session)
+
+
+@router.patch("/avatar-color", summary="아바타 색상 변경", dependencies=[Depends(require_login)])
+async def update_avatar_color(body: profile_schema.UpdateAvatarColor, request: Request,
+                              session: AsyncSession = Depends(db.session)):
+    return await profile_controller.update_avatar_color(body, request, session)
+
+
 @router.get("/ui-prefs", summary="뷰 상태 조회", dependencies=[Depends(require_login)])
 async def get_ui_prefs(request: Request, session: AsyncSession = Depends(db.session)):
     user_id = request.state.payload['user_id']
