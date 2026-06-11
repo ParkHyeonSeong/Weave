@@ -1,7 +1,7 @@
-import { useState, useMemo, useRef, useEffect, memo } from 'react';
+import { useState, useMemo, useRef, memo } from 'react';
 import { Reply, Pencil, Trash2 } from 'lucide-react';
 import { sanitizeHtml } from '@/library/sanitize';
-import { hydrateDom } from '@/library/refHydration';
+import { useRefHydration } from '@/library/refHydration';
 import { formatRelative } from '@/library/formatTime';
 import Avatar from '@/components/common/Avatar';
 import { buildMentionHtml } from '@/components/Canvas/extensions/MentionExtension';
@@ -66,11 +66,9 @@ function CommentItem({
     [comment.content],
   );
 
-  // readonly 본문의 ref 칩 하이드레이션 (최신 제목·상태)
+  // readonly 본문의 ref 칩 하이드레이션 (최신 제목·상태 + 탭 내 변경 이벤트)
   const contentRef = useRef(null);
-  useEffect(() => {
-    if (!editing) hydrateDom(contentRef.current);
-  }, [comment.content, editing]);
+  useRefHydration(contentRef, [comment.content, editing], !editing);
 
   const handleSubmitEdit = async (html) => {
     try {

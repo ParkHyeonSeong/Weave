@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import { Extension } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
@@ -29,7 +29,7 @@ import { createMarkdownPastePlugin } from './extensions/MarkdownPastePlugin';
 import MermaidExtension from './extensions/MermaidExtension';
 import CanvasEditorToolbar from './CanvasEditorToolbar';
 import TableBubbleMenu from './TableBubbleMenu';
-import { hydrateEditor } from '@/library/refHydration';
+import { useEditorRefHydration } from '@/library/refHydration';
 
 const lowlight = createLowlight(common);
 const MAX_PLAIN_TEXT_LENGTH = 60000;
@@ -117,18 +117,7 @@ export default function CanvasEditor({ content, onChange, canvasId }) {
   });
 
   // 칩 하이드레이션: 마운트 직후 + 탭 내 태스크 변경 시
-  useEffect(() => {
-    if (!editor) return;
-    const t = setTimeout(() => hydrateEditor(editor), 1000);
-    const refresh = () => hydrateEditor(editor);
-    window.addEventListener('task:updated', refresh);
-    window.addEventListener('issue:updated', refresh);
-    return () => {
-      clearTimeout(t);
-      window.removeEventListener('task:updated', refresh);
-      window.removeEventListener('issue:updated', refresh);
-    };
-  }, [editor]);
+  useEditorRefHydration(editor);
 
   if (!editor) return null;
 

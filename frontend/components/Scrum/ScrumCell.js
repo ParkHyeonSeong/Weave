@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import { Extension } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
@@ -11,7 +11,7 @@ import DocRefNode from '@/components/Canvas/extensions/DocRefExtension';
 import MentionNode from '@/components/Canvas/extensions/MentionExtension';
 import ScrumCellToolbar from './ScrumCellToolbar';
 import SlashCommandsExtension from '@/components/Canvas/extensions/SlashCommandsExtension';
-import { hydrateEditor } from '@/library/refHydration';
+import { useEditorRefHydration } from '@/library/refHydration';
 
 // ydoc/provider가 준비된 뒤에만 마운트 (wrapper)
 export default function ScrumCell(props) {
@@ -44,18 +44,7 @@ function ScrumCellInner({ ydoc, fragmentKey, placeholder }) {
   const editor = useEditor({ immediatelyRender: false, extensions }, [ydoc, fragmentKey]);
 
   // 칩 하이드레이션: 마운트 직후(yjs 초기 동기화 대기) + 탭 내 태스크 변경 시
-  useEffect(() => {
-    if (!editor) return;
-    const t = setTimeout(() => hydrateEditor(editor), 1000);
-    const refresh = () => hydrateEditor(editor);
-    window.addEventListener('task:updated', refresh);
-    window.addEventListener('issue:updated', refresh);
-    return () => {
-      clearTimeout(t);
-      window.removeEventListener('task:updated', refresh);
-      window.removeEventListener('issue:updated', refresh);
-    };
-  }, [editor]);
+  useEditorRefHydration(editor, 1000);
 
   if (!editor) return <div className="ScrumCell ScrumCell--loading" />;
   return (

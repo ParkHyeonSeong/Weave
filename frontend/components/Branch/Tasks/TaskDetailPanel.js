@@ -8,7 +8,7 @@ import DatePicker from '@/components/common/DatePicker';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import useTaskDetail from '@/hooks/useTaskDetail';
 import { sanitizeHtml } from '@/library/sanitize';
-import { hydrateDom } from '@/library/refHydration';
+import { useRefHydration } from '@/library/refHydration';
 import Avatar from '@/components/common/Avatar';
 import TaskIssueSection from './TaskIssueSection';
 import TaskDependencySection from './TaskDependencySection';
@@ -47,11 +47,9 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
   // 삭제 확인
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  // readonly 설명의 ref 칩 하이드레이션 (최신 제목·상태)
+  // readonly 설명의 ref 칩 하이드레이션 (최신 제목·상태 + 탭 내 변경 이벤트)
   const descRef = useRef(null);
-  useEffect(() => {
-    if (!editingDesc) hydrateDom(descRef.current);
-  }, [task?.description, editingDesc]);
+  useRefHydration(descRef, [task?.description, editingDesc], !editingDesc);
 
   // 제목 저장
   const saveTitle = () => {

@@ -17,7 +17,7 @@ import { createImageUploadPlugin } from '@/components/Canvas/extensions/ImageUpl
 import { createMarkdownPastePlugin } from '@/components/Canvas/extensions/MarkdownPastePlugin';
 import MermaidExtension from '@/components/Canvas/extensions/MermaidExtension';
 import CanvasEditorToolbar from '@/components/Canvas/CanvasEditorToolbar';
-import { hydrateEditor } from '@/library/refHydration';
+import { useEditorRefHydration } from '@/library/refHydration';
 
 const lowlight = createLowlight(common);
 
@@ -72,18 +72,7 @@ export default function TaskDescriptionEditor({ content, onSave, branchId }) {
   });
 
   // 칩 하이드레이션: 마운트 직후 + 탭 내 태스크 변경 시
-  useEffect(() => {
-    if (!editor) return;
-    const t = setTimeout(() => hydrateEditor(editor), 1000);
-    const refresh = () => hydrateEditor(editor);
-    window.addEventListener('task:updated', refresh);
-    window.addEventListener('issue:updated', refresh);
-    return () => {
-      clearTimeout(t);
-      window.removeEventListener('task:updated', refresh);
-      window.removeEventListener('issue:updated', refresh);
-    };
-  }, [editor]);
+  useEditorRefHydration(editor);
 
   // blur 시 저장
   useEffect(() => {

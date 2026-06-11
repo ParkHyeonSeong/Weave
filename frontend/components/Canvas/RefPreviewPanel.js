@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import { X, ExternalLink, ArrowRight, Loader } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import { sanitizeHtml } from '@/library/sanitize';
-import { hydrateDom } from '@/library/refHydration';
+import { useRefHydration } from '@/library/refHydration';
 
 export default function RefPreviewPanel({ refType, refData, onClose }) {
   const router = useRouter();
@@ -40,10 +40,8 @@ export default function RefPreviewPanel({ refType, refData, onClose }) {
     return () => { cancelled = true; };
   }, [refKey]);
 
-  // 프리뷰 본문의 ref 칩 하이드레이션 (최신 제목·상태)
-  useEffect(() => {
-    hydrateDom(bodyRef.current);
-  }, [data]);
+  // 프리뷰 본문의 ref 칩 하이드레이션 (최신 제목·상태 + 탭 내 변경 이벤트)
+  useRefHydration(bodyRef, [data]);
 
   const getNavigateUrl = () => {
     if (refType === 'task') return `/branch/${refData.branchId}/task/${refData.taskId}`;

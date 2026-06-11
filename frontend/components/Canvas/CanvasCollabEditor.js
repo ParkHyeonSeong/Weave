@@ -34,7 +34,7 @@ import CanvasEditorToolbar from './CanvasEditorToolbar';
 import TableBubbleMenu from './TableBubbleMenu';
 import { getBaseURL } from '@/library/_axios';
 import { buildAvatarDOM } from '@/library/userAvatar';
-import { hydrateEditor } from '@/library/refHydration';
+import { useEditorRefHydration } from '@/library/refHydration';
 
 const lowlight = createLowlight(common);
 const MAX_PLAIN_TEXT_LENGTH = 60000;
@@ -178,18 +178,7 @@ function CollabEditorInner({
   }, [editor, initialContent, hasExistingYjsState, ydoc]);
 
   // 칩 하이드레이션: 마운트 직후(yjs 초기 동기화 대기) + 탭 내 태스크 변경 시
-  useEffect(() => {
-    if (!editor) return;
-    const t = setTimeout(() => hydrateEditor(editor), 1000);
-    const refresh = () => hydrateEditor(editor);
-    window.addEventListener('task:updated', refresh);
-    window.addEventListener('issue:updated', refresh);
-    return () => {
-      clearTimeout(t);
-      window.removeEventListener('task:updated', refresh);
-      window.removeEventListener('issue:updated', refresh);
-    };
-  }, [editor]);
+  useEditorRefHydration(editor, 1000);
 
   if (!editor) return null;
 

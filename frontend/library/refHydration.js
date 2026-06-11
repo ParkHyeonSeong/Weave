@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { axios } from '@/library/_axios';
 
 // 인라인 ref 칩(taskRef/docRef/issueRef/mention) 라이브 하이드레이션.
@@ -162,4 +163,66 @@ export async function hydrateDom(root) {
 export async function hydrateEditor(editor) {
   if (!editor || editor.isDestroyed) return;
   return hydrateDom(editor.view.dom);
+}
+
+// task:updated 등 이벤트 구동 재해석 시 TTL 캐시가 stale을 되돌려주지 않게 비운다
+export function invalidateRefCache() {
+  cache.clear();
+}
+
+// readonly 표면용 훅: 콘텐츠 변경 시 + task/issue 변경 이벤트 시 하이드레이션.
+// deps는 호출부가 콘텐츠 의존성을 그대로 넘긴다.
+export function useRefHydration(ref, deps, enabled = true) {
+  useEffect(() => {
+    if (!enabled || !ref.current) return;
+    hydrateDom(ref.current);
+    const refresh = () => {
+      invalidateRefCache();
+      if (ref.current) hydrateDom(ref.current);
+    };
+    window.addEventListener('task:updated', refresh);
+    window.addEventListener('issue:updated', refresh);
+    return () => {
+      window.removeEventListener('task:updated', refresh);
+      window.removeEventListener('issue:updated', refresh);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, ...deps]);
+}
+
+// 에디터(TipTap) 표면용 훅. collab(yjs) 에디터는 초기 동기화 대기용 delay를 준다.
+export function useEditorRefHydration(editor, delay = 0) {
+  useEffect(() => {
+    if (!editor) return;
+    const t = setTimeout(() => hydrateEditor(editor), delay);
+    const refresh = () => {
+      invalidateRefCache();
+      hydrateEditor(editor);
+    };
+    window.addEventListener('task:updated', refresh);
+    window.addEventListener('issue:updated', refresh);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener('task:updated', refresh);
+      window.removeEventListener('issue:updated', refresh);
+    };
+  }, [editor, delay]);
+}
+
+// fetch 전 즉시 표시용: 칩의 data-* 스냅샷 attrs로 배지를 주입한다
+// (CanvasPageView/CanvasOverview 공용 — 구 인라인 구현 2벌 대체)
+export function applyFallbackBadges(root) {
+  if (!root) return;
+  root.querySelectorAll('[data-task-ref]').forEach((el) => {
+    const status = el.getAttribute('data-status') || 'todo';
+    setBadge(el, {
+      category: el.getAttribute('data-status-category') || status,
+      label: el.getAttribute('data-status-label') || status,
+      color: el.getAttribute('data-status-color') || null,
+    });
+  });
+  root.querySelectorAll('[data-issue-ref]').forEach((el) => {
+    const status = el.getAttribute('data-status') || 'open';
+    setBadge(el, { category: status, label: ISSUE_LABELS[status] || status, color: null });
+  });
 }

@@ -9,7 +9,7 @@ import ConfirmModal from '@/components/modal/ConfirmModal';
 import PageMoveModal from '@/components/modal/PageMoveModal';
 import useCollabProvider from '@/library/useCollabProvider';
 import { sanitizeHtml } from '@/library/sanitize';
-import { hydrateDom } from '@/library/refHydration';
+import { applyFallbackBadges, useRefHydration } from '@/library/refHydration';
 import PresenceBar from './PresenceBar';
 import AnnotationLayer from './AnnotationLayer';
 import AnnotationSidebar from './AnnotationSidebar';
@@ -255,46 +255,14 @@ export default function CanvasPageView({ onRefClick }) {
     return () => handlers.forEach(({ el, handler }) => el.removeEventListener('click', handler));
   }, [isEditing, page?.content, router, onRefClick]);
 
-  // 읽기 모드에서 ref 칩 폴백 뱃지 주입 + 하이드레이션 (최신 제목·상태)
+  // 읽기 모드에서 ref 칩 폴백 뱃지 주입 (data-* 스냅샷으로 fetch 전 즉시 표시)
   useEffect(() => {
     if (isEditing || !contentRef.current || page?.type === 'typst') return;
-
-    const issueStatusMap = { open: 'Open', closed: 'Closed' };
-
-    // data-status fallback으로 즉시 뱃지 표시
-    const injectBadge = (el, status, labelMap) => {
-      el.querySelector('[data-ref-badge]')?.remove();
-      const badge = document.createElement('span');
-      badge.className = `ref-chip__badge ref-chip__badge--${status}`;
-      badge.textContent = labelMap[status] || status;
-      badge.setAttribute('data-ref-badge', 'true');
-      el.appendChild(badge);
-    };
-
-    contentRef.current.querySelectorAll('[data-task-ref]').forEach((el) => {
-      const status = el.getAttribute('data-status') || 'todo';
-      const statusLabel = el.getAttribute('data-status-label');
-      const statusColor = el.getAttribute('data-status-color');
-      const category = el.getAttribute('data-status-category') || status;
-      el.querySelector('[data-ref-badge]')?.remove();
-      const badge = document.createElement('span');
-      badge.className = `ref-chip__badge ref-chip__badge--${category}`;
-      badge.textContent = statusLabel || status;
-      if (statusColor) {
-        badge.style.backgroundColor = `${statusColor}20`;
-        badge.style.color = statusColor;
-      }
-      badge.setAttribute('data-ref-badge', 'true');
-      el.appendChild(badge);
-    });
-    contentRef.current.querySelectorAll('[data-issue-ref]').forEach((el) => {
-      const status = el.getAttribute('data-status') || 'open';
-      injectBadge(el, status, issueStatusMap);
-    });
-
-    // 배치 API로 최신 제목·상태 갱신
-    hydrateDom(contentRef.current);
+    applyFallbackBadges(contentRef.current);
   }, [isEditing, page?.content]);
+
+  // 배치 API로 최신 제목·상태 하이드레이션 + 탭 내 태스크/이슈 변경 이벤트 갱신
+  useRefHydration(contentRef, [isEditing, page?.content], !isEditing && page?.type !== 'typst');
 
   // 제목 변경 (debounced)
   const handleTitleChange = (e) => {

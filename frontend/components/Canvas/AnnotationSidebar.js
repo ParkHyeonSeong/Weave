@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { X, Check, RotateCcw, Trash2, MoreHorizontal, MessageSquare } from 'lucide-react';
 import { sanitizeHtml } from '@/library/sanitize';
-import { hydrateDom } from '@/library/refHydration';
+import { useRefHydration } from '@/library/refHydration';
 import { formatRelative } from '@/library/formatTime';
 import Avatar from '@/components/common/Avatar';
 import IssueEditor from '@/components/Branch/Tasks/IssueEditor';
@@ -49,10 +49,8 @@ export default function AnnotationSidebar({
     }
   }, [newAnnotationData]);
 
-  // readonly 답글의 ref 칩 하이드레이션 (최신 제목·상태)
-  useEffect(() => {
-    if (isOpen) hydrateDom(sidebarRef.current);
-  }, [annotations, tab, isOpen]);
+  // readonly 답글의 ref 칩 하이드레이션 (최신 제목·상태 + 탭 내 변경 이벤트)
+  useRefHydration(sidebarRef, [annotations, tab, isOpen], isOpen);
 
   // activeAnnotationId 변경 시 해당 카드로 스크롤
   useEffect(() => {

@@ -1,8 +1,8 @@
-import { useRef, useEffect } from 'react';
+import { useRef } from 'react';
 import { useRouter } from 'next/router';
 import { X, CalendarDays, Flag, ExternalLink, Lock, Layers, MessageSquare, GitBranch } from 'lucide-react';
 import { sanitizeHtml } from '@/library/sanitize';
-import { hydrateDom } from '@/library/refHydration';
+import { useRefHydration } from '@/library/refHydration';
 import Avatar from '@/components/common/Avatar';
 import { PRIORITIES } from '../mockData';
 
@@ -18,11 +18,9 @@ export default function TrackItemDetail({ item, branch, workflowStatuses, onClos
   // openInBranch는 restricted/empty 분기 이후 렌더되므로 item/branch_id/task_id는 항상 존재
   const openInBranch = () => router.push(`/branch/${item.branch_id}?task=${item.task_id}`);
 
-  // readonly 설명의 ref 칩 하이드레이션 (최신 제목·상태)
+  // readonly 설명의 ref 칩 하이드레이션 (최신 제목·상태 + 탭 내 변경 이벤트)
   const descRef = useRef(null);
-  useEffect(() => {
-    hydrateDom(descRef.current);
-  }, [item?.description]);
+  useRefHydration(descRef, [item?.description]);
 
   if (!item) {
     return (
