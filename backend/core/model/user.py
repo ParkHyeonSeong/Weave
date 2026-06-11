@@ -128,6 +128,21 @@ async def search_active(query: str, exclude_user_id: int, limit: int = 10,
     return [dict(r._mapping) for r in result.fetchall()]
 
 
+async def batch_usernames(user_ids: list[int], db: AsyncSession) -> dict:
+    """멘션 칩 하이드레이션용 username 배치 조회.
+
+    별도 스코핑 없음 — username은 GET /chat/users(전체 사용자 목록, require_login)로
+    이미 전 로그인 사용자에게 노출되는 수준의 정보다.
+    """
+    if not user_ids:
+        return {}
+    result = await db.execute(text("""
+        SELECT user_id, username FROM "user"
+        WHERE user_id = ANY(:ids) AND status = 'active' AND deleted_at IS NULL
+    """), {'ids': user_ids})
+    return {str(r.user_id): {'username': r.username} for r in result.fetchall()}
+
+
 async def soft_delete(user_id: int, db: AsyncSession):
     """사용자 소프트 삭제"""
     await db.execute(text("""

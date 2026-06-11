@@ -57,6 +57,20 @@ async def find_by_id_simple(page_id: int, db: AsyncSession):
     return dict(row._mapping) if row else None
 
 
+async def batch_titles(page_ids: list[int], user_id: int, db: AsyncSession) -> dict:
+    """Ref 제목 배치 조회 (page_id → title/canvas_name), 멤버인 canvas만"""
+    if not page_ids:
+        return {}
+    result = await db.execute(text("""
+        SELECT p.page_id, p.title, c.canvas_name
+        FROM canvas_page p
+        INNER JOIN canvas c ON c.canvas_id = p.canvas_id
+        INNER JOIN canvas_member cm ON cm.canvas_id = p.canvas_id AND cm.user_id = :user_id
+        WHERE p.page_id = ANY(:ids) AND p.is_archived = FALSE
+    """), {'ids': page_ids, 'user_id': user_id})
+    return {str(r.page_id): {'title': r.title, 'canvas_name': r.canvas_name} for r in result.fetchall()}
+
+
 async def find_tree(canvas_id: int, db: AsyncSession):
     """Canvas 내 전체 페이지 트리 (content 제외, 가볍게)"""
     result = await db.execute(text("""
