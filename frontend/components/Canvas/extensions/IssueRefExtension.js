@@ -1,11 +1,9 @@
 import { Node, mergeAttributes } from '@tiptap/core';
-import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { PluginKey } from '@tiptap/pm/state';
 import IssueRefPopup from './IssueRefPopup';
-import { mapAnchor, withAnchorRel, createSuggestionPopupView } from './refSuggestion';
+import { createRefSuggestionPlugin } from './refSuggestion';
 
 export const issueRefPluginKey = new PluginKey('issueRefSuggestion');
-
-const ISSUE_OFF = { active: false, from: 0 };
 
 const IssueRefNode = Node.create({
   name: 'issueRef',
@@ -80,38 +78,22 @@ const IssueRefNode = Node.create({
   },
 
   addProseMirrorPlugins() {
-    const editor = this.editor;
-
     return [
-      new Plugin({
-        key: issueRefPluginKey,
-        state: {
-          init() { return ISSUE_OFF; },
-          apply(tr, prev, _oldState, newState) {
-            const meta = tr.getMeta(issueRefPluginKey);
-            if (meta) return withAnchorRel(meta, newState);
-            if (!prev.active || !tr.docChanged) return prev;
-            // 검색어는 input에 있으므로 문서 변경엔 앵커 추적만 (원격 tr은 relPos로)
-            return mapAnchor(tr, prev, ISSUE_OFF, newState);
-          },
-        },
-        view: createSuggestionPopupView({
-          editor,
-          pluginKey: issueRefPluginKey,
-          off: ISSUE_OFF,
-          Popup: IssueRefPopup,
-          buildProps: (st, { close, dismiss, backToMenu, insertRefNode }) => ({
-            onClose: close,
-            onDismiss: dismiss,
-            onBack: backToMenu,
-            onSelect: (issue) => insertRefNode('issueRef', {
-              issueId: issue.issue_id,
-              taskId: issue.task_id,
-              branchId: issue.branch_id,
-              displayId: issue.display_id,
-              title: issue.title,
-              status: issue.status,
-            }),
+      createRefSuggestionPlugin({
+        editor: this.editor,
+        pluginKey: issueRefPluginKey,
+        Popup: IssueRefPopup,
+        buildProps: (st, { close, dismiss, backToMenu, insertRefNode }) => ({
+          onClose: close,
+          onDismiss: dismiss,
+          onBack: backToMenu,
+          onSelect: (issue) => insertRefNode('issueRef', {
+            issueId: issue.issue_id,
+            taskId: issue.task_id,
+            branchId: issue.branch_id,
+            displayId: issue.display_id,
+            title: issue.title,
+            status: issue.status,
           }),
         }),
       }),

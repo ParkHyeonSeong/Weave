@@ -1,11 +1,9 @@
 import { Node, mergeAttributes } from '@tiptap/core';
-import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { PluginKey } from '@tiptap/pm/state';
 import DocRefPopup from './DocRefPopup';
-import { mapAnchor, withAnchorRel, createSuggestionPopupView } from './refSuggestion';
+import { createRefSuggestionPlugin } from './refSuggestion';
 
 export const docRefPluginKey = new PluginKey('docRefSuggestion');
-
-const DOC_OFF = { active: false, from: 0 };
 
 const DocRefNode = Node.create({
   name: 'docRef',
@@ -68,36 +66,20 @@ const DocRefNode = Node.create({
   },
 
   addProseMirrorPlugins() {
-    const editor = this.editor;
-
     return [
-      new Plugin({
-        key: docRefPluginKey,
-        state: {
-          init() { return DOC_OFF; },
-          apply(tr, prev, _oldState, newState) {
-            const meta = tr.getMeta(docRefPluginKey);
-            if (meta) return withAnchorRel(meta, newState);
-            if (!prev.active || !tr.docChanged) return prev;
-            // 검색어는 input에 있으므로 문서 변경엔 앵커 추적만 (원격 tr은 relPos로)
-            return mapAnchor(tr, prev, DOC_OFF, newState);
-          },
-        },
-        view: createSuggestionPopupView({
-          editor,
-          pluginKey: docRefPluginKey,
-          off: DOC_OFF,
-          Popup: DocRefPopup,
-          buildProps: (st, { close, dismiss, backToMenu, insertRefNode }) => ({
-            onClose: close,
-            onDismiss: dismiss,
-            onBack: backToMenu,
-            onSelect: (doc) => insertRefNode('docRef', {
-              pageId: doc.page_id,
-              canvasId: doc.canvas_id,
-              title: doc.title,
-              canvasName: doc.canvas_name,
-            }),
+      createRefSuggestionPlugin({
+        editor: this.editor,
+        pluginKey: docRefPluginKey,
+        Popup: DocRefPopup,
+        buildProps: (st, { close, dismiss, backToMenu, insertRefNode }) => ({
+          onClose: close,
+          onDismiss: dismiss,
+          onBack: backToMenu,
+          onSelect: (doc) => insertRefNode('docRef', {
+            pageId: doc.page_id,
+            canvasId: doc.canvas_id,
+            title: doc.title,
+            canvasName: doc.canvas_name,
           }),
         }),
       }),

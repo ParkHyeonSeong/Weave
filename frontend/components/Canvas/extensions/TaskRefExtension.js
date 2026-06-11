@@ -1,11 +1,9 @@
 import { Node, mergeAttributes } from '@tiptap/core';
-import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { PluginKey } from '@tiptap/pm/state';
 import TaskRefPopup from './TaskRefPopup';
-import { mapAnchor, withAnchorRel, createSuggestionPopupView } from './refSuggestion';
+import { createRefSuggestionPlugin } from './refSuggestion';
 
 export const taskRefPluginKey = new PluginKey('taskRefSuggestion');
-
-const TASK_OFF = { active: false, mode: null, from: 0 };
 
 // snake_case key를 Title Case로 변환 (fallback용)
 const formatStatusKey = (key) => key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -103,42 +101,26 @@ const TaskRefNode = Node.create({
   },
 
   addProseMirrorPlugins() {
-    const editor = this.editor;
-
     return [
-      new Plugin({
-        key: taskRefPluginKey,
-        state: {
-          init() { return TASK_OFF; },
-          apply(tr, prev, _oldState, newState) {
-            const meta = tr.getMeta(taskRefPluginKey);
-            if (meta) return withAnchorRel(meta, newState);
-            if (!prev.active || !tr.docChanged) return prev;
-            // 검색어는 input에 있으므로 문서 변경엔 앵커 추적만 (원격 tr은 relPos로)
-            return mapAnchor(tr, prev, TASK_OFF, newState);
-          },
-        },
-        view: createSuggestionPopupView({
-          editor,
-          pluginKey: taskRefPluginKey,
-          off: TASK_OFF,
-          Popup: TaskRefPopup,
-          buildProps: (st, { close, dismiss, backToMenu, insertRefNode }) => ({
-            mode: st.mode,
-            onClose: close,
-            onDismiss: dismiss,
-            onBack: backToMenu,
-            onSelect: (task) => insertRefNode('taskRef', {
-              taskId: task.task_id,
-              branchId: task.branch_id,
-              displayId: task.display_id,
-              title: task.title,
-              status: task.status,
-              priority: task.priority,
-              statusLabel: task.status_label || null,
-              statusColor: task.status_color || null,
-              statusCategory: task.status_category || null,
-            }),
+      createRefSuggestionPlugin({
+        editor: this.editor,
+        pluginKey: taskRefPluginKey,
+        Popup: TaskRefPopup,
+        buildProps: (st, { close, dismiss, backToMenu, insertRefNode }) => ({
+          mode: st.mode,
+          onClose: close,
+          onDismiss: dismiss,
+          onBack: backToMenu,
+          onSelect: (task) => insertRefNode('taskRef', {
+            taskId: task.task_id,
+            branchId: task.branch_id,
+            displayId: task.display_id,
+            title: task.title,
+            status: task.status,
+            priority: task.priority,
+            statusLabel: task.status_label || null,
+            statusColor: task.status_color || null,
+            statusCategory: task.status_category || null,
           }),
         }),
       }),

@@ -1,7 +1,7 @@
 // ref 제안 팝업(taskRef/docRef/issueRef/mention/슬래시 메뉴) 공용 모듈:
 // plugin key(순환 import 회피용 이관) + state 헬퍼 + 검색 팝업 view 팩토리.
 
-import { PluginKey, TextSelection, Selection } from '@tiptap/pm/state';
+import { Plugin, PluginKey, TextSelection, Selection } from '@tiptap/pm/state';
 import { ReactRenderer } from '@tiptap/react';
 import {
   ySyncPluginKey,
@@ -10,6 +10,10 @@ import {
 } from 'y-prosemirror';
 
 const OFF = { active: false, keyword: '', from: 0 };
+
+// ref 검색 플러그인 공용 비활성 상태 (taskRef의 mode 등 종류별 필드는
+// 비활성 시 아무도 읽지 않으므로 공용 shape 하나로 충분)
+export const REF_OFF = { active: false, from: 0 };
 
 // 슬래시 메뉴 plugin key — ref 확장들의 onBack(커맨드 메뉴 복귀)과
 // SlashCommandsExtension이 함께 쓰므로 순환 import를 피해 여기에 둔다.
@@ -52,7 +56,7 @@ export function mapAnchor(tr, prev, off, newState) {
 // ref 검색 팝업(taskRef/docRef/issueRef 공용) plugin view 팩토리.
 // 팝업 생명주기·앵커 좌표·포커스 복원·커맨드 메뉴 복귀(onBack)를 담당하고,
 // 종류별 차이(검색 컴포넌트·칩 attrs)는 buildProps로 주입받는다.
-export function createSuggestionPopupView({ editor, pluginKey, off, Popup, buildProps }) {
+export function createSuggestionPopupView({ editor, pluginKey, off = REF_OFF, Popup, buildProps }) {
   return (editorView) => {
     let popup = null;
     let renderer = null;
@@ -150,6 +154,24 @@ export function createSuggestionPopupView({ editor, pluginKey, off, Popup, build
       destroy() { destroyPopup(); },
     };
   };
+}
+
+// ref 검색 플러그인(taskRef/docRef/issueRef) 전체를 생성 — state(앵커 추적) + view(팝업).
+export function createRefSuggestionPlugin({ editor, pluginKey, Popup, buildProps }) {
+  return new Plugin({
+    key: pluginKey,
+    state: {
+      init() { return REF_OFF; },
+      apply(tr, prev, _oldState, newState) {
+        const meta = tr.getMeta(pluginKey);
+        if (meta) return withAnchorRel(meta, newState);
+        if (!prev.active || !tr.docChanged) return prev;
+        // 검색어는 input에 있으므로 문서 변경엔 앵커 추적만 (원격 tr은 relPos로)
+        return mapAnchor(tr, prev, REF_OFF, newState);
+      },
+    },
+    view: createSuggestionPopupView({ editor, pluginKey, Popup, buildProps }),
+  });
 }
 
 // 활성 토큰(prevFrom에서 시작해 커서까지)을 현재 상태에서 다시 찾는다.
