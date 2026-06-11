@@ -606,11 +606,7 @@
       mark { border-radius: 2px; padding: 1px 2px; }
       u { text-decoration: underline; }
 
-      img {
-        max-width: 100%;
-        height: auto;
-        border-radius: $radius-lg;
-      }
+      img { @include rich-content-img; }
 
       .ResizableImage {
         display: inline-block;
@@ -626,6 +622,8 @@
 
           &--selected { border-color: $color-primary; }
           &--resizing { user-select: none; }
+          // 리사이즈 래퍼 내부 img는 JS가 width를 직접 제어하므로
+          // rich-content-img mixin(max-width/height) 제외, 모서리만 통일
           img { border-radius: $radius-lg; }
         }
 
@@ -742,11 +740,7 @@
   word-break: break-word;
   overflow-wrap: break-word;
 
-  img {
-    max-width: 100%;
-    height: auto;
-    border-radius: $radius-lg;
-  }
+  img { @include rich-content-img; }
 
   > * + * { margin-top: 0.4em; }
 

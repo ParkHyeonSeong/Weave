@@ -193,8 +193,7 @@
     a { color: $color-primary; text-decoration: underline; }
 
     img {
-      max-width: 100%;
-      border-radius: $radius-lg;
+      @include rich-content-img;
       margin: 0.8em 0;
 
       &[data-text-align="center"] {

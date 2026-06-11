@@ -1301,6 +1301,8 @@ $track-border-soft: color.adjust($color-border, $lightness: 5%);
     line-height: 1.55;
     color: $track-ink;
     margin: 0;
+
+    img { @include rich-content-img; }
   }
 
   &__TrackChips {

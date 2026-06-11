@@ -107,3 +107,13 @@ $bp-desktop: 1024px;
     @content;
   }
 }
+
+// -- Rich content image ---------------------------------------------------
+// dangerouslySetInnerHTML 표면·에디터에 삽입된 이미지는 width 없이 저장되므로
+// 제약이 없으면 원본 해상도 그대로 넘친다. 모든 리치 콘텐츠 컨테이너의
+// img는 이 mixin을 include해 폭을 통일한다. (새 표면 추가 시 필수)
+@mixin rich-content-img {
+  max-width: 100%;
+  height: auto;
+  border-radius: $radius-lg;
+}

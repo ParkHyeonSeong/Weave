@@ -187,6 +187,7 @@
       border-radius: 3px;
       font-size: 0.9em;
     }
+    img { @include rich-content-img; }
 
     &--doc {
       max-height: none;
@@ -218,10 +219,6 @@
           width: auto !important;
           min-width: 0 !important;
         }
-      }
-      img {
-        max-width: 100%;
-        height: auto;
       }
       [data-bookmark] {
         max-width: 100%;

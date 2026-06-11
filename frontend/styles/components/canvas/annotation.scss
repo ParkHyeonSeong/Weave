@@ -251,6 +251,8 @@
     p + p {
       margin-top: 4px;
     }
+
+    img { @include rich-content-img; }
   }
 
   &__ReplyMenu {
