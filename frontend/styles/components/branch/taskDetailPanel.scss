@@ -712,6 +712,9 @@
         &--todo { background: rgba(0, 0, 0, 0.06); color: $color-text-secondary; }
         &--in_progress { background: $color-status-in-progress-bg; color: $color-status-in-progress; }
         &--done { background: $color-success-bg; color: $color-success; }
+        &--cancelled { background: rgba(0, 0, 0, 0.06); color: $color-text-secondary; }
+        &--open { background: $color-status-in-progress-bg; color: $color-status-in-progress; }
+        &--closed { background: $color-success-bg; color: $color-success; }
       }
 
       .callout {
@@ -842,6 +845,9 @@
     &--todo { background: rgba(0, 0, 0, 0.06); color: $color-text-secondary; }
     &--in_progress { background: $color-status-in-progress-bg; color: $color-status-in-progress; }
     &--done { background: $color-success-bg; color: $color-success; }
+    &--cancelled { background: rgba(0, 0, 0, 0.06); color: $color-text-secondary; }
+    &--open { background: $color-status-in-progress-bg; color: $color-status-in-progress; }
+    &--closed { background: $color-success-bg; color: $color-success; }
   }
 
   .callout {

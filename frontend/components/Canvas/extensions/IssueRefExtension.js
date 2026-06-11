@@ -34,6 +34,7 @@ const IssueRefNode = Node.create({
   },
 
   renderHTML({ node, HTMLAttributes }) {
+    const label = node.attrs.status === 'open' ? 'Open' : 'Closed';
     return [
       'span',
       mergeAttributes(HTMLAttributes, {
@@ -47,6 +48,10 @@ const IssueRefNode = Node.create({
         class: 'issue-ref',
       }),
       `${node.attrs.displayId} ${node.attrs.title}`,
+      ['span', {
+        class: `ref-chip__badge ref-chip__badge--${node.attrs.status}`,
+        'data-ref-badge': 'true',
+      }, label],
     ];
   },
 

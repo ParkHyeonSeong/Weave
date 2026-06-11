@@ -16,17 +16,27 @@ const cache = new Map(); // 'tasks:1' → { data, at }
 let membershipsAt = 0;
 let myBranchIds = null; // Set<string>
 let myCanvasIds = null;
+let membershipPromise = null; // in-flight 가드 — 동시 마운트 시 중복 fetch 방지
 
 async function ensureMemberships() {
   if (myBranchIds && Date.now() - membershipsAt < TTL_MS) return;
-  const [br, cv] = await Promise.all([
-    axios.get('/branches').catch(() => null),
-    axios.get('/canvases').catch(() => null),
-  ]);
-  // 요청 실패 시 빈 집합 → 전부 '권한 밖' 취급(정상 표시) — 오표기보다 미표기가 안전
-  myBranchIds = new Set((br?.data?.branches || []).map((b) => String(b.branch_id)));
-  myCanvasIds = new Set((cv?.data?.canvases || []).map((c) => String(c.canvas_id)));
-  membershipsAt = Date.now();
+  if (!membershipPromise) {
+    membershipPromise = (async () => {
+      try {
+        const [br, cv] = await Promise.all([
+          axios.get('/branches').catch(() => null),
+          axios.get('/canvases').catch(() => null),
+        ]);
+        // 요청 실패 시 빈 집합 → 전부 '권한 밖' 취급(정상 표시) — 오표기보다 미표기가 안전
+        myBranchIds = new Set((br?.data?.branches || []).map((b) => String(b.branch_id)));
+        myCanvasIds = new Set((cv?.data?.canvases || []).map((c) => String(c.canvas_id)));
+        membershipsAt = Date.now();
+      } finally {
+        membershipPromise = null;
+      }
+    })();
+  }
+  return membershipPromise;
 }
 
 function cacheGet(kind, id) {
@@ -145,6 +155,7 @@ function setUnresolved(el, unresolved, tooltip) {
 // 누락 칩은 멤버십과 대조해 '삭제 확정'(멤버인 곳)만 표기하고 권한 밖은 정상 모양 유지
 // — 멤버십은 누락이 실제로 있을 때만 lazy fetch 하므로 async.
 export async function applyToDom(root, { tasks, issues, pages, users }) {
+  if (!root.isConnected) return;
   const missingByBranch = []; // 누락 task/issue 칩 — data-branch-id 멤버십으로 판정
   const missingByCanvas = []; // 누락 doc 칩 — data-canvas-id 멤버십으로 판정
   root.querySelectorAll('[data-task-ref]').forEach((el) => {
@@ -233,13 +244,19 @@ export async function hydrateEditor(editor) {
   return hydrateDom(editor.view.dom);
 }
 
-// task:updated 등 이벤트 구동 재해석 시 TTL 캐시가 stale을 되돌려주지 않게 비운다
+// task:updated 등 이벤트 구동 재해석 시 TTL 캐시가 stale을 되돌려주지 않게 비운다.
+// 멤버십 캐시도 함께 비워 브랜치 탈퇴 직후 30초간 '삭제 확정' 오표기를 막는다.
 export function invalidateRefCache() {
   cache.clear();
+  myBranchIds = null;
+  myCanvasIds = null;
+  membershipsAt = 0;
 }
 
 // readonly 표면용 훅: 콘텐츠 변경 시 + task/issue 변경 이벤트 시 하이드레이션.
 // deps는 호출부가 콘텐츠 의존성을 그대로 넘긴다.
+// 주의: deps는 렌더 간 길이가 변하지 않는 고정 길이 배열이어야 한다(React hooks 규칙
+// — spread로 useEffect deps에 들어가므로 길이가 변하면 훅 규칙 위반).
 export function useRefHydration(ref, deps, enabled = true) {
   useEffect(() => {
     if (!enabled || !ref.current) return;
