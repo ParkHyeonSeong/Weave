@@ -4,7 +4,7 @@ import { axios } from '@/library/_axios';
 // 인라인 ref 칩(taskRef/docRef/issueRef/mention) 라이브 하이드레이션.
 // 칩 attrs는 삽입 시점 스냅샷(폴백)이고, 표면이 마운트될 때마다 /ref-status로
 // 최신 제목·상태를 받아 DOM을 패치한다 (컨플루언스 Smart Link 모델).
-// 응답에 없는 ID(삭제·권한 밖)는 건드리지 않는다 — 스냅샷이 그대로 폴백.
+// 응답에 없는 ID(삭제·권한 밖)는 스냅샷 텍스트를 유지한 채 중립 표기만 한다.
 
 const TTL_MS = 30_000;
 const cache = new Map(); // 'tasks:1' → { data, at }
@@ -105,10 +105,24 @@ function setBadge(el, { category, label, color }) {
 
 const ISSUE_LABELS = { open: 'Open', closed: 'Closed' };
 
+const UNRESOLVED_TITLE = '삭제되었거나 접근할 수 없는 항목';
+
+// 응답에서 누락된 칩(삭제됐거나 접근 권한 없음 — 서버는 보안상 구분하지 않음) 중립 표기.
+// 캐시 만료 후 재해석에서 다시 살아나면 표기를 걷는다 (title은 우리가 쓴 것만 제거).
+function setUnresolved(el, unresolved) {
+  el.classList.toggle('ref-chip--unresolved', unresolved);
+  if (unresolved) {
+    el.title = UNRESOLVED_TITLE;
+  } else if (el.title === UNRESOLVED_TITLE) {
+    el.removeAttribute('title');
+  }
+}
+
 // 해석 결과를 root 안 칩 DOM에 반영 (data-* 속성도 갱신해 클릭/배지 재주입이 fresh 값을 읽게)
 export function applyToDom(root, { tasks, issues, pages, users }) {
   root.querySelectorAll('[data-task-ref]').forEach((el) => {
     const info = tasks[el.getAttribute('data-task-id')];
+    setUnresolved(el, !info);
     if (!info) return;
     setChipText(el, `${info.display_id} ${info.title}`);
     el.setAttribute('data-display-id', info.display_id);
@@ -125,6 +139,7 @@ export function applyToDom(root, { tasks, issues, pages, users }) {
   });
   root.querySelectorAll('[data-issue-ref]').forEach((el) => {
     const info = issues[el.getAttribute('data-issue-id')];
+    setUnresolved(el, !info);
     if (!info) return;
     const displayId = el.getAttribute('data-display-id') || '';
     setChipText(el, `${displayId} ${info.title}`);
@@ -134,6 +149,7 @@ export function applyToDom(root, { tasks, issues, pages, users }) {
   });
   root.querySelectorAll('[data-doc-ref]').forEach((el) => {
     const info = pages[el.getAttribute('data-page-id')];
+    setUnresolved(el, !info);
     if (!info) return;
     setChipText(el, info.title);
     el.setAttribute('data-title', info.title);
@@ -142,6 +158,7 @@ export function applyToDom(root, { tasks, issues, pages, users }) {
   });
   root.querySelectorAll('[data-mention]').forEach((el) => {
     const info = users[el.getAttribute('data-user-id')];
+    setUnresolved(el, !info);
     if (!info) return;
     setChipText(el, `@${info.username}`);
     el.setAttribute('data-username', info.username);

@@ -51,6 +51,17 @@ input {
   font-size: inherit;
 }
 
+// 하이드레이션에서 해석 실패한 ref 칩 (삭제/접근불가) — 스냅샷 유지 + 중립 표기
+// (칩 CSS는 표면별 복제라 여기 전역 한 곳에 둔다)
+.task-ref.ref-chip--unresolved,
+.issue-ref.ref-chip--unresolved,
+.doc-ref.ref-chip--unresolved,
+.mention.ref-chip--unresolved {
+  opacity: 0.55;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
 // 키보드 사용자를 위한 포커스 스타일
 :focus-visible {
   outline: 2px solid $color-primary;
