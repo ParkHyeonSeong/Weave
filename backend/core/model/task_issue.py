@@ -107,17 +107,17 @@ async def search_for_chat(user_id: int, keyword: str, db: AsyncSession):
 
 
 async def batch_statuses(issue_ids: list[int], user_id: int, db: AsyncSession) -> dict:
-    """Ref 상태 배치 조회 (issue_id → status), 멤버인 branch만"""
+    """Ref 상태 배치 조회 (issue_id → status/title), 멤버인 branch만"""
     if not issue_ids:
         return {}
     result = await db.execute(text("""
-        SELECT ti.issue_id, ti.status
+        SELECT ti.issue_id, ti.status, ti.title
         FROM task_issue ti
         INNER JOIN task t ON t.task_id = ti.task_id
         INNER JOIN branch_member bm ON bm.branch_id = t.branch_id AND bm.user_id = :user_id
         WHERE ti.issue_id = ANY(:ids)
     """), {'ids': issue_ids, 'user_id': user_id})
-    return {str(r.issue_id): {'status': r.status} for r in result.fetchall()}
+    return {str(r.issue_id): {'status': r.status, 'title': r.title} for r in result.fetchall()}
 
 
 async def get_task_id(issue_id: int, db: AsyncSession):

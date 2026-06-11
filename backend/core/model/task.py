@@ -717,14 +717,16 @@ async def set_labels(task_id: int, label_ids: list, db: AsyncSession):
 
 
 async def batch_statuses(task_ids: list[int], user_id: int, db: AsyncSession) -> dict:
-    """Ref 상태 배치 조회 (task_id → status + workflow info), 멤버인 branch만"""
+    """Ref 상태 배치 조회 (task_id → status/title/display_id + workflow info), 멤버인 branch만"""
     if not task_ids:
         return {}
     result = await db.execute(text("""
-        SELECT t.task_id, t.status,
+        SELECT t.task_id, t.status, t.title,
+               b.key || '-' || t.display_number::text AS display_id,
                ws.label AS status_label, ws.color AS status_color, ws.category AS status_category
         FROM task t
         INNER JOIN branch_member bm ON bm.branch_id = t.branch_id AND bm.user_id = :user_id
+        INNER JOIN branch b ON b.branch_id = t.branch_id
         LEFT JOIN workflow_status ws ON ws.branch_id = t.branch_id AND ws.key = t.status
         WHERE t.task_id = ANY(:ids)
     """), {'ids': task_ids, 'user_id': user_id})
@@ -733,6 +735,8 @@ async def batch_statuses(task_ids: list[int], user_id: int, db: AsyncSession) ->
         row = dict(r._mapping)
         out[str(row['task_id'])] = {
             'status': row['status'],
+            'title': row['title'],
+            'display_id': row['display_id'],
             'status_label': row.get('status_label'),
             'status_color': row.get('status_color'),
             'status_category': row.get('status_category'),
