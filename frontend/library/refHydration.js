@@ -4,10 +4,30 @@ import { axios } from '@/library/_axios';
 // 인라인 ref 칩(taskRef/docRef/issueRef/mention) 라이브 하이드레이션.
 // 칩 attrs는 삽입 시점 스냅샷(폴백)이고, 표면이 마운트될 때마다 /ref-status로
 // 최신 제목·상태를 받아 DOM을 패치한다 (컨플루언스 Smart Link 모델).
-// 응답에 없는 ID(삭제·권한 밖)는 스냅샷 텍스트를 유지한 채 중립 표기만 한다.
+// 응답에 없는 ID는 삭제일 수도, 권한 밖(비멤버 branch/canvas)일 수도 있으므로
+// 칩의 branch/canvas id를 내 멤버십과 대조해 '삭제 확정'만 표기한다.
 
 const TTL_MS = 30_000;
 const cache = new Map(); // 'tasks:1' → { data, at }
+
+// 내가 멤버인 브랜치/캔버스 id 집합 — '삭제 확정' 판정용 (TTL 공유).
+// /ref-status batch 쿼리와 동일한 멤버십 스코프(branch_member/canvas_member INNER JOIN)라
+// "멤버인 곳의 칩이 응답에서 누락 = 삭제"가 성립한다. 누락 칩이 있을 때만 lazy fetch.
+let membershipsAt = 0;
+let myBranchIds = null; // Set<string>
+let myCanvasIds = null;
+
+async function ensureMemberships() {
+  if (myBranchIds && Date.now() - membershipsAt < TTL_MS) return;
+  const [br, cv] = await Promise.all([
+    axios.get('/branches').catch(() => null),
+    axios.get('/canvases').catch(() => null),
+  ]);
+  // 요청 실패 시 빈 집합 → 전부 '권한 밖' 취급(정상 표시) — 오표기보다 미표기가 안전
+  myBranchIds = new Set((br?.data?.branches || []).map((b) => String(b.branch_id)));
+  myCanvasIds = new Set((cv?.data?.canvases || []).map((c) => String(c.canvas_id)));
+  membershipsAt = Date.now();
+}
 
 function cacheGet(kind, id) {
   const key = `${kind}:${id}`;
@@ -105,25 +125,35 @@ function setBadge(el, { category, label, color }) {
 
 const ISSUE_LABELS = { open: 'Open', closed: 'Closed' };
 
-const UNRESOLVED_TITLE = '삭제되었거나 접근할 수 없는 항목';
+const DELETED_ITEM_TITLE = '삭제된 항목';
+const DELETED_DOC_TITLE = '삭제되었거나 보관된 문서';
+const GONE_USER_TITLE = '탈퇴했거나 비활성화된 사용자';
+const UNRESOLVED_TITLES = new Set([DELETED_ITEM_TITLE, DELETED_DOC_TITLE, GONE_USER_TITLE]);
 
-// 응답에서 누락된 칩(삭제됐거나 접근 권한 없음 — 서버는 보안상 구분하지 않음) 중립 표기.
-// 캐시 만료 후 재해석에서 다시 살아나면 표기를 걷는다 (title은 우리가 쓴 것만 제거).
-function setUnresolved(el, unresolved) {
+// 삭제 확정 칩 표기 토글. 캐시 만료 후 재해석에서 다시 살아나면 표기를 걷는다
+// (title은 우리가 쓴 것만 제거 — doc 칩의 경로 툴팁 등은 보존).
+function setUnresolved(el, unresolved, tooltip) {
   el.classList.toggle('ref-chip--unresolved', unresolved);
   if (unresolved) {
-    el.title = UNRESOLVED_TITLE;
-  } else if (el.title === UNRESOLVED_TITLE) {
+    el.title = tooltip;
+  } else if (UNRESOLVED_TITLES.has(el.title)) {
     el.removeAttribute('title');
   }
 }
 
-// 해석 결과를 root 안 칩 DOM에 반영 (data-* 속성도 갱신해 클릭/배지 재주입이 fresh 값을 읽게)
-export function applyToDom(root, { tasks, issues, pages, users }) {
+// 해석 결과를 root 안 칩 DOM에 반영 (data-* 속성도 갱신해 클릭/배지 재주입이 fresh 값을 읽게).
+// 누락 칩은 멤버십과 대조해 '삭제 확정'(멤버인 곳)만 표기하고 권한 밖은 정상 모양 유지
+// — 멤버십은 누락이 실제로 있을 때만 lazy fetch 하므로 async.
+export async function applyToDom(root, { tasks, issues, pages, users }) {
+  const missingByBranch = []; // 누락 task/issue 칩 — data-branch-id 멤버십으로 판정
+  const missingByCanvas = []; // 누락 doc 칩 — data-canvas-id 멤버십으로 판정
   root.querySelectorAll('[data-task-ref]').forEach((el) => {
     const info = tasks[el.getAttribute('data-task-id')];
-    setUnresolved(el, !info);
-    if (!info) return;
+    if (!info) {
+      missingByBranch.push(el);
+      return;
+    }
+    setUnresolved(el, false);
     setChipText(el, `${info.display_id} ${info.title}`);
     el.setAttribute('data-display-id', info.display_id);
     el.setAttribute('data-title', info.title);
@@ -139,8 +169,11 @@ export function applyToDom(root, { tasks, issues, pages, users }) {
   });
   root.querySelectorAll('[data-issue-ref]').forEach((el) => {
     const info = issues[el.getAttribute('data-issue-id')];
-    setUnresolved(el, !info);
-    if (!info) return;
+    if (!info) {
+      missingByBranch.push(el);
+      return;
+    }
+    setUnresolved(el, false);
     const displayId = el.getAttribute('data-display-id') || '';
     setChipText(el, `${displayId} ${info.title}`);
     el.setAttribute('data-title', info.title);
@@ -149,8 +182,11 @@ export function applyToDom(root, { tasks, issues, pages, users }) {
   });
   root.querySelectorAll('[data-doc-ref]').forEach((el) => {
     const info = pages[el.getAttribute('data-page-id')];
-    setUnresolved(el, !info);
-    if (!info) return;
+    if (!info) {
+      missingByCanvas.push(el);
+      return;
+    }
+    setUnresolved(el, false);
     setChipText(el, info.title);
     el.setAttribute('data-title', info.title);
     el.setAttribute('data-canvas-name', info.canvas_name);
@@ -158,10 +194,25 @@ export function applyToDom(root, { tasks, issues, pages, users }) {
   });
   root.querySelectorAll('[data-mention]').forEach((el) => {
     const info = users[el.getAttribute('data-user-id')];
-    setUnresolved(el, !info);
+    // mention은 권한 개념이 없으므로 누락 = 탈퇴/비활성 확정
+    setUnresolved(el, !info, GONE_USER_TITLE);
     if (!info) return;
     setChipText(el, `@${info.username}`);
     el.setAttribute('data-username', info.username);
+  });
+
+  if (!missingByBranch.length && !missingByCanvas.length) return;
+  await ensureMemberships();
+  if (!root.isConnected) return;
+  missingByBranch.forEach((el) => {
+    // 멤버 브랜치의 누락 = 삭제 확정. 비멤버(또는 branch id 미상)는 권한 밖 → 정상 모양
+    const deleted = myBranchIds.has(el.getAttribute('data-branch-id'));
+    setUnresolved(el, deleted, DELETED_ITEM_TITLE);
+  });
+  missingByCanvas.forEach((el) => {
+    // 멤버 캔버스의 누락 = 삭제 또는 보관 (batch_titles가 is_archived 페이지 제외)
+    const deleted = myCanvasIds.has(el.getAttribute('data-canvas-id'));
+    setUnresolved(el, deleted, DELETED_DOC_TITLE);
   });
 }
 
@@ -172,7 +223,7 @@ export async function hydrateDom(root) {
   if (!ids.task_ids.size && !ids.issue_ids.size && !ids.page_ids.size && !ids.user_ids.size) return;
   try {
     const data = await resolveRefs(ids);
-    if (root.isConnected) applyToDom(root, data);
+    if (root.isConnected) await applyToDom(root, data);
   } catch {}
 }
 
