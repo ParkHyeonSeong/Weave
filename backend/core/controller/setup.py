@@ -1,10 +1,10 @@
-import bcrypt
 from fastapi import Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.controller.auth import _create_token, _set_auth_cookie
 from core.model import workspace as workspace_model
 from core.model import user as user_model
+from library import crypto
 
 
 async def check_initialized(db: AsyncSession):
@@ -43,7 +43,7 @@ async def initialize(body, request: Request, response: Response, db: AsyncSessio
         return {'status': False, 'message': 'EMAIL_ALREADY_EXISTS'}
 
     # 관리자 계정 생성
-    password_hash = bcrypt.hashpw(body.password.encode('utf-8'), bcrypt.gensalt())
+    password_hash = crypto.hash_password(body.password)
     user_id = await user_model.create(body.email, password_hash, body.username, db)
 
     # admin 역할 부여

@@ -1,6 +1,7 @@
 from typing import List, Optional
 from pydantic import BaseModel, field_validator
 
+from library.crypto import MIN_PASSWORD_LENGTH
 from library.user_avatar import AVATAR_COLORS
 
 
@@ -26,8 +27,8 @@ class UpdatePassword(BaseModel):
     @field_validator('new_password')
     @classmethod
     def validate_new_password(cls, v):
-        if len(v) < 6:
-            raise ValueError('password must be at least 6 characters')
+        if len(v) < MIN_PASSWORD_LENGTH:
+            raise ValueError(f'password must be at least {MIN_PASSWORD_LENGTH} characters')
         return v
 
 
@@ -38,8 +39,8 @@ class ForceChangePassword(BaseModel):
     @field_validator('new_password')
     @classmethod
     def validate_new_password(cls, v):
-        if len(v) < 6:
-            raise ValueError('password must be at least 6 characters')
+        if len(v) < MIN_PASSWORD_LENGTH:
+            raise ValueError(f'password must be at least {MIN_PASSWORD_LENGTH} characters')
         return v
 
 

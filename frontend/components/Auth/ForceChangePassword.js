@@ -28,8 +28,8 @@ export default function ForceChangePassword() {
     e.preventDefault();
     if (loading) return;
 
-    if (newPassword.length < 6) {
-      showAlert('Input Error', 'Password must be at least 6 characters.');
+    if (newPassword.length < 8) {
+      showAlert('Input Error', 'Password must be at least 8 characters.');
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -86,7 +86,7 @@ export default function ForceChangePassword() {
                 id="newPassword"
                 type={showPassword ? 'text' : 'password'}
                 className="ChangePassword__Input"
-                placeholder="Minimum 6 characters"
+                placeholder="Minimum 8 characters"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 autoComplete="new-password"

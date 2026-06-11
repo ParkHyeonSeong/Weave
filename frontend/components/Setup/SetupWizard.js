@@ -59,8 +59,8 @@ export default function SetupWizard() {
       showAlert('Input Error', 'Please enter your email.');
       return;
     }
-    if (password.length < 6) {
-      showAlert('Input Error', 'Password must be at least 6 characters.');
+    if (password.length < 8) {
+      showAlert('Input Error', 'Password must be at least 8 characters.');
       return;
     }
     if (password !== confirmPassword) {
@@ -244,7 +244,7 @@ export default function SetupWizard() {
                       id="setup-password"
                       type={showPassword ? 'text' : 'password'}
                       className="Setup__Input"
-                      placeholder="At least 6 characters"
+                      placeholder="At least 8 characters"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       autoComplete="new-password"

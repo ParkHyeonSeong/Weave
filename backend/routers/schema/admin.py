@@ -1,6 +1,8 @@
 from typing import Optional
 from pydantic import BaseModel, field_validator
 
+from library.crypto import MIN_PASSWORD_LENGTH
+
 
 class CreateUser(BaseModel):
     email: str
@@ -18,8 +20,8 @@ class CreateUser(BaseModel):
     @field_validator('password')
     @classmethod
     def validate_password(cls, v):
-        if len(v) < 6:
-            raise ValueError('password must be at least 6 characters')
+        if len(v) < MIN_PASSWORD_LENGTH:
+            raise ValueError(f'password must be at least {MIN_PASSWORD_LENGTH} characters')
         return v
 
 

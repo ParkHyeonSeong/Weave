@@ -116,8 +116,8 @@ export default function Profile() {
       showAlert('Error', 'Please enter current password.');
       return;
     }
-    if (newPassword.length < 6) {
-      showAlert('Error', 'New password must be at least 6 characters.');
+    if (newPassword.length < 8) {
+      showAlert('Error', 'New password must be at least 8 characters.');
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -380,7 +380,7 @@ export default function Profile() {
                 type={showNewPw ? 'text' : 'password'}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="New password (min 6 chars)"
+                placeholder="New password (min 8 chars)"
               />
               <button
                 type="button"

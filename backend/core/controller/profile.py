@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.model import user as user_model
 from core.controller.auth import _create_token, _set_auth_cookie
+from library import crypto
 from library.file_validator import validate_image_magic_bytes
 
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'uploads', 'avatars')
@@ -79,7 +80,7 @@ async def update_password(body, request: Request, db: AsyncSession):
     if body.new_password != body.confirm_password:
         return {'status': False, 'message': 'PASSWORD_MISMATCH'}
 
-    new_hash = bcrypt.hashpw(body.new_password.encode('utf-8'), bcrypt.gensalt())
+    new_hash = crypto.hash_password(body.new_password)
     await user_model.update_password(user_id, new_hash, db)
     return {'status': True}
 
@@ -100,7 +101,7 @@ async def force_change_password(body, request: Request, db: AsyncSession):
     if body.new_password != body.confirm_password:
         return {'status': False, 'message': 'PASSWORD_MISMATCH'}
 
-    new_hash = bcrypt.hashpw(body.new_password.encode('utf-8'), bcrypt.gensalt())
+    new_hash = crypto.hash_password(body.new_password)
     await user_model.update_password(user_id, new_hash, db)
     return {'status': True}
 

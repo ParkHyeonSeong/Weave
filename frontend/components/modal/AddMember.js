@@ -12,7 +12,7 @@ export default function AddMember({ onClose }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!email.trim() || !username.trim() || password.length < 6 || loading) return;
+    if (!email.trim() || !username.trim() || password.length < 8 || loading) return;
 
     setError('');
     setLoading(true);
@@ -79,7 +79,7 @@ export default function AddMember({ onClose }) {
             <input
               className="AddMember__Input"
               type="password"
-              placeholder="Minimum 6 characters"
+              placeholder="Minimum 8 characters"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -108,7 +108,7 @@ export default function AddMember({ onClose }) {
           <button
             type="submit"
             className="AddMember__SubmitBtn"
-            disabled={!email.trim() || !username.trim() || password.length < 6 || loading}
+            disabled={!email.trim() || !username.trim() || password.length < 8 || loading}
           >
             {loading ? 'Adding...' : 'Add Member'}
           </button>

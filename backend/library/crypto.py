@@ -3,6 +3,7 @@ Fernet 대칭 암호화 유틸리티
 ENCRYPT_KEY 환경변수 기반으로 민감 데이터(SMTP 비밀번호 등) 암호화/복호화
 """
 import base64
+import bcrypt
 import hashlib
 import hmac
 import logging
@@ -56,3 +57,15 @@ def hash_token(raw: str) -> str:
         return hmac.new(key, raw.encode(), hashlib.sha256).hexdigest()
     logger.warning("ENCRYPT_KEY not set — hashing PAT without pepper (sha256)")
     return hashlib.sha256(raw.encode()).hexdigest()
+
+
+# ── 비밀번호 정책/해싱 ──────────────────────────────────────────────
+MIN_PASSWORD_LENGTH = 8  # 모든 비밀번호 설정 경로가 공유하는 최소 길이 단일 소스
+
+
+def hash_password(plain: str, rounds: int = 12) -> bytes:
+    """비밀번호 bcrypt 해싱 (cost=12).
+
+    기존 cost=10 해시는 checkpw가 해시에 embed된 cost로 그대로 검증하므로 호환된다 —
+    신규 비밀번호만 cost=12로 점진 강화한다. cost 조정이 필요하면 이 함수 한 곳만 바꾸면 된다."""
+    return bcrypt.hashpw(plain.encode('utf-8'), bcrypt.gensalt(rounds=rounds))

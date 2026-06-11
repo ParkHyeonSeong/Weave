@@ -58,8 +58,8 @@ export default function Login() {
         showAlert('Input Error', 'Passwords do not match.');
         return;
       }
-      if (password.length < 6) {
-        showAlert('Input Error', 'Password must be at least 6 characters.');
+      if (password.length < 8) {
+        showAlert('Input Error', 'Password must be at least 8 characters.');
         return;
       }
     }
@@ -102,6 +102,7 @@ export default function Login() {
       } else {
         const messages = {
           'INVALID_CREDENTIALS': 'Invalid email or password.',
+          'PASSWORD_TOO_SHORT': 'Password must be at least 8 characters.',
           'REGISTRATION_DISABLED': 'Registration is not available. Contact your administrator.',
           'NOT_INITIALIZED': 'System setup is required first.',
           'ACCOUNT_PENDING': 'Your account is awaiting admin approval.',

@@ -13,8 +13,6 @@ from core.model import workspace as workspace_model
 from core.model import password_reset_token as reset_token_model
 from library import crypto
 
-MIN_PASSWORD_LENGTH = 6
-
 
 def _get_client_ip(request: Request) -> str:
     forwarded = request.headers.get('X-Forwarded-For')
@@ -71,6 +69,10 @@ async def register(body, request: Request, response: Response, db: AsyncSession)
       쿠키를 내려주지 않고, 사용자는 로그인 화면에서 별도 로그인한다(이 UX가 비열거에 필수).
     기존 이메일이면 어떤 계정도 새로 만들지 않는다.
     """
+    # 비밀번호 정책 검증 — 이메일 존재 여부와 무관하게 동일하게 거부하므로 열거/타이밍 영향 없음.
+    if not body.password or len(body.password) < crypto.MIN_PASSWORD_LENGTH:
+        return {'status': False, 'message': 'PASSWORD_TOO_SHORT'}
+
     # 초기화 여부 확인
     settings = await workspace_model.get_settings(db)
     if not settings:
@@ -80,7 +82,7 @@ async def register(body, request: Request, response: Response, db: AsyncSession)
 
     # 존재 여부와 무관하게 항상 해싱 수행(타이밍 사이드채널 제거). 기존 이메일이면
     # 해시는 사용하지 않고 버린다(계정 미생성).
-    password_hash = bcrypt.hashpw(body.password.encode('utf-8'), bcrypt.gensalt())
+    password_hash = crypto.hash_password(body.password)
 
     # private 모드: 승인 대기. 신규/기존 모두 동일한 중립 응답.
     if settings['registration_policy'] == 'private':
@@ -164,8 +166,8 @@ async def reset_password(body, db: AsyncSession):
     토큰을 해시 매칭으로 조회(평문 미저장)하고 미만료·미사용일 때만 새 비밀번호를 설정한다.
     열거 방지를 위해 잘못된/만료/사용된 토큰은 모두 동일한 INVALID_OR_EXPIRED_TOKEN을 반환한다.
     """
-    # 새 비밀번호 정책 검증 (기존 정책: 최소 6자) — 토큰을 소비하기 전에 거부한다.
-    if not body.new_password or len(body.new_password) < MIN_PASSWORD_LENGTH:
+    # 새 비밀번호 정책 검증 (crypto.MIN_PASSWORD_LENGTH) — 토큰을 소비하기 전에 거부한다.
+    if not body.new_password or len(body.new_password) < crypto.MIN_PASSWORD_LENGTH:
         return {'status': False, 'message': 'PASSWORD_TOO_SHORT'}
 
     token_hash = crypto.hash_token(body.token)
@@ -178,6 +180,6 @@ async def reset_password(body, db: AsyncSession):
     if not claimed:
         return {'status': False, 'message': 'INVALID_OR_EXPIRED_TOKEN'}
 
-    new_hash = bcrypt.hashpw(body.new_password.encode('utf-8'), bcrypt.gensalt())
+    new_hash = crypto.hash_password(body.new_password)
     await user_model.update_password(row['user_id'], new_hash, db)
     return {'status': True}

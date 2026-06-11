@@ -52,8 +52,8 @@ export default function ResetPassword({ token }) {
     e.preventDefault();
     if (loading) return;
 
-    if (newPassword.length < 6) {
-      showAlert('Input Error', 'Password must be at least 6 characters.');
+    if (newPassword.length < 8) {
+      showAlert('Input Error', 'Password must be at least 8 characters.');
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -73,7 +73,7 @@ export default function ResetPassword({ token }) {
       } else {
         const messages = {
           'INVALID_OR_EXPIRED_TOKEN': 'This link has expired or is invalid. Please request a new password reset.',
-          'PASSWORD_TOO_SHORT': 'Password must be at least 6 characters.',
+          'PASSWORD_TOO_SHORT': 'Password must be at least 8 characters.',
         };
         showAlert('Error', messages[res.data.message] || res.data.message);
       }
@@ -129,7 +129,7 @@ export default function ResetPassword({ token }) {
                 id="newPassword"
                 type={showPassword ? 'text' : 'password'}
                 className="ChangePassword__Input"
-                placeholder="Minimum 6 characters"
+                placeholder="Minimum 8 characters"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 autoComplete="new-password"

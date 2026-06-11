@@ -1,6 +1,5 @@
 import secrets
 import asyncio
-import bcrypt
 import logging
 from datetime import datetime, timedelta, timezone
 from fastapi import Request
@@ -30,7 +29,7 @@ async def create_user(body, request: Request, db: AsyncSession):
     if existing:
         return {'status': False, 'message': 'EMAIL_ALREADY_EXISTS'}
 
-    password_hash = bcrypt.hashpw(body.password.encode('utf-8'), bcrypt.gensalt())
+    password_hash = crypto.hash_password(body.password)
     user_id = await user_model.create(body.email, password_hash, body.username, db)
 
     if body.role == 'admin':
