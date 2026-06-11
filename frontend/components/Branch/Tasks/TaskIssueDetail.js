@@ -4,6 +4,7 @@ import { ArrowLeft, CircleDot, MoreHorizontal, Pencil, Trash2, XCircle, CheckCir
 import { axios } from '@/library/_axios';
 import { ensureHtml } from '@/library/ensureHtml';
 import { sanitizeHtml } from '@/library/sanitize';
+import { hydrateDom } from '@/library/refHydration';
 import Avatar from '@/components/common/Avatar';
 import IssueEditor from './IssueEditor';
 import ConfirmModal from '@/components/modal/ConfirmModal';
@@ -35,6 +36,12 @@ export default function TaskIssueDetail() {
   const bodyEditorRef = useRef(null);
   const commentEditorRef = useRef(null);
   const newCommentRef = useRef(null);
+
+  // readonly 본문·댓글의 ref 칩 하이드레이션 (최신 제목·상태)
+  const timelineRef = useRef(null);
+  useEffect(() => {
+    hydrateDom(timelineRef.current);
+  }, [issue?.body, comments]);
 
   const myProfile = typeof window !== 'undefined'
     ? JSON.parse(sessionStorage.getItem('profile') || '{}')
@@ -256,7 +263,7 @@ export default function TaskIssueDetail() {
       <div className="IssueDetail__Divider" />
 
       {/* 타임라인: 본문 + 댓글 */}
-      <div className="IssueDetail__Timeline">
+      <div className="IssueDetail__Timeline" ref={timelineRef}>
         {/* 본문 카드 (OP) */}
         <div className="IssueDetail__TimelineItem">
           <Avatar

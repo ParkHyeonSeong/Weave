@@ -1,6 +1,8 @@
+import { useRef, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { X, CalendarDays, Flag, ExternalLink, Lock, Layers, MessageSquare, GitBranch } from 'lucide-react';
 import { sanitizeHtml } from '@/library/sanitize';
+import { hydrateDom } from '@/library/refHydration';
 import Avatar from '@/components/common/Avatar';
 import { PRIORITIES } from '../mockData';
 
@@ -15,6 +17,13 @@ export default function TrackItemDetail({ item, branch, workflowStatuses, onClos
   const router = useRouter();
   // openInBranch는 restricted/empty 분기 이후 렌더되므로 item/branch_id/task_id는 항상 존재
   const openInBranch = () => router.push(`/branch/${item.branch_id}?task=${item.task_id}`);
+
+  // readonly 설명의 ref 칩 하이드레이션 (최신 제목·상태)
+  const descRef = useRef(null);
+  useEffect(() => {
+    hydrateDom(descRef.current);
+  }, [item?.description]);
+
   if (!item) {
     return (
       <aside className="TrackDetail TrackDetail--empty">
@@ -123,6 +132,7 @@ export default function TrackItemDetail({ item, branch, workflowStatuses, onClos
         </h3>
         {item.description ? (
           <div
+            ref={descRef}
             className="TrackDetail__Description"
             // eslint-disable-next-line react/no-danger -- sanitizeHtml로 정제, Branch TaskDetailPanel과 동일 패턴
             dangerouslySetInnerHTML={{ __html: sanitizeHtml(item.description) }}

@@ -5,6 +5,7 @@ import { Pencil, X, Wifi, WifiOff, Loader } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import useCollabProvider from '@/library/useCollabProvider';
 import { sanitizeHtml } from '@/library/sanitize';
+import { hydrateDom } from '@/library/refHydration';
 import PresenceBar from './PresenceBar';
 import EntityIcon from '@/components/common/EntityIcon';
 import EntityAppearancePopover from '@/components/common/EntityAppearancePopover';
@@ -130,21 +131,9 @@ export default function CanvasOverview() {
     return () => handlers.forEach(({ el, handler }) => el.removeEventListener('click', handler));
   }, [isEditing, overview?.content, router]);
 
-  // 읽기 모드에서 ref 상태 배치 갱신 + 뱃지 주입
+  // 읽기 모드에서 ref 칩 폴백 뱃지 주입 + 하이드레이션 (최신 제목·상태)
   useEffect(() => {
     if (isEditing || !contentRef.current) return;
-
-    const taskIds = new Set();
-    const issueIds = new Set();
-
-    contentRef.current.querySelectorAll('[data-task-ref]').forEach((el) => {
-      const id = el.getAttribute('data-task-id');
-      if (id) taskIds.add(Number(id));
-    });
-    contentRef.current.querySelectorAll('[data-issue-ref]').forEach((el) => {
-      const id = el.getAttribute('data-issue-id');
-      if (id) issueIds.add(Number(id));
-    });
 
     const issueStatusMap = { open: 'Open', closed: 'Closed' };
 
@@ -178,38 +167,8 @@ export default function CanvasOverview() {
       injectBadge(el, status, issueStatusMap);
     });
 
-    if (taskIds.size === 0 && issueIds.size === 0) return;
-
-    axios.post('/ref-status', {
-      task_ids: [...taskIds],
-      issue_ids: [...issueIds],
-    }).then((res) => {
-      if (!res.data.status || !contentRef.current) return;
-      const { tasks, issues } = res.data;
-
-      contentRef.current.querySelectorAll('[data-task-ref]').forEach((el) => {
-        const id = el.getAttribute('data-task-id');
-        const info = tasks[id];
-        if (info) {
-          el.querySelector('[data-ref-badge]')?.remove();
-          const cat = info.status_category || info.status;
-          const b = document.createElement('span');
-          b.className = `ref-chip__badge ref-chip__badge--${cat}`;
-          b.textContent = info.status_label || info.status;
-          if (info.status_color) {
-            b.style.backgroundColor = `${info.status_color}20`;
-            b.style.color = info.status_color;
-          }
-          b.setAttribute('data-ref-badge', 'true');
-          el.appendChild(b);
-        }
-      });
-      contentRef.current.querySelectorAll('[data-issue-ref]').forEach((el) => {
-        const id = el.getAttribute('data-issue-id');
-        const info = issues[id];
-        if (info) injectBadge(el, info.status, issueStatusMap);
-      });
-    }).catch(() => {});
+    // 배치 API로 최신 제목·상태 갱신
+    hydrateDom(contentRef.current);
   }, [isEditing, overview?.content]);
 
   const handleHtmlChange = (html) => {

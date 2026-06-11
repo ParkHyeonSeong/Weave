@@ -1,6 +1,7 @@
-import { useState, useMemo, memo } from 'react';
+import { useState, useMemo, useRef, useEffect, memo } from 'react';
 import { Reply, Pencil, Trash2 } from 'lucide-react';
 import { sanitizeHtml } from '@/library/sanitize';
+import { hydrateDom } from '@/library/refHydration';
 import { formatRelative } from '@/library/formatTime';
 import Avatar from '@/components/common/Avatar';
 import { buildMentionHtml } from '@/components/Canvas/extensions/MentionExtension';
@@ -64,6 +65,12 @@ function CommentItem({
     () => sanitizeHtml(comment.content || ''),
     [comment.content],
   );
+
+  // readonly 본문의 ref 칩 하이드레이션 (최신 제목·상태)
+  const contentRef = useRef(null);
+  useEffect(() => {
+    if (!editing) hydrateDom(contentRef.current);
+  }, [comment.content, editing]);
 
   const handleSubmitEdit = async (html) => {
     try {
@@ -147,6 +154,7 @@ function CommentItem({
           />
         ) : (
           <div
+            ref={contentRef}
             className="CommentItem__Content"
             dangerouslySetInnerHTML={{ __html: sanitizedContent }}
           />
