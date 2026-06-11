@@ -1,14 +1,14 @@
 import { Extension } from '@tiptap/core';
-import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { Plugin } from '@tiptap/pm/state';
 import { ReactRenderer } from '@tiptap/react';
 import SlashCommandMenu from './SlashCommandMenu';
 import { filterSlashCommands, exactSlashCommand } from './slashCommands';
-import { mapTokenBeforeCursor, scheduleTriggerActivation } from './refSuggestion';
+import { mapTokenBeforeCursor, scheduleTriggerActivation, slashCommandPluginKey } from './refSuggestion';
 import { taskRefPluginKey } from './TaskRefExtension';
 import { docRefPluginKey } from './DocRefExtension';
 import { issueRefPluginKey } from './IssueRefExtension';
 
-export const slashCommandPluginKey = new PluginKey('slashCommandMenu');
+export { slashCommandPluginKey };
 const OFF = { active: false, query: '', from: 0, index: 0 };
 
 // 선택된 커맨드로 검색 시작: 정규 토큰으로 치환 후 해당 ref 플러그인을 active 화.
