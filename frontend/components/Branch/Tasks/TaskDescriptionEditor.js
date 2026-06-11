@@ -93,6 +93,28 @@ export default function TaskDescriptionEditor({ content, onSave, branchId }) {
     return () => editor.off('blur', handleBlur);
   }, [editor, onSave]);
 
+  // 외부 클릭으로 팝업이 dismiss되면 포커스가 에디터로 돌아오지 않아 blur 저장이
+  // 영영 안 일어난다. 팝업 활성→비활성 전환을 감지해, 한 틱 뒤에도 에디터가
+  // 포커스를 못 받았으면(=Esc/칩 선택이 아닌 dismiss) 바깥 클릭과 동일하게 저장한다.
+  useEffect(() => {
+    if (!editor) return;
+    let wasRefActive = false;
+    const handleTransaction = ({ editor: ed }) => {
+      const st = ed.state;
+      const refActive = taskRefPluginKey.getState(st)?.active || slashCommandPluginKey.getState(st)?.active;
+      if (wasRefActive && !refActive) {
+        setTimeout(() => {
+          if (editor.isDestroyed || editor.isFocused || savedRef.current) return;
+          savedRef.current = true;
+          onSave(editor.isEmpty ? null : editor.getHTML());
+        }, 0);
+      }
+      wasRefActive = !!refActive;
+    };
+    editor.on('transaction', handleTransaction);
+    return () => editor.off('transaction', handleTransaction);
+  }, [editor, onSave]);
+
   if (!editor) return null;
 
   return (
