@@ -3,6 +3,11 @@
 
 import { PluginKey, TextSelection, Selection } from '@tiptap/pm/state';
 import { ReactRenderer } from '@tiptap/react';
+import {
+  ySyncPluginKey,
+  absolutePositionToRelativePosition,
+  relativePositionToAbsolutePosition,
+} from 'y-prosemirror';
 
 const OFF = { active: false, keyword: '', from: 0 };
 
@@ -10,11 +15,35 @@ const OFF = { active: false, keyword: '', from: 0 };
 // SlashCommandsExtension이 함께 쓰므로 순환 import를 피해 여기에 둔다.
 export const slashCommandPluginKey = new PluginKey('slashCommandMenu');
 
+// 활성화 meta에 yjs relative position을 동봉한다 (협업 에디터에서만).
+// y-prosemirror는 원격 변경을 전체 문서 replace로 적용해 tr.mapping이 무용하므로,
+// 원격 tr에서는 relPos로 절대 위치를 복원해 앵커를 추적한다.
+export function withAnchorRel(meta, state) {
+  if (!meta.active) return meta;
+  const ystate = ySyncPluginKey.getState(state);
+  if (!ystate?.type || !ystate.binding) return meta; // 비협업 에디터
+  const rel = absolutePositionToRelativePosition(meta.from, ystate.type, ystate.binding.mapping);
+  return rel ? { ...meta, rel } : meta;
+}
+
 // 검색 input 모드: 검색어가 문서에 없으므로 active 동안은 칩이 삽입될
 // 앵커 위치만 원격 편집을 따라가면 된다. 앵커가 지워지면 닫는다.
 // (mapResult 기본 assoc=1: 앵커 자리에 원격 삽입 시 앵커는 그 뒤로 밀리고,
 //  앵커 직후가 삭제에 휩쓸리면 deleted로 보고 닫는다 — 보수적 선택)
-export function mapAnchor(tr, prev, off) {
+// 원격 tr(isChangeOrigin)은 전체 replace라 mapping이 무용 → relPos로 복원.
+export function mapAnchor(tr, prev, off, newState) {
+  const ysMeta = newState ? tr.getMeta(ySyncPluginKey) : null;
+  if (ysMeta?.isChangeOrigin) {
+    const ystate = ySyncPluginKey.getState(newState);
+    if (prev.rel && ystate?.type && ystate.binding) {
+      const pos = relativePositionToAbsolutePosition(
+        ystate.doc, ystate.type, prev.rel, ystate.binding.mapping,
+      );
+      if (pos == null) return off; // 앵커 자리가 실제로 사라짐
+      return pos === prev.from ? prev : { ...prev, from: pos };
+    }
+    return off;
+  }
   const r = tr.mapping.mapResult(prev.from);
   if (r.deleted) return off;
   return r.pos === prev.from ? prev : { ...prev, from: r.pos };

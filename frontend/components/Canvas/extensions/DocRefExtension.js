@@ -1,7 +1,7 @@
 import { Node, mergeAttributes } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import DocRefPopup from './DocRefPopup';
-import { mapAnchor, createSuggestionPopupView } from './refSuggestion';
+import { mapAnchor, withAnchorRel, createSuggestionPopupView } from './refSuggestion';
 
 export const docRefPluginKey = new PluginKey('docRefSuggestion');
 
@@ -75,12 +75,12 @@ const DocRefNode = Node.create({
         key: docRefPluginKey,
         state: {
           init() { return DOC_OFF; },
-          apply(tr, prev) {
+          apply(tr, prev, _oldState, newState) {
             const meta = tr.getMeta(docRefPluginKey);
-            if (meta) return meta;
+            if (meta) return withAnchorRel(meta, newState);
             if (!prev.active || !tr.docChanged) return prev;
-            // 검색어는 input에 있으므로 문서 변경(원격 편집)엔 앵커 추적만
-            return mapAnchor(tr, prev, DOC_OFF);
+            // 검색어는 input에 있으므로 문서 변경엔 앵커 추적만 (원격 tr은 relPos로)
+            return mapAnchor(tr, prev, DOC_OFF, newState);
           },
         },
         view: createSuggestionPopupView({
