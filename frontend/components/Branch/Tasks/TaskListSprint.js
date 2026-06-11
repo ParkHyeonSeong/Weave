@@ -26,7 +26,8 @@ export default function TaskListSprint({
   collapsed, onToggleCollapse,
 }) {
   const [inlineTitle, setInlineTitle] = useState('');
-  const [inlineType, setInlineType] = useState('task');
+  const [inlineType, setInlineType] = useState('');
+  const [inlineError, setInlineError] = useState('');
   const [showInline, setShowInline] = useState(false);
   const [creating, setCreating] = useState(false);
   const [startError, setStartError] = useState('');
@@ -75,6 +76,15 @@ export default function TaskListSprint({
     return () => document.removeEventListener('mousedown', handleClick);
   }, [showTypeDropdown]);
 
+  // inlineType을 이 브랜치에 실제로 존재하는 task type으로 동기화한다.
+  // (기본 타입을 직접 교체한 브랜치에서 없는 키로 생성 시도해 조용히 실패하는 것 방지)
+  useEffect(() => {
+    if (!taskTypes || taskTypes.length === 0) return;
+    if (!taskTypes.some((t) => t.type_key === inlineType)) {
+      setInlineType(taskTypes[0].type_key);
+    }
+  }, [taskTypes, inlineType]);
+
   const getStatusLabel = (status) => {
     switch (status) {
       case 'active': return 'Active';
@@ -97,8 +107,8 @@ export default function TaskListSprint({
     if (!inlineTitle.trim() || creating) return;
 
     setCreating(true);
+    setInlineError('');
     try {
-      const { axios } = await import('@/library/_axios');
       const res = await axios.post(`/branches/${branchId}/tasks`, {
         title: inlineTitle.trim(),
         sprint_id: isBacklog ? null : (sprint.sprint_id || null),
@@ -107,9 +117,17 @@ export default function TaskListSprint({
       if (res.data.status) {
         setInlineTitle('');
         window.dispatchEvent(new Event('task:updated'));
+      } else {
+        const messages = {
+          INVALID_TASK_TYPE: '이 브랜치에 없는 작업 유형이에요. 유형을 다시 선택해 주세요.',
+          INVALID_STATUS: '이 브랜치에 없는 상태예요.',
+          INVALID_ASSIGNEE: '담당자가 이 브랜치의 멤버가 아니에요.',
+          NOT_BRANCH_MEMBER: '이 브랜치의 멤버가 아니에요.',
+        };
+        setInlineError(messages[res.data.message] || res.data.message || '작업을 만들지 못했어요.');
       }
     } catch {
-      // 에러 무시
+      setInlineError('작업을 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
     } finally {
       setCreating(false);
     }
@@ -140,6 +158,7 @@ export default function TaskListSprint({
     if (e.key === 'Escape') {
       setShowInline(false);
       setInlineTitle('');
+      setInlineError('');
     }
   };
 
@@ -255,7 +274,7 @@ export default function TaskListSprint({
                         key={tt.type_key}
                         type="button"
                         className={`TaskList__InlineTypeOption ${inlineType === tt.type_key ? 'TaskList__InlineTypeOption--selected' : ''}`}
-                        onClick={() => { setInlineType(tt.type_key); setShowTypeDropdown(false); }}
+                        onClick={() => { setInlineType(tt.type_key); setShowTypeDropdown(false); setInlineError(''); }}
                       >
                         <TaskTypeIcon name={tt.icon} size={14} color={tt.color} />
                         <span>{tt.type_name}</span>
@@ -283,12 +302,15 @@ export default function TaskListSprint({
               />
             </form>
           )}
+          {showInline && inlineError && (
+            <div className="TaskList__InlineError">{inlineError}</div>
+          )}
 
           {/* 만들기 버튼 */}
           {!showInline && (
             <button
               className="TaskList__InlineBtn"
-              onClick={() => setShowInline(true)}
+              onClick={() => { setShowInline(true); setInlineError(''); }}
             >
               <Plus size={14} />
               Create

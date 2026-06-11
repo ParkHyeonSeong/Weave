@@ -251,6 +251,12 @@
     border-top: 1px solid $color-border;
   }
 
+  &__InlineError {
+    padding: $space-1 $space-4 $space-2;
+    font-size: $font-size-xs;
+    color: $color-error;
+  }
+
   &__InlineIcon {
     flex-shrink: 0;
     color: $color-text-tertiary;
