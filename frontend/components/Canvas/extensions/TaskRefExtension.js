@@ -15,17 +15,24 @@ const TaskRefNode = Node.create({
   inline: true,
   atom: true,
 
+  // per-attr parseHTML: 저장된 HTML 재파싱(설명 편집 재진입 등) 시 data-*에서 attrs 복원.
+  // per-attr renderHTML은 비활성 — 노드 레벨 renderHTML()이 data-*를 전부 명시 출력하므로
+  // 기본 렌더(camelCase 속성 중복 출력)를 억제해 출력 HTML을 data-*만으로 유지한다.
   addAttributes() {
+    const numAttr = (name) => (el) => {
+      const v = el.getAttribute(name);
+      return v != null && v !== '' ? Number(v) : null;
+    };
     return {
-      taskId: { default: null },
-      branchId: { default: null },
-      displayId: { default: '' },
-      title: { default: '' },
-      status: { default: 'todo' },
-      priority: { default: 'medium' },
-      statusLabel: { default: null },
-      statusColor: { default: null },
-      statusCategory: { default: null },
+      taskId: { default: null, parseHTML: numAttr('data-task-id'), renderHTML: () => ({}) },
+      branchId: { default: null, parseHTML: numAttr('data-branch-id'), renderHTML: () => ({}) },
+      displayId: { default: '', parseHTML: (el) => el.getAttribute('data-display-id') || '', renderHTML: () => ({}) },
+      title: { default: '', parseHTML: (el) => el.getAttribute('data-title') || '', renderHTML: () => ({}) },
+      status: { default: 'todo', parseHTML: (el) => el.getAttribute('data-status') || 'todo', renderHTML: () => ({}) },
+      priority: { default: 'medium', parseHTML: (el) => el.getAttribute('data-priority') || 'medium', renderHTML: () => ({}) },
+      statusLabel: { default: null, parseHTML: (el) => el.getAttribute('data-status-label') || null, renderHTML: () => ({}) },
+      statusColor: { default: null, parseHTML: (el) => el.getAttribute('data-status-color') || null, renderHTML: () => ({}) },
+      statusCategory: { default: null, parseHTML: (el) => el.getAttribute('data-status-category') || null, renderHTML: () => ({}) },
     };
   },
 
