@@ -2,6 +2,7 @@ import { Node, mergeAttributes } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { ReactRenderer } from '@tiptap/react';
 import TaskRefPopup from './TaskRefPopup';
+import { reparseSuggestion } from './refSuggestion';
 
 export const taskRefPluginKey = new PluginKey('taskRefSuggestion');
 
@@ -110,49 +111,16 @@ const TaskRefNode = Node.create({
           init() {
             return { active: false, mode: null, keyword: '', from: 0 };
           },
-          apply(tr, prev) {
+          apply(tr, prev, _oldState, newState) {
             const meta = tr.getMeta(taskRefPluginKey);
             if (meta) return meta;
-            if (tr.docChanged) return { active: false, mode: null, keyword: '', from: 0 };
-            return prev;
+            if (!prev.active || !tr.docChanged) return prev;
+            // 선택된 mode에 맞는 토큰만으로 키워드 추출 (스페이스 없어도 동작)
+            const re = prev.mode === 'all' ? /^\/ta\s?(.*)$/ : /^\/t\s?(.*)$/;
+            return reparseSuggestion(prev, tr, newState, re, { active: false, mode: null, keyword: '', from: 0 });
           },
         },
         props: {
-          handleTextInput(view, from, to, text) {
-            const { state } = view;
-            const pluginState = taskRefPluginKey.getState(state);
-
-            if (pluginState.active) {
-              // 팝업 활성 상태에서 키워드 업데이트
-              setTimeout(() => {
-                const newState = taskRefPluginKey.getState(view.state);
-                if (!newState.active) return;
-                const $pos = view.state.doc.resolve(view.state.selection.from);
-                const textBefore = $pos.parent.textBetween(
-                  Math.max(0, newState.from - $pos.start()),
-                  view.state.selection.from - $pos.start(),
-                  null,
-                  '\ufffc',
-                );
-                // 선택된 mode에 맞는 토큰만으로 키워드 추출 (스페이스 없어도 동작)
-                const re = newState.mode === 'all' ? /^\/ta\s?(.*)$/ : /^\/t\s?(.*)$/;
-                const m = textBefore.match(re);
-                if (m) {
-                  view.dispatch(view.state.tr.setMeta(taskRefPluginKey, {
-                    active: true, mode: newState.mode, keyword: m[1], from: newState.from,
-                  }));
-                } else {
-                  view.dispatch(view.state.tr.setMeta(taskRefPluginKey, {
-                    active: false, mode: null, keyword: '', from: 0,
-                  }));
-                }
-              }, 0);
-              return false;
-            }
-
-            return false;
-          },
-
           handleKeyDown(view, event) {
             const pluginState = taskRefPluginKey.getState(view.state);
             if (!pluginState.active) return false;
@@ -176,6 +144,7 @@ const TaskRefNode = Node.create({
         view(editorView) {
           let popup = null;
           let renderer = null;
+          let lastState = null; // 상태 불변 시 updateProps 리렌더 스킵용
 
           function destroyPopup() {
             if (renderer) {
@@ -255,6 +224,8 @@ const TaskRefNode = Node.create({
           return {
             update(view) {
               const pluginState = taskRefPluginKey.getState(view.state);
+              if (pluginState === lastState) return;
+              lastState = pluginState;
               if (pluginState.active) {
                 if (renderer) {
                   renderer.updateProps({

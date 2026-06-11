@@ -3,6 +3,7 @@ import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { ReactRenderer } from '@tiptap/react';
 import SlashCommandMenu from './SlashCommandMenu';
 import { filterSlashCommands, exactSlashCommand } from './slashCommands';
+import { mapTokenBeforeCursor, scheduleTriggerActivation } from './refSuggestion';
 import { taskRefPluginKey } from './TaskRefExtension';
 import { docRefPluginKey } from './DocRefExtension';
 import { issueRefPluginKey } from './IssueRefExtension';
@@ -45,37 +46,24 @@ const SlashCommandsExtension = Extension.create({
             if (!prev.active || !tr.docChanged) return prev;
             // 타이핑·undo·붙여넣기·원격편집 등 모든 문서 변경에서 슬래시 토큰 재검증
             // (handleTextInput를 안 거치는 undo도 여기서 닫힘 처리됨)
-            const $pos = newState.doc.resolve(newState.selection.from);
-            const fromIdx = prev.from - $pos.start();
-            const toIdx = newState.selection.from - $pos.start();
-            if (fromIdx < 0 || toIdx < fromIdx) return { ...OFF };
-            const textBefore = $pos.parent.textBetween(fromIdx, toIdx, null, '￼');
-            if (/^\/\S*$/.test(textBefore) && filterSlashCommands(textBefore, enabled).length > 0) {
-              return prev.query === textBefore ? prev : { ...prev, query: textBefore, index: 0 };
+            const token = mapTokenBeforeCursor(prev.from, tr, newState);
+            if (token && /^\/\S*$/.test(token.text) && filterSlashCommands(token.text, enabled).length > 0) {
+              if (prev.query === token.text && prev.from === token.from) return prev;
+              return { ...prev, from: token.from, query: token.text, index: prev.query === token.text ? prev.index : 0 };
             }
-            return { ...OFF };
+            return OFF;
           },
         },
         props: {
           handleTextInput(view, from, to, text) {
-            const { state } = view;
-            const ps = slashCommandPluginKey.getState(state);
+            const ps = slashCommandPluginKey.getState(view.state);
 
             // 활성 중 키워드 갱신·종료는 plugin state.apply()가 담당
             if (ps.active) return false;
 
+            // '/' 감지 — 단어 시작 조건 검증은 헬퍼가 콜백 시점에 수행
             if (text === '/') {
-              const $pos = state.doc.resolve(from);
-              const charBefore = from > $pos.start()
-                ? $pos.parent.textBetween(from - $pos.start() - 1, from - $pos.start(), null, '￼')
-                : '';
-              if (!charBefore || /\s/.test(charBefore)) {
-                setTimeout(() => {
-                  view.dispatch(view.state.tr.setMeta(slashCommandPluginKey, {
-                    active: true, query: '/', from, index: 0,
-                  }));
-                }, 0);
-              }
+              scheduleTriggerActivation(view, '/', slashCommandPluginKey, { active: true, query: '/', index: 0 });
             }
             return false;
           },
@@ -116,6 +104,7 @@ const SlashCommandsExtension = Extension.create({
         view(editorView) {
           let popup = null;
           let renderer = null;
+          let lastState = null; // 상태 불변 시 updateProps 리렌더 스킵용
 
           function destroyPopup() {
             if (renderer) { renderer.destroy(); renderer = null; }
@@ -160,6 +149,8 @@ const SlashCommandsExtension = Extension.create({
           return {
             update(view) {
               const ps = slashCommandPluginKey.getState(view.state);
+              if (ps === lastState) return;
+              lastState = ps;
               if (ps.active) render(ps); else destroyPopup();
             },
             destroy() { destroyPopup(); },

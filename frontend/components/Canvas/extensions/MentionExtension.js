@@ -2,6 +2,7 @@ import { Node, mergeAttributes } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { ReactRenderer } from '@tiptap/react';
 import MentionPopup from './MentionPopup';
+import { reparseSuggestion, scheduleTriggerActivation } from './refSuggestion';
 
 const mentionPluginKey = new PluginKey('mentionSuggestion');
 
@@ -70,57 +71,21 @@ const MentionNode = Node.create({
           init() {
             return { active: false, keyword: '', from: 0 };
           },
-          apply(tr, prev) {
+          apply(tr, prev, _oldState, newState) {
             const meta = tr.getMeta(mentionPluginKey);
             if (meta) return meta;
-            if (tr.docChanged) return { active: false, keyword: '', from: 0 };
-            return prev;
+            if (!prev.active || !tr.docChanged) return prev;
+            return reparseSuggestion(prev, tr, newState, /^@(\S*)$/);
           },
         },
         props: {
           handleTextInput(view, from, to, text) {
-            const { state } = view;
-            const pluginState = mentionPluginKey.getState(state);
+            const pluginState = mentionPluginKey.getState(view.state);
+            if (pluginState.active) return false; // 활성 중 갱신은 plugin state.apply()가 담당
 
-            if (pluginState.active) {
-              setTimeout(() => {
-                const newState = mentionPluginKey.getState(view.state);
-                if (!newState.active) return;
-                const $pos = view.state.doc.resolve(view.state.selection.from);
-                const textBefore = $pos.parent.textBetween(
-                  Math.max(0, newState.from - $pos.start()),
-                  view.state.selection.from - $pos.start(),
-                  null,
-                  '\ufffc',
-                );
-                const match = textBefore.match(/@(\S*)$/);
-                if (match) {
-                  view.dispatch(view.state.tr.setMeta(mentionPluginKey, {
-                    active: true, keyword: match[1], from: newState.from,
-                  }));
-                } else {
-                  view.dispatch(view.state.tr.setMeta(mentionPluginKey, {
-                    active: false, keyword: '', from: 0,
-                  }));
-                }
-              }, 0);
-              return false;
-            }
-
-            // @ 감지 (단어 시작 위치)
+            // @ 감지 — 단어 시작 조건 검증은 헬퍼가 콜백 시점에 수행
             if (text === '@') {
-              const $pos = state.doc.resolve(from);
-              const charBefore = from > $pos.start()
-                ? $pos.parent.textBetween(from - $pos.start() - 1, from - $pos.start(), null, '\ufffc')
-                : '';
-              // @ 앞이 비어있거나 공백인 경우에만 트리거
-              if (!charBefore || /\s/.test(charBefore)) {
-                setTimeout(() => {
-                  view.dispatch(view.state.tr.setMeta(mentionPluginKey, {
-                    active: true, keyword: '', from,
-                  }));
-                }, 0);
-              }
+              scheduleTriggerActivation(view, '@', mentionPluginKey, { active: true, keyword: '' });
             }
             return false;
           },
@@ -140,14 +105,8 @@ const MentionNode = Node.create({
               return true;
             }
 
-            // Space 입력 시 팝업 닫기
-            if (event.key === ' ') {
-              view.dispatch(view.state.tr.setMeta(mentionPluginKey, {
-                active: false, keyword: '', from: 0,
-              }));
-              return false;
-            }
-
+            // Space는 그대로 삽입되고, '@kw '가 토큰 정규식에 안 맞아
+            // plugin state.apply() 재파싱에서 팝업이 닫힌다
             return false;
           },
         },
@@ -155,6 +114,7 @@ const MentionNode = Node.create({
         view(editorView) {
           let popup = null;
           let renderer = null;
+          let lastState = null; // 상태 불변 시 updateProps 리렌더 스킵용
 
           function destroyPopup() {
             if (renderer) {
@@ -226,6 +186,8 @@ const MentionNode = Node.create({
           return {
             update(view) {
               const pluginState = mentionPluginKey.getState(view.state);
+              if (pluginState === lastState) return;
+              lastState = pluginState;
               if (pluginState.active) {
                 if (renderer) {
                   renderer.updateProps({ keyword: pluginState.keyword });

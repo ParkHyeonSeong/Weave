@@ -2,6 +2,7 @@ import { Node, mergeAttributes } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { ReactRenderer } from '@tiptap/react';
 import DocRefPopup from './DocRefPopup';
+import { reparseSuggestion } from './refSuggestion';
 
 export const docRefPluginKey = new PluginKey('docRefSuggestion');
 
@@ -75,46 +76,14 @@ const DocRefNode = Node.create({
           init() {
             return { active: false, keyword: '', from: 0 };
           },
-          apply(tr, prev) {
+          apply(tr, prev, _oldState, newState) {
             const meta = tr.getMeta(docRefPluginKey);
             if (meta) return meta;
-            if (tr.docChanged) return { active: false, keyword: '', from: 0 };
-            return prev;
+            if (!prev.active || !tr.docChanged) return prev;
+            return reparseSuggestion(prev, tr, newState, /^\/d\s?(.*)$/);
           },
         },
         props: {
-          handleTextInput(view, from, to, text) {
-            const { state } = view;
-            const pluginState = docRefPluginKey.getState(state);
-
-            if (pluginState.active) {
-              setTimeout(() => {
-                const newState = docRefPluginKey.getState(view.state);
-                if (!newState.active) return;
-                const $pos = view.state.doc.resolve(view.state.selection.from);
-                const textBefore = $pos.parent.textBetween(
-                  Math.max(0, newState.from - $pos.start()),
-                  view.state.selection.from - $pos.start(),
-                  null,
-                  '\ufffc',
-                );
-                const match = textBefore.match(/^\/d\s?(.*)$/);
-                if (match) {
-                  view.dispatch(view.state.tr.setMeta(docRefPluginKey, {
-                    active: true, keyword: match[1], from: newState.from,
-                  }));
-                } else {
-                  view.dispatch(view.state.tr.setMeta(docRefPluginKey, {
-                    active: false, keyword: '', from: 0,
-                  }));
-                }
-              }, 0);
-              return false;
-            }
-
-            return false;
-          },
-
           handleKeyDown(view, event) {
             const pluginState = docRefPluginKey.getState(view.state);
             if (!pluginState.active) return false;
@@ -137,6 +106,7 @@ const DocRefNode = Node.create({
         view(editorView) {
           let popup = null;
           let renderer = null;
+          let lastState = null; // 상태 불변 시 updateProps 리렌더 스킵용
 
           function destroyPopup() {
             if (renderer) { renderer.destroy(); renderer = null; }
@@ -202,6 +172,8 @@ const DocRefNode = Node.create({
           return {
             update(view) {
               const pluginState = docRefPluginKey.getState(view.state);
+              if (pluginState === lastState) return;
+              lastState = pluginState;
               if (pluginState.active) {
                 if (renderer) {
                   renderer.updateProps({ keyword: pluginState.keyword });
