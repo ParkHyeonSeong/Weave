@@ -16,6 +16,7 @@ from core.model import password_reset_token as prt_model
 from library import crypto
 from routers.schema import admin as admin_schema
 from routers.schema import profile as profile_schema
+from routers.schema import setup as setup_schema
 
 
 # ── crypto.hash_password: cost=12 + 호환성 ─────────────────────────────────
@@ -75,6 +76,21 @@ def test_force_change_password_schema_rejects_short():
 def test_force_change_password_schema_accepts_eight():
     m = profile_schema.ForceChangePassword(new_password="eight888", confirm_password="eight888")
     assert m.new_password == "eight888"
+
+
+def test_setup_initialize_schema_rejects_short():
+    # 최초 관리자 생성(setup)도 서버측에서 정책을 강제해야 한다(우회 차단).
+    with pytest.raises(ValidationError):
+        setup_schema.SetupInitialize(
+            workspace_name="W", registration_policy="private",
+            email="a@b.c", password="seven77", username="admin")  # 7자
+
+
+def test_setup_initialize_schema_accepts_eight():
+    m = setup_schema.SetupInitialize(
+        workspace_name="W", registration_policy="private",
+        email="a@b.c", password="eight888", username="admin")
+    assert m.password == "eight888"
 
 
 # ── register 컨트롤러: 길이 게이트가 이메일 로직보다 먼저 ──────────────────
