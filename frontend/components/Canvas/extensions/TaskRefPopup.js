@@ -42,6 +42,7 @@ export default function TaskRefPopup({ mode, onSelect, onClose, onDismiss, onBac
   const finish = (fn) => { doneRef.current = true; fn(); };
 
   const handleKeyDown = (e) => {
+    if (e.nativeEvent.isComposing) return; // 한글 조합 확정 Enter가 선택으로 새지 않게 (레포 컨벤션)
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       setActiveIdx((prev) => Math.min(prev + 1, tasks.length - 1));
