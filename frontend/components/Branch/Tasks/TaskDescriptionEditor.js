@@ -9,9 +9,9 @@ import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import { common, createLowlight } from 'lowlight';
 import CalloutExtension from '@/components/Canvas/extensions/CalloutExtension';
-import TaskRefNode from '@/components/Canvas/extensions/TaskRefExtension';
+import TaskRefNode, { taskRefPluginKey } from '@/components/Canvas/extensions/TaskRefExtension';
 import MentionNode from '@/components/Canvas/extensions/MentionExtension';
-import SlashCommandsExtension from '@/components/Canvas/extensions/SlashCommandsExtension';
+import SlashCommandsExtension, { slashCommandPluginKey } from '@/components/Canvas/extensions/SlashCommandsExtension';
 import { ResizableImage } from '@/components/Canvas/extensions/ResizableImageExtension';
 import { createImageUploadPlugin } from '@/components/Canvas/extensions/ImageUploadPlugin';
 import { createMarkdownPastePlugin } from '@/components/Canvas/extensions/MarkdownPastePlugin';
@@ -75,6 +75,11 @@ export default function TaskDescriptionEditor({ content, onSave, branchId }) {
     if (!editor) return;
 
     const handleBlur = () => {
+      // 슬래시 메뉴/ref 검색 팝업이 열려 있는 동안의 blur는 팝업 input으로의
+      // 포커스 이동이다 — 저장/종료 트리거가 아님. 팝업이 닫히면 에디터로
+      // 포커스가 돌아오고, 이후의 진짜 blur에서 저장된다.
+      const st = editor.state;
+      if (taskRefPluginKey.getState(st)?.active || slashCommandPluginKey.getState(st)?.active) return;
       if (savedRef.current) return;
       savedRef.current = true;
       if (editor.isEmpty) {
