@@ -56,7 +56,7 @@ function cacheSet(kind, map) {
 }
 
 // root(DOM) 안의 칩들에서 종류별 ID 수집
-export function collectRefIds(root) {
+function collectRefIds(root) {
   const ids = { task_ids: new Set(), issue_ids: new Set(), page_ids: new Set(), user_ids: new Set() };
   root.querySelectorAll('[data-task-ref]').forEach((el) => {
     const id = Number(el.getAttribute('data-task-id'));
@@ -77,28 +77,46 @@ export function collectRefIds(root) {
   return ids;
 }
 
+// /ref-status single-flight — readonly 표면 N개 동시 마운트나 이벤트 무효화 직후
+// 캐시가 비어 N발의 POST가 나가던 것을, 진행 중 요청을 먼저 기다렸다가
+// 캐시를 다시 본 뒤 남은 miss만 새로 요청해 1~2발로 수렴시킨다.
+let inflightFetch = null;
+
 // 캐시 미스만 골라 배치 요청 → { tasks, issues, pages, users } (캐시 병합본)
-export async function resolveRefs(ids) {
+async function resolveRefs(ids) {
   const want = {
     tasks: [...ids.task_ids], issues: [...ids.issue_ids],
     pages: [...ids.page_ids], users: [...ids.user_ids],
   };
   const out = { tasks: {}, issues: {}, pages: {}, users: {} };
-  const miss = { task_ids: [], issue_ids: [], page_ids: [], user_ids: [] };
-  const pick = (kind, list, missKey) => {
-    list.forEach((id) => {
-      const hit = cacheGet(kind, id);
-      if (hit) out[kind][id] = hit;
-      else miss[missKey].push(id);
-    });
+  const collectMiss = () => {
+    const miss = { task_ids: [], issue_ids: [], page_ids: [], user_ids: [] };
+    const pick = (kind, list, missKey) => {
+      list.forEach((id) => {
+        const hit = cacheGet(kind, id);
+        if (hit) out[kind][id] = hit;
+        else miss[missKey].push(id);
+      });
+    };
+    pick('tasks', want.tasks, 'task_ids');
+    pick('issues', want.issues, 'issue_ids');
+    pick('pages', want.pages, 'page_ids');
+    pick('users', want.users, 'user_ids');
+    return miss;
   };
-  pick('tasks', want.tasks, 'task_ids');
-  pick('issues', want.issues, 'issue_ids');
-  pick('pages', want.pages, 'page_ids');
-  pick('users', want.users, 'user_ids');
+  const hasMiss = (m) => m.task_ids.length || m.issue_ids.length || m.page_ids.length || m.user_ids.length;
 
-  if (miss.task_ids.length || miss.issue_ids.length || miss.page_ids.length || miss.user_ids.length) {
-    const res = await axios.post('/ref-status', miss);
+  let miss = collectMiss();
+  while (hasMiss(miss) && inflightFetch) {
+    await inflightFetch.catch(() => {});
+    miss = collectMiss();
+  }
+  if (hasMiss(miss)) {
+    const req = axios.post('/ref-status', miss).finally(() => {
+      if (inflightFetch === req) inflightFetch = null;
+    });
+    inflightFetch = req;
+    const res = await req;
     if (res.data.status) {
       ['tasks', 'issues', 'pages', 'users'].forEach((kind) => {
         cacheSet(kind, res.data[kind]);
@@ -154,7 +172,7 @@ function setUnresolved(el, unresolved, tooltip) {
 // 해석 결과를 root 안 칩 DOM에 반영 (data-* 속성도 갱신해 클릭/배지 재주입이 fresh 값을 읽게).
 // 누락 칩은 멤버십과 대조해 '삭제 확정'(멤버인 곳)만 표기하고 권한 밖은 정상 모양 유지
 // — 멤버십은 누락이 실제로 있을 때만 lazy fetch 하므로 async.
-export async function applyToDom(root, { tasks, issues, pages, users }) {
+async function applyToDom(root, { tasks, issues, pages, users }) {
   if (!root.isConnected) return;
   const missingByBranch = []; // 누락 task/issue 칩 — data-branch-id 멤버십으로 판정
   const missingByCanvas = []; // 누락 doc 칩 — data-canvas-id 멤버십으로 판정
@@ -228,7 +246,7 @@ export async function applyToDom(root, { tasks, issues, pages, users }) {
 }
 
 // readonly 표면용: root 안의 칩 전부 해석·패치
-export async function hydrateDom(root) {
+async function hydrateDom(root) {
   if (!root) return;
   const ids = collectRefIds(root);
   if (!ids.task_ids.size && !ids.issue_ids.size && !ids.page_ids.size && !ids.user_ids.size) return;
@@ -239,18 +257,38 @@ export async function hydrateDom(root) {
 }
 
 // 에디터 표면용: NodeView DOM을 같은 패처로 패치
-export async function hydrateEditor(editor) {
+async function hydrateEditor(editor) {
   if (!editor || editor.isDestroyed) return;
   return hydrateDom(editor.view.dom);
 }
 
 // task:updated 등 이벤트 구동 재해석 시 TTL 캐시가 stale을 되돌려주지 않게 비운다.
 // 멤버십 캐시도 함께 비워 브랜치 탈퇴 직후 30초간 '삭제 확정' 오표기를 막는다.
-export function invalidateRefCache() {
+function invalidateRefCache() {
   cache.clear();
   myBranchIds = null;
   myCanvasIds = null;
   membershipsAt = 0;
+}
+
+// task:updated/issue:updated 모듈 단일 리스너 — 표면 N개가 각자 리스너를 달아
+// 이벤트당 N회 invalidate+hydrate 하던 것을 invalidate 1회 + 구독자 알림으로 수렴.
+// 훅 useEffect 안에서만 호출되므로 window 접근은 클라이언트에서만 일어난다.
+const refreshSubscribers = new Set();
+let listenersBound = false;
+
+function subscribeRefresh(fn) {
+  refreshSubscribers.add(fn);
+  if (!listenersBound) {
+    listenersBound = true;
+    const onUpdate = () => {
+      invalidateRefCache(); // 구독자 수와 무관하게 1회만
+      refreshSubscribers.forEach((f) => f());
+    };
+    window.addEventListener('task:updated', onUpdate);
+    window.addEventListener('issue:updated', onUpdate);
+  }
+  return () => refreshSubscribers.delete(fn);
 }
 
 // readonly 표면용 훅: 콘텐츠 변경 시 + task/issue 변경 이벤트 시 하이드레이션.
@@ -261,16 +299,9 @@ export function useRefHydration(ref, deps, enabled = true) {
   useEffect(() => {
     if (!enabled || !ref.current) return;
     hydrateDom(ref.current);
-    const refresh = () => {
-      invalidateRefCache();
+    return subscribeRefresh(() => {
       if (ref.current) hydrateDom(ref.current);
-    };
-    window.addEventListener('task:updated', refresh);
-    window.addEventListener('issue:updated', refresh);
-    return () => {
-      window.removeEventListener('task:updated', refresh);
-      window.removeEventListener('issue:updated', refresh);
-    };
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, ...deps]);
 }
@@ -280,16 +311,10 @@ export function useEditorRefHydration(editor, delay = 0) {
   useEffect(() => {
     if (!editor) return;
     const t = setTimeout(() => hydrateEditor(editor), delay);
-    const refresh = () => {
-      invalidateRefCache();
-      hydrateEditor(editor);
-    };
-    window.addEventListener('task:updated', refresh);
-    window.addEventListener('issue:updated', refresh);
+    const unsubscribe = subscribeRefresh(() => hydrateEditor(editor));
     return () => {
       clearTimeout(t);
-      window.removeEventListener('task:updated', refresh);
-      window.removeEventListener('issue:updated', refresh);
+      unsubscribe();
     };
   }, [editor, delay]);
 }

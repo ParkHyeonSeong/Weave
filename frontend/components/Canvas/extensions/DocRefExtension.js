@@ -2,6 +2,7 @@ import { Node, mergeAttributes } from '@tiptap/core';
 import { PluginKey } from '@tiptap/pm/state';
 import DocRefPopup from './DocRefPopup';
 import { createRefSuggestionPlugin } from './refSuggestion';
+import { numAttr, strAttr } from './refAttr';
 
 export const docRefPluginKey = new PluginKey('docRefSuggestion');
 
@@ -11,19 +12,13 @@ const DocRefNode = Node.create({
   inline: true,
   atom: true,
 
-  // per-attr parseHTML: 저장된 HTML 재파싱 시 data-*에서 attrs 복원.
-  // per-attr renderHTML은 비활성 — 노드 레벨 renderHTML()이 data-*를 전부 명시 출력하므로
-  // 기본 렌더(camelCase 속성 중복 출력)를 억제해 출력 HTML을 data-*만으로 유지한다.
+  // attr 정의·불변식(per-attr 렌더 억제)은 refAttr.js 참고
   addAttributes() {
-    const numAttr = (name) => (el) => {
-      const v = el.getAttribute(name);
-      return v != null && v !== '' ? Number(v) : null;
-    };
     return {
-      pageId: { default: null, parseHTML: numAttr('data-page-id'), renderHTML: () => ({}) },
-      canvasId: { default: null, parseHTML: numAttr('data-canvas-id'), renderHTML: () => ({}) },
-      title: { default: '', parseHTML: (el) => el.getAttribute('data-title') || '', renderHTML: () => ({}) },
-      canvasName: { default: '', parseHTML: (el) => el.getAttribute('data-canvas-name') || '', renderHTML: () => ({}) },
+      pageId: numAttr('data-page-id'),
+      canvasId: numAttr('data-canvas-id'),
+      title: strAttr('data-title'),
+      canvasName: strAttr('data-canvas-name'),
     };
   },
 
