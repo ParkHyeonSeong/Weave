@@ -9,8 +9,14 @@ const TTL_MS = 30_000;
 const cache = new Map(); // 'tasks:1' → { data, at }
 
 function cacheGet(kind, id) {
-  const hit = cache.get(`${kind}:${id}`);
-  return hit && Date.now() - hit.at < TTL_MS ? hit.data : null;
+  const key = `${kind}:${id}`;
+  const hit = cache.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.at >= TTL_MS) {
+    cache.delete(key);
+    return null;
+  }
+  return hit.data;
 }
 
 function cacheSet(kind, map) {
@@ -79,10 +85,14 @@ function setChipText(el, text) {
   }
 }
 
+// 서버 응답 값이 className에 그대로 보간되므로 화이트리스트로 방어
+const SAFE_CATEGORIES = new Set(['todo', 'in_progress', 'done', 'cancelled', 'open', 'closed']);
+
 function setBadge(el, { category, label, color }) {
   el.querySelector('[data-ref-badge]')?.remove();
   const badge = document.createElement('span');
-  badge.className = `ref-chip__badge ref-chip__badge--${category}`;
+  const safeCategory = SAFE_CATEGORIES.has(category) ? category : 'todo';
+  badge.className = `ref-chip__badge ref-chip__badge--${safeCategory}`;
   badge.textContent = label;
   if (color) {
     badge.style.backgroundColor = `${color}20`;

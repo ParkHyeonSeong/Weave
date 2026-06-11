@@ -52,6 +52,7 @@ const IssueRefNode = Node.create({
       dom.setAttribute('data-branch-id', node.attrs.branchId);
       dom.setAttribute('data-task-id', node.attrs.taskId);
       dom.setAttribute('data-issue-id', node.attrs.issueId);
+      dom.setAttribute('data-display-id', node.attrs.displayId);
       dom.title = `${node.attrs.displayId} - ${node.attrs.title}`;
 
       dom.appendChild(document.createTextNode(`${node.attrs.displayId} ${node.attrs.title}`));

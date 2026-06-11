@@ -54,6 +54,9 @@ const MentionNode = Node.create({
       const dom = document.createElement('span');
       dom.className = 'mention';
       dom.contentEditable = 'false';
+      dom.setAttribute('data-mention', 'true');
+      dom.setAttribute('data-user-id', node.attrs.userId);
+      dom.setAttribute('data-username', node.attrs.username);
       dom.textContent = `@${node.attrs.username}`;
       dom.title = node.attrs.username;
       return { dom };
