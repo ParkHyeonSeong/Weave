@@ -38,6 +38,13 @@ if not ENCRYPT_KEY:
     else:
         raise RuntimeError("ENCRYPT_KEY must be set (export ENCRYPT_KEY=...)")
 
+# Frontend base URL — 비밀번호 재설정 링크 등 절대 URL 구성용.
+# 미설정 시 백엔드는 토큰 + 상대경로만 반환하고 프론트가 절대 URL을 구성한다.
+FRONTEND_URL = os.getenv("FRONTEND_URL", "").rstrip("/")
+
+# 비밀번호 재설정 토큰 만료 (시간)
+PASSWORD_RESET_TOKEN_EXPIRE_HOURS = int(os.getenv("PASSWORD_RESET_TOKEN_EXPIRE_HOURS", "1"))
+
 # Web Push (VAPID)
 VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
 VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")

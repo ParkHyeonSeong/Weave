@@ -60,11 +60,8 @@ class SmtpTestRequest(BaseModel):
 
 
 class ResetUserPassword(BaseModel):
-    new_password: Optional[str] = None
+    """비밀번호 초기화는 본문 필드가 없다 — 단일사용 재설정 링크를 발급할 뿐(SEC-07).
 
-    @field_validator('new_password')
-    @classmethod
-    def validate_password(cls, v):
-        if v is not None and len(v) < 6:
-            raise ValueError('password must be at least 6 characters')
-        return v
+    과거의 new_password(관리자 지정 평문)는 컨트롤러가 무시하던 사일런트 풋건이라 제거했다.
+    """
+    pass

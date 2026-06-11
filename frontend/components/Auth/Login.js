@@ -75,9 +75,13 @@ export default function Login() {
       const response = await axios.post(endpoint, payload);
 
       if (response.data.status) {
-        // private 모드 회원가입: 승인 대기
-        if (response.data.pending) {
-          showAlert('Registration Complete', 'Your account has been created and is awaiting admin approval. You will be able to log in once approved.');
+        // 회원가입: 이메일 열거 방지를 위해 신규/기존을 구별하지 않는 중립 응답.
+        // 가입은 자동로그인하지 않으므로(쿠키/프로필 없음) 로그인 화면으로 안내한다.
+        if (mode === 'register') {
+          showAlert(
+            'Registration Submitted',
+            'Your request has been received. If you already have an account, please sign in.'
+          );
           setMode('login');
           return;
         }
@@ -98,7 +102,6 @@ export default function Login() {
       } else {
         const messages = {
           'INVALID_CREDENTIALS': 'Invalid email or password.',
-          'EMAIL_ALREADY_EXISTS': 'This email is already registered.',
           'REGISTRATION_DISABLED': 'Registration is not available. Contact your administrator.',
           'NOT_INITIALIZED': 'System setup is required first.',
           'ACCOUNT_PENDING': 'Your account is awaiting admin approval.',

@@ -1,33 +1,34 @@
 import { useState } from 'react';
-import { X, Copy, Check, Mail } from 'lucide-react';
+import { X, Copy, Check, Mail, Link2 } from 'lucide-react';
 import { axios } from '@/library/_axios';
 
 export default function ResetPassword({ user, onClose }) {
-  const [useCustom, setUseCustom] = useState(false);
-  const [customPassword, setCustomPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   // 결과 상태
-  const [tempPassword, setTempPassword] = useState('');
   const [emailSent, setEmailSent] = useState(false);
+  const [resetLink, setResetLink] = useState('');
   const [copied, setCopied] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (loading) return;
-    if (useCustom && customPassword.length < 6) return;
 
     setError('');
     setLoading(true);
     try {
-      const payload = useCustom ? { new_password: customPassword } : {};
-      const res = await axios.post(`/admin/users/${user.user_id}/reset-password`, payload);
+      const res = await axios.post(`/admin/users/${user.user_id}/reset-password`, {});
       if (res.data.status) {
         if (res.data.email_sent) {
           setEmailSent(true);
         } else {
-          setTempPassword(res.data.temporary_password);
+          // 상대경로면 현재 origin을 붙여 절대 URL로 만든다.
+          const link = res.data.reset_link || '';
+          const absolute = /^https?:\/\//i.test(link)
+            ? link
+            : `${window.location.origin}${link}`;
+          setResetLink(absolute);
         }
       } else {
         const messages = {
@@ -45,13 +46,13 @@ export default function ResetPassword({ user, onClose }) {
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(tempPassword);
+      await navigator.clipboard.writeText(resetLink);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
       // fallback
       const textarea = document.createElement('textarea');
-      textarea.value = tempPassword;
+      textarea.value = resetLink;
       document.body.appendChild(textarea);
       textarea.select();
       document.execCommand('copy');
@@ -77,11 +78,11 @@ export default function ResetPassword({ user, onClose }) {
             <div className="ResetPassword__EmailSent">
               <Mail size={32} style={{ color: '#5E6AD2', marginBottom: 12 }} />
               <p className="ResetPassword__Description">
-                A temporary password has been sent to<br />
+                A password reset link has been sent to<br />
                 <strong>{user.email}</strong>
               </p>
               <p className="ResetPassword__Notice">
-                The user will be required to change their password on next login.
+                The link can be used once and expires in 1 hour.
               </p>
             </div>
           </div>
@@ -96,8 +97,8 @@ export default function ResetPassword({ user, onClose }) {
     );
   }
 
-  // 임시 비밀번호 결과 화면
-  if (tempPassword) {
+  // 재설정 링크 결과 화면 (SMTP 미설정/발송 실패 시 관리자에게 링크 전달)
+  if (resetLink) {
     return (
       <div className="ResetPassword__Backdrop" onClick={onClose}>
         <div className="ResetPassword" onClick={(e) => e.stopPropagation()}>
@@ -110,10 +111,11 @@ export default function ResetPassword({ user, onClose }) {
 
           <div className="ResetPassword__Body">
             <p className="ResetPassword__Description">
-              Temporary password for <strong>{user.username}</strong>
+              Reset link for <strong>{user.username}</strong>
             </p>
-            <div className="ResetPassword__PasswordDisplay">
-              <code className="ResetPassword__PasswordCode">{tempPassword}</code>
+            <div className="ResetPassword__LinkDisplay">
+              <Link2 size={16} className="ResetPassword__LinkIcon" />
+              <span className="ResetPassword__LinkText">{resetLink}</span>
               <button
                 type="button"
                 className="ResetPassword__CopyBtn"
@@ -124,7 +126,7 @@ export default function ResetPassword({ user, onClose }) {
               </button>
             </div>
             <p className="ResetPassword__Notice">
-              The user will be required to change their password on next login.
+              Share this link with the user. It can be used once and expires in 1 hour.
             </p>
           </div>
 
@@ -138,7 +140,7 @@ export default function ResetPassword({ user, onClose }) {
     );
   }
 
-  // 비밀번호 초기화 입력 화면
+  // 비밀번호 초기화 확인 화면
   return (
     <div className="ResetPassword__Backdrop" onClick={onClose}>
       <form className="ResetPassword" onClick={(e) => e.stopPropagation()} onSubmit={handleSubmit}>
@@ -153,29 +155,10 @@ export default function ResetPassword({ user, onClose }) {
           <p className="ResetPassword__Description">
             Reset password for <strong>{user.username}</strong> ({user.email})
           </p>
-
-          <label className="ResetPassword__CheckboxLabel">
-            <input
-              type="checkbox"
-              checked={useCustom}
-              onChange={(e) => setUseCustom(e.target.checked)}
-            />
-            Set custom password
-          </label>
-
-          {useCustom && (
-            <div className="ResetPassword__Field">
-              <label className="ResetPassword__Label">New Password</label>
-              <input
-                className="ResetPassword__Input"
-                type="password"
-                placeholder="Minimum 6 characters"
-                value={customPassword}
-                onChange={(e) => setCustomPassword(e.target.value)}
-                autoFocus
-              />
-            </div>
-          )}
+          <p className="ResetPassword__Notice">
+            A single-use reset link will be generated. If email is configured, it will be
+            sent to the user; otherwise the link will be shown here for you to share.
+          </p>
 
           {error && <div className="ResetPassword__Error">{error}</div>}
         </div>
@@ -187,7 +170,7 @@ export default function ResetPassword({ user, onClose }) {
           <button
             type="submit"
             className="ResetPassword__SubmitBtn"
-            disabled={loading || (useCustom && customPassword.length < 6)}
+            disabled={loading}
           >
             {loading ? 'Resetting...' : 'Reset Password'}
           </button>

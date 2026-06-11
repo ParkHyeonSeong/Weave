@@ -10,6 +10,10 @@ from config import (
 )
 from core.model import user as user_model
 from core.model import workspace as workspace_model
+from core.model import password_reset_token as reset_token_model
+from library import crypto
+
+MIN_PASSWORD_LENGTH = 6
 
 
 def _get_client_ip(request: Request) -> str:
@@ -57,39 +61,37 @@ def _clear_auth_cookie(response: Response):
 
 
 async def register(body, request: Request, response: Response, db: AsyncSession):
-    """회원가입"""
+    """회원가입 (이메일 열거 방지: SEC-13-A).
+
+    신규 이메일과 이미 가입된 이메일에 대해 응답이 외부에서 구별 불가능하도록 한다.
+    - 응답 구조: 모드별 중립 응답을 신규/기존 동일하게 반환(EMAIL_ALREADY_EXISTS 미사용).
+    - 타이밍: 이메일 존재 여부와 무관하게 항상 bcrypt 해싱을 수행해 "존재 체크는 빠르고
+      해싱은 느린" 차이를 제거.
+    - public 모드: 자동로그인(profile/쿠키)을 하지 않는다. 신규는 active 계정을 생성하되
+      쿠키를 내려주지 않고, 사용자는 로그인 화면에서 별도 로그인한다(이 UX가 비열거에 필수).
+    기존 이메일이면 어떤 계정도 새로 만들지 않는다.
+    """
     # 초기화 여부 확인
     settings = await workspace_model.get_settings(db)
     if not settings:
         return {'status': False, 'message': 'NOT_INITIALIZED'}
 
     existing = await user_model.find_by_email(body.email, db)
-    if existing:
-        return {'status': False, 'message': 'EMAIL_ALREADY_EXISTS'}
 
+    # 존재 여부와 무관하게 항상 해싱 수행(타이밍 사이드채널 제거). 기존 이메일이면
+    # 해시는 사용하지 않고 버린다(계정 미생성).
     password_hash = bcrypt.hashpw(body.password.encode('utf-8'), bcrypt.gensalt())
 
-    # private 모드: pending 상태로 생성, 승인 대기
+    # private 모드: 승인 대기. 신규/기존 모두 동일한 중립 응답.
     if settings['registration_policy'] == 'private':
-        await user_model.create(body.email, password_hash, body.username, db, status='pending')
-        return {'status': True, 'pending': True, 'message': 'ACCOUNT_PENDING'}
+        if not existing:
+            await user_model.create(body.email, password_hash, body.username, db, status='pending')
+        return {'status': True, 'pending': True, 'message': 'REGISTRATION_PENDING'}
 
-    # public 모드: active 상태로 생성, 즉시 로그인
-    user_id = await user_model.create(body.email, password_hash, body.username, db)
-    token = _create_token(user_id, body.email, body.username, 'member')
-    _set_auth_cookie(response, token)
-    return {
-        'status': True,
-        'profile': {
-            'user_id': user_id,
-            'email': body.email,
-            'username': body.username,
-            'role': 'member',
-            # 같은 브라우저에서 계정 전환 시 이전 사용자의 아바타가 남지 않도록 명시
-            'avatar_url': None,
-            'avatar_color': None,
-        },
-    }
+    # public 모드: 신규는 active 계정 생성(자동로그인 없음). 신규/기존 모두 동일한 중립 응답.
+    if not existing:
+        await user_model.create(body.email, password_hash, body.username, db)
+    return {'status': True, 'message': 'REGISTRATION_SUCCESS'}
 
 
 async def login(body, request: Request, response: Response, db: AsyncSession):
@@ -153,4 +155,29 @@ async def me(request: Request):
 async def logout(response: Response):
     """로그아웃 - 쿠키 삭제"""
     _clear_auth_cookie(response)
+    return {'status': True}
+
+
+async def reset_password(body, db: AsyncSession):
+    """일회용·만료 재설정 토큰으로 새 비밀번호 설정 (SEC-07, 미인증).
+
+    토큰을 해시 매칭으로 조회(평문 미저장)하고 미만료·미사용일 때만 새 비밀번호를 설정한다.
+    열거 방지를 위해 잘못된/만료/사용된 토큰은 모두 동일한 INVALID_OR_EXPIRED_TOKEN을 반환한다.
+    """
+    # 새 비밀번호 정책 검증 (기존 정책: 최소 6자) — 토큰을 소비하기 전에 거부한다.
+    if not body.new_password or len(body.new_password) < MIN_PASSWORD_LENGTH:
+        return {'status': False, 'message': 'PASSWORD_TOO_SHORT'}
+
+    token_hash = crypto.hash_token(body.token)
+    row = await reset_token_model.find_valid_by_hash(token_hash, db)
+    if not row:
+        return {'status': False, 'message': 'INVALID_OR_EXPIRED_TOKEN'}
+
+    # 단일사용 처리를 먼저 시도해 경합(동시 소비)을 차단한다.
+    claimed = await reset_token_model.mark_used(row['token_id'], db)
+    if not claimed:
+        return {'status': False, 'message': 'INVALID_OR_EXPIRED_TOKEN'}
+
+    new_hash = bcrypt.hashpw(body.new_password.encode('utf-8'), bcrypt.gensalt())
+    await user_model.update_password(row['user_id'], new_hash, db)
     return {'status': True}

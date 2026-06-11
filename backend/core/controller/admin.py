@@ -2,14 +2,26 @@ import secrets
 import asyncio
 import bcrypt
 import logging
+from datetime import datetime, timedelta, timezone
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger("weave.admin")
 
+from config import FRONTEND_URL, PASSWORD_RESET_TOKEN_EXPIRE_HOURS
 from core.model import user as user_model
 from core.model import smtp_config as smtp_config_model
-from library import smtp_client
+from core.model import password_reset_token as reset_token_model
+from library import smtp_client, crypto
+
+RESET_TOKEN_BYTES = 32
+RESET_PATH = "/auth/reset"
+
+
+def _build_reset_link(raw_token: str) -> str:
+    """재설정 링크 구성. FRONTEND_URL이 있으면 절대 URL, 없으면 상대경로."""
+    path = f"{RESET_PATH}?token={raw_token}"
+    return f"{FRONTEND_URL}{path}" if FRONTEND_URL else path
 
 
 async def create_user(body, request: Request, db: AsyncSession):
@@ -66,7 +78,12 @@ async def update_user_status(user_id: int, body, request: Request, db: AsyncSess
 
 
 async def reset_user_password(user_id: int, body, request: Request, db: AsyncSession):
-    """사용자 비밀번호 초기화"""
+    """사용자 비밀번호 초기화 — 일회용·만료 재설정 링크 발급(SEC-07).
+
+    임시 평문 비밀번호를 더 이상 생성/반환하지 않는다. 대신 secrets로 토큰을 생성하고
+    해시만 저장(at-rest)한 뒤, 사용자가 직접 새 비밀번호를 설정하는 단일사용 링크를 발급한다.
+    SMTP가 설정돼 있으면 링크를 이메일로 발송하고, 미설정이면 링크/토큰을 관리자에게 반환한다
+    (단일사용+만료라 평문 비밀번호보다 위험이 훨씬 낮다)."""
     admin_id = request.state.payload.get('user_id')
 
     # 자기 자신의 비밀번호는 초기화 불가
@@ -77,28 +94,33 @@ async def reset_user_password(user_id: int, body, request: Request, db: AsyncSes
     if not target:
         return {'status': False, 'message': 'USER_NOT_FOUND'}
 
-    # 비밀번호 생성 (미지정 시 자동 생성)
-    plain_password = body.new_password if body.new_password else secrets.token_urlsafe(9)
-    password_hash = bcrypt.hashpw(plain_password.encode('utf-8'), bcrypt.gensalt())
+    # 일회용 재설정 토큰 생성 — 평문은 한 번만 노출하고 해시로 저장한다(PAT 동일 패턴).
+    raw_token = "rst_" + secrets.token_urlsafe(RESET_TOKEN_BYTES)
+    token_hash = crypto.hash_token(raw_token)
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=PASSWORD_RESET_TOKEN_EXPIRE_HOURS)
+    await reset_token_model.create(token_hash, user_id, expires_at, db)
 
-    await user_model.update_password(user_id, password_hash, db)
-    await user_model.set_must_change_password(user_id, True, db)
+    # 사용자가 링크에서 직접 새 비번을 설정하므로 must_change_password는 불필요 — 해제해 둔다.
+    await user_model.set_must_change_password(user_id, False, db)
 
-    # SMTP 설정이 있으면 이메일 발송
+    reset_link = _build_reset_link(raw_token)
+
+    # SMTP 설정이 있으면 링크를 이메일로 발송
     smtp_config = await smtp_config_model.get_config_for_sending(db)
     if smtp_config:
         email_html = f"""
         <div style="max-width:480px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:32px;">
             <h2 style="color:#5E6AD2;margin-bottom:16px;">Password Reset</h2>
             <p style="color:#333;line-height:1.6;">
-                Your password has been reset by an administrator.<br>
-                Please use the temporary password below to log in.
+                An administrator has initiated a password reset for your account.<br>
+                Click the button below to set a new password. This link can be used once
+                and expires in {PASSWORD_RESET_TOKEN_EXPIRE_HOURS} hour(s).
             </p>
-            <div style="background:#F5F5F5;border-radius:8px;padding:16px;margin:20px 0;text-align:center;">
-                <code style="font-size:18px;font-weight:bold;color:#333;letter-spacing:1px;">{plain_password}</code>
+            <div style="text-align:center;margin:24px 0;">
+                <a href="{reset_link}" style="display:inline-block;background:#5E6AD2;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:bold;">Set a new password</a>
             </div>
-            <p style="color:#333;line-height:1.6;">
-                You will be required to change your password on your next login.
+            <p style="color:#999;font-size:12px;line-height:1.6;">
+                If you did not request this, you can safely ignore this email.
             </p>
             <hr style="border:none;border-top:1px solid #E5E5E5;margin:24px 0;">
             <p style="color:#999;font-size:12px;">Sent from Weave</p>
@@ -107,14 +129,18 @@ async def reset_user_password(user_id: int, body, request: Request, db: AsyncSes
         try:
             asyncio.create_task(
                 smtp_client.send_email(smtp_config, [target['email']],
-                                       "Weave - Your password has been reset", email_html)
+                                       "Weave - Reset your password", email_html)
             )
             return {'status': True, 'email_sent': True}
         except Exception as e:
             logger.error("Failed to send reset email: %s", e)
-            return {'status': True, 'temporary_password': plain_password, 'email_sent': False}
+            # 발송 실패 시 평문 비밀번호가 아니라 단일사용 링크/토큰을 관리자에게 반환
+            return {'status': True, 'email_sent': False,
+                    'reset_link': reset_link, 'reset_token': raw_token}
 
-    return {'status': True, 'temporary_password': plain_password, 'email_sent': False}
+    # SMTP 미설정: 단일사용 링크/토큰을 관리자에게 반환 (평문 비밀번호 아님)
+    return {'status': True, 'email_sent': False,
+            'reset_link': reset_link, 'reset_token': raw_token}
 
 
 # ── SMTP 설정 ────────────────────────────────────────────────────────────

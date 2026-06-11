@@ -92,8 +92,8 @@ import "@/styles/components/track/tracksIndex.scss";
 import "@/styles/components/track/trackSettings.scss";
 import "@/styles/components/scrum/scrum.scss";
 
-const publicPaths = ['/auth/login', '/auth/change-password', '/setup'];
-const noLayoutPaths = ['/auth/login', '/auth/change-password', '/setup', '/admin'];
+const publicPaths = ['/auth/login', '/auth/change-password', '/auth/reset', '/setup'];
+const noLayoutPaths = ['/auth/login', '/auth/change-password', '/auth/reset', '/setup', '/admin'];
 
 export default function App({ Component, pageProps }) {
   const router = useRouter();
