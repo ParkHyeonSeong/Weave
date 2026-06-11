@@ -6,7 +6,7 @@ import { axios } from '@/library/_axios';
 // 응답에 없는 ID(삭제·권한 밖)는 건드리지 않는다 — 스냅샷이 그대로 폴백.
 
 const TTL_MS = 30_000;
-const cache = new Map(); // 'task:1' → { data, at }
+const cache = new Map(); // 'tasks:1' → { data, at }
 
 function cacheGet(kind, id) {
   const hit = cache.get(`${kind}:${id}`);
@@ -151,5 +151,5 @@ export async function hydrateDom(root) {
 // 에디터 표면용: NodeView DOM을 같은 패처로 패치
 export async function hydrateEditor(editor) {
   if (!editor || editor.isDestroyed) return;
-  hydrateDom(editor.view.dom);
+  return hydrateDom(editor.view.dom);
 }

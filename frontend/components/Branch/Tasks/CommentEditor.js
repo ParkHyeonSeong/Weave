@@ -10,6 +10,7 @@ import TaskRefNode from '@/components/Canvas/extensions/TaskRefExtension';
 import { ResizableImage } from '@/components/Canvas/extensions/ResizableImageExtension';
 import { createImageUploadPlugin } from '@/components/Canvas/extensions/ImageUploadPlugin';
 import SlashCommandsExtension from '@/components/Canvas/extensions/SlashCommandsExtension';
+import { hydrateEditor } from '@/library/refHydration';
 
 const lowlight = createLowlight(common);
 
@@ -92,6 +93,20 @@ export default function CommentEditor({
 
   useEffect(() => {
     editorRef.current = editor;
+  }, [editor]);
+
+  // 칩 하이드레이션: 마운트 직후 + 탭 내 태스크 변경 시
+  useEffect(() => {
+    if (!editor) return;
+    const t = setTimeout(() => hydrateEditor(editor), 1000);
+    const refresh = () => hydrateEditor(editor);
+    window.addEventListener('task:updated', refresh);
+    window.addEventListener('issue:updated', refresh);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener('task:updated', refresh);
+      window.removeEventListener('issue:updated', refresh);
+    };
   }, [editor]);
 
   if (!editor) return null;

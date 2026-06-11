@@ -38,10 +38,11 @@ export default function TaskIssueDetail() {
   const newCommentRef = useRef(null);
 
   // readonly 본문·댓글의 ref 칩 하이드레이션 (최신 제목·상태)
+  // 편집 취소 시 readonly가 stale 스냅샷으로 재마운트되므로 편집 플래그도 deps에 포함
   const timelineRef = useRef(null);
   useEffect(() => {
     hydrateDom(timelineRef.current);
-  }, [issue?.body, comments]);
+  }, [issue?.body, comments, editingBody, editingCommentId]);
 
   const myProfile = typeof window !== 'undefined'
     ? JSON.parse(sessionStorage.getItem('profile') || '{}')

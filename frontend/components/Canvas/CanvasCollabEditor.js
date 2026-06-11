@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import { Extension } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
@@ -32,8 +32,9 @@ import { createMarkdownPastePlugin } from './extensions/MarkdownPastePlugin';
 import MermaidExtension from './extensions/MermaidExtension';
 import CanvasEditorToolbar from './CanvasEditorToolbar';
 import TableBubbleMenu from './TableBubbleMenu';
-import { axios, getBaseURL } from '@/library/_axios';
+import { getBaseURL } from '@/library/_axios';
 import { buildAvatarDOM } from '@/library/userAvatar';
+import { hydrateEditor } from '@/library/refHydration';
 
 const lowlight = createLowlight(common);
 const MAX_PLAIN_TEXT_LENGTH = 60000;
@@ -176,63 +177,18 @@ function CollabEditorInner({
     }
   }, [editor, initialContent, hasExistingYjsState, ydoc]);
 
-  // 에디터 마운트 시 ref 상태 배치 갱신 (DOM 뱃지만 업데이트, Yjs 속성 미변경)
-  const refreshedRef = useRef(false);
+  // 칩 하이드레이션: 마운트 직후(yjs 초기 동기화 대기) + 탭 내 태스크 변경 시
   useEffect(() => {
-    if (!editor || refreshedRef.current) return;
-    refreshedRef.current = true;
-
-    // Yjs sync 후 DOM이 준비되기를 기다린 뒤 배치 갱신
-    const timer = setTimeout(() => {
-      const taskIds = new Set();
-      const issueIds = new Set();
-
-      editor.state.doc.descendants((node) => {
-        if (node.type.name === 'taskRef' && node.attrs.taskId) taskIds.add(node.attrs.taskId);
-        if (node.type.name === 'issueRef' && node.attrs.issueId) issueIds.add(node.attrs.issueId);
-      });
-
-      if (taskIds.size === 0 && issueIds.size === 0) return;
-
-      axios.post('/ref-status', {
-        task_ids: [...taskIds],
-        issue_ids: [...issueIds],
-      }).then((res) => {
-        if (!res.data.status) return;
-        const { tasks, issues } = res.data;
-        const issueStatusMap = { open: 'Open', closed: 'Closed' };
-
-        editor.state.doc.descendants((node, nodePos) => {
-          if (node.type.name === 'taskRef') {
-            const info = tasks[String(node.attrs.taskId)];
-            if (!info) return;
-            const dom = editor.view.nodeDOM(nodePos);
-            const badge = dom?.querySelector('[data-ref-badge]');
-            if (badge) {
-              const cat = info.status_category || info.status;
-              badge.className = `ref-chip__badge ref-chip__badge--${cat}`;
-              badge.textContent = info.status_label || info.status;
-              if (info.status_color) {
-                badge.style.backgroundColor = `${info.status_color}20`;
-                badge.style.color = info.status_color;
-              }
-            }
-          }
-          if (node.type.name === 'issueRef') {
-            const info = issues[String(node.attrs.issueId)];
-            if (!info) return;
-            const dom = editor.view.nodeDOM(nodePos);
-            const badge = dom?.querySelector('[data-ref-badge]');
-            if (badge) {
-              badge.className = `ref-chip__badge ref-chip__badge--${info.status}`;
-              badge.textContent = issueStatusMap[info.status] || info.status;
-            }
-          }
-        });
-      }).catch(() => {});
-    }, 1000);
-
-    return () => clearTimeout(timer);
+    if (!editor) return;
+    const t = setTimeout(() => hydrateEditor(editor), 1000);
+    const refresh = () => hydrateEditor(editor);
+    window.addEventListener('task:updated', refresh);
+    window.addEventListener('issue:updated', refresh);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener('task:updated', refresh);
+      window.removeEventListener('issue:updated', refresh);
+    };
   }, [editor]);
 
   if (!editor) return null;
