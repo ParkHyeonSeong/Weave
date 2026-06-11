@@ -1,10 +1,11 @@
 import { Node, mergeAttributes } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
-import { ReactRenderer } from '@tiptap/react';
 import IssueRefPopup from './IssueRefPopup';
-import { reparseSuggestion } from './refSuggestion';
+import { mapAnchor, createSuggestionPopupView } from './refSuggestion';
 
 export const issueRefPluginKey = new PluginKey('issueRefSuggestion');
+
+const ISSUE_OFF = { active: false, from: 0 };
 
 const IssueRefNode = Node.create({
   name: 'issueRef',
@@ -85,124 +86,34 @@ const IssueRefNode = Node.create({
       new Plugin({
         key: issueRefPluginKey,
         state: {
-          init() {
-            return { active: false, keyword: '', from: 0 };
-          },
-          apply(tr, prev, _oldState, newState) {
+          init() { return ISSUE_OFF; },
+          apply(tr, prev) {
             const meta = tr.getMeta(issueRefPluginKey);
             if (meta) return meta;
             if (!prev.active || !tr.docChanged) return prev;
-            return reparseSuggestion(prev, tr, newState, /^\/i\s?(.*)$/);
+            // 검색어는 input에 있으므로 문서 변경(원격 편집)엔 앵커 추적만
+            return mapAnchor(tr, prev, ISSUE_OFF);
           },
         },
-        props: {
-          handleKeyDown(view, event) {
-            const pluginState = issueRefPluginKey.getState(view.state);
-            if (!pluginState.active) return false;
-
-            if (event.key === 'Escape') {
-              view.dispatch(view.state.tr.setMeta(issueRefPluginKey, {
-                active: false, keyword: '', from: 0,
-              }));
-              return true;
-            }
-
-            if (['ArrowDown', 'ArrowUp', 'Enter'].includes(event.key)) {
-              return true;
-            }
-
-            return false;
-          },
-        },
-
-        view(editorView) {
-          let popup = null;
-          let renderer = null;
-          let lastState = null; // 상태 불변 시 updateProps 리렌더 스킵용
-
-          function destroyPopup() {
-            if (renderer) { renderer.destroy(); renderer = null; }
-            if (popup) { popup.remove(); popup = null; }
-          }
-
-          function createPopup(pluginState) {
-            destroyPopup();
-
-            // viewport 기준 fixed + body append → 컨테이너 종류/클리핑 무관하게 정확히 뜸
-            const coords = editorView.coordsAtPos(editorView.state.selection.from);
-
-            popup = document.createElement('div');
-            popup.style.position = 'fixed';
-            // 우측 가장자리에서 화면 밖으로 넘치지 않게 left 클램프
-            popup.style.left = `${Math.min(coords.left, window.innerWidth - 360)}px`;
-            popup.style.top = `${coords.bottom + 4}px`;
-            popup.style.zIndex = '500';
-            document.body.appendChild(popup);
-            // 화면 아래로 넘치면 커서 위로 뒤집어 띄움 (하단 셀에서 안 묻히게)
-            requestAnimationFrame(() => {
-              if (!popup) return;
-              const h = popup.offsetHeight;
-              if (h && coords.bottom + h + 8 > window.innerHeight) {
-                popup.style.top = `${Math.max(8, coords.top - h - 4)}px`;
-              }
-            });
-
-            renderer = new ReactRenderer(IssueRefPopup, {
-              editor,
-              props: {
-                keyword: pluginState.keyword,
-                onSelect: (issue) => {
-                  const { state } = editorView;
-                  const pluginSt = issueRefPluginKey.getState(state);
-                  const tr = state.tr.replaceWith(
-                    pluginSt.from,
-                    state.selection.from,
-                    state.schema.nodes.issueRef.create({
-                      issueId: issue.issue_id,
-                      taskId: issue.task_id,
-                      branchId: issue.branch_id,
-                      displayId: issue.display_id,
-                      title: issue.title,
-                      status: issue.status,
-                    }),
-                  );
-                  tr.setMeta(issueRefPluginKey, { active: false, keyword: '', from: 0 });
-                  editorView.dispatch(tr);
-                  editorView.focus();
-                },
-                onClose: () => {
-                  editorView.dispatch(
-                    editorView.state.tr.setMeta(issueRefPluginKey, {
-                      active: false, keyword: '', from: 0,
-                    }),
-                  );
-                },
-              },
-            });
-
-            popup.appendChild(renderer.element);
-          }
-
-          return {
-            update(view) {
-              const pluginState = issueRefPluginKey.getState(view.state);
-              if (pluginState === lastState) return;
-              lastState = pluginState;
-              if (pluginState.active) {
-                if (renderer) {
-                  renderer.updateProps({ keyword: pluginState.keyword });
-                } else {
-                  createPopup(pluginState);
-                }
-              } else {
-                destroyPopup();
-              }
-            },
-            destroy() {
-              destroyPopup();
-            },
-          };
-        },
+        view: createSuggestionPopupView({
+          editor,
+          pluginKey: issueRefPluginKey,
+          off: ISSUE_OFF,
+          Popup: IssueRefPopup,
+          buildProps: (st, { close, dismiss, backToMenu, insertRefNode }) => ({
+            onClose: close,
+            onDismiss: dismiss,
+            onBack: backToMenu,
+            onSelect: (issue) => insertRefNode('issueRef', {
+              issueId: issue.issue_id,
+              taskId: issue.task_id,
+              branchId: issue.branch_id,
+              displayId: issue.display_id,
+              title: issue.title,
+              status: issue.status,
+            }),
+          }),
+        }),
       }),
     ];
   },

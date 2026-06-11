@@ -1151,6 +1151,8 @@
     letter-spacing: 0.3px;
   }
 
+  @include ref-popup-search;
+
   &__List {
     max-height: 240px;
     overflow-y: auto;

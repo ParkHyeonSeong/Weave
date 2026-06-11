@@ -11,32 +11,20 @@ import { issueRefPluginKey } from './IssueRefExtension';
 export { slashCommandPluginKey };
 const OFF = { active: false, query: '', from: 0, index: 0 };
 
-// 선택된 커맨드로 검색 시작.
-// task/doc: 새 방식 — 토큰을 지우고 팝업 input 검색으로 전환 (포커스는 팝업 input이 가져감)
-// issue: 구 방식 유지 (다음 수직 슬라이스에서 전환)
+// 선택된 커맨드로 검색 시작: 토큰을 지우고 해당 ref 팝업의 input 검색으로 전환.
+// 포커스는 팝업 input이 가져간다.
 function activateRef(command, from, view) {
   const { state } = view;
-  if (command.kind === 'task') {
-    let tr = state.tr.delete(from, state.selection.from);
-    tr = tr.setMeta(slashCommandPluginKey, OFF);
-    tr = tr.setMeta(taskRefPluginKey, { active: true, mode: command.mode, from });
-    view.dispatch(tr);
-    return;
-  }
-  if (command.kind === 'doc') {
-    let tr = state.tr.delete(from, state.selection.from);
-    tr = tr.setMeta(slashCommandPluginKey, OFF);
-    tr = tr.setMeta(docRefPluginKey, { active: true, from });
-    view.dispatch(tr);
-    return;
-  }
-  let tr = state.tr.insertText(command.cmd, from, state.selection.from);
+  let tr = state.tr.delete(from, state.selection.from);
   tr = tr.setMeta(slashCommandPluginKey, OFF);
-  if (command.kind === 'issue') {
-    tr = tr.setMeta(issueRefPluginKey, { active: true, keyword: '', from });
+  if (command.kind === 'task') {
+    tr = tr.setMeta(taskRefPluginKey, { active: true, mode: command.mode, from });
+  } else if (command.kind === 'doc') {
+    tr = tr.setMeta(docRefPluginKey, { active: true, from });
+  } else if (command.kind === 'issue') {
+    tr = tr.setMeta(issueRefPluginKey, { active: true, from });
   }
   view.dispatch(tr);
-  view.focus();
 }
 
 const SlashCommandsExtension = Extension.create({
