@@ -13,6 +13,12 @@ from core.model import workspace as workspace_model
 from core.model import password_reset_token as reset_token_model
 from library import crypto
 
+# 로그인 타이밍 사이드채널 방지용 더미 해시(SEC-13-C): 존재하지 않는 이메일에도 실제
+# 계정과 동일한 cost로 bcrypt를 수행해 응답 시간으로 존재를 추론하지 못하게 한다.
+# 신규 해시와 같은 cost=12(crypto.hash_password)로 만들어 cost 차이도 없앤다.
+# 더미와의 매칭 결과는 login의 `not user` 가드가 폐기하므로 인증에는 영향이 없다.
+_DUMMY_HASH = crypto.hash_password('_dummy_never_matches_')
+
 
 def _get_client_ip(request: Request) -> str:
     forwarded = request.headers.get('X-Forwarded-For')
@@ -97,19 +103,25 @@ async def register(body, request: Request, response: Response, db: AsyncSession)
 
 
 async def login(body, request: Request, response: Response, db: AsyncSession):
-    """로그인"""
+    """로그인 (계정 열거·타이밍 사이드채널 방지: SEC-13-B/C).
+
+    존재 여부와 무관하게 항상 bcrypt를 수행하고(없으면 더미 해시), 자격증명이 틀리면
+    존재/상태를 구분할 수 없는 단일 INVALID_CREDENTIALS를 반환한다. 계정 상태(pending/
+    rejected/inactive)는 비밀번호가 맞아 소유권이 입증된 뒤에만 공개한다.
+    """
     user = await user_model.find_by_email(body.email, db)
-    if not user:
-        return {'status': False, 'message': 'INVALID_CREDENTIALS'}
 
-    stored_password = user['password']
-    if isinstance(stored_password, memoryview):
+    # 존재 여부와 무관하게 항상 bcrypt 실행 — 없는 계정엔 더미 해시로 시간을 맞춘다(SEC-13-C).
+    stored_password = user['password'] if user else _DUMMY_HASH
+    if user and isinstance(stored_password, memoryview):
         stored_password = bytes(stored_password)
+    password_correct = bcrypt.checkpw(body.password.encode('utf-8'), stored_password)
 
-    if not bcrypt.checkpw(body.password.encode('utf-8'), stored_password):
+    # 존재하지 않거나 비밀번호가 틀리면 동일 응답 — 존재·상태를 노출하지 않는다(SEC-13-B).
+    if not user or not password_correct:
         return {'status': False, 'message': 'INVALID_CREDENTIALS'}
 
-    # 계정 상태 확인
+    # 비밀번호가 맞은 뒤에만 계정 상태를 공개한다(소유권 입증됨 → UX 안전).
     if user.get('status') == 'pending':
         return {'status': False, 'message': 'ACCOUNT_PENDING'}
     if user.get('status') == 'rejected':
