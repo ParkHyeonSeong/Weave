@@ -1,6 +1,7 @@
-// ref 제안 팝업(taskRef/docRef/issueRef/mention/슬래시 메뉴) 공용 plugin state 헬퍼.
+// ref 제안 팝업(taskRef/docRef/issueRef/mention/슬래시 메뉴) 공용 모듈:
+// plugin key(순환 import 회피용 이관) + state 헬퍼 + 검색 팝업 view 팩토리.
 
-import { PluginKey, TextSelection } from '@tiptap/pm/state';
+import { PluginKey, TextSelection, Selection } from '@tiptap/pm/state';
 import { ReactRenderer } from '@tiptap/react';
 
 const OFF = { active: false, keyword: '', from: 0 };
@@ -11,6 +12,8 @@ export const slashCommandPluginKey = new PluginKey('slashCommandMenu');
 
 // 검색 input 모드: 검색어가 문서에 없으므로 active 동안은 칩이 삽입될
 // 앵커 위치만 원격 편집을 따라가면 된다. 앵커가 지워지면 닫는다.
+// (mapResult 기본 assoc=1: 앵커 자리에 원격 삽입 시 앵커는 그 뒤로 밀리고,
+//  앵커 직후가 삭제에 휩쓸리면 deleted로 보고 닫는다 — 보수적 선택)
 export function mapAnchor(tr, prev, off) {
   const r = tr.mapping.mapResult(prev.from);
   if (r.deleted) return off;
@@ -26,20 +29,20 @@ export function createSuggestionPopupView({ editor, pluginKey, off, Popup, build
     let renderer = null;
     let lastState = null; // 상태 불변 시 updateProps 리렌더 스킵용
 
-    function focusEditorAt(pos) {
-      const { state } = editorView;
-      const clamped = Math.min(pos, state.doc.content.size);
-      editorView.dispatch(state.tr.setSelection(TextSelection.create(state.doc, clamped)));
-      editorView.focus();
-    }
-
-    // Esc·외부클릭: 문서 무변경으로 닫고 앵커로 커서 복원
-    function close() {
+    // Esc: 문서 무변경으로 닫고 앵커로 커서 복원.
+    // dismiss(외부클릭 blur 경유)는 포커스를 되돌리지 않는다 —
+    // 사용자가 클릭한 대상과 포커스 경합을 일으키지 않기 위해서다.
+    function close({ refocus = true } = {}) {
       const st = pluginKey.getState(editorView.state);
       if (!st.active) return;
-      editorView.dispatch(editorView.state.tr.setMeta(pluginKey, off));
-      focusEditorAt(st.from);
+      let tr = editorView.state.tr.setMeta(pluginKey, off);
+      if (refocus) {
+        tr = tr.setSelection(Selection.near(tr.doc.resolve(Math.min(st.from, tr.doc.content.size))));
+      }
+      editorView.dispatch(tr);
+      if (refocus) editorView.focus();
     }
+    const dismiss = () => close({ refocus: false });
 
     // 빈 input Backspace: 앵커에 '/'를 되살려 커맨드 메뉴를 같은 자리에서 다시 연다
     function backToMenu() {
@@ -88,8 +91,9 @@ export function createSuggestionPopupView({ editor, pluginKey, off, Popup, build
       });
       document.body.appendChild(popup);
       // 화면 아래로 넘치면 커서 위로 뒤집어 띄움
+      const el = popup;
       requestAnimationFrame(() => {
-        if (!popup) return;
+        if (!popup || popup !== el) return;
         const h = popup.offsetHeight;
         if (h && coords.bottom + h + 8 > window.innerHeight) {
           popup.style.top = `${Math.max(8, coords.top - h - 4)}px`;
@@ -97,7 +101,7 @@ export function createSuggestionPopupView({ editor, pluginKey, off, Popup, build
       });
       renderer = new ReactRenderer(Popup, {
         editor,
-        props: buildProps(pluginState, { close, backToMenu, insertRefNode }),
+        props: buildProps(pluginState, { close, dismiss, backToMenu, insertRefNode }),
       });
       popup.appendChild(renderer.element);
     }
@@ -108,7 +112,7 @@ export function createSuggestionPopupView({ editor, pluginKey, off, Popup, build
         if (st === lastState) return;
         lastState = st;
         if (st.active) {
-          if (renderer) renderer.updateProps(buildProps(st, { close, backToMenu, insertRefNode }));
+          if (renderer) renderer.updateProps(buildProps(st, { close, dismiss, backToMenu, insertRefNode }));
           else createPopup(st);
         } else {
           destroyPopup();
