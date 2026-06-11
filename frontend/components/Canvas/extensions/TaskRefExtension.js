@@ -1,10 +1,11 @@
 import { Node, mergeAttributes } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
-import { ReactRenderer } from '@tiptap/react';
 import TaskRefPopup from './TaskRefPopup';
-import { reparseSuggestion } from './refSuggestion';
+import { mapAnchor, createSuggestionPopupView } from './refSuggestion';
 
 export const taskRefPluginKey = new PluginKey('taskRefSuggestion');
+
+const TASK_OFF = { active: false, mode: null, from: 0 };
 
 // snake_case key를 Title Case로 변환 (fallback용)
 const formatStatusKey = (key) => key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -108,142 +109,38 @@ const TaskRefNode = Node.create({
       new Plugin({
         key: taskRefPluginKey,
         state: {
-          init() {
-            return { active: false, mode: null, keyword: '', from: 0 };
-          },
-          apply(tr, prev, _oldState, newState) {
+          init() { return TASK_OFF; },
+          apply(tr, prev) {
             const meta = tr.getMeta(taskRefPluginKey);
             if (meta) return meta;
             if (!prev.active || !tr.docChanged) return prev;
-            // 선택된 mode에 맞는 토큰만으로 키워드 추출 (스페이스 없어도 동작)
-            const re = prev.mode === 'all' ? /^\/ta\s?(.*)$/ : /^\/t\s?(.*)$/;
-            return reparseSuggestion(prev, tr, newState, re, { active: false, mode: null, keyword: '', from: 0 });
+            // 검색어는 input에 있으므로 문서 변경(원격 편집)엔 앵커 추적만
+            return mapAnchor(tr, prev, TASK_OFF);
           },
         },
-        props: {
-          handleKeyDown(view, event) {
-            const pluginState = taskRefPluginKey.getState(view.state);
-            if (!pluginState.active) return false;
-
-            if (event.key === 'Escape') {
-              view.dispatch(view.state.tr.setMeta(taskRefPluginKey, {
-                active: false, mode: null, keyword: '', from: 0,
-              }));
-              return true;
-            }
-
-            // ArrowDown/ArrowUp/Enter는 팝업에서 처리
-            if (['ArrowDown', 'ArrowUp', 'Enter'].includes(event.key)) {
-              return true;
-            }
-
-            return false;
-          },
-        },
-
-        view(editorView) {
-          let popup = null;
-          let renderer = null;
-          let lastState = null; // 상태 불변 시 updateProps 리렌더 스킵용
-
-          function destroyPopup() {
-            if (renderer) {
-              renderer.destroy();
-              renderer = null;
-            }
-            if (popup) {
-              popup.remove();
-              popup = null;
-            }
-          }
-
-          function createPopup(pluginState) {
-            destroyPopup();
-
-            // 커서 위치에서 팝업 좌표 계산 (viewport 기준 fixed + body append →
-            // 에디터 컨테이너 종류/overflow 클리핑과 무관하게 어디서든 정확히 뜬다)
-            const coords = editorView.coordsAtPos(editorView.state.selection.from);
-
-            popup = document.createElement('div');
-            popup.style.position = 'fixed';
-            // 우측 가장자리에서 화면 밖으로 넘치지 않게 left 클램프
-            popup.style.left = `${Math.min(coords.left, window.innerWidth - 360)}px`;
-            popup.style.top = `${coords.bottom + 4}px`;
-            popup.style.zIndex = '500';
-            document.body.appendChild(popup);
-            // 화면 아래로 넘치면 커서 위로 뒤집어 띄움 (하단 셀에서 안 묻히게)
-            requestAnimationFrame(() => {
-              if (!popup) return;
-              const h = popup.offsetHeight;
-              if (h && coords.bottom + h + 8 > window.innerHeight) {
-                popup.style.top = `${Math.max(8, coords.top - h - 4)}px`;
-              }
-            });
-
-            renderer = new ReactRenderer(TaskRefPopup, {
-              editor,
-              props: {
-                keyword: pluginState.keyword,
-                mode: pluginState.mode,
-                onSelect: (task) => {
-                  const { state } = editorView;
-                  const pluginSt = taskRefPluginKey.getState(state);
-                  // 슬래시 텍스트부터 현재 커서까지 교체
-                  const tr = state.tr.replaceWith(
-                    pluginSt.from,
-                    state.selection.from,
-                    state.schema.nodes.taskRef.create({
-                      taskId: task.task_id,
-                      branchId: task.branch_id,
-                      displayId: task.display_id,
-                      title: task.title,
-                      status: task.status,
-                      priority: task.priority,
-                      statusLabel: task.status_label || null,
-                      statusColor: task.status_color || null,
-                      statusCategory: task.status_category || null,
-                    }),
-                  );
-                  tr.setMeta(taskRefPluginKey, { active: false, mode: null, keyword: '', from: 0 });
-                  editorView.dispatch(tr);
-                  editorView.focus();
-                },
-                onClose: () => {
-                  editorView.dispatch(
-                    editorView.state.tr.setMeta(taskRefPluginKey, {
-                      active: false, mode: null, keyword: '', from: 0,
-                    }),
-                  );
-                },
-              },
-            });
-
-            popup.appendChild(renderer.element);
-          }
-
-          return {
-            update(view) {
-              const pluginState = taskRefPluginKey.getState(view.state);
-              if (pluginState === lastState) return;
-              lastState = pluginState;
-              if (pluginState.active) {
-                if (renderer) {
-                  renderer.updateProps({
-                    keyword: pluginState.keyword,
-                    mode: pluginState.mode,
-                  });
-                } else {
-                  createPopup(pluginState);
-                }
-              } else {
-                destroyPopup();
-              }
-            },
-            destroy() {
-              destroyPopup();
-            },
-          };
-        },
+        view: createSuggestionPopupView({
+          editor,
+          pluginKey: taskRefPluginKey,
+          off: TASK_OFF,
+          Popup: TaskRefPopup,
+          buildProps: (st, { close, dismiss, backToMenu, insertRefNode }) => ({
+            mode: st.mode,
+            onClose: close,
+            onDismiss: dismiss,
+            onBack: backToMenu,
+            onSelect: (task) => insertRefNode('taskRef', {
+              taskId: task.task_id,
+              branchId: task.branch_id,
+              displayId: task.display_id,
+              title: task.title,
+              status: task.status,
+              priority: task.priority,
+              statusLabel: task.status_label || null,
+              statusColor: task.status_color || null,
+              statusCategory: task.status_category || null,
+            }),
+          }),
+        }),
       }),
     ];
   },

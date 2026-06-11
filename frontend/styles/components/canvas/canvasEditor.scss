@@ -939,6 +939,31 @@
   }
 }
 
+// ref 검색 팝업 공용 검색 input 행 (Task/Doc/IssueRefPopup 공유)
+@mixin ref-popup-search {
+  &__Search {
+    padding: $space-2 $space-2 $space-1;
+
+    input {
+      width: 100%;
+      border: 1px solid $color-border;
+      border-radius: $radius-md;
+      padding: $space-1 $space-2;
+      font-size: $font-size-sm;
+      color: $color-text;
+      background: $color-bg;
+      outline: none;
+
+      &:focus {
+        border-color: $color-primary;
+        box-shadow: 0 0 0 2px rgba($color-primary, 0.15);
+      }
+
+      &::placeholder { color: $color-text-tertiary; }
+    }
+  }
+}
+
 // 태스크 검색 팝업 (에디터 내 슬래시 커맨드)
 .TaskRefPopup {
   width: 360px;
@@ -960,6 +985,8 @@
     text-transform: uppercase;
     letter-spacing: 0.3px;
   }
+
+  @include ref-popup-search;
 
   &__List {
     max-height: 240px;

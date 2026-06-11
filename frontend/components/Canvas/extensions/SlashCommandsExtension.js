@@ -11,14 +11,21 @@ import { issueRefPluginKey } from './IssueRefExtension';
 export { slashCommandPluginKey };
 const OFF = { active: false, query: '', from: 0, index: 0 };
 
-// 선택된 커맨드로 검색 시작: 정규 토큰으로 치환 후 해당 ref 플러그인을 active 화.
+// 선택된 커맨드로 검색 시작.
+// task: 새 방식 — 토큰을 지우고 팝업 input 검색으로 전환 (포커스는 팝업 input이 가져감)
+// doc/issue: 구 방식 유지 (각 수직 슬라이스에서 전환)
 function activateRef(command, from, view) {
   const { state } = view;
+  if (command.kind === 'task') {
+    let tr = state.tr.delete(from, state.selection.from);
+    tr = tr.setMeta(slashCommandPluginKey, OFF);
+    tr = tr.setMeta(taskRefPluginKey, { active: true, mode: command.mode, from });
+    view.dispatch(tr);
+    return;
+  }
   let tr = state.tr.insertText(command.cmd, from, state.selection.from);
   tr = tr.setMeta(slashCommandPluginKey, OFF);
-  if (command.kind === 'task') {
-    tr = tr.setMeta(taskRefPluginKey, { active: true, mode: command.mode, keyword: '', from });
-  } else if (command.kind === 'doc') {
+  if (command.kind === 'doc') {
     tr = tr.setMeta(docRefPluginKey, { active: true, keyword: '', from });
   } else if (command.kind === 'issue') {
     tr = tr.setMeta(issueRefPluginKey, { active: true, keyword: '', from });
