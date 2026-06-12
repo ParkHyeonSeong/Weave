@@ -83,13 +83,15 @@ async def count_admins(branch_id: int, db: AsyncSession) -> int:
 
 async def search_members(branch_id: int, query: str, exclude_user_id: int,
                           limit: int = 10, db: AsyncSession = None):
-    """Branch 멤버 중 username 검색 (본인 제외)"""
+    """Branch 멤버 중 username 검색 (본인 제외) — @멘션용. 이름·아바타만, 활성·비삭제 멤버만."""
     result = await db.execute(text("""
-        SELECT u.user_id, u.username, u.email, u.avatar_url, u.avatar_color
+        SELECT u.user_id, u.username, u.avatar_url, u.avatar_color
         FROM branch_member bm
         INNER JOIN "user" u ON bm.user_id = u.user_id
         WHERE bm.branch_id = :branch_id
           AND u.user_id != :exclude_user_id
+          AND u.status = 'active'
+          AND u.deleted_at IS NULL
           AND u.username ILIKE :q
         ORDER BY u.username
         LIMIT :limit

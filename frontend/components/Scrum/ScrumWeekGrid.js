@@ -36,6 +36,7 @@ function ScrumWeekGrid({ ydoc, members, isoYear, isoWeek }) {
                     ydoc={ydoc}
                     fragmentKey={`${m.user_id}:${dayIdx}:${rowKey}`}
                     placeholder=""
+                    members={members}
                   />
                 </div>
               ))}

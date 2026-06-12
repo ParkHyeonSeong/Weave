@@ -19,7 +19,7 @@ export default function ScrumCell(props) {
   return <ScrumCellInner {...props} />;
 }
 
-function ScrumCellInner({ ydoc, fragmentKey, placeholder }) {
+function ScrumCellInner({ ydoc, fragmentKey, placeholder, members }) {
   const extensions = useMemo(() => {
     const fragment = ydoc.getXmlFragment(fragmentKey);
     const Yjs = Extension.create({
@@ -33,10 +33,12 @@ function ScrumCellInner({ ydoc, fragmentKey, placeholder }) {
       TaskItem.configure({ nested: false }),
       TaskRefNode,
       DocRefNode,
-      MentionNode,
+      MentionNode.configure({ members }),
       SlashCommandsExtension.configure({ enabled: ['/t', '/ta', '/d'] }),
       Yjs,
     ];
+    // members는 보드 세션 내 정적(멤버는 셀 렌더 전 이미 로드됨)이라 deps에서 의도적으로
+    // 제외 — 추가하면 멤버 목록 참조가 바뀔 때마다 에디터/ yjs 바인딩이 재생성되어 churn 발생.
   }, [ydoc, fragmentKey]);
 
   // [ydoc, fragmentKey] deps → 바인딩이 바뀌면 에디터를 진짜로 재생성(setOptions가

@@ -48,7 +48,7 @@ export default function RetroView({ boardId, members = [] }) {
               <div key={key} className={`RetroCol RetroCol--${key}`}>
                 <div className="RetroCol__Head">{label}</div>
                 <div className="RetroCol__Body">
-                  <ScrumCell ydoc={ydoc} fragmentKey={`${m.user_id}:${key}`} placeholder="" />
+                  <ScrumCell ydoc={ydoc} fragmentKey={`${m.user_id}:${key}`} placeholder="" members={members} />
                 </div>
               </div>
             ))}

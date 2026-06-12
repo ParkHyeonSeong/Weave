@@ -33,7 +33,6 @@ const baseExtensions = [
   TaskItem.configure({ nested: true }),
   CalloutExtension,
   TaskRefNode,
-  MentionNode,
   SlashCommandsExtension.configure({ enabled: ['/t', '/ta'] }),
   ResizableImage,
   MermaidExtension,
@@ -44,6 +43,7 @@ export default function TaskDescriptionEditor({ content, onSave, branchId }) {
 
   const extensions = useMemo(() => {
     const ext = [...baseExtensions];
+    ext.push(MentionNode.configure({ branchId }));
     ext.push(
       Extension.create({
         name: 'markdownPaste',

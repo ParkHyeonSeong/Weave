@@ -33,7 +33,6 @@ const makeBaseExtensions = (placeholder) => [
   TaskItem.configure({ nested: true }),
   CalloutExtension,
   TaskRefNode,
-  MentionNode,
   SlashCommandsExtension.configure({ enabled: ['/t', '/ta'] }),
   ResizableImage,
   MermaidExtension,
@@ -42,6 +41,7 @@ const makeBaseExtensions = (placeholder) => [
 const IssueEditor = forwardRef(({ content, placeholder, minHeight = 150, branchId }, ref) => {
   const extensions = useMemo(() => {
     const ext = makeBaseExtensions(placeholder);
+    ext.push(MentionNode.configure({ branchId }));
     ext.push(
       Extension.create({
         name: 'markdownPaste',

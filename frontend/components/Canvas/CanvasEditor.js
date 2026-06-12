@@ -94,7 +94,7 @@ export default function CanvasEditor({ content, onChange, canvasId }) {
     }),
     CalloutExtension,
     TaskRefNode,
-    MentionNode,
+    MentionNode.configure({ canvasId }),
     SlashCommandsExtension.configure({ enabled: ['/t', '/ta'] }),
     BookmarkNode,
     BookmarkPaste,

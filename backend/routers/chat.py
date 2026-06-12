@@ -58,9 +58,11 @@ async def mention_search(request: Request,
                          q: str = Query('', max_length=100),
                          room_id: int = Query(None),
                          branch_id: int = Query(None),
+                         canvas_id: int = Query(None),
                          session: AsyncSession = Depends(db.session)):
     return await chat_controller.search_mentions(q, request, session,
-                                                  room_id=room_id, branch_id=branch_id)
+                                                  room_id=room_id, branch_id=branch_id,
+                                                  canvas_id=canvas_id)
 
 
 @router.get("/users", summary="전체 사용자 목록", dependencies=[Depends(require_login)])

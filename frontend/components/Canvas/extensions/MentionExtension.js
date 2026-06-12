@@ -12,6 +12,12 @@ const MentionNode = Node.create({
   inline: true,
   atom: true,
 
+  addOptions() {
+    // 멘션 후보 범위. 에디터별로 설정한다: branch task→branchId, canvas→canvasId,
+    // scrum→members(로컬 보드멤버 목록). 아무것도 없으면 후보 없음(전체 사용자 열거 방지).
+    return { branchId: null, canvasId: null, members: null };
+  },
+
   addAttributes() {
     return {
       userId: {
@@ -65,7 +71,7 @@ const MentionNode = Node.create({
 
   addProseMirrorPlugins() {
     const editor = this.editor;
-    const branchId = this.options.branchId || null;
+    const { branchId, canvasId, members } = this.options;
 
     return [
       new Plugin({
@@ -158,6 +164,8 @@ const MentionNode = Node.create({
               props: {
                 keyword: pluginState.keyword,
                 branchId,
+                canvasId,
+                members,
                 onSelect: (user) => {
                   const { state } = editorView;
                   const pluginSt = mentionPluginKey.getState(state);

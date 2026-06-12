@@ -3,7 +3,7 @@ import { Search } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import Avatar from '@/components/common/Avatar';
 
-const MentionPopup = forwardRef(({ keyword, branchId, roomId, onSelect, onClose }, ref) => {
+const MentionPopup = forwardRef(({ keyword, branchId, roomId, canvasId, members, onSelect, onClose }, ref) => {
   const [users, setUsers] = useState([]);
   const [activeIdx, setActiveIdx] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -12,6 +12,18 @@ const MentionPopup = forwardRef(({ keyword, branchId, roomId, onSelect, onClose 
   useImperativeHandle(ref, () => ({}));
 
   useEffect(() => {
+    // 로컬 멤버 목록(스크럼 등)이 주어지면 API 없이 클라이언트에서 필터
+    if (Array.isArray(members)) {
+      const kw = (keyword || '').toLowerCase();
+      setUsers(members.filter((u) => (u.username || '').toLowerCase().includes(kw)).slice(0, 10));
+      setActiveIdx(0);
+      return undefined;
+    }
+    // 범위(방/브랜치/캔버스)가 없으면 전체 사용자 열거를 피하기 위해 검색하지 않는다
+    if (!roomId && !branchId && !canvasId) {
+      setUsers([]);
+      return undefined;
+    }
     clearTimeout(timerRef.current);
     timerRef.current = setTimeout(async () => {
       setLoading(true);
@@ -19,6 +31,7 @@ const MentionPopup = forwardRef(({ keyword, branchId, roomId, onSelect, onClose 
         const params = { q: keyword || '' };
         if (roomId) params.room_id = roomId;
         else if (branchId) params.branch_id = branchId;
+        else if (canvasId) params.canvas_id = canvasId;
         const res = await axios.get('/chat/mention-search', { params });
         if (res.data.status) {
           setUsers(res.data.users);
@@ -28,7 +41,7 @@ const MentionPopup = forwardRef(({ keyword, branchId, roomId, onSelect, onClose 
       setLoading(false);
     }, 300);
     return () => clearTimeout(timerRef.current);
-  }, [keyword, branchId, roomId]);
+  }, [keyword, branchId, roomId, canvasId, members]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -74,7 +87,6 @@ const MentionPopup = forwardRef(({ keyword, branchId, roomId, onSelect, onClose 
           >
             <Avatar user={user} size="xs" className="MentionPopup__ItemIcon" />
             <span className="MentionPopup__ItemName">{user.username}</span>
-            <span className="MentionPopup__ItemEmail">{user.email}</span>
           </li>
         ))}
       </ul>

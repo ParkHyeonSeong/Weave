@@ -141,7 +141,7 @@ function CollabEditorInner({
       }),
       CalloutExtension,
       TaskRefNode,
-      MentionNode,
+      MentionNode.configure({ canvasId }),
       DocRefNode,
       IssueRefNode,
       SlashCommandsExtension.configure({ enabled: ['/t', '/ta', '/d', '/i'] }),

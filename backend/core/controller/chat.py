@@ -120,24 +120,43 @@ async def search_issues(keyword: str, request: Request, db: AsyncSession):
     return {'status': True, 'issues': issues}
 
 
+def _strip_email(users):
+    """멘션/디렉터리 응답에서 email을 제거한다 — 이름·아바타면 충분하고, 이메일을
+    모든 인증 사용자에게 넓게 노출하지 않기 위함(SEC-09/SEC-21)."""
+    return [{k: v for k, v in u.items() if k != 'email'} for u in users]
+
+
 async def get_users(db: AsyncSession):
-    """전체 사용자 목록"""
+    """전체 사용자 목록 (메신저 디렉터리 — 이메일 제외)"""
     users = await user_model.find_all(db)
-    return {'status': True, 'users': users}
+    return {'status': True, 'users': _strip_email(users)}
 
 
 async def search_mentions(query: str, request: Request, db: AsyncSession,
-                           room_id: int = None, branch_id: int = None):
-    """@멘션 사용자 검색 (채팅방/브랜치 범위 또는 전체)"""
+                           room_id: int = None, branch_id: int = None, canvas_id: int = None):
+    """@멘션 사용자 검색. 호출자가 멤버인 방/브랜치/캔버스 범위로만 검색한다.
+
+    유효 범위가 없거나 호출자가 그 범위의 멤버가 아니면 빈 결과를 반환한다 —
+    범위 없는 전체 활성 사용자 열거를 막는다(SEC-09). 응답에서 이메일은 제거한다.
+    """
     user_id = request.state.payload.get('user_id')
 
     if room_id:
         from core.model import chat_member as chat_member_model
+        if not await chat_member_model.is_member(room_id, user_id, db):
+            return {'status': True, 'users': []}
         users = await chat_member_model.search_room_members(room_id, query, user_id, 10, db)
     elif branch_id:
         from core.model import branch_member as branch_member_model
+        if not await branch_member_model.is_member(branch_id, user_id, db):
+            return {'status': True, 'users': []}
         users = await branch_member_model.search_members(branch_id, query, user_id, 10, db)
+    elif canvas_id:
+        from core.model import canvas_member as canvas_member_model
+        if not await canvas_member_model.is_member(canvas_id, user_id, db):
+            return {'status': True, 'users': []}
+        users = await canvas_member_model.search_members(canvas_id, query, user_id, 10, db)
     else:
-        users = await user_model.search_active(query, user_id, 10, db)
+        users = []
 
-    return {'status': True, 'users': users}
+    return {'status': True, 'users': _strip_email(users)}

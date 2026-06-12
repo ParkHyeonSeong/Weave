@@ -83,3 +83,22 @@ async def search_non_members(canvas_id: int, query: str, db: AsyncSession):
     """), {'canvas_id': canvas_id, 'q': f'%{query}%'})
     rows = result.fetchall()
     return [dict(row._mapping) for row in rows]
+
+
+async def search_members(canvas_id: int, query: str, exclude_user_id: int,
+                          limit: int = 10, db: AsyncSession = None):
+    """Canvas 멤버 중 username 검색 (본인 제외) — @멘션용. 이름·아바타만 반환."""
+    result = await db.execute(text("""
+        SELECT u.user_id, u.username, u.avatar_url, u.avatar_color
+        FROM canvas_member cm
+        INNER JOIN "user" u ON cm.user_id = u.user_id
+        WHERE cm.canvas_id = :canvas_id
+          AND u.user_id != :exclude_user_id
+          AND u.status = 'active'
+          AND u.deleted_at IS NULL
+          AND u.username ILIKE :q
+        ORDER BY u.username
+        LIMIT :limit
+    """), {'canvas_id': canvas_id, 'exclude_user_id': exclude_user_id,
+           'q': f'%{query}%', 'limit': limit})
+    return [dict(r._mapping) for r in result.fetchall()]

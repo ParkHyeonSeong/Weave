@@ -67,7 +67,6 @@ export default function MentionSearchPopup({ keyword, roomId, onSelect, onClose 
           >
             <Avatar user={user} size="xs" className="MentionSearchPopup__ItemAvatar" />
             <span className="MentionSearchPopup__ItemName">{user.username}</span>
-            <span className="MentionSearchPopup__ItemEmail">{user.email}</span>
           </li>
         ))}
       </ul>

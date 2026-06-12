@@ -48,7 +48,7 @@ export default function CommentEditor({
       }),
       Placeholder.configure({ placeholder }),
       CodeBlockLowlight.configure({ lowlight }),
-      MentionNode,
+      MentionNode.configure({ branchId }),
       TaskRefNode,
       SlashCommandsExtension.configure({ enabled: ['/t', '/ta'] }),
       ResizableImage,

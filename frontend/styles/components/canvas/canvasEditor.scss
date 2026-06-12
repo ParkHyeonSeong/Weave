@@ -1282,16 +1282,6 @@
     color: $color-text;
   }
 
-  &__ItemEmail {
-    font-size: 10px;
-    color: $color-text-tertiary;
-    flex: 1;
-    min-width: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
   &__Empty {
     padding: $space-3;
     text-align: center;
