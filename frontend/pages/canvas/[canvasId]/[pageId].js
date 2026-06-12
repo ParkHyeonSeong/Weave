@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Head from 'next/head';
 import CanvasPageView from '@/components/Canvas/CanvasPageView';
-import RefPreviewPanel from '@/components/Canvas/RefPreviewPanel';
+import RefPanelHost from '@/components/shared/RefPanelHost';
 
 export default function CanvasPageRoute() {
   const [previewRef, setPreviewRef] = useState(null);
@@ -15,13 +15,11 @@ export default function CanvasPageRoute() {
         <div className="CanvasPageLayout__Main">
           <CanvasPageView onRefClick={setPreviewRef} />
         </div>
-        {previewRef && (
-          <RefPreviewPanel
-            refType={previewRef.type}
-            refData={previewRef.data}
-            onClose={() => setPreviewRef(null)}
-          />
-        )}
+        <RefPanelHost
+          previewRef={previewRef}
+          onClose={() => setPreviewRef(null)}
+          onChangeRef={setPreviewRef}
+        />
       </div>
     </>
   );

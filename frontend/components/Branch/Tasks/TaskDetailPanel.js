@@ -24,7 +24,7 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
   const router = useRouter();
   const highlightCommentId = router.query.comment_id ? Number(router.query.comment_id) : null;
   const {
-    task, loading, sprints, epics, members, labels,
+    task, loading, error, sprints, epics, members, labels,
     workflowStatuses: hookStatuses, taskTypes: hookTaskTypes, customFields,
     updateField, updateAssignees, toggleLabel, createLabel, updateLabel, deleteLabel, handleDelete, handleSelectChange,
   } = useTaskDetail(branchId, taskSummary?.task_id);
@@ -76,7 +76,7 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
     if (ok) onClose();
   };
 
-  if (loading || !task) {
+  if (error || loading || !task) {
     return (
       <div className="TaskDetailPanel">
         <div className="TaskDetailPanel__Header">
@@ -85,12 +85,14 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
             <X size={16} />
           </button>
         </div>
+        {error && <div className="TaskDetailPanel__ErrorState">접근 권한이 없거나 삭제된 항목입니다.</div>}
       </div>
     );
   }
 
   const typeConfig = (taskTypes || []).find((t) => t.type_key === task.task_type);
-  const displayId = task.display_id || `${branchKey}-${task.display_number}`;
+  const displayId = task.display_id
+    || (branchKey ? `${branchKey}-${task.display_number}` : `#${task.display_number}`);
 
   return (
     <div className="TaskDetailPanel">
@@ -192,10 +194,17 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
                   onClick={(e) => {
                     // task-ref 클릭 → 해당 task로 이동
                     const ref = e.target.closest('.task-ref');
-                    if (ref) {
+                    if (ref && onSelectTask) {
                       e.stopPropagation();
                       const taskId = ref.dataset.taskId;
-                      if (taskId && onSelectTask) onSelectTask({ task_id: Number(taskId) });
+                      // cross-branch 칩 체이닝을 위해 칩의 branch_id도 함께 전달
+                      const refBranchId = ref.dataset.branchId;
+                      if (taskId) {
+                        onSelectTask({
+                          task_id: Number(taskId),
+                          branch_id: refBranchId ? Number(refBranchId) : undefined,
+                        });
+                      }
                     }
                   }}
                 />

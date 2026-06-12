@@ -511,6 +511,14 @@
     // font-size / padding-left / border / line-height 는 __RowValue scope override에서 처리
   }
 
+  // -- 에러 상태 (접근 불가/삭제된 참조) --
+  &__ErrorState {
+    padding: $space-10 $space-4;
+    text-align: center;
+    font-size: $font-size-sm;
+    color: $color-text-tertiary;
+  }
+
   // -- 삭제 --
   &__DeleteBtn {
     display: flex;

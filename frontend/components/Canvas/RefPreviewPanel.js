@@ -22,10 +22,7 @@ export default function RefPreviewPanel({ refType, refData, onClose }) {
     const fetchData = async () => {
       try {
         let res;
-        if (refType === 'task') {
-          res = await axios.get(`/branches/${refData.branchId}/tasks/${refData.taskId}`);
-          if (!cancelled && res.data.status) setData(res.data.task);
-        } else if (refType === 'doc') {
+        if (refType === 'doc') {
           res = await axios.get(`/canvases/${refData.canvasId}/pages/${refData.pageId}`);
           if (!cancelled && res.data.status) setData(res.data.page);
         } else if (refType === 'issue') {
@@ -44,7 +41,6 @@ export default function RefPreviewPanel({ refType, refData, onClose }) {
   useRefHydration(bodyRef, [data]);
 
   const getNavigateUrl = () => {
-    if (refType === 'task') return `/branch/${refData.branchId}/task/${refData.taskId}`;
     if (refType === 'doc') return `/canvas/${refData.canvasId}/${refData.pageId}`;
     if (refType === 'issue') return `/branch/${refData.branchId}/task/${refData.taskId}/issue/${refData.issueId}`;
     return '/';
@@ -58,7 +54,8 @@ export default function RefPreviewPanel({ refType, refData, onClose }) {
     window.open(getNavigateUrl(), '_blank');
   };
 
-  const typeLabels = { task: 'Task', doc: 'Document', issue: 'Issue' };
+  // task 칩은 RefPanelHost에서 TaskDetailPanel로 라우팅됨 — 이 패널은 doc/issue 전용
+  const typeLabels = { doc: 'Document', issue: 'Issue' };
 
   return (
     <div className="RefPreviewPanel">
@@ -86,70 +83,11 @@ export default function RefPreviewPanel({ refType, refData, onClose }) {
           <div className="RefPreviewPanel__Empty">Failed to load content.</div>
         ) : (
           <>
-            {refType === 'task' && <TaskPreview task={data} />}
             {refType === 'doc' && <DocPreview page={data} />}
             {refType === 'issue' && <IssuePreview issue={data} />}
           </>
         )}
       </div>
-    </div>
-  );
-}
-
-function TaskPreview({ task }) {
-  const statusCategory = task.status_category || task.status;
-
-  return (
-    <div className="RefPreviewPanel__Content">
-      <div className="RefPreviewPanel__TitleRow">
-        <span className="RefPreviewPanel__DisplayId">{task.display_id}</span>
-        <span className={`RefPreviewPanel__Badge RefPreviewPanel__Badge--${statusCategory}`}
-          style={task.status_color ? { backgroundColor: `${task.status_color}20`, color: task.status_color } : {}}
-        >
-          {task.status_label || task.status}
-        </span>
-      </div>
-      <h3 className="RefPreviewPanel__Title">{task.title}</h3>
-
-      {task.priority && (
-        <div className="RefPreviewPanel__Field">
-          <span className="RefPreviewPanel__FieldLabel">Priority</span>
-          <span className="RefPreviewPanel__FieldValue">{task.priority}</span>
-        </div>
-      )}
-
-      {task.assignees && task.assignees.length > 0 && (
-        <div className="RefPreviewPanel__Field">
-          <span className="RefPreviewPanel__FieldLabel">Assignees</span>
-          <span className="RefPreviewPanel__FieldValue">
-            {task.assignees.map((a) => a.username).join(', ')}
-          </span>
-        </div>
-      )}
-
-      {task.epic_name && (
-        <div className="RefPreviewPanel__Field">
-          <span className="RefPreviewPanel__FieldLabel">Epic</span>
-          <span className="RefPreviewPanel__FieldValue">{task.epic_name}</span>
-        </div>
-      )}
-
-      {task.sprint_name && (
-        <div className="RefPreviewPanel__Field">
-          <span className="RefPreviewPanel__FieldLabel">Sprint</span>
-          <span className="RefPreviewPanel__FieldValue">{task.sprint_name}</span>
-        </div>
-      )}
-
-      {task.description && (
-        <div className="RefPreviewPanel__Section">
-          <span className="RefPreviewPanel__SectionTitle">Description</span>
-          <div
-            className="RefPreviewPanel__HtmlContent"
-            dangerouslySetInnerHTML={{ __html: sanitizeHtml(task.description) }}
-          />
-        </div>
-      )}
     </div>
   );
 }
