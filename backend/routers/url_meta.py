@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 from fastapi import APIRouter, Request
 
 from library.validator import require_login
-from library.url_validator import validate_url_for_ssrf
+from library.url_validator import resolve_validated_ip
 from library.rate_limiter import limiter
 from routers.schema.url_meta import URLMetaRequest
 
@@ -20,8 +20,8 @@ async def fetch_url_meta(request: Request, body: URLMetaRequest):
     """URL 메타데이터 추출 (title, description, favicon, og:image)"""
     require_login(request)
 
-    # SSRF 방지: 내부 네트워크/메타데이터 URL 차단
-    ssrf_error = validate_url_for_ssrf(body.url)
+    # SSRF 방지: 내부 네트워크/메타데이터 URL 차단 + 검증된 IP 확보(리바인딩 차단용)
+    ip, ssrf_error = await resolve_validated_ip(body.url)
     if ssrf_error:
         return {'status': False, 'message': ssrf_error}
 
@@ -31,17 +31,32 @@ async def fetch_url_meta(request: Request, body: URLMetaRequest):
             follow_redirects=False,
             headers={'User-Agent': 'Mozilla/5.0 (compatible; Weave/1.0)'},
         ) as client:
-            # 리다이렉트를 수동으로 따라가며 매 hop마다 SSRF 재검증
+            # 리다이렉트를 수동으로 따라가며 매 hop마다 SSRF 재검증.
+            # 검증과 실제 연결 사이의 DNS 리바인딩(TOCTOU)을 막기 위해, 재해석에 맡기지 않고
+            # 검증된 IP로 직접 연결한다(Host 헤더·TLS SNI는 원 hostname 유지).
             url = body.url
             resp = None
             for _ in range(4):  # 최초 요청 + 최대 3회 리다이렉트
-                resp = await client.get(url)
+                parsed = urlparse(url)
+                port = parsed.port or (443 if parsed.scheme == 'https' else 80)
+                ip_host = f'[{ip}]' if ':' in ip else ip
+                pinned_url = f'{parsed.scheme}://{ip_host}:{port}{parsed.path or "/"}'
+                if parsed.query:
+                    pinned_url += f'?{parsed.query}'
+                # Host는 비표준 포트일 때 포트를 포함해야 한다(HTTP/1.1). SNI는 포트 없는 hostname.
+                host_header = parsed.hostname if port in (80, 443) else f'{parsed.hostname}:{port}'
+                req = client.build_request(
+                    'GET', pinned_url,
+                    headers={'Host': host_header},
+                    extensions={'sni_hostname': parsed.hostname},
+                )
+                resp = await client.send(req)
                 if resp.is_redirect:
                     location = resp.headers.get('location', '')
                     if not location:
                         return {'status': False, 'message': 'Invalid redirect'}
                     url = urljoin(url, location)
-                    ssrf_error = validate_url_for_ssrf(url)
+                    ip, ssrf_error = await resolve_validated_ip(url)
                     if ssrf_error:
                         return {'status': False, 'message': ssrf_error}
                     continue
@@ -54,7 +69,9 @@ async def fetch_url_meta(request: Request, body: URLMetaRequest):
         if 'text/html' not in content_type:
             return {'status': False, 'message': 'Not an HTML page'}
 
-        html = resp.text[:MAX_BODY_SIZE]
+        # MAX_BODY_SIZE는 바이트 한도 — resp.text(디코딩된 str)를 자르면 멀티바이트에서
+        # 한도가 무력화되므로 raw 바이트를 먼저 자른 뒤 디코딩한다.
+        html = resp.content[:MAX_BODY_SIZE].decode(resp.encoding or 'utf-8', errors='replace')
         soup = BeautifulSoup(html, 'html.parser')
 
         # title
