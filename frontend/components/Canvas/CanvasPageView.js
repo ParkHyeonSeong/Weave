@@ -8,7 +8,7 @@ import { axios } from '@/library/_axios';
 import ConfirmModal from '@/components/modal/ConfirmModal';
 import PageMoveModal from '@/components/modal/PageMoveModal';
 import useCollabProvider from '@/library/useCollabProvider';
-import { sanitizeHtml } from '@/library/sanitize';
+import { sanitizeHtml, sanitizeSvg } from '@/library/sanitize';
 import { applyFallbackBadges, useRefHydration } from '@/library/refHydration';
 import PresenceBar from './PresenceBar';
 import AnnotationLayer from './AnnotationLayer';
@@ -716,7 +716,7 @@ export default function CanvasPageView({ onRefClick }) {
         ) : page.type === 'typst' ? (
           <div className="CanvasPageView__TypstPreview">
             {typstSvg ? (
-              <div className="CanvasPageView__TypstPage" dangerouslySetInnerHTML={{ __html: typstSvg }} />
+              <div className="CanvasPageView__TypstPage" dangerouslySetInnerHTML={{ __html: sanitizeSvg(typstSvg) }} />
             ) : typstError ? (
               <div className="CanvasPageView__TypstError">
                 <AlertTriangle size={14} />

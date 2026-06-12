@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Download, AlertTriangle, Loader } from 'lucide-react';
 import { compileToSvg, downloadPdf } from '@/library/typstCompiler';
+import { sanitizeSvg } from '@/library/sanitize';
 import { yCollab, patchYSync } from '@/library/yCollabPatched';
 
 // CodeMirror + Yjs (동적 로드)
@@ -237,7 +238,7 @@ function TypstEditorInner({
           {svgContent ? (
             <div
               className="TypstEditor__Page"
-              dangerouslySetInnerHTML={{ __html: svgContent }}
+              dangerouslySetInnerHTML={{ __html: sanitizeSvg(svgContent) }}
             />
           ) : !compileErrors.length && (
             <div className="TypstEditor__Empty">

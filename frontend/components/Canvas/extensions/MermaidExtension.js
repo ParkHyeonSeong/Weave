@@ -153,6 +153,8 @@ function MermaidView({ node, updateAttributes, selected, editor }) {
         ) : svg ? (
           <div
             className="mermaid-block__svg"
+            // mermaid는 securityLevel:'strict'에서 출력 SVG를 자체 DOMPurify로 정화한다(mermaidConfig).
+            // 별도 sanitizeSvg를 덧씌우면 라벨용 foreignObject(HTML)가 제거돼 다이어그램이 깨지므로 적용하지 않는다.
             dangerouslySetInnerHTML={{ __html: svg }}
           />
         ) : (
