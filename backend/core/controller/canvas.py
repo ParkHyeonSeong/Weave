@@ -10,6 +10,7 @@ from core.model import canvas_member as member_model
 from core.model import canvas_page as page_model
 from library.file_validator import validate_image_magic_bytes
 from library.icon_storage import delete_image_icon_file
+from library.user_directory import strip_email
 from library.svg_sanitizer import sanitize_svg
 
 ICON_UPLOAD_DIR = os.path.join(
@@ -99,17 +100,23 @@ async def get_detail(canvas_id: int, request: Request, db: AsyncSession):
 
 
 async def get_members(canvas_id: int, request: Request, db: AsyncSession):
-    """Canvas 멤버 목록 (private canvas는 멤버만 조회 가능)"""
+    """Canvas 멤버 목록 (private canvas는 멤버만 조회 가능).
+
+    이메일은 멤버에게만 노출한다(SEC-37). 공개 canvas는 비멤버도 목록을 볼 수 있지만,
+    그 경우 멤버 이메일은 응답에서 제거한다.
+    """
     canvas = await canvas_model.find_by_id(canvas_id, db)
     if not canvas:
         return {'status': False, 'message': 'CANVAS_NOT_FOUND'}
 
     user_id = request.state.payload.get('user_id')
-    if canvas['visibility'] == 'private':
-        if not await member_model.is_member(canvas_id, user_id, db):
-            return {'status': False, 'message': 'ACCESS_DENIED'}
+    is_member = await member_model.is_member(canvas_id, user_id, db)
+    if canvas['visibility'] == 'private' and not is_member:
+        return {'status': False, 'message': 'ACCESS_DENIED'}
 
     members = await member_model.find_by_canvas(canvas_id, db)
+    if not is_member:
+        members = strip_email(members)  # 비멤버(공개 canvas 조회자)에겐 이메일 비노출
     return {'status': True, 'members': members}
 
 

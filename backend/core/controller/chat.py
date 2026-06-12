@@ -8,6 +8,7 @@ from core.model import user as user_model
 from core.model import task as task_model
 from core.model import canvas_page as canvas_page_model
 from core.model import task_issue as issue_model
+from library.user_directory import strip_email
 
 
 async def create_room(body, request: Request, db: AsyncSession):
@@ -120,16 +121,10 @@ async def search_issues(keyword: str, request: Request, db: AsyncSession):
     return {'status': True, 'issues': issues}
 
 
-def _strip_email(users):
-    """멘션/디렉터리 응답에서 email을 제거한다 — 이름·아바타면 충분하고, 이메일을
-    모든 인증 사용자에게 넓게 노출하지 않기 위함(SEC-09/SEC-21)."""
-    return [{k: v for k, v in u.items() if k != 'email'} for u in users]
-
-
 async def get_users(db: AsyncSession):
     """전체 사용자 목록 (메신저 디렉터리 — 이메일 제외)"""
     users = await user_model.find_all(db)
-    return {'status': True, 'users': _strip_email(users)}
+    return {'status': True, 'users': strip_email(users)}
 
 
 async def search_mentions(query: str, request: Request, db: AsyncSession,
@@ -159,4 +154,4 @@ async def search_mentions(query: str, request: Request, db: AsyncSession,
     else:
         users = []
 
-    return {'status': True, 'users': _strip_email(users)}
+    return {'status': True, 'users': strip_email(users)}

@@ -10,6 +10,7 @@ from core.model import branch_member as member_model
 from core.model import task_type_config as type_model
 from core.model import workflow_status as ws_model
 from library.file_validator import validate_image_magic_bytes
+from library.user_directory import strip_email
 from library.icon_storage import delete_image_icon_file
 from library.svg_sanitizer import sanitize_svg
 
@@ -92,17 +93,23 @@ async def get_detail(branch_id: int, request: Request, db: AsyncSession):
 
 
 async def get_members(branch_id: int, request: Request, db: AsyncSession):
-    """Branch 멤버 목록 (private branch는 멤버만 조회 가능)"""
+    """Branch 멤버 목록 (private branch는 멤버만 조회 가능).
+
+    이메일은 멤버에게만 노출한다(SEC-21). 공개 branch는 비멤버도 목록을 볼 수 있지만,
+    그 경우 멤버 이메일은 응답에서 제거한다.
+    """
     branch = await branch_model.find_by_id(branch_id, db)
     if not branch:
         return {'status': False, 'message': 'BRANCH_NOT_FOUND'}
 
     user_id = request.state.payload.get('user_id')
-    if branch['visibility'] == 'private':
-        if not await member_model.is_member(branch_id, user_id, db):
-            return {'status': False, 'message': 'ACCESS_DENIED'}
+    is_member = await member_model.is_member(branch_id, user_id, db)
+    if branch['visibility'] == 'private' and not is_member:
+        return {'status': False, 'message': 'ACCESS_DENIED'}
 
     members = await member_model.find_by_branch(branch_id, db)
+    if not is_member:
+        members = strip_email(members)  # 비멤버(공개 branch 조회자)에겐 이메일 비노출
     return {'status': True, 'members': members}
 
 

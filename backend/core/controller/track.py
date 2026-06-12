@@ -10,6 +10,7 @@ from core.model import track_branch as track_branch_model
 from core.model import track_item as track_item_model
 from core.model import track_link as track_link_model
 from core.model import track_scope as track_scope_model
+from library.user_directory import strip_email
 from core.model import branch_member as branch_member_model
 from core.model import branch as branch_model
 from core.model import task as task_model
@@ -214,17 +215,19 @@ async def permanent_delete(track_id: int, request: Request, db: AsyncSession):
 # =========================================================================
 
 async def get_members(track_id: int, request: Request, db: AsyncSession):
-    """Track 멤버 목록 — 본인 멤버이거나 public Track"""
+    """Track 멤버 목록 — 본인 멤버이거나 public Track. 이메일은 멤버에게만 노출(SEC-21 동류)."""
     track = await track_model.find_by_id(track_id, db)
     if not track:
         return {'status': False, 'message': 'TRACK_NOT_FOUND'}
 
     user_id = request.state.payload.get('user_id')
-    if track['visibility'] == 'private':
-        if not await member_model.is_member(track_id, user_id, db):
-            return {'status': False, 'message': 'ACCESS_DENIED'}
+    is_member = await member_model.is_member(track_id, user_id, db)
+    if track['visibility'] == 'private' and not is_member:
+        return {'status': False, 'message': 'ACCESS_DENIED'}
 
     members = await member_model.find_by_track(track_id, db)
+    if not is_member:
+        members = strip_email(members)  # 비멤버(공개 track 조회자)에겐 이메일 비노출
     return {'status': True, 'members': members}
 
 

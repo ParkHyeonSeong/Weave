@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.model import scrum_board as board_model
 from core.model import scrum_member as member_model
+from library.user_directory import strip_email
 
 
 async def _require_role(board_id: int, request: Request, required: str,
@@ -112,6 +113,8 @@ async def get_members(board_id: int, request: Request, db: AsyncSession):
     if board['visibility'] == 'private' and not my_role:
         return {'status': False, 'message': 'ACCESS_DENIED'}
     members = await member_model.find_by_board(board_id, db)
+    if not my_role:  # 비멤버(공개 board 조회자)에겐 이메일 비노출 (SEC-21 동류)
+        members = strip_email(members)
     return {'status': True, 'members': members}
 
 
