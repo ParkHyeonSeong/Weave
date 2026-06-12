@@ -67,8 +67,14 @@ export function UiPrefsProvider({ children }) {
 
   const isHidden = useCallback((app, id) => (prefs.hidden?.[app] || []).includes(id), [prefs]);
 
+  // 앱 홈 정렬·뷰 per-user 저장 (appKey ∈ 'branch'|'canvas'|'track'|'scrum')
+  const setHomeCtl = useCallback((appKey, patch) => {
+    const cur = prefsRef.current.homeControls || {};
+    setNamespace('homeControls', { ...cur, [appKey]: { ...(cur[appKey] || {}), ...patch } });
+  }, [setNamespace]);
+
   return (
-    <UiPrefsContext.Provider value={{ prefs, loaded, setNamespace, hide, unhide, isHidden }}>
+    <UiPrefsContext.Provider value={{ prefs, loaded, setNamespace, hide, unhide, isHidden, setHomeCtl }}>
       {children}
     </UiPrefsContext.Provider>
   );
@@ -78,6 +84,7 @@ export function UiPrefsProvider({ children }) {
 const EMPTY = {
   prefs: {}, loaded: false,
   setNamespace: () => {}, hide: () => {}, unhide: () => {}, isHidden: () => false,
+  setHomeCtl: () => {},
 };
 export function useUiPrefs() {
   return useContext(UiPrefsContext) || EMPTY;
