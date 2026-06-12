@@ -5,6 +5,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from config import (JWT_SECRET_KEY, JWT_ALGORITHM, COOKIE_NAME, DEBUG,
                     WS_MAX_MESSAGE_BYTES, WS_MEMBERSHIP_RECHECK_SECS)
+from library.origins import reject_ws_if_forbidden_origin
 from library.ws_collab_manager import scrum_retro_collab_manager
 from core.model import scrum_member as member_model
 from core.model import scrum_retro as retro_model
@@ -26,6 +27,8 @@ def _verify_token(token: str):
 
 @router.websocket("/ws/scrum/{board_id}/retros/{retro_id}")
 async def websocket_scrum_retro(ws: WebSocket, board_id: int, retro_id: int):
+    if await reject_ws_if_forbidden_origin(ws):  # SEC-39: cross-site WebSocket hijacking 차단
+        return
     payload = _verify_token(ws.cookies.get(COOKIE_NAME, ''))
     if not payload:
         await ws.close(code=4001, reason="Unauthorized")

@@ -10,6 +10,7 @@ from slowapi.errors import RateLimitExceeded
 
 from config import MAX_REQUEST_BODY_BYTES
 from library import validator
+from library.origins import cors_allow_origins, ALLOWED_ORIGIN_REGEX
 from library.rate_limiter import limiter
 from library.ws_collab_manager import collab_manager, scrum_week_collab_manager, scrum_retro_collab_manager
 from routers import auth as auth_router
@@ -93,37 +94,23 @@ app = FastAPI(
 # -- Rate Limiting ---------------------------------------------------------
 app.state.limiter = limiter
 
-FRONTEND_PORT = os.getenv("FRONTEND_PORT", "3000")
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS")
-
-if ALLOWED_ORIGINS:
-    origins = ALLOWED_ORIGINS.split(",")
-else:
-    origins = [
-        f"http://localhost:{FRONTEND_PORT}",
-        f"http://127.0.0.1:{FRONTEND_PORT}",
-    ]
-
 _CORS_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
 _CORS_HEADERS = ["Content-Type", "Authorization", "X-Requested-With"]
 
-if DEBUG and not ALLOWED_ORIGINS:
-    # 개발 모드: LAN 범위 origin 허용 + credentials 지원
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(:\d+)?",
-        allow_credentials=True,
-        allow_methods=_CORS_METHODS,
-        allow_headers=_CORS_HEADERS,
-    )
+# origin 허용 정책은 library.origins 단일 소스(WebSocket Origin 검증과 공유, SEC-30/38/39).
+# DEBUG+명시목록 없음 → 루프백 임의 포트 정규식, 그 외 → 명시목록/기본 localhost.
+if ALLOWED_ORIGIN_REGEX:
+    _cors_origin = {"allow_origin_regex": ALLOWED_ORIGIN_REGEX}
 else:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=origins,
-        allow_credentials=True,
-        allow_methods=_CORS_METHODS,
-        allow_headers=_CORS_HEADERS,
-    )
+    _cors_origin = {"allow_origins": cors_allow_origins()}
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_methods=_CORS_METHODS,
+    allow_headers=_CORS_HEADERS,
+    **_cors_origin,
+)
 
 
 # -- Middleware ------------------------------------------------------------

@@ -1,3 +1,7 @@
+# ⚠️ 개발 전용 compose입니다. DEBUG=true로 동작하며 backend 포트를 호스트에 노출하고,
+#    CORS는 명시 ALLOWED_ORIGINS가 없으면 루프백(localhost/127.0.0.1) 임의 포트를 허용합니다.
+#    프로덕션 배포에는 반드시 docker-compose.prod.yml(nginx 프록시·DEBUG=false·ALLOWED_ORIGINS)
+#    을 사용하세요. 이 파일을 그대로 운영에 쓰면 안 됩니다.
 services:
   # -- Backend (FastAPI) ---------------------------------------------------
   backend:
