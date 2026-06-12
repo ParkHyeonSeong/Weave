@@ -309,7 +309,7 @@ export default function TaskFullPage() {
                 value={task.epic_id || ''}
                 options={[
                   { value: '', label: 'None' },
-                  ...epics.map((ep) => ({
+                  ...epics.filter((ep) => ep.status !== 'done' || ep.epic_id === task.epic_id).map((ep) => ({
                     value: ep.epic_id,
                     label: ep.epic_name,
                     color: ep.color || '#5E6AD2',
