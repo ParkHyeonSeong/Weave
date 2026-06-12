@@ -1,10 +1,11 @@
-import { useState } from 'react';
 import Head from 'next/head';
 import CanvasPageView from '@/components/Canvas/CanvasPageView';
-import RefPanelHost from '@/components/shared/RefPanelHost';
+import RefPanelHost, { useRefPreview } from '@/components/shared/RefPanelHost';
 
 export default function CanvasPageRoute() {
-  const [previewRef, setPreviewRef] = useState(null);
+  // 패널 상태로 들어오는 두 경로: 편집 모드 칩은 window 이벤트(useRefPreview 수신),
+  // 읽기 모드 칩은 window 이벤트를 안 쏘므로 onRefClick prop으로 직접 전달.
+  const [previewRef, setPreviewRef] = useRefPreview();
 
   return (
     <>

@@ -7,7 +7,7 @@ import ScrumWeekGrid from './ScrumWeekGrid';
 import RetroView from './RetroView';
 import ScrumMembersModal from './ScrumMembersModal';
 import Avatar from '@/components/common/Avatar';
-import RefPanelHost from '@/components/shared/RefPanelHost';
+import RefPanelHost, { useRefPreview } from '@/components/shared/RefPanelHost';
 import { currentISOWeek, addWeeks, weekDates } from '@/library/isoWeek';
 
 const getProfile = () => {
@@ -25,19 +25,13 @@ export default function ScrumBoardView() {
     && new URLSearchParams(window.location.search).get('tab') === 'retro') ? 'retro' : 'board');
   const [err, setErr] = useState('');
   const [showMembers, setShowMembers] = useState(false);
-  const [previewRef, setPreviewRef] = useState(null);
-
   // 인라인 ref 칩(task/doc) 클릭 → 타입별 패널 오픈 (데일리·회고 탭 공통)
-  useEffect(() => {
-    const handler = (e) => setPreviewRef(e.detail);
-    window.addEventListener('canvas:ref_click', handler);
-    return () => window.removeEventListener('canvas:ref_click', handler);
-  }, []);
+  const [previewRef, setPreviewRef] = useRefPreview();
 
   // 탭·주 전환은 다른 문서로 가는 것 — 열려 있던 참조 패널은 닫는다
   useEffect(() => {
     setPreviewRef(null);
-  }, [tab, wk.isoYear, wk.isoWeek]);
+  }, [tab, wk.isoYear, wk.isoWeek, setPreviewRef]);
   const user = useMemo(() => { const p = getProfile(); return p.user_id ? { user_id: p.user_id, username: p.username, avatar_url: p.avatar_url, avatar_color: p.avatar_color } : null; }, []);
 
   // 보드 상세 + 멤버

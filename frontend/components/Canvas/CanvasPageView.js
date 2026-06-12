@@ -25,6 +25,9 @@ const lowlight = createLowlight(common);
 const CanvasCollabEditor = dynamic(() => import('./CanvasCollabEditor'), { ssr: false });
 const TypstEditor = dynamic(() => import('./TypstEditor'), { ssr: false });
 
+// onRefClick: 읽기 모드 칩 클릭 폴백 전용 — 미전달 시 router.push로 직접 이동.
+// 편집 모드 칩은 NodeView가 window canvas:ref_click을 발행하므로
+// 호스트(라우트)의 useRefPreview가 직접 수신한다.
 export default function CanvasPageView({ onRefClick }) {
   const router = useRouter();
   const { canvasId, pageId } = router.query;
@@ -77,14 +80,6 @@ export default function CanvasPageView({ onRefClick }) {
     ro.observe(el);
     return () => ro.disconnect();
   }, [page]);
-
-  // 편집 모드에서 ref 클릭 이벤트 수신
-  useEffect(() => {
-    if (!onRefClick) return;
-    const handler = (e) => onRefClick(e.detail);
-    window.addEventListener('canvas:ref_click', handler);
-    return () => window.removeEventListener('canvas:ref_click', handler);
-  }, [onRefClick]);
 
   // sessionStorage에서 유저 정보 로드 (아바타 변경 시 awareness 갱신 위해 profile:updated도 수신)
   useEffect(() => {
