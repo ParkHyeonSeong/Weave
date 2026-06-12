@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import jwt
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from config import JWT_SECRET_KEY, JWT_ALGORITHM, COOKIE_NAME
+from config import JWT_SECRET_KEY, JWT_ALGORITHM, COOKIE_NAME, WS_MAX_MESSAGE_BYTES
 from library.ws_manager import manager
 from core.model import chat_message as message_model
 from core.model import chat_member as member_model
@@ -63,6 +63,9 @@ async def websocket_chat(ws: WebSocket):
     try:
         while True:
             raw = await ws.receive_text()
+            if len(raw) > WS_MAX_MESSAGE_BYTES:  # SEC-20: 대형 메시지 차단
+                await ws.close(code=1009, reason="Message too large")
+                break
             try:
                 data = json.loads(raw)
             except json.JSONDecodeError:
@@ -215,14 +218,11 @@ async def websocket_chat(ws: WebSocket):
                     }, session)
 
     except WebSocketDisconnect:
-        manager.disconnect(user_id, ws)
-        if not manager.is_online(user_id):
-            await manager.broadcast_to_all({
-                'type': 'presence',
-                'user_id': user_id,
-                'status': 'offline',
-            })
+        pass
     except Exception:
+        pass
+    finally:
+        # 정상 종료·끊김·예외·크기초과(break) 모든 경로에서 연결 정리(중복 제거)
         manager.disconnect(user_id, ws)
         if not manager.is_online(user_id):
             await manager.broadcast_to_all({

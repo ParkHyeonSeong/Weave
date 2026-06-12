@@ -1,9 +1,11 @@
 import logging
+import time
 
 import jwt
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from config import JWT_SECRET_KEY, JWT_ALGORITHM, COOKIE_NAME, DEBUG
+from config import (JWT_SECRET_KEY, JWT_ALGORITHM, COOKIE_NAME, DEBUG,
+                    WS_MAX_MESSAGE_BYTES, WS_MEMBERSHIP_RECHECK_SECS)
 from library.ws_collab_manager import scrum_week_collab_manager
 from core.model import scrum_member as member_model
 from core.model import scrum_week as week_model
@@ -50,8 +52,19 @@ async def websocket_scrum_week(ws: WebSocket, board_id: int, week_id: int):
     try:
         async with db.transactional_session() as session:
             await scrum_week_collab_manager.join(week_id, user_id, ws, session)
+        last_check = time.monotonic()
         while True:
             data = await ws.receive_bytes()
+            if len(data) > WS_MAX_MESSAGE_BYTES:  # SEC-20: 대형 프레임 차단
+                await ws.close(code=1009, reason="Message too large")
+                return
+            # LOG-03: 연결 후 멤버십 재검증(스로틀) — 제거된 멤버의 편집 세션 차단
+            if time.monotonic() - last_check >= WS_MEMBERSHIP_RECHECK_SECS:
+                last_check = time.monotonic()
+                async with db.transactional_session() as session:
+                    if not await member_model.is_member(board_id, user_id, session):
+                        await ws.close(code=4003, reason="Membership revoked")
+                        return
             await scrum_week_collab_manager.handle_message(week_id, ws, data)
     except WebSocketDisconnect:
         pass

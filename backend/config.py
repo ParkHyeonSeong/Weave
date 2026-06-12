@@ -49,3 +49,13 @@ PASSWORD_RESET_TOKEN_EXPIRE_HOURS = int(os.getenv("PASSWORD_RESET_TOKEN_EXPIRE_H
 VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
 VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
 VAPID_SUBJECT = os.getenv("VAPID_SUBJECT", "mailto:admin@weave.local")
+
+# WebSocket 협업 메시지 최대 크기(바이트). Yjs 업데이트/동기화는 바이너리 CRDT 인코딩이며
+# 증분 업데이트는 보통 수 KB 수준이지만, 대형 프레임 반복으로 인한 메모리/CPU 고갈(DoS)을
+# 막기 위해 앱 레벨 상한을 둔다(SEC-20).
+# uvicorn 기본 ws_max_size(16MB)보다 보수적으로 잡되 큰 문서 초기 동기화는 통과하도록 여유.
+WS_MAX_MESSAGE_BYTES = int(os.getenv("WS_MAX_MESSAGE_BYTES", str(2 * 1024 * 1024)))
+
+# WebSocket 협업 연결의 멤버십 재검증 주기(초). 핸드셰이크 후 제거된 멤버가 편집 세션을
+# 유지하지 못하도록 수신 메시지마다(스로틀) 멤버십을 재확인한다(LOG-03).
+WS_MEMBERSHIP_RECHECK_SECS = int(os.getenv("WS_MEMBERSHIP_RECHECK_SECS", "30"))
