@@ -23,8 +23,9 @@ async def list_rooms(request: Request, session: AsyncSession = Depends(db.sessio
 
 
 @router.post("/upload", summary="채팅 파일 업로드", dependencies=[Depends(require_login)])
-async def upload_file(request: Request, file: UploadFile = File(...)):
-    return await chat_upload.upload(file, request)
+async def upload_file(request: Request, room_id: int = Query(...), file: UploadFile = File(...),
+                      session: AsyncSession = Depends(db.session)):
+    return await chat_upload.upload(room_id, file, request, session)
 
 
 @router.get("/task-search", summary="채팅용 Task 검색",

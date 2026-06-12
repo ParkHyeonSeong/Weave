@@ -5,7 +5,6 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
 
 from slowapi.errors import RateLimitExceeded
 
@@ -16,6 +15,7 @@ from routers import auth as auth_router
 from routers import setup as setup_router
 from routers import branch as branch_router
 from routers import chat as chat_router
+from routers import uploads as uploads_router
 from routers import ws_chat as ws_chat_router
 from routers import admin as admin_router
 from routers import sprint as sprint_router
@@ -191,12 +191,12 @@ app.include_router(scrum_board_router.router, prefix="/api/scrum", tags=["scrum"
 app.include_router(scrum_week_router.router, prefix="/api/scrum", tags=["scrum"])
 app.include_router(scrum_retro_router.router, prefix="/api/scrum", tags=["scrum"])
 
-# -- Static files (업로드 파일 서빙) -----------------------------------------
+# -- 업로드 파일 서빙 (인증 + 멤버십 검증, SEC-19) ---------------------------
 uploads_dir = os.path.join(os.path.dirname(__file__), 'uploads')
 os.makedirs(os.path.join(uploads_dir, 'avatars'), exist_ok=True)
 os.makedirs(os.path.join(uploads_dir, 'chat'), exist_ok=True)
 os.makedirs(os.path.join(uploads_dir, 'task'), exist_ok=True)
-app.mount("/api/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+app.include_router(uploads_router.router, prefix="/api/uploads", tags=["uploads"])
 
 
 # -- Health ----------------------------------------------------------------

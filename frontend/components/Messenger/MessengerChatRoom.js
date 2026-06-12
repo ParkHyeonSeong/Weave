@@ -170,7 +170,7 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await axios.post('/chat/upload', formData, {
+      const res = await axios.post(`/chat/upload?room_id=${roomId}`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
         onUploadProgress: (e) => {
           if (e.total) {
@@ -195,7 +195,7 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
     } catch {
       setPendingFiles((prev) => prev.filter((f) => f.id !== tempId));
     }
-  }, []);
+  }, [roomId]);
 
   const handleFilesSelected = useCallback((files) => {
     Array.from(files).forEach((file) => uploadFile(file));

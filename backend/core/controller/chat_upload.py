@@ -3,7 +3,9 @@ import uuid
 import mimetypes
 
 from fastapi import Request, UploadFile
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.model import chat_member as member_model
 from library.file_validator import validate_image_magic_bytes
 
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'uploads', 'chat')
@@ -15,8 +17,12 @@ ALLOWED_EXTENSIONS = IMAGE_EXTENSIONS | FILE_EXTENSIONS
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
 
-async def upload(file: UploadFile, request: Request):
-    """채팅 파일 업로드"""
+async def upload(room_id: int, file: UploadFile, request: Request, db: AsyncSession):
+    """채팅 파일 업로드 (방 멤버만, SEC-18)"""
+    user_id = request.state.payload.get('user_id')
+    if not await member_model.is_member(room_id, user_id, db):
+        return {'status': False, 'message': 'NOT_A_MEMBER'}
+
     if not file or not file.filename:
         return {'status': False, 'message': 'NO_FILE'}
 
@@ -36,8 +42,8 @@ async def upload(file: UploadFile, request: Request):
     # 디렉토리 생성
     os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-    # 고유 파일명
-    filename = f"chat_{uuid.uuid4().hex[:12]}{ext}"
+    # 고유 파일명 — room_id를 포함해 서빙 시 멤버십 검증에 사용(SEC-19)
+    filename = f"chat_{room_id}_{uuid.uuid4().hex[:12]}{ext}"
     filepath = os.path.join(UPLOAD_DIR, filename)
     with open(filepath, 'wb') as f:
         f.write(content)
