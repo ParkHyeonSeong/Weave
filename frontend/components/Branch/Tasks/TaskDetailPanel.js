@@ -9,6 +9,7 @@ import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import useTaskDetail from '@/hooks/useTaskDetail';
 import { sanitizeHtml } from '@/library/sanitize';
 import { formatYMD, formatDateTime } from '@/library/formatTime';
+import { selectableEpics } from '@/library/epics';
 import { useRefHydration } from '@/library/refHydration';
 import Avatar from '@/components/common/Avatar';
 import TaskIssueSection from './TaskIssueSection';
@@ -259,7 +260,7 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
                 value={task.epic_id || ''}
                 options={[
                   { value: '', label: 'None' },
-                  ...epics.filter((ep) => ep.status !== 'done' || ep.epic_id === task.epic_id).map((ep) => ({
+                  ...selectableEpics(epics, task.epic_id).map((ep) => ({
                     value: ep.epic_id,
                     label: ep.epic_name,
                     color: ep.color || '#5E6AD2',

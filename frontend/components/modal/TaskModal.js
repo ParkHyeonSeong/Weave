@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, ChevronDown } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import { selectableEpics } from '@/library/epics';
 import DatePicker from '@/components/common/DatePicker';
 import Avatar from '@/components/common/Avatar';
 import AvatarStack from '@/components/common/AvatarStack';
@@ -109,7 +110,7 @@ export default function TaskModal({ branchId, branchKey, task, defaultSprintId, 
         task_type: taskType,
         status,
         priority,
-        epic_id: epicId || null,
+        epic_id: epicId ? Number(epicId) : null,
         sprint_id: sprintId || null,
         assignees: {
           main: mainAssigneeId ? Number(mainAssigneeId) : null,
@@ -249,7 +250,7 @@ export default function TaskModal({ branchId, branchKey, task, defaultSprintId, 
               <label className="TaskModal__Label">Epic</label>
               <select className="TaskModal__Select" value={epicId} onChange={(e) => setEpicId(e.target.value)}>
                 <option value="">None</option>
-                {epics.map((ep) => (
+                {selectableEpics(epics, task?.epic_id).map((ep) => (
                   <option key={ep.epic_id} value={ep.epic_id}>{ep.epic_name}</option>
                 ))}
               </select>
