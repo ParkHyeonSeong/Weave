@@ -58,4 +58,11 @@ async def serve_upload(subdir: str, filename: str, request: Request,
     if not await _is_authorized(subdir, filename, user_id, session):
         # 미존재와 동일하게 404 — 비멤버에게 파일 존재 여부를 알려주는 오라클을 막는다.
         return Response(status_code=404)
-    return FileResponse(path)
+    # nosniff: MIME 스니핑 차단. SVG는 attachment로 강제해 주소창 직접 열람 시 top-level
+    # 문서로 렌더되며 스크립트가 실행되는 XSS 경로를 막는다(SEC-25). <img> 로딩은
+    # Content-Disposition을 무시하므로 아이콘 표시에는 영향이 없다.
+    headers = {'X-Content-Type-Options': 'nosniff'}
+    if filename.lower().endswith('.svg'):
+        # filename은 _SAFE_NAME(영숫자·._-)로 검증돼 추가 이스케이프 불필요(RFC 6266)
+        headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return FileResponse(path, headers=headers)

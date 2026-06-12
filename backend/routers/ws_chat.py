@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import datetime, timezone
 
 import jwt
@@ -17,6 +18,11 @@ from library import notification_service
 import db_engine as db
 
 router = APIRouter()
+
+# 채팅 첨부는 /chat/upload가 생성한 chat 서브디렉터리 파일만 허용한다(SEC-41).
+# startswith('/api/uploads/')는 '//host/...'·'/../..' 같은 경로를 통과시켜 약하므로,
+# 정확한 chat 업로드 URL 형식만 매칭한다(실 서빙 경계는 uploads 라우트가 한 번 더 검증).
+_ATTACHMENT_URL_RE = re.compile(r'^/api/uploads/chat/[A-Za-z0-9._-]+$')
 
 
 def _verify_token(token: str) -> dict | None:
@@ -151,7 +157,7 @@ async def websocket_chat(ws: WebSocket):
                     if attachments:
                         valid = [a for a in attachments[:10]
                                  if a.get('url') and a.get('file_name')
-                                 and a['url'].startswith('/api/uploads/')]
+                                 and _ATTACHMENT_URL_RE.match(a['url'])]
                         if valid:
                             att_list = [{
                                 'file_url': a['url'],

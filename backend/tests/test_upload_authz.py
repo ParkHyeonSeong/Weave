@@ -199,6 +199,36 @@ async def test_serve_path_traversal_rejected(client, db_session):
     assert res.status_code == 404
 
 
+async def test_svg_served_as_attachment_with_nosniff(client, db_session):
+    # SEC-25: SVG는 attachment+nosniff로 서빙(주소창 직접 열람 시 top-level 렌더 XSS 차단)
+    uid = await _user(db_session, 'svg@t.local')
+    h = await _pat(db_session, uid, 'wv_svg_authz_token')
+    icon_dir = _os.path.join(_os.path.dirname(_UPLOAD_TASK_DIR), 'branch-icons')
+    _os.makedirs(icon_dir, exist_ok=True)
+    fpath = _os.path.join(icon_dir, 'pytesticon.svg')
+    with open(fpath, 'wb') as f:
+        f.write(b'<svg xmlns="http://www.w3.org/2000/svg"></svg>')
+    try:
+        r = await client.get('/api/uploads/branch-icons/pytesticon.svg', headers=h)
+        assert r.status_code == 200
+        assert r.headers.get('content-disposition', '').startswith('attachment')
+        assert r.headers.get('x-content-type-options') == 'nosniff'
+    finally:
+        _os.remove(fpath)
+
+
+def test_chat_attachment_url_regex_strict():
+    # SEC-41: 채팅 첨부 URL은 chat 서브디렉터리 업로드 형식만 허용
+    from routers import ws_chat
+    R = ws_chat._ATTACHMENT_URL_RE
+    assert R.match('/api/uploads/chat/chat_5_abc123.png')
+    assert not R.match('//evil.example/api/uploads/chat/x.png')   # protocol-relative
+    assert not R.match('/api/uploads/chat/../task/secret.png')    # traversal
+    assert not R.match('/api/uploads/task/t1_x.png')              # 비-chat 서브디렉터리
+    assert not R.match('https://evil/api/uploads/chat/x.png')     # 절대 URL
+    assert not R.match('/api/uploads/chat/')                      # 빈 파일명
+
+
 async def test_serve_authz_legacy_chat_strict(db_session):
     uid = await _user(db_session, 'leg@t.local')
     # 레거시 chat_{12-hex uuid}.ext(room_id 없음)는 인증 사용자에게 허용(구버전 호환)
