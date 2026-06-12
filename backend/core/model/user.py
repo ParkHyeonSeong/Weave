@@ -29,7 +29,7 @@ async def update_role(user_id: int, role: str, db: AsyncSession):
     await db.execute(text("""
         UPDATE "user"
         SET role = :role
-        WHERE user_id = :user_id
+        WHERE user_id = :user_id AND deleted_at IS NULL
     """), {'user_id': user_id, 'role': role})
 
 
@@ -38,7 +38,7 @@ async def update_login(user_id: int, ip: str, db: AsyncSession):
     await db.execute(text("""
         UPDATE "user"
         SET last_login_at = NOW(), last_login_ip = :ip
-        WHERE user_id = :user_id
+        WHERE user_id = :user_id AND deleted_at IS NULL
     """), {'user_id': user_id, 'ip': ip})
 
 
@@ -59,7 +59,7 @@ async def find_by_id(user_id: int, db: AsyncSession):
     result = await db.execute(text("""
         SELECT user_id, email, username, role, status, avatar_url, avatar_color, created_at, last_login_at
         FROM "user"
-        WHERE user_id = :user_id
+        WHERE user_id = :user_id AND deleted_at IS NULL
     """), {'user_id': user_id})
     row = result.fetchone()
     return dict(row._mapping) if row else None
@@ -70,7 +70,7 @@ async def find_by_id_with_password(user_id: int, db: AsyncSession):
     result = await db.execute(text("""
         SELECT user_id, email, password, username, role, status, avatar_url
         FROM "user"
-        WHERE user_id = :user_id
+        WHERE user_id = :user_id AND deleted_at IS NULL
     """), {'user_id': user_id})
     row = result.fetchone()
     return dict(row._mapping) if row else None
@@ -81,7 +81,7 @@ async def update_status(user_id: int, status: str, db: AsyncSession):
     await db.execute(text("""
         UPDATE "user"
         SET status = :status
-        WHERE user_id = :user_id
+        WHERE user_id = :user_id AND deleted_at IS NULL
     """), {'user_id': user_id, 'status': status})
 
 
@@ -90,7 +90,7 @@ async def update_username(user_id: int, username: str, db: AsyncSession):
     await db.execute(text("""
         UPDATE "user"
         SET username = :username
-        WHERE user_id = :user_id
+        WHERE user_id = :user_id AND deleted_at IS NULL
     """), {'user_id': user_id, 'username': username})
 
 
@@ -99,7 +99,7 @@ async def update_password(user_id: int, password_hash: bytes, db: AsyncSession):
     await db.execute(text("""
         UPDATE "user"
         SET password = :password, must_change_password = FALSE
-        WHERE user_id = :user_id
+        WHERE user_id = :user_id AND deleted_at IS NULL
     """), {'user_id': user_id, 'password': password_hash})
 
 
@@ -108,7 +108,7 @@ async def set_must_change_password(user_id: int, flag: bool, db: AsyncSession):
     await db.execute(text("""
         UPDATE "user"
         SET must_change_password = :flag
-        WHERE user_id = :user_id
+        WHERE user_id = :user_id AND deleted_at IS NULL
     """), {'user_id': user_id, 'flag': flag})
 
 
@@ -141,7 +141,7 @@ async def update_avatar(user_id: int, avatar_url: str, db: AsyncSession):
     await db.execute(text("""
         UPDATE "user"
         SET avatar_url = :avatar_url
-        WHERE user_id = :user_id
+        WHERE user_id = :user_id AND deleted_at IS NULL
     """), {'user_id': user_id, 'avatar_url': avatar_url})
 
 
@@ -150,14 +150,14 @@ async def update_avatar_color(user_id: int, color, db: AsyncSession):
     await db.execute(text("""
         UPDATE "user"
         SET avatar_color = :color
-        WHERE user_id = :user_id
+        WHERE user_id = :user_id AND deleted_at IS NULL
     """), {'user_id': user_id, 'color': color})
 
 
 async def get_ui_prefs(user_id: int, db: AsyncSession):
     """per-user 뷰 상태(ui_prefs) 조회"""
     result = await db.execute(text("""
-        SELECT ui_prefs FROM "user" WHERE user_id = :user_id
+        SELECT ui_prefs FROM "user" WHERE user_id = :user_id AND deleted_at IS NULL
     """), {'user_id': user_id})
     row = result.fetchone()
     return row._mapping['ui_prefs'] if row else None
@@ -170,5 +170,5 @@ async def update_ui_prefs(user_id: int, patch: dict, db: AsyncSession):
     await db.execute(text("""
         UPDATE "user"
         SET ui_prefs = COALESCE(ui_prefs, '{}'::jsonb) || CAST(:patch AS jsonb)
-        WHERE user_id = :user_id
+        WHERE user_id = :user_id AND deleted_at IS NULL
     """), {'user_id': user_id, 'patch': __import__('json').dumps(patch)})

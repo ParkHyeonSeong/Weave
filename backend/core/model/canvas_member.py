@@ -27,6 +27,7 @@ async def find_by_canvas(canvas_id: int, db: AsyncSession):
         FROM canvas_member cm
         INNER JOIN "user" u ON cm.user_id = u.user_id
         WHERE cm.canvas_id = :canvas_id
+          AND u.deleted_at IS NULL
         ORDER BY cm.joined_at
     """), {'canvas_id': canvas_id})
     rows = result.fetchall()
@@ -74,6 +75,7 @@ async def search_non_members(canvas_id: int, query: str, db: AsyncSession):
         SELECT u.user_id, u.username, u.email, u.avatar_url, u.avatar_color
         FROM "user" u
         WHERE u.status = 'active'
+          AND u.deleted_at IS NULL
           AND u.user_id NOT IN (
               SELECT user_id FROM canvas_member WHERE canvas_id = :canvas_id
           )

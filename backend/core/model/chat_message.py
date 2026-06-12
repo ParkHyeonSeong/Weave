@@ -31,7 +31,7 @@ async def find_by_room(room_id: int, limit: int, offset: int, db: AsyncSession):
                b.key AS ref_branch_key,
                (SELECT u2.username FROM task_assignee ta2
                 INNER JOIN "user" u2 ON ta2.user_id = u2.user_id
-                WHERE ta2.task_id = t.task_id AND ta2.role = 'main'
+                WHERE ta2.task_id = t.task_id AND ta2.role = 'main' AND u2.deleted_at IS NULL
                 LIMIT 1) AS ref_main_assignee_name,
                cp.page_id AS ref_page_id, cp.canvas_id AS ref_canvas_id,
                cp.title AS ref_page_title,

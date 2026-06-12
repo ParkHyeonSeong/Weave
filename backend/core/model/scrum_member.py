@@ -40,6 +40,7 @@ async def find_by_board(board_id: int, db: AsyncSession):
         FROM scrum_member sm
         INNER JOIN "user" u ON u.user_id = sm.user_id
         WHERE sm.board_id = :board_id
+          AND u.deleted_at IS NULL
         ORDER BY sm.joined_at
     """), {'board_id': board_id})
     return [dict(r._mapping) for r in result.fetchall()]
@@ -73,6 +74,7 @@ async def search_non_members(board_id: int, query: str, db: AsyncSession):
         SELECT u.user_id, u.username, u.email, u.avatar_url, u.avatar_color
         FROM "user" u
         WHERE u.status = 'active'
+          AND u.deleted_at IS NULL
           AND u.user_id NOT IN (SELECT user_id FROM scrum_member WHERE board_id = :board_id)
           AND (u.username ILIKE :q OR u.email ILIKE :q)
         ORDER BY u.username

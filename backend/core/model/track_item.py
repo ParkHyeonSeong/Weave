@@ -132,6 +132,7 @@ async def find_by_track(track_id: int, user_id: int, db: AsyncSession):
             FROM task_assignee ta
             INNER JOIN "user" u ON ta.user_id = u.user_id
             WHERE ta.task_id = ANY(:ids)
+              AND u.deleted_at IS NULL
             ORDER BY ta.role, u.username
         """), {'ids': accessible_task_ids})
         assignee_map = {}

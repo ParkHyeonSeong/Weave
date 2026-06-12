@@ -126,6 +126,7 @@ async def find_by_id(task_id: int, db: AsyncSession):
         FROM task_assignee ta
         INNER JOIN "user" u ON ta.user_id = u.user_id
         WHERE ta.task_id = :task_id
+          AND u.deleted_at IS NULL
         ORDER BY ta.role, u.username
     """), {'task_id': task_id})
     task['assignees'] = [dict(r._mapping) for r in assignees_result.fetchall()]
@@ -199,6 +200,7 @@ async def find_by_branch(branch_id: int, sprint_id, db: AsyncSession):
             FROM task_assignee ta
             INNER JOIN "user" u ON ta.user_id = u.user_id
             WHERE ta.task_id = ANY(:task_ids)
+              AND u.deleted_at IS NULL
             ORDER BY ta.role, u.username
         """), {'task_ids': task_ids})
         assignee_map = {}
@@ -272,6 +274,7 @@ async def find_for_board(branch_id: int, sprint_id, db: AsyncSession):
             FROM task_assignee ta
             INNER JOIN "user" u ON ta.user_id = u.user_id
             WHERE ta.task_id = ANY(:task_ids)
+              AND u.deleted_at IS NULL
             ORDER BY ta.role, u.username
         """), {'task_ids': task_ids})
         assignee_map = {}
@@ -371,6 +374,7 @@ async def find_archived(branch_id: int, db: AsyncSession):
             FROM task_assignee ta
             INNER JOIN "user" u ON ta.user_id = u.user_id
             WHERE ta.task_id = ANY(:task_ids)
+              AND u.deleted_at IS NULL
             ORDER BY ta.role, u.username
         """), {'task_ids': task_ids})
         assignee_map = {}
@@ -418,6 +422,7 @@ async def find_subtasks(parent_task_id: int, db: AsyncSession):
             FROM task_assignee ta
             INNER JOIN "user" u ON ta.user_id = u.user_id
             WHERE ta.task_id = ANY(:task_ids)
+              AND u.deleted_at IS NULL
             ORDER BY ta.role, u.username
         """), {'task_ids': task_ids})
         assignee_map = {}
@@ -591,6 +596,7 @@ async def search_for_chat(user_id: int, keyword: str, my_only: bool, db: AsyncSe
             FROM task_assignee ta
             INNER JOIN "user" u ON ta.user_id = u.user_id
             WHERE ta.task_id = ANY(:task_ids)
+              AND u.deleted_at IS NULL
             ORDER BY ta.role, u.username
         """), {'task_ids': task_ids})
         assignee_map = {}
@@ -669,6 +675,7 @@ async def find_by_assignee(user_id: int, status: str, status_category: str, prio
             FROM task_assignee ta
             INNER JOIN "user" u ON ta.user_id = u.user_id
             WHERE ta.task_id = ANY(:task_ids)
+              AND u.deleted_at IS NULL
             ORDER BY ta.role, u.username
         """), {'task_ids': task_ids})
         assignee_map = {}

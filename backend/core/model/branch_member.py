@@ -40,6 +40,7 @@ async def find_by_branch(branch_id: int, db: AsyncSession):
         FROM branch_member bm
         INNER JOIN "user" u ON bm.user_id = u.user_id
         WHERE bm.branch_id = :branch_id
+          AND u.deleted_at IS NULL
         ORDER BY bm.joined_at
     """), {'branch_id': branch_id})
     rows = result.fetchall()
@@ -119,6 +120,7 @@ async def search_non_members(branch_id: int, query: str, db: AsyncSession):
         SELECT u.user_id, u.username, u.email, u.avatar_url, u.avatar_color
         FROM "user" u
         WHERE u.status = 'active'
+          AND u.deleted_at IS NULL
           AND u.user_id NOT IN (
               SELECT user_id FROM branch_member WHERE branch_id = :branch_id
           )

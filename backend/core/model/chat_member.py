@@ -19,6 +19,7 @@ async def find_by_room(room_id: int, db: AsyncSession):
         FROM chat_room_member crm
         INNER JOIN "user" u ON crm.user_id = u.user_id
         WHERE crm.room_id = :room_id
+          AND u.deleted_at IS NULL
         ORDER BY crm.joined_at
     """), {'room_id': room_id})
     rows = result.fetchall()

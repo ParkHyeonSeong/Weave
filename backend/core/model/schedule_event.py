@@ -98,6 +98,7 @@ async def find_participants(schedule_event_id: int, db: AsyncSession):
         FROM schedule_event_participant sep
         INNER JOIN "user" u ON sep.user_id = u.user_id
         WHERE sep.schedule_event_id = :schedule_event_id
+          AND u.deleted_at IS NULL
         ORDER BY u.username
     """), {'schedule_event_id': schedule_event_id})
     return [dict(row._mapping) for row in result.fetchall()]

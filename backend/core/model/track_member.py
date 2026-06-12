@@ -41,6 +41,7 @@ async def find_by_track(track_id: int, db: AsyncSession):
         FROM track_member tm
         INNER JOIN "user" u ON tm.user_id = u.user_id
         WHERE tm.track_id = :track_id
+          AND u.deleted_at IS NULL
         ORDER BY
             CASE tm.role WHEN 'owner' THEN 0 WHEN 'editor' THEN 1 ELSE 2 END,
             tm.joined_at
@@ -77,6 +78,7 @@ async def search_non_members(track_id: int, query: str, db: AsyncSession):
         SELECT u.user_id, u.username, u.email, u.avatar_url, u.avatar_color
         FROM "user" u
         WHERE u.status = 'active'
+          AND u.deleted_at IS NULL
           AND u.user_id NOT IN (
               SELECT user_id FROM track_member WHERE track_id = :track_id
           )

@@ -120,6 +120,7 @@ async def find_accessible(user_id: int, db: AsyncSession):
             FROM branch_member bm
             INNER JOIN "user" u ON bm.user_id = u.user_id
             WHERE bm.branch_id = ANY(:branch_ids)
+              AND u.deleted_at IS NULL
         ) ranked
         WHERE rn <= 4
         ORDER BY branch_id, rn
