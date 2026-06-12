@@ -10,6 +10,8 @@ import HomeEmptyState from '@/components/Home/shared/HomeEmptyState';
 import AppCard from '@/components/Home/shared/AppCard';
 import CreateScrumBoard from '@/components/modal/CreateScrumBoard';
 import { useUiPrefs } from '@/library/UiPrefsContext';
+import useHomeListControls from '@/library/useHomeListControls';
+import { byTextAsc, byNumberDesc, byDateDesc, ROLE_GROUP } from '@/library/homeListControls';
 import useContextMenu from '@/components/common/useContextMenu';
 import ContextMenu from '@/components/common/ContextMenu';
 import { buildSpaceMenu } from '@/components/Layout/spaceMenu';
@@ -21,14 +23,43 @@ const getMyName = () => {
 };
 const CADENCE_LABEL = { weekly: '매주', biweekly: '격주', every_n_weeks: 'N주', monthly: '매월', manual: '수동' };
 
+const SCRUM_CONTROLS = {
+  appKey: 'scrum',
+  hiddenApp: 'scrums',
+  idField: 'board_id',
+  queryFields: ['name'],
+  defaultView: 'grid',
+  sortOptions: [
+    { key: 'updated', label: '최근 수정순', compare: byDateDesc('updated_at') },
+    { key: 'name', label: '이름순', compare: byTextAsc('name') },
+    { key: 'created', label: '최근 생성순', compare: byDateDesc('created_at') },
+    { key: 'members', label: '멤버순', compare: byNumberDesc('member_count') },
+  ],
+  filterConfig: {
+    groups: [
+      ROLE_GROUP,
+      {
+        key: 'cadence', label: '회고 주기', options: [
+          { value: 'all', label: '전체', test: () => true },
+          { value: 'weekly', label: '매주', test: (it) => it.retro_cadence === 'weekly' },
+          { value: 'biweekly', label: '격주', test: (it) => it.retro_cadence === 'biweekly' },
+          { value: 'every_n_weeks', label: 'N주', test: (it) => it.retro_cadence === 'every_n_weeks' },
+          { value: 'monthly', label: '매월', test: (it) => it.retro_cadence === 'monthly' },
+          { value: 'manual', label: '수동', test: (it) => it.retro_cadence === 'manual' },
+        ],
+      },
+    ],
+    showHidden: true,
+  },
+};
+
 export default function ScrumHome() {
   const router = useRouter();
   const { isHidden, hide, unhide } = useUiPrefs();
   const ctx = useContextMenu();
   const [leaveTarget, setLeaveTarget] = useState(null);
   const [boards, setBoards] = useState([]);
-  const [query, setQuery] = useState('');
-  const [view, setView] = useState('grid');
+  const { processed, view, query, toolbarProps } = useHomeListControls(SCRUM_CONTROLS, boards);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [me, setMe] = useState('');
@@ -46,13 +77,6 @@ export default function ScrumHome() {
     setShowCreate(false);
     if (boardId) router.push(`/scrum/${boardId}`);
   }, [router]);
-
-  const filtered = useMemo(() => {
-    const base = boards.filter((b) => !isHidden('scrums', b.board_id));
-    if (!query.trim()) return base;
-    const q = query.toLowerCase();
-    return base.filter((b) => b.name.toLowerCase().includes(q));
-  }, [boards, query, isHidden]);
 
   const memberTotal = useMemo(() => boards.reduce((s, b) => s + (b.member_count || 0), 0), [boards]);
 
@@ -113,10 +137,10 @@ export default function ScrumHome() {
         ]}
       />
       <div className="HomeDivider" />
-      <HomeToolbar count={`보드 ${filtered.length}`} query={query} onQuery={setQuery} placeholder="보드 검색…" sortLabel="최근순" view={view} onView={setView} />
+      <HomeToolbar count={`보드 ${processed.length}`} placeholder="보드 검색…" {...toolbarProps} />
       {loading ? (
         <HomeSkeleton variant="cards" />
-      ) : filtered.length === 0 ? (
+      ) : processed.length === 0 ? (
         <HomeEmptyState
           icon={<CalendarCheck size={26} />}
           title={boards.length === 0 ? '아직 스크럼 보드가 없어요' : (query.trim() ? '검색 결과 없음' : '표시할 보드가 없어요')}
@@ -125,8 +149,8 @@ export default function ScrumHome() {
           onCta={() => setShowCreate(true)}
         />
       ) : (
-        <div className="HGrid">
-          {filtered.map((b) => (
+        <div className={view === 'list' ? 'HList' : 'HGrid'}>
+          {processed.map((b) => (
             <AppCard key={b.board_id} accent={b.color} onClick={() => router.push(`/scrum/${b.board_id}`)} onContextMenu={(e) => openCardMenu(e, b)}>
               <div className="HCard__Top">
                 <div>
