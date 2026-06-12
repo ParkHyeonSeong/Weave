@@ -16,6 +16,9 @@ import SprintModal from '@/components/modal/SprintModal';
 import CompleteSprintModal from '@/components/modal/CompleteSprintModal';
 import TaskFilterBar from '../TaskFilterBar';
 import TaskListRow from './TaskListRow';
+import useTaskContextMenu from './taskMenu';
+import ContextMenu from '@/components/common/ContextMenu';
+import ConfirmModal from '@/components/modal/ConfirmModal';
 
 // localStorage 키 헬퍼
 const storageKey = (branchId, type) => `weave_tasks_${branchId}_${type}`;
@@ -77,6 +80,8 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
   const [dragOverContainerId, setDragOverContainerId] = useState(null);
 
   const sortActive = sortConfig.field !== null;
+
+  const taskMenu = useTaskContextMenu({ branchId, onSelectTask });
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -611,6 +616,7 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
               members={members}
               sprints={sprints}
               onEditTask={handleTaskClick}
+              onTaskContextMenu={taskMenu.openMenu}
               onEditSprint={() => setSprintModal({ open: true, sprint })}
               onCompleteSprint={(s) => setCompleteSprint(s)}
               selectedTaskIds={selectedTaskIds}
@@ -632,6 +638,7 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
           epics={epics}
           members={members}
           onEditTask={handleTaskClick}
+          onTaskContextMenu={taskMenu.openMenu}
           isBacklog
           selectedTaskIds={selectedTaskIds}
           dragOverContainerId={dragOverContainerId}
@@ -679,6 +686,17 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
           onClose={() => setCompleteSprint(null)}
         />
       )}
+
+      <ContextMenu {...taskMenu.menuProps} />
+      <ConfirmModal
+        isOpen={!!taskMenu.confirmTask}
+        onClose={taskMenu.clearConfirm}
+        onConfirm={taskMenu.handleConfirmDelete}
+        title="Delete Task"
+        message={`${taskMenu.confirmTask?.display_id ?? ''} 태스크를 삭제하시겠습니까?`}
+        confirmLabel="Delete"
+        variant="danger"
+      />
     </div>
   );
 }

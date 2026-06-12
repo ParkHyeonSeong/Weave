@@ -10,6 +10,7 @@ import TaskRefNode from '@/components/Canvas/extensions/TaskRefExtension';
 import { ResizableImage } from '@/components/Canvas/extensions/ResizableImageExtension';
 import { createImageUploadPlugin } from '@/components/Canvas/extensions/ImageUploadPlugin';
 import SlashCommandsExtension from '@/components/Canvas/extensions/SlashCommandsExtension';
+import { BookmarkPasteExtension } from '@/components/Canvas/extensions/BookmarkPastePlugin';
 import { useEditorRefHydration } from '@/library/refHydration';
 
 const lowlight = createLowlight(common);
@@ -55,6 +56,7 @@ export default function CommentEditor({
       TaskRefNode,
       SlashCommandsExtension.configure({ enabled: ['/t', '/ta'] }),
       ResizableImage,
+      BookmarkPasteExtension,
     ];
     if (branchId) {
       ext.push(

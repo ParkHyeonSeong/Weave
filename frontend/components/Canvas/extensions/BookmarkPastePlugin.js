@@ -1,4 +1,5 @@
 import { Plugin } from '@tiptap/pm/state';
+import { Extension } from '@tiptap/core';
 import { axios } from '@/library/_axios';
 
 const URL_PATTERN = /^https?:\/\/[^\s]+$/;
@@ -79,6 +80,9 @@ export function createBookmarkPastePlugin() {
           }
         }
 
+        // bookmark 노드가 없는 에디터(댓글·태스크설명 등)는 외부 URL을 일반 텍스트로 통과
+        if (!view.state.schema.nodes.bookmark) return false;
+
         // 외부 URL → bookmark 카드
         event.preventDefault();
 
@@ -100,6 +104,15 @@ export function createBookmarkPastePlugin() {
     },
   });
 }
+
+// 에디터들이 공용으로 쓰는 TipTap Extension 래퍼.
+// 각 에디터 스키마에 있는 ref/bookmark 노드만 변환되고 나머지는 통과한다.
+export const BookmarkPasteExtension = Extension.create({
+  name: 'bookmarkPaste',
+  addProseMirrorPlugins() {
+    return [createBookmarkPastePlugin()];
+  },
+});
 
 // 내부 ref 정보 fetch 후 노드 속성 업데이트
 async function fetchTaskInfo(view, branchId, taskId) {

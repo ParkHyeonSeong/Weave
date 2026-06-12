@@ -77,6 +77,17 @@ export default function BranchDetail() {
     return () => window.removeEventListener('branch:created', handler);
   }, [id]);
 
+  // 우클릭 메뉴 등 외부에서 태스크 삭제 시, 그 태스크가 패널에 열려있으면 닫기
+  useEffect(() => {
+    const onTaskDeleted = (e) => {
+      const deletedId = e.detail?.taskId;
+      if (deletedId == null) return;
+      setSelectedTask((prev) => (prev && prev.task_id === deletedId ? null : prev));
+    };
+    window.addEventListener('task:deleted', onTaskDeleted);
+    return () => window.removeEventListener('task:deleted', onTaskDeleted);
+  }, []);
+
   // URL query tab 동기화
   useEffect(() => {
     if (queryTab && validTabs.includes(queryTab) && queryTab !== activeTab) {

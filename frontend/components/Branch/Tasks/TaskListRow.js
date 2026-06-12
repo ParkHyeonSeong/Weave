@@ -21,7 +21,7 @@ const DEFAULT_STATUS_OPTIONS = [
   { value: 'cancelled', label: 'Cancelled', color: '#DC2626' },
 ];
 
-export default function TaskListRow({ task, branchId, taskTypes, workflowStatuses, epics, members, onClick, isSelected, isOverlay }) {
+export default function TaskListRow({ task, branchId, taskTypes, workflowStatuses, epics, members, onClick, onContextMenu, isSelected, isOverlay }) {
   const statusOptions = (workflowStatuses && workflowStatuses.length > 0)
     ? workflowStatuses.map((ws) => ({ value: ws.key, label: ws.label, color: ws.color }))
     : DEFAULT_STATUS_OPTIONS;
@@ -90,6 +90,7 @@ export default function TaskListRow({ task, branchId, taskTypes, workflowStatuse
       ref={setNodeRef}
       style={style}
       onClick={onClick}
+      onContextMenu={onContextMenu}
     >
       {/* 드래그 핸들 */}
       <span

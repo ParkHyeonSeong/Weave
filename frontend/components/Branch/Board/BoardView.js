@@ -3,8 +3,12 @@ import { axios } from '@/library/_axios';
 import { LayoutGrid } from 'lucide-react';
 import BoardColumn from './BoardColumn';
 import TaskFilterBar from '../TaskFilterBar';
+import useTaskContextMenu from '@/components/Branch/Tasks/taskMenu';
+import ContextMenu from '@/components/common/ContextMenu';
+import ConfirmModal from '@/components/modal/ConfirmModal';
 
 export default function BoardView({ branchId, branchKey, taskTypes, workflowStatuses, onSelectTask }) {
+  const taskMenu = useTaskContextMenu({ branchId, onSelectTask });
   const [columns, setColumns] = useState({});
   const [activeSprints, setActiveSprints] = useState([]);
   const [selectedSprintId, setSelectedSprintId] = useState(null); // null = All
@@ -229,10 +233,22 @@ export default function BoardView({ branchId, branchKey, taskTypes, workflowStat
             tasks={filterTasks(columns[ws.key] || [])}
             taskTypes={taskTypes}
             onCardClick={(task) => onSelectTask(task)}
+            onCardContextMenu={taskMenu.openMenu}
             onStatusChange={handleStatusChange}
           />
         ))}
       </div>
+
+      <ContextMenu {...taskMenu.menuProps} />
+      <ConfirmModal
+        isOpen={!!taskMenu.confirmTask}
+        onClose={taskMenu.clearConfirm}
+        onConfirm={taskMenu.handleConfirmDelete}
+        title="Delete Task"
+        message={`${taskMenu.confirmTask?.display_id ?? ''} 태스크를 삭제하시겠습니까?`}
+        confirmLabel="Delete"
+        variant="danger"
+      />
     </div>
   );
 }

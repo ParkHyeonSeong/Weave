@@ -1,7 +1,7 @@
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import Avatar from '@/components/common/Avatar';
 
-export default function BoardCard({ task, taskTypes, onClick }) {
+export default function BoardCard({ task, taskTypes, onClick, onContextMenu }) {
   const typeConfig = (taskTypes || []).find((t) => t.type_key === task.task_type);
 
   const handleDragStart = (e) => {
@@ -13,6 +13,7 @@ export default function BoardCard({ task, taskTypes, onClick }) {
     <div
       className="BoardCard"
       onClick={onClick}
+      onContextMenu={onContextMenu}
       draggable
       onDragStart={handleDragStart}
     >

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import BoardCard from './BoardCard';
 
-export default function BoardColumn({ status, label, color, tasks, taskTypes, onCardClick, onStatusChange }) {
+export default function BoardColumn({ status, label, color, tasks, taskTypes, onCardClick, onCardContextMenu, onStatusChange }) {
   const [dragOver, setDragOver] = useState(false);
 
   const handleDragOver = (e) => {
@@ -43,6 +43,7 @@ export default function BoardColumn({ status, label, color, tasks, taskTypes, on
             task={task}
             taskTypes={taskTypes}
             onClick={() => onCardClick(task)}
+            onContextMenu={(e) => onCardContextMenu?.(e, task)}
           />
         ))}
         {tasks.length === 0 && (

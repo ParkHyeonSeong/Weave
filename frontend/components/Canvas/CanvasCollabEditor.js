@@ -27,7 +27,7 @@ import IssueRefNode from './extensions/IssueRefExtension';
 import SlashCommandsExtension from './extensions/SlashCommandsExtension';
 import { createImageUploadPlugin } from './extensions/ImageUploadPlugin';
 import BookmarkNode from './extensions/BookmarkExtension';
-import { createBookmarkPastePlugin } from './extensions/BookmarkPastePlugin';
+import { BookmarkPasteExtension } from './extensions/BookmarkPastePlugin';
 import { createMarkdownPastePlugin } from './extensions/MarkdownPastePlugin';
 import MermaidExtension from './extensions/MermaidExtension';
 import CanvasEditorToolbar from './CanvasEditorToolbar';
@@ -68,13 +68,6 @@ function CollabEditorInner({
           },
         })
       : null;
-
-    const BookmarkPaste = Extension.create({
-      name: 'bookmarkPaste',
-      addProseMirrorPlugins() {
-        return [createBookmarkPastePlugin()];
-      },
-    });
 
     const MarkdownPaste = Extension.create({
       name: 'markdownPaste',
@@ -146,7 +139,7 @@ function CollabEditorInner({
       IssueRefNode,
       SlashCommandsExtension.configure({ enabled: ['/t', '/ta', '/d', '/i'] }),
       BookmarkNode,
-      BookmarkPaste,
+      BookmarkPasteExtension,
       MarkdownPaste,
       Mathematics.configure({
         katexOptions: { throwOnError: false },

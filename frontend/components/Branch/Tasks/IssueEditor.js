@@ -15,6 +15,7 @@ import SlashCommandsExtension from '@/components/Canvas/extensions/SlashCommands
 import { ResizableImage } from '@/components/Canvas/extensions/ResizableImageExtension';
 import { createImageUploadPlugin } from '@/components/Canvas/extensions/ImageUploadPlugin';
 import { createMarkdownPastePlugin } from '@/components/Canvas/extensions/MarkdownPastePlugin';
+import { BookmarkPasteExtension } from '@/components/Canvas/extensions/BookmarkPastePlugin';
 import MermaidExtension from '@/components/Canvas/extensions/MermaidExtension';
 import CanvasEditorToolbar from '@/components/Canvas/CanvasEditorToolbar';
 import { useEditorRefHydration } from '@/library/refHydration';
@@ -42,6 +43,7 @@ const IssueEditor = forwardRef(({ content, placeholder, minHeight = 150, branchI
   const extensions = useMemo(() => {
     const ext = makeBaseExtensions(placeholder);
     ext.push(MentionNode.configure({ branchId }));
+    ext.push(BookmarkPasteExtension);
     ext.push(
       Extension.create({
         name: 'markdownPaste',
