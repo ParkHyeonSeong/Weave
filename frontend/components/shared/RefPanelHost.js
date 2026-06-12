@@ -1,15 +1,16 @@
 import dynamic from 'next/dynamic';
-import RefPreviewPanel from '@/components/Canvas/RefPreviewPanel';
 
-// TipTap 에디터 서브트리(설명·댓글 에디터)를 물고 있어, 칩을 클릭하기 전까지는
-// 호스트 화면의 초기 번들에 싣지 않는다.
+// 패널은 칩 클릭 후에만 렌더되므로 무거운 의존(TipTap 에디터 서브트리,
+// dompurify)을 호스트 화면의 초기 번들에 싣지 않는다.
 const TaskDetailPanel = dynamic(() => import('@/components/Branch/Tasks/TaskDetailPanel'), { ssr: false });
+const RefPreviewPanel = dynamic(() => import('@/components/Canvas/RefPreviewPanel'), { ssr: false });
 
 /**
  * 인라인 ref 칩 클릭 패널 라우터 — 칩 타입별로 패널을 분기한다.
  * task는 편집 가능한 TaskDetailPanel을 그대로 재사용(편집 패널 중복 구현 금지),
- * doc/issue는 읽기 전용 RefPreviewPanel. onChangeRef 체이닝은 현재 task→task
- * (패널 설명 안의 task-ref 클릭)만 연결되어 있다.
+ * doc/issue는 읽기 전용 RefPreviewPanel. 체이닝: onSelectTask(task→task)와,
+ * 호스트가 window의 canvas:ref_click을 구독하는 경우(스크럼) 패널 본문 안
+ * 칩 클릭 전반이 onChangeRef로 이어진다.
  */
 export default function RefPanelHost({ previewRef, onClose, onChangeRef }) {
   if (!previewRef) return null;

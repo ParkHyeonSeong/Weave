@@ -7,6 +7,7 @@ import ScrumWeekGrid from './ScrumWeekGrid';
 import RetroView from './RetroView';
 import ScrumMembersModal from './ScrumMembersModal';
 import Avatar from '@/components/common/Avatar';
+import RefPanelHost from '@/components/shared/RefPanelHost';
 import { currentISOWeek, addWeeks, weekDates } from '@/library/isoWeek';
 
 const getProfile = () => {
@@ -24,6 +25,19 @@ export default function ScrumBoardView() {
     && new URLSearchParams(window.location.search).get('tab') === 'retro') ? 'retro' : 'board');
   const [err, setErr] = useState('');
   const [showMembers, setShowMembers] = useState(false);
+  const [previewRef, setPreviewRef] = useState(null);
+
+  // 인라인 ref 칩(task/doc) 클릭 → 타입별 패널 오픈 (데일리·회고 탭 공통)
+  useEffect(() => {
+    const handler = (e) => setPreviewRef(e.detail);
+    window.addEventListener('canvas:ref_click', handler);
+    return () => window.removeEventListener('canvas:ref_click', handler);
+  }, []);
+
+  // 탭·주 전환은 다른 문서로 가는 것 — 열려 있던 참조 패널은 닫는다
+  useEffect(() => {
+    setPreviewRef(null);
+  }, [tab, wk.isoYear, wk.isoWeek]);
   const user = useMemo(() => { const p = getProfile(); return p.user_id ? { user_id: p.user_id, username: p.username, avatar_url: p.avatar_url, avatar_color: p.avatar_color } : null; }, []);
 
   // 보드 상세 + 멤버
@@ -117,17 +131,26 @@ export default function ScrumBoardView() {
           </button>
         </div>
       </header>
-      {tab === 'board' ? (
-        !weekId || !ydoc ? (
-          <div className="ScrumBoard__Loading">주간 보드 연결 중…</div>
-        ) : members.length === 0 ? (
-          <div className="ScrumBoard__Empty">아직 멤버가 없어요. 설정에서 팀원을 초대하세요.</div>
-        ) : (
-          <ScrumWeekGrid ydoc={ydoc} members={members} isoYear={wk.isoYear} isoWeek={wk.isoWeek} />
-        )
-      ) : (
-        <RetroView boardId={boardId} members={members} />
-      )}
+      <div className="ScrumBoard__Body">
+        <div className="ScrumBoard__BodyMain">
+          {tab === 'board' ? (
+            !weekId || !ydoc ? (
+              <div className="ScrumBoard__Loading">주간 보드 연결 중…</div>
+            ) : members.length === 0 ? (
+              <div className="ScrumBoard__Empty">아직 멤버가 없어요. 설정에서 팀원을 초대하세요.</div>
+            ) : (
+              <ScrumWeekGrid ydoc={ydoc} members={members} isoYear={wk.isoYear} isoWeek={wk.isoWeek} />
+            )
+          ) : (
+            <RetroView boardId={boardId} members={members} />
+          )}
+        </div>
+        <RefPanelHost
+          previewRef={previewRef}
+          onClose={() => setPreviewRef(null)}
+          onChangeRef={setPreviewRef}
+        />
+      </div>
       {showMembers && (
         <ScrumMembersModal
           boardId={boardId}
