@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { Inbox, Clock, AlarmClock, Activity, GitBranch } from 'lucide-react';
 import { axios } from '@/library/_axios';
@@ -11,6 +11,8 @@ import HomeEmptyState from '@/components/Home/shared/HomeEmptyState';
 import ProgressRing from '@/components/Home/shared/ProgressRing';
 import AppCard, { AvatarSet } from '@/components/Home/shared/AppCard';
 import { useUiPrefs } from '@/library/UiPrefsContext';
+import useHomeListControls from '@/library/useHomeListControls';
+import { byTextAsc, byNumberDesc, byDateDesc, ROLE_GROUP } from '@/library/homeListControls';
 import useContextMenu from '@/components/common/useContextMenu';
 import ContextMenu from '@/components/common/ContextMenu';
 import { buildSpaceMenu } from '@/components/Layout/spaceMenu';
@@ -40,16 +42,42 @@ const getMyName = () => {
 const createBranch = () => window.dispatchEvent(new CustomEvent('layout:create-branch'));
 const openCommandPalette = () => window.dispatchEvent(new CustomEvent('layout:open-search'));
 
+const BRANCH_CONTROLS = {
+  appKey: 'branch',
+  hiddenApp: 'branches',
+  idField: 'branch_id',
+  queryFields: ['branch_name', 'key'],
+  defaultView: 'grid',
+  sortOptions: [
+    { key: 'name', label: '이름순', compare: byTextAsc('branch_name') },
+    { key: 'created', label: '최근 생성순', compare: byDateDesc('created_at') },
+    { key: 'progress', label: '진행률순', compare: byNumberDesc('progress_percent') },
+    { key: 'tasks', label: '활성 태스크순', compare: byNumberDesc('active_task_count') },
+  ],
+  filterConfig: {
+    groups: [
+      ROLE_GROUP,
+      {
+        key: 'sprint', label: '스프린트', options: [
+          { value: 'all', label: '전체', test: () => true },
+          { value: 'yes', label: '활성 있음', test: (it) => (it.active_sprint_count || 0) > 0 },
+          { value: 'no', label: '없음', test: (it) => (it.active_sprint_count || 0) === 0 },
+        ],
+      },
+    ],
+    showHidden: true,
+  },
+};
+
 export default function BranchHome() {
   const router = useRouter();
   const { isHidden, hide, unhide } = useUiPrefs();
   const ctx = useContextMenu();
   const [leaveTarget, setLeaveTarget] = useState(null);
   const [branches, setBranches] = useState([]);
+  const { processed, view, query, toolbarProps } = useHomeListControls(BRANCH_CONTROLS, branches);
   const [recentTasks, setRecentTasks] = useState([]);
   const [stats, setStats] = useState(null);
-  const [query, setQuery] = useState('');
-  const [view, setView] = useState('grid');
   const [loading, setLoading] = useState(true);
   const [me, setMe] = useState('');
 
@@ -87,15 +115,6 @@ export default function BranchHome() {
     window.addEventListener('branch:created', handleRefresh);
     return () => window.removeEventListener('branch:created', handleRefresh);
   }, []);
-
-  const filteredBranches = useMemo(() => {
-    const base = branches.filter((b) => !isHidden('branches', b.branch_id));
-    if (!query.trim()) return base;
-    const q = query.toLowerCase();
-    return base.filter(
-      (b) => b.branch_name.toLowerCase().includes(q) || b.key.toLowerCase().includes(q)
-    );
-  }, [branches, query, isHidden]);
 
   const openCardMenu = (e, b) => {
     const id = b.branch_id;
@@ -186,18 +205,14 @@ export default function BranchHome() {
       <div className="HomeDivider" />
 
       <HomeToolbar
-        count={`브랜치 ${filteredBranches.length}`}
-        query={query}
-        onQuery={setQuery}
+        count={`브랜치 ${processed.length}`}
         placeholder="브랜치 검색…"
-        sortLabel="최근 활동순"
-        view={view}
-        onView={setView}
+        {...toolbarProps}
       />
 
       {loading ? (
         <HomeSkeleton variant="cards" />
-      ) : filteredBranches.length === 0 ? (
+      ) : processed.length === 0 ? (
         <HomeEmptyState
           icon={<GitBranch size={26} />}
           title={branches.length === 0 ? '아직 브랜치가 없어요' : (query.trim() ? '검색 결과 없음' : '표시할 브랜치가 없어요')}
@@ -210,8 +225,8 @@ export default function BranchHome() {
           onCta={createBranch}
         />
       ) : (
-        <div className="HGrid">
-          {filteredBranches.map((b) => (
+        <div className={view === 'list' ? 'HList' : 'HGrid'}>
+          {processed.map((b) => (
             <AppCard
               key={b.branch_id}
               accent={b.color}
