@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { Workflow, GitBranch, Clock, AlarmClock } from 'lucide-react';
 import { axios } from '@/library/_axios';
@@ -9,6 +9,8 @@ import HomeSkeleton from '@/components/Home/shared/HomeSkeleton';
 import HomeEmptyState from '@/components/Home/shared/HomeEmptyState';
 import ProgressRing from '@/components/Home/shared/ProgressRing';
 import { useUiPrefs } from '@/library/UiPrefsContext';
+import useHomeListControls from '@/library/useHomeListControls';
+import { byTextAsc, byNumberDesc, byDateDesc, ROLE_GROUP } from '@/library/homeListControls';
 import AppCard from '@/components/Home/shared/AppCard';
 import CreateTrack from '@/components/modal/CreateTrack';
 import useContextMenu from '@/components/common/useContextMenu';
@@ -28,15 +30,41 @@ const getMyName = () => {
 
 const openCommandPalette = () => window.dispatchEvent(new CustomEvent('layout:open-search'));
 
+const TRACK_CONTROLS = {
+  appKey: 'track',
+  hiddenApp: 'tracks',
+  idField: 'track_id',
+  queryFields: ['track_name'],
+  defaultView: 'grid',
+  sortOptions: [
+    { key: 'updated', label: '최근 수정순', compare: byDateDesc('updated_at') },
+    { key: 'progress', label: '진행률순', compare: byNumberDesc('progress_percent') },
+    { key: 'name', label: '이름순', compare: byTextAsc('track_name') },
+    { key: 'branches', label: '브랜치순', compare: byNumberDesc('branch_count') },
+  ],
+  filterConfig: {
+    groups: [
+      ROLE_GROUP,
+      {
+        key: 'status', label: '진행 상태', options: [
+          { value: 'all', label: '전체', test: () => true },
+          { value: 'active', label: '진행 중', test: (it) => (it.progress_percent ?? 0) < 100 },
+          { value: 'done', label: '완료', test: (it) => it.progress_percent === 100 },
+        ],
+      },
+    ],
+    showHidden: true,
+  },
+};
+
 export default function TrackHome() {
   const router = useRouter();
   const { isHidden, hide, unhide } = useUiPrefs();
   const ctx = useContextMenu();
   const [leaveTarget, setLeaveTarget] = useState(null);
   const [tracks, setTracks] = useState([]);
+  const { processed, view, query, toolbarProps } = useHomeListControls(TRACK_CONTROLS, tracks);
   const [stats, setStats] = useState(null);
-  const [query, setQuery] = useState('');
-  const [view, setView] = useState('grid');
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [me, setMe] = useState('');
@@ -67,13 +95,6 @@ export default function TrackHome() {
     setShowCreate(false);
     if (trackId) router.push(`/tracks/${trackId}`);
   }, [router]);
-
-  const filteredTracks = useMemo(() => {
-    const base = tracks.filter((t) => !isHidden('tracks', t.track_id));
-    if (!query.trim()) return base;
-    const q = query.toLowerCase();
-    return base.filter((t) => t.track_name.toLowerCase().includes(q));
-  }, [tracks, query, isHidden]);
 
   const openCardMenu = (e, t) => {
     const id = t.track_id;
@@ -150,18 +171,14 @@ export default function TrackHome() {
       <div className="HomeDivider" />
 
       <HomeToolbar
-        count={`트랙 ${filteredTracks.length}`}
-        query={query}
-        onQuery={setQuery}
+        count={`트랙 ${processed.length}`}
         placeholder="트랙 검색…"
-        sortLabel="진행률순"
-        view={view}
-        onView={setView}
+        {...toolbarProps}
       />
 
       {loading ? (
         <HomeSkeleton variant="cards" />
-      ) : filteredTracks.length === 0 ? (
+      ) : processed.length === 0 ? (
         <HomeEmptyState
           icon={<Workflow size={26} />}
           title={tracks.length === 0 ? '아직 트랙이 없어요' : (query.trim() ? '검색 결과 없음' : '표시할 트랙이 없어요')}
@@ -174,8 +191,8 @@ export default function TrackHome() {
           onCta={() => setShowCreate(true)}
         />
       ) : (
-        <div className="HGrid">
-          {filteredTracks.map((t) => (
+        <div className={view === 'list' ? 'HList' : 'HGrid'}>
+          {processed.map((t) => (
             <AppCard
               key={t.track_id}
               accent={t.color}
