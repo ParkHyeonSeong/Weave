@@ -17,7 +17,7 @@ export default function useHomeListControls(config, items) {
   useEffect(() => {
     if (appliedRef.current || !loaded) return;
     appliedRef.current = true;
-    const persisted = prefs.homeControls?.[config.appKey];
+    const persisted = prefs.home_controls?.[config.appKey];
     if (persisted?.sort && config.sortOptions.some((o) => o.key === persisted.sort)) {
       setSortKey(persisted.sort);
     }

@@ -62,3 +62,4 @@ class UpdateUiPrefs(BaseModel):
     hidden: Optional[dict] = None
     launchpad_order: Optional[List[str]] = None
     widget_layout: Optional[List[str]] = None
+    home_controls: Optional[dict] = None

@@ -26,3 +26,10 @@ async def test_ui_prefs_roundtrip_and_namespace_merge(db_session):
     got2 = await user_model.get_ui_prefs(uid, db_session)
     assert got2["sidebar_order"]["branches"] == [3, 1, 2]
     assert got2["hidden"]["branches"] == [2]
+
+
+def test_update_ui_prefs_schema_allows_home_controls():
+    from routers.schema.profile import UpdateUiPrefs
+    body = UpdateUiPrefs(home_controls={"branch": {"sort": "progress", "view": "list"}})
+    patch = body.model_dump(exclude_none=True)
+    assert patch == {"home_controls": {"branch": {"sort": "progress", "view": "list"}}}

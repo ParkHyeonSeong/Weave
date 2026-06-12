@@ -69,8 +69,8 @@ export function UiPrefsProvider({ children }) {
 
   // 앱 홈 정렬·뷰 per-user 저장 (appKey ∈ 'branch'|'canvas'|'track'|'scrum')
   const setHomeCtl = useCallback((appKey, patch) => {
-    const cur = prefsRef.current.homeControls || {};
-    setNamespace('homeControls', { ...cur, [appKey]: { ...(cur[appKey] || {}), ...patch } });
+    const cur = prefsRef.current.home_controls || {};
+    setNamespace('home_controls', { ...cur, [appKey]: { ...(cur[appKey] || {}), ...patch } });
   }, [setNamespace]);
 
   return (
