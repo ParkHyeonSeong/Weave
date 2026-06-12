@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { FileText, FileEdit, Star } from 'lucide-react';
 import { axios } from '@/library/_axios';
@@ -11,6 +11,8 @@ import HomeSkeleton from '@/components/Home/shared/HomeSkeleton';
 import HomeEmptyState from '@/components/Home/shared/HomeEmptyState';
 import AppCard, { AvatarSet } from '@/components/Home/shared/AppCard';
 import { useUiPrefs } from '@/library/UiPrefsContext';
+import useHomeListControls from '@/library/useHomeListControls';
+import { byTextAsc, byNumberDesc, byDateDesc, ROLE_GROUP } from '@/library/homeListControls';
 import useContextMenu from '@/components/common/useContextMenu';
 import ContextMenu from '@/components/common/ContextMenu';
 import { buildSpaceMenu } from '@/components/Layout/spaceMenu';
@@ -53,17 +55,43 @@ const tintOf = (hex) => {
 const createCanvas = () => window.dispatchEvent(new CustomEvent('layout:create-canvas'));
 const openCommandPalette = () => window.dispatchEvent(new CustomEvent('layout:open-search'));
 
+const CANVAS_CONTROLS = {
+  appKey: 'canvas',
+  hiddenApp: 'canvases',
+  idField: 'canvas_id',
+  queryFields: ['canvas_name'],
+  defaultView: 'grid',
+  sortOptions: [
+    { key: 'edited', label: '최근 편집순', compare: byDateDesc('last_edited_at') },
+    { key: 'name', label: '이름순', compare: byTextAsc('canvas_name') },
+    { key: 'created', label: '최근 생성순', compare: byDateDesc('created_at') },
+    { key: 'pages', label: '페이지순', compare: byNumberDesc('page_count') },
+  ],
+  filterConfig: {
+    groups: [
+      ROLE_GROUP,
+      {
+        key: 'link', label: '브랜치 연결', options: [
+          { value: 'all', label: '전체', test: () => true },
+          { value: 'linked', label: '연결됨', test: (it) => it.branch_id != null },
+          { value: 'standalone', label: '독립', test: (it) => it.branch_id == null },
+        ],
+      },
+    ],
+    showHidden: true,
+  },
+};
+
 export default function CanvasHome() {
   const router = useRouter();
   const { isHidden, hide, unhide } = useUiPrefs();
   const ctx = useContextMenu();
   const [leaveTarget, setLeaveTarget] = useState(null);
   const [canvases, setCanvases] = useState([]);
+  const { processed, view, query, toolbarProps } = useHomeListControls(CANVAS_CONTROLS, canvases);
   const [recentDocs, setRecentDocs] = useState([]);
   const [starredDocs, setStarredDocs] = useState([]);
   const [stats, setStats] = useState(null);
-  const [query, setQuery] = useState('');
-  const [view, setView] = useState('grid');
   const [activeTab, setActiveTab] = useState('recent');
   const [loading, setLoading] = useState(true);
   const [me, setMe] = useState('');
@@ -106,13 +134,6 @@ export default function CanvasHome() {
     window.addEventListener('canvas:created', handleRefresh);
     return () => window.removeEventListener('canvas:created', handleRefresh);
   }, []);
-
-  const filteredCanvases = useMemo(() => {
-    const base = canvases.filter((c) => !isHidden('canvases', c.canvas_id));
-    if (!query.trim()) return base;
-    const q = query.toLowerCase();
-    return base.filter((c) => c.canvas_name.toLowerCase().includes(q));
-  }, [canvases, query, isHidden]);
 
   const openCardMenu = (e, c) => {
     const id = c.canvas_id;
@@ -209,18 +230,14 @@ export default function CanvasHome() {
       <div className="HomeDivider" />
 
       <HomeToolbar
-        count={`캔버스 ${filteredCanvases.length}`}
-        query={query}
-        onQuery={setQuery}
+        count={`캔버스 ${processed.length}`}
         placeholder="문서·캔버스 검색…"
-        sortLabel="최근 편집순"
-        view={view}
-        onView={setView}
+        {...toolbarProps}
       />
 
       {loading ? (
         <HomeSkeleton variant="cards" />
-      ) : filteredCanvases.length === 0 ? (
+      ) : processed.length === 0 ? (
         <HomeEmptyState
           icon={<FileText size={26} />}
           title={canvases.length === 0 ? '아직 캔버스가 없어요' : (query.trim() ? '검색 결과 없음' : '표시할 캔버스가 없어요')}
@@ -233,8 +250,8 @@ export default function CanvasHome() {
           onCta={createCanvas}
         />
       ) : (
-        <div className="HGrid">
-          {filteredCanvases.map((c) => (
+        <div className={view === 'list' ? 'HList' : 'HGrid'}>
+          {processed.map((c) => (
             <AppCard
               key={c.canvas_id}
               accent={c.color}
