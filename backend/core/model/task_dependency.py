@@ -84,6 +84,10 @@ async def check_circular(source_task_id: int, target_task_id: int,
     """finish_to_start 순환 참조 체크 (True = 순환 발생).
     branch_id=None 이면 cross-branch 전체 의존 그래프 탐색.
     """
+    # UNION(중복 제거)이라 방문한 tid는 한 번만 행으로 남는다 → 사이클이 있어도 서로 다른
+    # task 수(O(V))만큼 진행한 뒤 새 행이 없어 반드시 종료한다(depth 추적은 오히려 행을
+    # 매 반복 달라지게 만들어 종료를 깨므로 두지 않는다). 병리적 대형 그래프의 실행 시간은
+    # DB statement_timeout(SEC-33)이 backstop으로 제한한다.
     result = await db.execute(text("""
         WITH RECURSIVE chain AS (
             SELECT target_task_id AS tid

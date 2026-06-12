@@ -1,6 +1,12 @@
 from contextlib import asynccontextmanager
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-from config import DATABASE_URL
+from config import DATABASE_URL, DB_STATEMENT_TIMEOUT_MS
+
+# 모든 쿼리에 statement_timeout(ms)을 강제해, 재귀 의존성 검사 등 병리적 쿼리가 커넥션을
+# 무한 점유하지 못하게 한다(SEC-33). asyncpg는 server_settings로 GUC를 전달한다.
+_connect_args = {}
+if DB_STATEMENT_TIMEOUT_MS > 0:
+    _connect_args["server_settings"] = {"statement_timeout": str(DB_STATEMENT_TIMEOUT_MS)}
 
 engine = create_async_engine(
     DATABASE_URL,
@@ -8,6 +14,7 @@ engine = create_async_engine(
     max_overflow=10,
     pool_recycle=3600,
     pool_pre_ping=True,
+    connect_args=_connect_args,
 )
 
 AsyncSessionLocal = async_sessionmaker(

@@ -4,6 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .schema import branch as branch_schema
 from core.controller import branch as branch_controller
 from library.validator import require_login
+from library.rate_limiter import limiter, user_or_ip_key
+from config import AGGREGATE_RATE_LIMIT
 import db_engine as db
 
 router = APIRouter()
@@ -27,6 +29,7 @@ async def list_public_branches(request: Request, session: AsyncSession = Depends
 
 # 주의: /{branch_id} 보다 위에 선언해야 "home-stats"가 branch_id로 매칭되지 않음.
 @router.get("/home-stats", summary="Branch 홈 KPI 집계", dependencies=[Depends(require_login)])
+@limiter.limit(AGGREGATE_RATE_LIMIT, key_func=user_or_ip_key)  # 집계 부하 남용 방지(SEC-11)
 async def get_branch_home_stats(request: Request, session: AsyncSession = Depends(db.session)):
     return await branch_controller.get_home_stats(request, session)
 

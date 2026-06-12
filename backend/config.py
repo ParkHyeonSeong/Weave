@@ -1,3 +1,4 @@
+import ipaddress
 import os
 import secrets
 
@@ -59,3 +60,39 @@ WS_MAX_MESSAGE_BYTES = int(os.getenv("WS_MAX_MESSAGE_BYTES", str(2 * 1024 * 1024
 # WebSocket 협업 연결의 멤버십 재검증 주기(초). 핸드셰이크 후 제거된 멤버가 편집 세션을
 # 유지하지 못하도록 수신 메시지마다(스로틀) 멤버십을 재확인한다(LOG-03).
 WS_MEMBERSHIP_RECHECK_SECS = int(os.getenv("WS_MEMBERSHIP_RECHECK_SECS", "30"))
+
+# 신뢰 프록시 IP/CIDR (CFG-01). reverse proxy(nginx) 뒤에서만 X-Forwarded-For/X-Real-IP를
+# 신뢰한다. 직접 피어가 이 목록 밖이면 클라이언트가 보낸 포워딩 헤더는 위조로 보고 무시해,
+# 헤더 한 줄로 IP 기반 레이트리밋(로그인 5/분 등)을 우회하지 못하게 한다.
+# 이 기본값(사설/루프백 전체)은 임의 토폴로지에서 곧바로 동작하기 위한 느슨한 폴백이며,
+# 같은 사설망의 다른 호스트가 X-Real-IP를 위조할 여지가 있다. 그래서 프로덕션 compose는
+# nginx에 정적 IP를 부여하고 TRUSTED_PROXIES를 그 IP/32로 좁혀 nginx만 신뢰하게 한다
+# (docker-compose.prod.yml). backend를 공개망에 직접 노출할 때도 동일하게 좁혀야 한다.
+TRUSTED_PROXIES = os.getenv(
+    "TRUSTED_PROXIES",
+    "127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16",
+)
+TRUSTED_PROXY_NETWORKS = []
+for _cidr in TRUSTED_PROXIES.split(","):
+    _cidr = _cidr.strip()
+    if not _cidr:
+        continue
+    try:
+        TRUSTED_PROXY_NETWORKS.append(ipaddress.ip_network(_cidr, strict=False))
+    except ValueError:
+        pass
+
+# 전역 요청 본문 크기 상한(바이트, SEC-32). 앱 레벨에서 Content-Length를 검사해, nginx를
+# 우회한 backend 직접 접근(개발/오설정)에서도 대형 본문으로 인한 메모리 고갈을 막는다.
+# nginx client_max_body_size(20M)와 정합. 0 이하면 검사 비활성.
+MAX_REQUEST_BODY_BYTES = int(os.getenv("MAX_REQUEST_BODY_BYTES", str(20 * 1024 * 1024)))
+
+# 단일 DB 쿼리 최대 실행 시간(ms, SEC-33). 재귀 의존성 검사 등 병리적 쿼리가 커넥션을
+# 무한 점유하지 못하도록 Postgres statement_timeout으로 강제 중단한다. 0이면 비활성.
+DB_STATEMENT_TIMEOUT_MS = int(os.getenv("DB_STATEMENT_TIMEOUT_MS", "15000"))
+
+# 비용 큰 엔드포인트 레이트리밋(SEC-11). 계정당(IP가 아니라 user_id 기준) 제한해
+# 공유 NAT 환경에서 정상 사용자를 막지 않으면서 LLM 비용 증폭/집계 부하 남용을 차단한다.
+# AI 채팅은 LLM API 비용이 직접 발생하므로 더 보수적으로 잡는다.
+AI_CHAT_RATE_LIMIT = os.getenv("AI_CHAT_RATE_LIMIT", "20/minute")
+AGGREGATE_RATE_LIMIT = os.getenv("AGGREGATE_RATE_LIMIT", "60/minute")

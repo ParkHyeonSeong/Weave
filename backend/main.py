@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 
 from slowapi.errors import RateLimitExceeded
 
+from config import MAX_REQUEST_BODY_BYTES
 from library import validator
 from library.rate_limiter import limiter
 from library.ws_collab_manager import collab_manager, scrum_week_collab_manager, scrum_retro_collab_manager
@@ -126,6 +127,8 @@ else:
 
 
 # -- Middleware ------------------------------------------------------------
+# 아래에 정의된 미들웨어일수록 바깥(먼저 실행)이다. body-size 검사를 auth보다 바깥에 둬
+# 대형 본문을 인증/본문 파싱 전에 거른다.
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     payload = validator.validate_login(request)  # cookie JWT (sync, no DB)
@@ -141,6 +144,29 @@ async def auth_middleware(request: Request, call_next):
     request.state.payload = payload
     response = await call_next(request)
     return response
+
+
+@app.middleware("http")
+async def limit_body_size(request: Request, call_next):
+    """전역 요청 본문 크기 상한(SEC-32) — Content-Length 기반 사전 거절.
+
+    일반 HTTP 클라이언트(axios/fetch, 멀티파트 업로드)는 항상 Content-Length를 보내므로
+    본문 파싱 전에 대형 요청을 거른다. Content-Length가 없는 chunked 전송은 여기서 막지
+    못하며, 그 경계는 reverse proxy가 담당한다(nginx client_max_body_size 20M는 chunked에도
+    적용). 프로덕션에서 backend는 internal-only(expose)라 nginx를 거치지 않는 직접 접근
+    자체가 불가능하므로, 이 미들웨어는 그 위에 더해지는 앱 레벨 방어선이다."""
+    if MAX_REQUEST_BODY_BYTES > 0:
+        content_length = request.headers.get('content-length')
+        if content_length:
+            try:
+                if int(content_length) > MAX_REQUEST_BODY_BYTES:
+                    return JSONResponse(
+                        status_code=413,
+                        content={"status": False, "message": "REQUEST_TOO_LARGE"},
+                    )
+            except ValueError:
+                pass
+    return await call_next(request)
 
 
 # -- Routers ---------------------------------------------------------------

@@ -12,22 +12,13 @@ from core.model import user as user_model
 from core.model import workspace as workspace_model
 from core.model import password_reset_token as reset_token_model
 from library import crypto
+from library.client_ip import get_client_ip
 
 # 로그인 타이밍 사이드채널 방지용 더미 해시(SEC-13-C): 존재하지 않는 이메일에도 실제
 # 계정과 동일한 cost로 bcrypt를 수행해 응답 시간으로 존재를 추론하지 못하게 한다.
 # 신규 해시와 같은 cost=12(crypto.hash_password)로 만들어 cost 차이도 없앤다.
 # 더미와의 매칭 결과는 login의 `not user` 가드가 폐기하므로 인증에는 영향이 없다.
 _DUMMY_HASH = crypto.hash_password('_dummy_never_matches_')
-
-
-def _get_client_ip(request: Request) -> str:
-    forwarded = request.headers.get('X-Forwarded-For')
-    if forwarded:
-        return forwarded.split(',')[0].strip()
-    real_ip = request.headers.get('X-Real-IP')
-    if real_ip:
-        return real_ip
-    return request.client.host if request.client else '0.0.0.0'
 
 
 def _create_token(user_id: int, email: str, username: str, role: str = 'member') -> str:
@@ -129,7 +120,7 @@ async def login(body, request: Request, response: Response, db: AsyncSession):
     if user.get('status') == 'inactive':
         return {'status': False, 'message': 'ACCOUNT_INACTIVE'}
 
-    ip = _get_client_ip(request)
+    ip = get_client_ip(request)
     await user_model.update_login(user['user_id'], ip, db)
 
     role = user.get('role', 'member')

@@ -4,6 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .schema import ai as ai_schema
 from core.controller import ai as ai_controller
 from library.validator import require_login, require_admin
+from library.rate_limiter import limiter, user_or_ip_key
+from config import AI_CHAT_RATE_LIMIT
 import db_engine as db
 
 router = APIRouter()
@@ -61,6 +63,7 @@ async def get_messages(conversation_id: int, request: Request,
 
 @router.post("/conversations/{conversation_id}/chat", summary="AI 채팅 전송",
              dependencies=[Depends(require_login)])
+@limiter.limit(AI_CHAT_RATE_LIMIT, key_func=user_or_ip_key)  # 계정당 LLM 비용 증폭 방지(SEC-11)
 async def send_message(conversation_id: int, body: ai_schema.AIChatMessage,
                        request: Request, session: AsyncSession = Depends(db.session)):
     return await ai_controller.send_message(conversation_id, body, request, session)
