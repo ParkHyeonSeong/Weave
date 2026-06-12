@@ -1271,8 +1271,9 @@
     }
   }
 
+  // Avatar(이니셜) 슬롯 — .Avatar가 흰 글자를 칠하므로 여기서 color를 덮어쓰지 않는다.
+  // (예전 Lucide 아이콘 시절 잔재인 color:$color-primary가 이니셜을 파랗게 만들던 버그)
   &__ItemIcon {
-    color: $color-primary;
     flex-shrink: 0;
   }
 
