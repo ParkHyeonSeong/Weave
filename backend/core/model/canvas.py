@@ -163,9 +163,18 @@ async def home_stats(user_id: int, db: AsyncSession):
 
 
 async def update(canvas_id: int, fields: dict, db: AsyncSession):
-    """Canvas 정보 수정"""
-    set_clauses = ', '.join(f'{k} = :{k}' for k in fields)
-    params = {**fields, 'canvas_id': canvas_id}
+    """Canvas 정보 수정.
+
+    필드명이 f-string으로 SQL에 보간되므로, 컬럼명 화이트리스트로 거른다(SEC-36) —
+    Pydantic(CanvasUpdate)이 이미 필드를 제한하지만, 모델 레벨에서 2차 방어해 다른
+    호출 경로가 임의 컬럼명을 주입하지 못하게 한다. (task.update와 동일 패턴)
+    """
+    allowed = {'canvas_name', 'key', 'description', 'visibility', 'color', 'icon'}
+    updates = {k: v for k, v in fields.items() if k in allowed}
+    if not updates:
+        return
+    set_clauses = ', '.join(f'{k} = :{k}' for k in updates)
+    params = {**updates, 'canvas_id': canvas_id}
     await db.execute(text(f"""
         UPDATE canvas SET {set_clauses}, updated_at = NOW()
         WHERE canvas_id = :canvas_id
