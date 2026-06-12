@@ -122,6 +122,15 @@ def _build_system_prompt(task_summary: str) -> str:
     )
 
 
+def _log_llm_api_error(provider: str, status_code: int, body: bytes) -> None:
+    """LLM API 오류 로깅 — 응답 본문은 사용자 요청을 echo back할 수 있어 기본 로그엔
+    상태 코드와 바이트 크기만 남기고, 전체 본문은 DEBUG에서만 남긴다(SEC-05)."""
+    logger.error("%s API error: %s (%d bytes)", provider, status_code, len(body))
+    # 이 가드는 DEBUG 비활성 시 body.decode() 비용을 피하기 위한 것 — 로그 억제용이 아니므로 제거 금지.
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug("%s API error body: %s", provider, body.decode(errors="replace"))
+
+
 async def send_message(conversation_id: int, body, request: Request, db: AsyncSession):
     """메시지 전송 + LLM 스트리밍 응답"""
     user_id = request.state.payload.get('user_id')
@@ -178,7 +187,7 @@ async def send_message(conversation_id: int, body, request: Request, db: AsyncSe
                     async with client.stream("POST", url, json=payload, headers=headers) as response:
                         if response.status_code != 200:
                             body = await response.aread()
-                            logger.error("Anthropic API %s: %s", response.status_code, body.decode())
+                            _log_llm_api_error("Anthropic", response.status_code, body)
                             yield f"data: {json.dumps({'error': f'API error ({response.status_code})'})}\n\n"
                             return
                         async for line in response.aiter_lines():
@@ -218,7 +227,7 @@ async def send_message(conversation_id: int, body, request: Request, db: AsyncSe
                     async with client.stream("POST", url, json=payload, headers=headers) as response:
                         if response.status_code != 200:
                             body = await response.aread()
-                            logger.error("OpenAI API %s: %s", response.status_code, body.decode())
+                            _log_llm_api_error("OpenAI", response.status_code, body)
                             yield f"data: {json.dumps({'error': f'API error ({response.status_code})'})}\n\n"
                             return
                         async for line in response.aiter_lines():
@@ -238,7 +247,8 @@ async def send_message(conversation_id: int, body, request: Request, db: AsyncSe
                                 continue
 
         except httpx.HTTPError as e:
-            logger.error("LLM API error: %s", e)
+            # 예외 메시지엔 호스트/연결 상세가 섞일 수 있어 타입만 남긴다(SEC-05).
+            logger.error("LLM API request failed: %s", type(e).__name__)
             yield f"data: {json.dumps({'error': 'LLM API request failed'})}\n\n"
             return
 

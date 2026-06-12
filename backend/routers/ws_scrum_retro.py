@@ -2,7 +2,7 @@ import logging
 import jwt
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from config import JWT_SECRET_KEY, JWT_ALGORITHM, COOKIE_NAME
+from config import JWT_SECRET_KEY, JWT_ALGORITHM, COOKIE_NAME, DEBUG
 from library.ws_collab_manager import scrum_retro_collab_manager
 from core.model import scrum_member as member_model
 from core.model import scrum_retro as retro_model
@@ -47,6 +47,6 @@ async def websocket_scrum_retro(ws: WebSocket, board_id: int, retro_id: int):
     except WebSocketDisconnect:
         pass
     except Exception:
-        logger.exception("scrum retro ws error (retro_id=%s)", retro_id)
+        logger.error("scrum retro ws error (retro_id=%s)", retro_id, exc_info=DEBUG)
     finally:
         await scrum_retro_collab_manager.leave(retro_id, user_id, ws)

@@ -7,6 +7,8 @@ import uuid
 from fastapi import Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from config import DEBUG
+
 logger = logging.getLogger("weave.jira_migrate")
 
 from core.model import branch_member as member_model
@@ -46,7 +48,7 @@ async def preview(branch_id: int, file: UploadFile, request: Request, db: AsyncS
         # 파싱 실패 시 임시 파일 삭제
         if os.path.exists(temp_path):
             os.remove(temp_path)
-        logger.error("CSV parse error: %s", e, exc_info=True)
+        logger.error("CSV parse error: %s", e, exc_info=DEBUG)
         return {'status': False, 'message': 'CSV_PARSE_ERROR'}
 
     return {
@@ -97,7 +99,7 @@ async def execute(branch_id: int, body, request: Request, db: AsyncSession):
 
         stats = await asyncio.to_thread(run_migration)
     except Exception as e:
-        logger.error("Migration failed: %s", e, exc_info=True)
+        logger.error("Migration failed: %s", e, exc_info=DEBUG)
         return {'status': False, 'message': 'MIGRATION_FAILED'}
     finally:
         # 임시 파일 삭제

@@ -3,7 +3,7 @@ import logging
 import jwt
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from config import JWT_SECRET_KEY, JWT_ALGORITHM, COOKIE_NAME
+from config import JWT_SECRET_KEY, JWT_ALGORITHM, COOKIE_NAME, DEBUG
 from library.ws_collab_manager import scrum_week_collab_manager
 from core.model import scrum_member as member_model
 from core.model import scrum_week as week_model
@@ -56,6 +56,6 @@ async def websocket_scrum_week(ws: WebSocket, board_id: int, week_id: int):
     except WebSocketDisconnect:
         pass
     except Exception:
-        logger.exception("scrum week ws error (week_id=%s)", week_id)
+        logger.error("scrum week ws error (week_id=%s)", week_id, exc_info=DEBUG)
     finally:
         await scrum_week_collab_manager.leave(week_id, user_id, ws)
