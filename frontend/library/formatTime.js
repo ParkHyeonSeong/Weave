@@ -17,6 +17,30 @@ export function formatMessageTime(dateStr) {
 }
 
 /**
+ * 절대 날짜 포맷 — 로컬 기준 YYYY-MM-DD
+ * (UTC ISO 문자열을 그대로 슬라이스하면 로컬 자정 부근에서 하루 어긋남)
+ */
+export function formatYMD(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * 절대 일시 포맷 — 로컬 기준, 브라우저 로케일 (툴팁 등 보조 표기용)
+ */
+export function formatDateTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString();
+}
+
+/**
  * 상대 시간 포맷
  * just now / Nm ago / Nh ago / yesterday / Nd ago / Nw ago / Nmo ago / 날짜
  *

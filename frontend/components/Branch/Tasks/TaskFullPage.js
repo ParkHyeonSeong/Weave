@@ -9,6 +9,7 @@ import DatePicker from '@/components/common/DatePicker';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import useTaskDetail from '@/hooks/useTaskDetail';
 import { sanitizeHtml } from '@/library/sanitize';
+import { formatYMD, formatDateTime } from '@/library/formatTime';
 import { useRefHydration } from '@/library/refHydration';
 import Avatar from '@/components/common/Avatar';
 import TaskIssueSection from './TaskIssueSection';
@@ -386,6 +387,16 @@ export default function TaskFullPage() {
               ) : (
                 <span className="TaskFullPage__CreatorEmpty">—</span>
               )}
+            </FieldRow>
+
+            {/* 생성일 */}
+            <FieldRow label="Created">
+              <span
+                className="TaskFullPage__CreatedAt"
+                title={formatDateTime(task.created_at) || undefined}
+              >
+                {formatYMD(task.created_at) || '—'}
+              </span>
             </FieldRow>
 
             {/* 커스텀 필드 */}

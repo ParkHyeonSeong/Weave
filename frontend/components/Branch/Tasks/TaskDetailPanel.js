@@ -8,6 +8,7 @@ import DatePicker from '@/components/common/DatePicker';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import useTaskDetail from '@/hooks/useTaskDetail';
 import { sanitizeHtml } from '@/library/sanitize';
+import { formatYMD, formatDateTime } from '@/library/formatTime';
 import { useRefHydration } from '@/library/refHydration';
 import Avatar from '@/components/common/Avatar';
 import TaskIssueSection from './TaskIssueSection';
@@ -341,6 +342,16 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
               ) : (
                 <span className="TaskDetailPanel__CreatorEmpty">—</span>
               )}
+            </DetailRow>
+
+            {/* 생성일 */}
+            <DetailRow label="Created">
+              <span
+                className="TaskDetailPanel__CreatedAt"
+                title={formatDateTime(task.created_at) || undefined}
+              >
+                {formatYMD(task.created_at) || '—'}
+              </span>
             </DetailRow>
           </div>
         </div>

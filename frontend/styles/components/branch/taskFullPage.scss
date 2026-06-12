@@ -309,7 +309,8 @@
     .TaskFullPage__SubAssigneeWrap,
     .LabelTagInput__Chips,
     .TaskFullPage__Creator,
-    .TaskFullPage__CreatorEmpty {
+    .TaskFullPage__CreatorEmpty,
+    .TaskFullPage__CreatedAt {
       min-height: 24px;
       box-sizing: border-box;
       font-size: $font-size-xs;
@@ -328,9 +329,10 @@
       align-items: center;
     }
 
-    // Creator/CreatorEmpty: 1px transparent border로 trigger들과 동일한 inner text x-position 보정
+    // Creator/CreatorEmpty/CreatedAt: 1px transparent border로 trigger들과 동일한 inner text x-position 보정
     .TaskFullPage__Creator,
-    .TaskFullPage__CreatorEmpty {
+    .TaskFullPage__CreatorEmpty,
+    .TaskFullPage__CreatedAt {
       border: 1px solid transparent;
       border-radius: $radius-sm;
       padding-left: 3px;  // 1px border + 3px padding = 4px effective
@@ -424,6 +426,13 @@
 
   &__CreatorName { color: inherit; }
   &__CreatorEmpty { color: $color-text-tertiary; }
+
+  // -- 생성일 --
+  &__CreatedAt {
+    display: inline-flex;
+    align-items: center;
+    // font-size / padding-left / border / line-height 는 __RowValue scope override에서 처리
+  }
 
   // -- 날짜 --
   &__DateInput {
