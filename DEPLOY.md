@@ -35,6 +35,32 @@ ALLOWED_ORIGINS=https://weave.example.com
 NEXT_PUBLIC_API_URL=https://weave.example.com
 ```
 
+> #### ⚠️ 필수 보안 변수 (미설정 시 backend가 시작되지 않음)
+>
+> 아래 값을 채우지 않으면 backend가 `RuntimeError`로 즉시 종료됩니다(약한 기본값으로
+> 조용히 뜨는 것을 막기 위한 안전장치). 운영 배포 전 반드시 설정하세요.
+>
+> ```env
+> # 인증 토큰 서명 키 — 미설정 시 backend 시작 실패
+> JWT_SECRET_KEY=        # openssl rand -hex 32 로 생성
+>
+> # 민감 데이터(SMTP 비번 등) 암호화 키 — 미설정 시 backend 시작 실패
+> ENCRYPT_KEY=           # openssl rand -hex 32 로 생성
+>
+> # DB 접속 URL — 기본 'weave:weave' 그대로면 운영(DEBUG=false)에서 시작 거부됨.
+> # POSTGRES_PASSWORD 와 동일한 강력한 비밀번호를 사용하세요.
+> DATABASE_URL=postgresql+asyncpg://weave:여기에_강력한_랜덤_비밀번호@db:5432/weave
+> ```
+>
+> 생성 예시:
+> ```bash
+> openssl rand -hex 32   # JWT_SECRET_KEY 용
+> openssl rand -hex 32   # ENCRYPT_KEY 용
+> ```
+>
+> 또한 `DEBUG`는 반드시 `false`로 두세요(기본값). `true`면 JWT 시크릿이 재시작마다
+> 재생성되어 세션이 풀리고 `/api/docs`가 노출됩니다.
+
 ### 3. SSL 인증서 초기 발급
 
 SSL 인증서 발급을 위해 먼저 Nginx를 HTTP 모드로 띄워야 합니다.
@@ -114,6 +140,7 @@ certbot 컨테이너가 12시간마다 자동으로 갱신을 시도합니다. �
 
 ## 보안 참고사항
 
+- **필수 시크릿**: `JWT_SECRET_KEY`, `ENCRYPT_KEY`는 운영에서 필수입니다(미설정 시 backend가 시작되지 않음). `DATABASE_URL`도 기본 `weave:weave`면 거부되므로 강력한 비밀번호로 설정하세요. 위 [환경변수 설정](#2-환경변수-설정) 참고.
 - **Swagger UI**: 프로덕션(`DEBUG=false`)에서는 자동 비활성화됩니다.
 - **Rate Limiting**: 로그인(5회/분), 회원가입(3회/분) 등 주요 엔드포인트에 기본 적용됩니다.
 - **보안 헤더**: 컨테이너 Nginx에 `X-Content-Type-Options`, `X-Frame-Options` 등이 기본 설정되어 있습니다. 호스트 Nginx 설정은 `nginx/host-nginx.conf.example`을 참고하세요.

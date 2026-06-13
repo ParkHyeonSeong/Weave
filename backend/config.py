@@ -1,19 +1,39 @@
 import ipaddress
+import logging
 import os
 import secrets
-
-# Database
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql+asyncpg://weave:weave@db:5432/weave",
-)
-
-# Alembic용 동기 URL (asyncpg -> psycopg 대신 간단하게 변환)
-DATABASE_URL_SYNC = DATABASE_URL.replace("+asyncpg", "")
 
 # App
 DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+
+# .env.production.example의 미치환 플레이스홀더(CHANGE_ME_*) 표식. 예제 파일을 복사한 뒤
+# 값을 바꾸지 않고 그대로 운영에 올리는 가장 흔한 실수를 잡기 위해, prod에서는 이 표식이
+# 들어간 시크릿/URL을 거부한다(openssl 출력은 16진수라 이 표식을 포함할 수 없다).
+_PLACEHOLDER_MARK = "CHANGE_ME"
+
+# Database — dev 편의 기본값(weave:weave). 프로덕션에서 이 약한 기본값으로 조용히 뜨면
+# DB 비밀번호가 'weave'인 채 운영되므로(CFG-03/DEP-01), prod(DEBUG=false)에서는 기본값/
+# 미설정/미치환 플레이스홀더를 거부한다(JWT_SECRET_KEY·ENCRYPT_KEY와 동일 패턴).
+_DEFAULT_DATABASE_URL = "postgresql+asyncpg://weave:weave@db:5432/weave"
+DATABASE_URL = os.getenv("DATABASE_URL", _DEFAULT_DATABASE_URL)
+if not DEBUG and (not DATABASE_URL or DATABASE_URL == _DEFAULT_DATABASE_URL
+                  or _PLACEHOLDER_MARK in DATABASE_URL):
+    raise RuntimeError(
+        "DATABASE_URL must be set with a non-default password in production "
+        "(export DATABASE_URL=postgresql+asyncpg://USER:STRONG_PASSWORD@db:5432/DB)"
+    )
+
+# Alembic용 동기 URL (asyncpg -> psycopg 대신 간단하게 변환)
+DATABASE_URL_SYNC = DATABASE_URL.replace("+asyncpg", "")
+
+if DEBUG:
+    # prod에서 실수로 DEBUG=true면 매 import마다 JWT 시크릿이 재생성돼 세션이 풀리고
+    # /api/docs가 노출된다(CFG-05). 운영 점검을 돕기 위해 시작 시 경고를 남긴다.
+    logging.getLogger("weave").warning(
+        "DEBUG=true: 개발 전용 모드입니다. 프로덕션에서는 반드시 DEBUG=false로 두세요 "
+        "(JWT 시크릿 자동재생성·/api/docs 노출)."
+    )
 
 # JWT — 프로덕션에서 미설정 시 멀티워커 환경에서 인증 깨짐 방지
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
@@ -21,7 +41,9 @@ if not JWT_SECRET_KEY:
     if DEBUG:
         JWT_SECRET_KEY = secrets.token_hex(32)
     else:
-        raise RuntimeError("JWT_SECRET_KEY must be set (export JWT_SECRET_KEY=...)")
+        raise RuntimeError("JWT_SECRET_KEY must be set (export JWT_SECRET_KEY=$(openssl rand -hex 32))")
+elif not DEBUG and _PLACEHOLDER_MARK in JWT_SECRET_KEY:
+    raise RuntimeError("JWT_SECRET_KEY must not be the example placeholder in production")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "24"))
 
@@ -37,7 +59,9 @@ if not ENCRYPT_KEY:
     if DEBUG:
         ENCRYPT_KEY = "dev-only-encrypt-key"
     else:
-        raise RuntimeError("ENCRYPT_KEY must be set (export ENCRYPT_KEY=...)")
+        raise RuntimeError("ENCRYPT_KEY must be set (export ENCRYPT_KEY=$(openssl rand -hex 32))")
+elif not DEBUG and _PLACEHOLDER_MARK in ENCRYPT_KEY:
+    raise RuntimeError("ENCRYPT_KEY must not be the example placeholder in production")
 
 # Frontend base URL — 비밀번호 재설정 링크 등 절대 URL 구성용.
 # 미설정 시 백엔드는 토큰 + 상대경로만 반환하고 프론트가 절대 URL을 구성한다.
