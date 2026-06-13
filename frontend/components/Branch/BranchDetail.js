@@ -13,6 +13,7 @@ import BranchSettings from './Settings/BranchSettings';
 import BranchSchedule from './Schedule/BranchSchedule';
 import EntityIcon from '@/components/common/EntityIcon';
 import EntityAppearancePopover from '@/components/common/EntityAppearancePopover';
+import RefPanelHost, { useRefPreview } from '@/components/shared/RefPanelHost';
 
 const TABS = [
   { key: 'epics', label: 'Epics', icon: Zap },
@@ -42,6 +43,17 @@ export default function BranchDetail() {
   // 오른쪽 패널
   const [selectedTask, setSelectedTask] = useState(null);
   const [selectedEpic, setSelectedEpic] = useState(null);
+
+  // 에디터(설명·댓글) 안 칩 클릭 → 작업 패널 왼쪽에 참조 패널
+  const [previewRef, setPreviewRef] = useRefPreview();
+
+  // 작업 패널과 같은 task를 가리키는 칩은 무시 — 같은 task의 편집 패널이
+  // 두 벌 마운트되면 서로의 변경을 덮어쓰는 경합이 생긴다
+  useEffect(() => {
+    if (previewRef?.type === 'task' && selectedTask?.task_id === Number(previewRef.data.taskId)) {
+      setPreviewRef(null);
+    }
+  }, [previewRef, selectedTask, setPreviewRef]);
 
   // Header appearance popover
   const iconRef = useRef(null);
@@ -105,10 +117,11 @@ export default function BranchDetail() {
     }
   }, [router.query.task, branch]);
 
-  // 탭 전환 시 패널 닫기
+  // 탭 전환 시 패널 닫기 (참조 패널도 함께 — 칩 발원지가 닫히는데 고아로 남기지 않음)
   useEffect(() => {
     setSelectedTask(null);
     setSelectedEpic(null);
+    setPreviewRef(null);
   }, [activeTab]);
 
   const fetchBranch = async () => {
@@ -265,6 +278,18 @@ export default function BranchDetail() {
           )}
         </div>
       </div>
+
+      {/* 인라인 칩 클릭 참조 패널 — 편집 상태를 보존한 채 옆에서 확인.
+          previewRef 가드는 빈 fixed 래퍼(좁은 화면에서 그림자 줄)를 막는 용도. */}
+      {previewRef && (
+        <div className="BranchDetail__RefPanel">
+          <RefPanelHost
+            previewRef={previewRef}
+            onClose={() => setPreviewRef(null)}
+            onChangeRef={setPreviewRef}
+          />
+        </div>
+      )}
 
       {/* Task 상세 패널 */}
       {selectedTask && (

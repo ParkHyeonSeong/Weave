@@ -33,6 +33,12 @@
     &:has(.Track) {
       overflow: hidden;
     }
+
+    // ref 패널 풀페이지 라우트(canvas·task·issue): 패널이 뷰포트 높이에 고정,
+    // 스크롤은 __Main이 담당
+    &:has(.RefPanelPageLayout) {
+      overflow: hidden;
+    }
   }
 
   // 메신저 리사이즈 핸들

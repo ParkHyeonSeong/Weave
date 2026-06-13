@@ -1,5 +1,6 @@
 import Head from 'next/head';
 import TaskFullPage from '@/components/Branch/Tasks/TaskFullPage';
+import RefPanelPageLayout from '@/components/shared/RefPanelPageLayout';
 
 export default function TaskPage() {
   return (
@@ -7,7 +8,9 @@ export default function TaskPage() {
       <Head>
         <title>Task - Weave</title>
       </Head>
-      <TaskFullPage />
+      <RefPanelPageLayout>
+        <TaskFullPage />
+      </RefPanelPageLayout>
     </>
   );
 }

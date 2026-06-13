@@ -85,6 +85,23 @@
     }
   }
 
+  // -- 칩 참조 패널 래퍼 --
+  // 넓은 화면: 작업 패널 왼쪽에 나란히(flex 자식). 패널 2장(840px)이 본문을
+  // 짓누르는 좁은 화면에선 작업 패널 위로 띄운다 — 아래 편집 상태는 유지됨.
+  &__RefPanel {
+    display: flex;
+
+    @media (max-width: 1439px) {
+      position: fixed;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      // 모바일 TaskDetailPanel(z 300) 위에 떠야 함 — 참조 패널이 더 최근 액션
+      z-index: 310;
+      box-shadow: $shadow-lg;
+    }
+  }
+
   // -- Mobile --
   @include mobile {
     &__Main {

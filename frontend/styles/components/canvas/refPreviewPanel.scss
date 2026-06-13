@@ -1,17 +1,5 @@
 @use '../../variables' as *;
 
-// 캔버스 페이지 레이아웃 (미리보기 패널 포함)
-.CanvasPageLayout {
-  display: flex;
-  height: 100%;
-
-  &__Main {
-    flex: 1;
-    min-width: 0;
-    overflow-y: auto;
-  }
-}
-
 // Ref 미리보기 패널
 .RefPreviewPanel {
   width: 420px;

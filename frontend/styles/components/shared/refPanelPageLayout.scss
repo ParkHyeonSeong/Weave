@@ -1,0 +1,14 @@
+@use '../../variables' as *;
+
+// 풀페이지 라우트(canvas·task·issue) 본문 + 우측 ref 패널 flex 레이아웃.
+// height:100%가 Layout__Content 높이에 정확히 맞아 본문 스크롤은 __Main이 담당.
+.RefPanelPageLayout {
+  display: flex;
+  height: 100%;
+
+  &__Main {
+    flex: 1;
+    min-width: 0;
+    overflow-y: auto;
+  }
+}

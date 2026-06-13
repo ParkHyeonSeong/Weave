@@ -90,6 +90,7 @@ import "@/styles/components/track/track.scss";
 import "@/styles/components/track/tracksIndex.scss";
 import "@/styles/components/track/trackSettings.scss";
 import "@/styles/components/scrum/scrum.scss";
+import "@/styles/components/shared/refPanelPageLayout.scss";
 
 const publicPaths = ['/auth/login', '/auth/change-password', '/auth/reset', '/setup'];
 const noLayoutPaths = ['/auth/login', '/auth/change-password', '/auth/reset', '/setup', '/admin'];
