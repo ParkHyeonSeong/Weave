@@ -45,15 +45,26 @@ if not JWT_SECRET_KEY:
 elif not DEBUG and _PLACEHOLDER_MARK in JWT_SECRET_KEY:
     raise RuntimeError("JWT_SECRET_KEY must not be the example placeholder in production")
 JWT_ALGORITHM = "HS256"
-JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "24"))
+JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "24"))  # (레거시 — access는 분 단위 사용)
+
+# 단기 access 토큰 + 장기 refresh 토큰(SEC-29). access 만료를 짧게 둬 탈취 시 노출창을
+# 줄이고, 장기 세션은 서버측 저장 refresh 토큰으로 갱신한다(로그아웃·비번재설정으로 즉시 폐기).
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
+REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
 
 # Cookie
 COOKIE_NAME = "weave_token"
+REFRESH_COOKIE_NAME = "weave_refresh"
+# refresh 쿠키는 /api/auth 경로에만 전송(매 요청에 실리지 않게 노출 최소화)
+REFRESH_COOKIE_PATH = "/api/auth"
 COOKIE_SECURE = not DEBUG
 COOKIE_SAMESITE = "lax"
 COOKIE_HTTPONLY = True
 
-# Encryption — 프로덕션에서 미설정 시 민감 데이터 평문 저장 방지
+# Encryption — 프로덕션에서 미설정 시 민감 데이터 평문 저장 방지.
+# ⚠️ 회전 주의: crypto.hash_token이 이 키로 토큰 해시를 peppering하므로, ENCRYPT_KEY를
+# 교체하면 저장된 refresh 토큰·PAT 해시가 모두 검증 불가가 되어 전 사용자가 한 번 강제
+# 로그아웃되고 PAT는 재발급이 필요하다. 키 회전 시 강제 재로그인 이벤트를 계획할 것.
 ENCRYPT_KEY = os.getenv("ENCRYPT_KEY", "")
 if not ENCRYPT_KEY:
     if DEBUG:

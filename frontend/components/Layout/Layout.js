@@ -13,7 +13,7 @@ import CreateScrumBoard from '@/components/modal/CreateScrumBoard';
 import CommandPalette from '@/components/modal/CommandPalette';
 import { requestNotificationPermission, showNotification, playNotificationSound } from '@/library/notification';
 import { subscribeToPush } from '@/library/pushSubscription';
-import { getWsBaseURL } from '@/library/_axios';
+import { getWsBaseURL, refreshAccessToken } from '@/library/_axios';
 import { showToast } from './Toast';
 import useMobile from '@/hooks/useMobile';
 import usePictureInPicture from '@/hooks/usePictureInPicture';
@@ -261,6 +261,7 @@ export default function Layout({ children }) {
     const wsUrl = `${getWsBaseURL()}/api/ws/chat`;
 
     let reconnectTimer = null;
+    let reconnectAttempts = 0;
     let alive = true;
 
     const connect = () => {
@@ -273,6 +274,8 @@ export default function Layout({ children }) {
       }
 
       const ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => { reconnectAttempts = 0; };
 
       ws.onmessage = (event) => {
         try {
@@ -327,7 +330,15 @@ export default function Layout({ children }) {
       };
 
       ws.onclose = () => {
-        if (alive) {
+        if (!alive) return;
+        reconnectAttempts += 1;
+        // 연속 실패(2회+)는 단기 access 토큰 만료(SEC-29)일 가능성이 크므로 재연결 전에
+        // 토큰을 선제 갱신한다(쿨다운 공유). 일시적 끊김은 첫 재시도로 곧 복구된다.
+        if (reconnectAttempts >= 2) {
+          refreshAccessToken()
+            .catch(() => {})
+            .finally(() => { if (alive) reconnectTimer = setTimeout(connect, 3000); });
+        } else {
           reconnectTimer = setTimeout(connect, 3000);
         }
       };

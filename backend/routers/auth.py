@@ -36,6 +36,15 @@ async def me(request: Request):
     return await auth_controller.me(request)
 
 
+@router.post("/refresh", summary="access 토큰 갱신 (refresh 쿠키)")
+@limiter.limit("30/minute")
+async def refresh(request: Request, response: Response,
+                  session: AsyncSession = Depends(db.session)):
+    return await auth_controller.refresh(request, response, session)
+
+
 @router.post("/logout", summary="로그아웃")
-async def logout(response: Response):
-    return await auth_controller.logout(response)
+@limiter.limit("20/minute")
+async def logout(request: Request, response: Response,
+                 session: AsyncSession = Depends(db.session)):
+    return await auth_controller.logout(request, response, session)

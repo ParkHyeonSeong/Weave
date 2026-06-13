@@ -1,3 +1,4 @@
+import secrets
 import bcrypt
 import jwt
 from datetime import datetime, timezone, timedelta
@@ -5,14 +6,18 @@ from fastapi import Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import (
-    JWT_SECRET_KEY, JWT_ALGORITHM, JWT_EXPIRE_HOURS,
+    JWT_SECRET_KEY, JWT_ALGORITHM,
+    ACCESS_TOKEN_EXPIRE_MINUTES, REFRESH_TOKEN_EXPIRE_DAYS,
     COOKIE_NAME, COOKIE_SECURE, COOKIE_SAMESITE, COOKIE_HTTPONLY,
+    REFRESH_COOKIE_NAME, REFRESH_COOKIE_PATH,
 )
 from core.model import user as user_model
 from core.model import workspace as workspace_model
 from core.model import password_reset_token as reset_token_model
+from core.model import refresh_token as refresh_token_model
 from library import crypto
 from library.client_ip import get_client_ip
+from library.validator import UnAuthorizedException
 
 # 로그인 타이밍 사이드채널 방지용 더미 해시(SEC-13-C): 존재하지 않는 이메일에도 실제
 # 계정과 동일한 cost로 bcrypt를 수행해 응답 시간으로 존재를 추론하지 못하게 한다.
@@ -27,17 +32,17 @@ def _create_token(user_id: int, email: str, username: str, role: str = 'member')
         'email': email,
         'username': username,
         'role': role,
-        'exp': datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRE_HOURS),
+        'exp': datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
     }
     return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
 
 
 def _set_auth_cookie(response: Response, token: str):
-    """응답에 인증 쿠키 설정"""
+    """응답에 단기 access 쿠키 설정"""
     response.set_cookie(
         key=COOKIE_NAME,
         value=token,
-        max_age=JWT_EXPIRE_HOURS * 3600,
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         httponly=COOKIE_HTTPONLY,
         samesite=COOKIE_SAMESITE,
         secure=COOKIE_SECURE,
@@ -46,12 +51,33 @@ def _set_auth_cookie(response: Response, token: str):
 
 
 def _clear_auth_cookie(response: Response):
-    """인증 쿠키 삭제"""
+    """access 쿠키 삭제"""
     response.delete_cookie(
-        key=COOKIE_NAME,
-        path="/",
+        key=COOKIE_NAME, path="/",
+        samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE,
+    )
+
+
+async def _issue_refresh_cookie(response: Response, user_id: int, db: AsyncSession):
+    """장기 refresh 토큰을 발급(DB 저장 + 쿠키 설정, SEC-29). 해시만 저장한다."""
+    raw = secrets.token_urlsafe(32)
+    expires_at = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    await refresh_token_model.create(user_id, crypto.hash_token(raw), expires_at, db)
+    response.set_cookie(
+        key=REFRESH_COOKIE_NAME,
+        value=raw,
+        max_age=REFRESH_TOKEN_EXPIRE_DAYS * 86400,
+        httponly=True,
         samesite=COOKIE_SAMESITE,
         secure=COOKIE_SECURE,
+        path=REFRESH_COOKIE_PATH,
+    )
+
+
+def _clear_refresh_cookie(response: Response):
+    response.delete_cookie(
+        key=REFRESH_COOKIE_NAME, path=REFRESH_COOKIE_PATH,
+        samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE,
     )
 
 
@@ -126,6 +152,7 @@ async def login(body, request: Request, response: Response, db: AsyncSession):
     role = user.get('role', 'member')
     token = _create_token(user['user_id'], user['email'], user['username'], role)
     _set_auth_cookie(response, token)
+    await _issue_refresh_cookie(response, user['user_id'], db)
 
     profile = {
         'user_id': user['user_id'],
@@ -157,9 +184,37 @@ async def me(request: Request):
     }
 
 
-async def logout(response: Response):
-    """로그아웃 - 쿠키 삭제"""
+async def refresh(request: Request, response: Response, db: AsyncSession):
+    """refresh 쿠키로 새 access 토큰 발급(SEC-29).
+
+    유효한 refresh 토큰이면 새 access 쿠키를 내리고 refresh 토큰을 회전(기존 폐기+신규 발급)
+    한다 — 회전으로 탈취·재사용을 탐지/제한한다. 사용자 정보는 DB에서 다시 읽어 최신 역할을
+    반영한다. 토큰이 없거나 만료/폐기됐으면 401(NEED_LOGIN)."""
+    raw = request.cookies.get(REFRESH_COOKIE_NAME, '')
+    # 원자적 소비(DELETE...RETURNING)로 회전 — 같은 토큰 동시 사용 시 단일 승자만 통과.
+    row = await refresh_token_model.consume_by_hash(crypto.hash_token(raw), db) if raw else None
+    if not row:
+        raise UnAuthorizedException(status=False, message='NEED_LOGIN')
+
+    user = await user_model.find_by_id(row['user_id'], db)
+    if not user or user.get('status') != 'active':
+        # 비활성/삭제 계정이면 토큰은 이미 소비됐으니 그대로 거부
+        raise UnAuthorizedException(status=False, message='NEED_LOGIN')
+
+    role = user.get('role', 'member')
+    access = _create_token(user['user_id'], user['email'], user['username'], role)
+    _set_auth_cookie(response, access)
+    await _issue_refresh_cookie(response, user['user_id'], db)
+    return {'status': True}
+
+
+async def logout(request: Request, response: Response, db: AsyncSession):
+    """로그아웃 - access·refresh 쿠키 삭제 + 서버측 refresh 토큰 폐기"""
+    raw = request.cookies.get(REFRESH_COOKIE_NAME, '')
+    if raw:
+        await refresh_token_model.delete_by_hash(crypto.hash_token(raw), db)
     _clear_auth_cookie(response)
+    _clear_refresh_cookie(response)
     return {'status': True}
 
 
@@ -185,4 +240,6 @@ async def reset_password(body, db: AsyncSession):
 
     new_hash = crypto.hash_password(body.new_password)
     await user_model.update_password(row['user_id'], new_hash, db)
+    # 비밀번호 재설정 시 기존 모든 세션 무효화(SEC-29) — 탈취 세션 강제 종료
+    await refresh_token_model.delete_all_for_user(row['user_id'], db)
     return {'status': True}

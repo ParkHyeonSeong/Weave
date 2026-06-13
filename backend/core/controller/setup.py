@@ -1,7 +1,7 @@
 from fastapi import Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.controller.auth import _create_token, _set_auth_cookie
+from core.controller.auth import _create_token, _set_auth_cookie, _issue_refresh_cookie
 from core.model import workspace as workspace_model
 from core.model import user as user_model
 from library import crypto
@@ -60,9 +60,10 @@ async def initialize(body, request: Request, response: Response, db: AsyncSessio
         await db.rollback()
         return {'status': False, 'message': 'ALREADY_INITIALIZED'}
 
-    # 쿠키 발급
+    # 쿠키 발급(access + refresh, SEC-29)
     token = _create_token(user_id, body.email, body.username, 'admin')
     _set_auth_cookie(response, token)
+    await _issue_refresh_cookie(response, user_id, db)
 
     return {
         'status': True,
