@@ -22,6 +22,7 @@ dependencies = [
     "aiohttp>=3.14.0",  # pywebpush 전이 의존 — CookieJar 역직렬화/리다이렉트 쿠키 누설 CVE 패치 하한
     "slowapi>=0.1.9",
     "defusedxml>=0.7.1",
+    "nh3>=0.2.18",  # 서버측 HTML sanitize(SEC-17) — Rust ammonia 바인딩
 ]
 
 [project.optional-dependencies]

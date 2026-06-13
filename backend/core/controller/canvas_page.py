@@ -6,6 +6,7 @@ from core.model import canvas_member as member_model
 from core.model import recent_view
 from library import notification_service
 from library import activity_service
+from library.html_sanitize import sanitize_html
 from library.mention_parser import extract_mention_user_ids
 
 
@@ -39,7 +40,7 @@ async def create(canvas_id: int, body, request: Request, db: AsyncSession):
     page_id = await page_model.create(
         canvas_id=canvas_id,
         title=body.title,
-        content=body.content or '',
+        content=sanitize_html(body.content) or '',  # SEC-17: 서버측 정화
         parent_page_id=body.parent_page_id,
         position=position,
         created_by=user_id,
@@ -92,6 +93,10 @@ async def update(canvas_id: int, page_id: int, body, request: Request, db: Async
     fields = body.model_dump(exclude_unset=True)
     if not fields:
         return {'status': True}
+
+    # SEC-17: 저장 전 서버측 HTML 정화(프론트 DOMPurify 우회 경로 방어)
+    if 'content' in fields:
+        fields['content'] = sanitize_html(fields['content'])
 
     await page_model.update(page_id, fields, user_id, db)
 

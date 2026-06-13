@@ -1,6 +1,8 @@
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from library.html_sanitize import sanitize_html
+
 
 async def create(canvas_id: int, title: str, content: str,
                  parent_page_id: int, position: int, created_by: int,
@@ -245,7 +247,8 @@ async def copy_page(page_id: int, parent_page_id: int | None,
     return await create(
         canvas_id=canvas_id,
         title=new_title,
-        content=original.get('content') or '',
+        # SEC-17: 복제 시에도 정화 — 정화 도입 이전에 저장된 기존 콘텐츠의 오염 전파 차단
+        content=sanitize_html(original.get('content') or '') or '',
         parent_page_id=target_parent,
         position=position,
         created_by=created_by,
