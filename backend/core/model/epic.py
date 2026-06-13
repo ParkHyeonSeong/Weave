@@ -50,7 +50,7 @@ async def find_by_branch(branch_id: int, db: AsyncSession):
         LEFT JOIN task t ON e.epic_id = t.epic_id
         WHERE e.branch_id = :branch_id
         GROUP BY e.epic_id
-        ORDER BY e.sort_order, e.created_at
+        ORDER BY e.sort_order, e.created_at, e.epic_id
     """), {'branch_id': branch_id})
     rows = result.fetchall()
     return [dict(row._mapping) for row in rows]

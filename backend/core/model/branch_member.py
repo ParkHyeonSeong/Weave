@@ -3,10 +3,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def add(branch_id: int, user_id: int, role: str, db: AsyncSession):
-    """Branch 멤버 추가"""
+    """Branch 멤버 추가 (신규 추가 전용 — 역할 변경은 update_role 담당)."""
+    # ON CONFLICT DO NOTHING: 동시 중복 추가 경합 시 UNIQUE 위반 500 대신 멱등 처리.
+    # 컨트롤러가 is_member로 이미 거르므로, 경합 시 기존 멤버십을 덮어쓰지 않고 그대로 둔다.
     await db.execute(text("""
         INSERT INTO branch_member (branch_id, user_id, role)
         VALUES (:branch_id, :user_id, :role)
+        ON CONFLICT (branch_id, user_id) DO NOTHING
     """), {'branch_id': branch_id, 'user_id': user_id, 'role': role})
 
 

@@ -44,7 +44,7 @@ async def find_by_branch(branch_id: int, db: AsyncSession):
         LEFT JOIN task t ON s.sprint_id = t.sprint_id
         WHERE s.branch_id = :branch_id
         GROUP BY s.sprint_id
-        ORDER BY s.sort_order, s.created_at
+        ORDER BY s.sort_order, s.created_at, s.sprint_id
     """), {'branch_id': branch_id})
     rows = result.fetchall()
     return [dict(row._mapping) for row in rows]
@@ -56,7 +56,7 @@ async def find_active_sprints(branch_id: int, db: AsyncSession):
         SELECT sprint_id, sprint_name, start_date, end_date
         FROM sprint
         WHERE branch_id = :branch_id AND status = 'active'
-        ORDER BY sort_order, created_at
+        ORDER BY sort_order, created_at, sprint_id
     """), {'branch_id': branch_id})
     rows = result.fetchall()
     return [dict(row._mapping) for row in rows]

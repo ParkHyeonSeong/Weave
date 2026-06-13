@@ -3,22 +3,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def next_display_number(branch_id: int, db: AsyncSession) -> int:
-    """Branch별 task 번호 원자적 증가"""
+    """Branch별 task 번호 원자적 증가.
+
+    단일 upsert로 처리해, task_sequence 행이 없던 Branch(레거시)에서 두 요청이 동시에
+    첫 task를 만들 때도 INSERT 경합으로 500이 나지 않게 한다(LOG-17). 행이 없으면 1을
+    넣고, 있으면 +1 — ON CONFLICT가 행 잠금을 잡아 동시 호출은 직렬화되며 서로 다른
+    번호를 받는다.
+    """
     result = await db.execute(text("""
-        UPDATE task_sequence
-        SET last_number = last_number + 1
-        WHERE branch_id = :branch_id
+        INSERT INTO task_sequence (branch_id, last_number)
+        VALUES (:branch_id, 1)
+        ON CONFLICT (branch_id) DO UPDATE SET last_number = task_sequence.last_number + 1
         RETURNING last_number
     """), {'branch_id': branch_id})
-    row = result.fetchone()
-    if not row:
-        # task_sequence가 아직 없는 Branch (기존 Branch 대응)
-        await db.execute(text("""
-            INSERT INTO task_sequence (branch_id, last_number)
-            VALUES (:branch_id, 1)
-        """), {'branch_id': branch_id})
-        return 1
-    return row[0]
+    return result.scalar_one()
 
 
 async def create(branch_id: int, display_number: int, title: str,
@@ -165,7 +163,7 @@ async def find_by_branch(branch_id: int, sprint_id, db: AsyncSession):
         LEFT JOIN epic e ON t.epic_id = e.epic_id
         WHERE t.branch_id = :branch_id AND t.parent_task_id IS NULL
               {where_sprint} {done_filter}
-        ORDER BY t.sort_order, t.created_at
+        ORDER BY t.sort_order, t.created_at, t.task_id
     """), params)
     rows = result.fetchall()
     tasks = []
@@ -240,7 +238,7 @@ async def find_for_board(branch_id: int, sprint_id, db: AsyncSession):
         INNER JOIN branch b ON t.branch_id = b.branch_id
         WHERE t.branch_id = :branch_id AND t.parent_task_id IS NULL
               {where_sprint}
-        ORDER BY t.sort_order, t.created_at
+        ORDER BY t.sort_order, t.created_at, t.task_id
     """), params)
     rows = result.fetchall()
     tasks = []
@@ -306,7 +304,7 @@ async def find_by_epic(epic_id: int, branch_id: int, db: AsyncSession):
         INNER JOIN branch b ON t.branch_id = b.branch_id
         WHERE t.epic_id = :epic_id AND t.branch_id = :branch_id
               AND t.parent_task_id IS NULL
-        ORDER BY t.sort_order, t.created_at
+        ORDER BY t.sort_order, t.created_at, t.task_id
     """), {'epic_id': epic_id, 'branch_id': branch_id})
     rows = result.fetchall()
     tasks = []
@@ -405,7 +403,7 @@ async def find_subtasks(parent_task_id: int, db: AsyncSession):
         FROM task t
         INNER JOIN branch b ON t.branch_id = b.branch_id
         WHERE t.parent_task_id = :parent_task_id
-        ORDER BY t.sort_order, t.created_at
+        ORDER BY t.sort_order, t.created_at, t.task_id
     """), {'parent_task_id': parent_task_id})
     rows = result.fetchall()
     tasks = []
@@ -502,7 +500,7 @@ async def reorder(branch_id: int, task_ids: list, sprint_id, after_task_id, db: 
     result = await db.execute(text(f"""
         SELECT task_id FROM task t
         WHERE t.branch_id = :branch_id AND {where}
-        ORDER BY t.sort_order, t.created_at
+        ORDER BY t.sort_order, t.created_at, t.task_id
     """), params)
     existing_ids = [row[0] for row in result.fetchall()]
 

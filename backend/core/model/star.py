@@ -12,9 +12,11 @@ async def toggle(user_id: int, item_type: str, item_id: int, db: AsyncSession):
     deleted = result.fetchone()
     if deleted:
         return {'starred': False}
+    # ON CONFLICT DO NOTHING: 빠른 더블클릭 등 동시 중복 별표 시 UNIQUE 위반 500 대신 멱등.
     await db.execute(text("""
         INSERT INTO user_star (user_id, item_type, item_id)
         VALUES (:user_id, :item_type, :item_id)
+        ON CONFLICT (user_id, item_type, item_id) DO NOTHING
     """), {'user_id': user_id, 'item_type': item_type, 'item_id': item_id})
     return {'starred': True}
 

@@ -78,7 +78,7 @@ async def find_tree(canvas_id: int, db: AsyncSession):
                p.created_by, p.updated_at
         FROM canvas_page p
         WHERE p.canvas_id = :canvas_id AND p.is_archived = FALSE
-        ORDER BY p.position, p.created_at
+        ORDER BY p.position, p.created_at, p.page_id
     """), {'canvas_id': canvas_id})
     rows = result.fetchall()
     return [dict(row._mapping) for row in rows]
