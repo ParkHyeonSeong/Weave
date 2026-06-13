@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -57,7 +58,11 @@ from routers import ws_scrum as ws_scrum_router
 from routers import ws_scrum_retro as ws_scrum_retro_router
 from routers import pat as pat_router
 from core.controller import pat as pat_controller
+from core.controller import jira_migrate as jira_migrate_controller
 import db_engine as db
+
+# Jira 임시 CSV 정리 주기(초, SEC-24)
+JIRA_TEMP_CLEANUP_INTERVAL = int(os.getenv("JIRA_TEMP_CLEANUP_INTERVAL", "3600"))
 
 # -- Logging ---------------------------------------------------------------
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -69,10 +74,33 @@ logging.basicConfig(
 logger = logging.getLogger("weave")
 
 # -- Lifespan ---------------------------------------------------------------
+async def _periodic_jira_temp_cleanup():
+    """주기적으로 TTL 초과 Jira 임시 CSV를 정리한다(SEC-24)."""
+    while True:
+        try:
+            await asyncio.sleep(JIRA_TEMP_CLEANUP_INTERVAL)
+            removed = await asyncio.to_thread(jira_migrate_controller.cleanup_temp_files)
+            if removed:
+                logger.info("Cleaned %d expired Jira temp file(s)", removed)
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            logger.warning("Jira temp cleanup tick failed", exc_info=False)
+
+
 @asynccontextmanager
 async def lifespan(app):
+    # Startup: 시작 시 1회 고아 임시파일 청소 + 주기 청소 태스크 기동(SEC-24).
+    # 동기 I/O라 to_thread로 위임해 스타트업 이벤트루프 블로킹을 피한다.
+    await asyncio.to_thread(jira_migrate_controller.cleanup_temp_files)
+    cleanup_task = asyncio.create_task(_periodic_jira_temp_cleanup())
     yield
-    # Graceful shutdown: 활성 collaboration room 영속화
+    # Graceful shutdown: 청소 태스크 정리(취소 완료 대기) + 활성 collaboration room 영속화
+    cleanup_task.cancel()
+    try:
+        await cleanup_task
+    except asyncio.CancelledError:
+        pass
     logger.info("Persisting active collaboration rooms...")
     await collab_manager.persist_all()
     await scrum_week_collab_manager.persist_all()

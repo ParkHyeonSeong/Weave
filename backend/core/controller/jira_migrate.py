@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import re
+import time
 import uuid
 
 from fastapi import Request, UploadFile
@@ -17,6 +18,29 @@ from core.model import branch as branch_model
 # 업로드 임시 디렉토리
 TEMP_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'uploads', 'temp')
 os.makedirs(TEMP_DIR, exist_ok=True)
+
+# 임시 CSV 보존 한도(초, SEC-24). preview 후 execute가 호출되지 않으면 임시 파일이 고아로
+# 남아 디스크를 잠식한다. lifespan 청소 작업이 이 한도를 넘은 파일을 주기적으로 지운다.
+TEMP_FILE_TTL_SECONDS = int(os.getenv("JIRA_TEMP_TTL_SECONDS", str(24 * 3600)))
+
+
+def cleanup_temp_files() -> int:
+    """TTL을 넘긴 임시 CSV를 정리하고 삭제 개수를 반환한다(SEC-24). 호출 실패는 무시한다."""
+    removed = 0
+    now = time.time()
+    try:
+        names = os.listdir(TEMP_DIR)
+    except OSError:
+        return 0
+    for name in names:
+        path = os.path.join(TEMP_DIR, name)
+        try:
+            if os.path.isfile(path) and (now - os.path.getmtime(path)) > TEMP_FILE_TTL_SECONDS:
+                os.remove(path)
+                removed += 1
+        except OSError:
+            pass
+    return removed
 
 
 async def preview(branch_id: int, file: UploadFile, request: Request, db: AsyncSession):

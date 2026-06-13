@@ -120,3 +120,8 @@ DB_STATEMENT_TIMEOUT_MS = int(os.getenv("DB_STATEMENT_TIMEOUT_MS", "15000"))
 # AI 채팅은 LLM API 비용이 직접 발생하므로 더 보수적으로 잡는다.
 AI_CHAT_RATE_LIMIT = os.getenv("AI_CHAT_RATE_LIMIT", "20/minute")
 AGGREGATE_RATE_LIMIT = os.getenv("AGGREGATE_RATE_LIMIT", "60/minute")
+
+# AI 스트리밍 응답 누적 길이 상한(문자, SEC-27). LLM max_tokens(4096)가 1차 상한이지만,
+# 오작동/변조된 LLM 엔드포인트가 무한 스트림을 보내 프론트 마크다운 렌더 CPU를 고갈시키는
+# 것을 막는 백엔드 backstop. 정상 응답(보통 <16KB)보다 훨씬 크되 병리적 길이는 차단.
+AI_MAX_RESPONSE_CHARS = int(os.getenv("AI_MAX_RESPONSE_CHARS", "100000"))

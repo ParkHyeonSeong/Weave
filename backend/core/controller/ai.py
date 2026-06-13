@@ -6,6 +6,7 @@ from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import StreamingResponse
 
+from config import AI_MAX_RESPONSE_CHARS
 from core.model import ai as ai_model
 
 logger = logging.getLogger("weave.ai")
@@ -162,6 +163,7 @@ async def send_message(conversation_id: int, body, request: Request, db: AsyncSe
 
     async def generate():
         full_response = ""
+        truncated = False  # SEC-27: 누적 상한 초과로 잘렸는지
 
         try:
             if provider == 'anthropic':
@@ -203,6 +205,9 @@ async def send_message(conversation_id: int, body, request: Request, db: AsyncSe
                                     if text:
                                         full_response += text
                                         yield f"data: {json.dumps({'content': text})}\n\n"
+                                        if len(full_response) > AI_MAX_RESPONSE_CHARS:
+                                            truncated = True
+                                            break  # SEC-27: 누적 응답 상한 — 병리적 길이 차단
                             except json.JSONDecodeError:
                                 continue
 
@@ -243,6 +248,9 @@ async def send_message(conversation_id: int, body, request: Request, db: AsyncSe
                                 if text:
                                     full_response += text
                                     yield f"data: {json.dumps({'content': text})}\n\n"
+                                    if len(full_response) > AI_MAX_RESPONSE_CHARS:
+                                        truncated = True
+                                        break  # SEC-27: 누적 응답 상한 — 병리적 길이 차단
                             except (json.JSONDecodeError, IndexError):
                                 continue
 
@@ -260,7 +268,7 @@ async def send_message(conversation_id: int, body, request: Request, db: AsyncSe
                     conversation_id, 'assistant', full_response, session
                 )
                 await ai_model.update_conversation_timestamp(conversation_id, session)
-                yield f"data: {json.dumps({'done': True, 'message_id': msg['message_id']})}\n\n"
+                yield f"data: {json.dumps({'done': True, 'message_id': msg['message_id'], 'truncated': truncated})}\n\n"
                 break
         else:
             yield f"data: {json.dumps({'done': True, 'message_id': None})}\n\n"
