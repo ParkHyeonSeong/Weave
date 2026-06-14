@@ -14,9 +14,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     networks:
-      weave-network:
-        # 고정 IP로 고정해 backend가 nginx만 신뢰 프록시로 인정하게 한다(CFG-01).
-        ipv4_address: 172.28.0.2
+      - weave-network
 
   # -- Backend (FastAPI) ---------------------------------------------------
   backend:
@@ -30,9 +28,12 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      # nginx(고정 IP)만 신뢰 프록시로 인정 → 내부 호스트의 X-Real-IP 위조로 레이트리밋을
-      # 우회하지 못하게 한다(CFG-01). 다른 토폴로지면 nginx IP로 맞춰 조정.
-      - TRUSTED_PROXIES=${TRUSTED_PROXIES:-172.28.0.2/32}
+      # 신뢰 프록시(CFG-01) — docker 브리지 대역(172.16/12)+루프백만. backend는 내부 전용
+      # (expose)이라 이 네트워크의 nginx만 도달한다. 호스트 LAN에 흔한 10/8·192.168/16은
+      # 의도적으로 제외(그 대역을 신뢰하면 동일 LAN 호스트가 X-Real-IP를 위조할 여지). docker
+      # 기본 주소풀(172.x)이 아니거나 backend를 공개망에 직접 노출하면 .env.production에서
+      # TRUSTED_PROXIES를 실제 nginx 대역/IP로 명시하라.
+      - TRUSTED_PROXIES=${TRUSTED_PROXIES:-127.0.0.1/32,::1/128,172.16.0.0/12}
       - LOG_LEVEL=${LOG_LEVEL:-WARNING}
       - DEBUG=${DEBUG:-false}
       - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
@@ -103,8 +104,3 @@ volumes:
 networks:
   weave-network:
     driver: bridge
-    # 고정 subnet — nginx에 정적 IP(172.28.0.2)를 부여해 backend의 신뢰 프록시 목록을
-    # 그 IP/32로 좁힐 수 있게 한다(CFG-01).
-    ipam:
-      config:
-        - subnet: 172.28.0.0/16
