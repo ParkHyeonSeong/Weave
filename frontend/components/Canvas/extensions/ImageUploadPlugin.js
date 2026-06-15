@@ -1,5 +1,27 @@
 import { Plugin } from '@tiptap/pm/state';
 import { axios } from '@/library/_axios';
+import { showToast } from '@/components/Layout/Toast';
+
+const MAX_IMAGE_SIZE_MB = 10;
+const MAX_IMAGE_SIZE = MAX_IMAGE_SIZE_MB * 1024 * 1024;
+
+// 백엔드 업로드 실패 코드 → 사용자 안내 메시지
+function uploadErrorMessage(code) {
+  switch (code) {
+    case 'FILE_TOO_LARGE':
+      return `이미지가 ${MAX_IMAGE_SIZE_MB}MB를 초과해 첨부할 수 없습니다.`;
+    case 'INVALID_FILE_TYPE':
+    case 'INVALID_FILE_CONTENT':
+      return '지원하지 않는 이미지 형식입니다. (JPG·PNG·GIF·WebP)';
+    case 'NOT_CANVAS_MEMBER':
+    case 'NOT_BRANCH_MEMBER':
+      return '이미지를 업로드할 권한이 없습니다.';
+    case 'NO_FILE':
+      return '첨부할 이미지를 찾을 수 없습니다.';
+    default:
+      return '이미지 업로드에 실패했습니다.';
+  }
+}
 
 export function createImageUploadPlugin({ canvasId, branchId }) {
   return new Plugin({
@@ -36,7 +58,10 @@ function getUploadUrl({ canvasId, branchId }) {
 }
 
 async function uploadAndInsert(file, context, view, insertPos) {
-  if (file.size > 5 * 1024 * 1024) return;
+  if (file.size > MAX_IMAGE_SIZE) {
+    showToast(uploadErrorMessage('FILE_TOO_LARGE'), 'error');
+    return;
+  }
 
   const url = getUploadUrl(context);
   if (!url) return;
@@ -55,6 +80,10 @@ async function uploadAndInsert(file, context, view, insertPos) {
       const pos = insertPos != null ? insertPos : view.state.selection.from;
       const tr = view.state.tr.insert(pos, node);
       view.dispatch(tr);
+    } else {
+      showToast(uploadErrorMessage(res.data?.message), 'error');
     }
-  } catch {}
+  } catch {
+    showToast(uploadErrorMessage(), 'error');
+  }
 }

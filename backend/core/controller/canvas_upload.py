@@ -9,7 +9,7 @@ from library.file_validator import validate_image_magic_bytes
 
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'uploads', 'canvas')
 ALLOWED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
-MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
 
 async def upload_image(canvas_id: int, file: UploadFile, request: Request, db: AsyncSession):
