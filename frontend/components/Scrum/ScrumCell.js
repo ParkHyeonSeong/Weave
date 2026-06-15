@@ -3,8 +3,7 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import { Extension } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
-import TaskList from '@tiptap/extension-task-list';
-import TaskItem from '@tiptap/extension-task-item';
+import { checklistExtensions } from '@/components/Canvas/extensions/checklistExtension';
 import { ySyncPlugin, yUndoPlugin } from 'y-prosemirror';
 import TaskRefNode from '@/components/Canvas/extensions/TaskRefExtension';
 import { BookmarkPasteExtension } from '@/components/Canvas/extensions/BookmarkPastePlugin';
@@ -30,8 +29,7 @@ function ScrumCellInner({ ydoc, fragmentKey, placeholder, members }) {
     return [
       StarterKit.configure({ history: false, codeBlock: false, heading: false, blockquote: false, horizontalRule: false, link: { openOnClick: false, autolink: false, HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' } } }),
       Placeholder.configure({ placeholder: placeholder || '' }),
-      TaskList,
-      TaskItem.configure({ nested: false, HTMLAttributes: { 'data-type': 'taskItem' } }),
+      ...checklistExtensions({ nested: false }),
       TaskRefNode,
       DocRefNode,
       MentionNode.configure({ members }),

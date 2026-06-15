@@ -14,8 +14,7 @@ import TextAlign from '@tiptap/extension-text-align';
 import Highlight from '@tiptap/extension-highlight';
 import Color from '@tiptap/extension-color';
 import { TextStyle } from '@tiptap/extension-text-style';
-import TaskList from '@tiptap/extension-task-list';
-import TaskItem from '@tiptap/extension-task-item';
+import { checklistExtensions } from './extensions/checklistExtension';
 import Mathematics from '@tiptap/extension-mathematics';
 import { ySyncPlugin, yCursorPlugin, yUndoPlugin } from 'y-prosemirror';
 import { common, createLowlight } from 'lowlight';
@@ -128,11 +127,7 @@ function CollabEditorInner({
       }),
       TextStyle,
       Color,
-      TaskList,
-      TaskItem.configure({
-        nested: true,
-        HTMLAttributes: { 'data-type': 'taskItem' },
-      }),
+      ...checklistExtensions({ nested: true }),
       CalloutExtension,
       TaskRefNode,
       MentionNode.configure({ canvasId }),

@@ -5,8 +5,7 @@ import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import Highlight from '@tiptap/extension-highlight';
-import TaskList from '@tiptap/extension-task-list';
-import TaskItem from '@tiptap/extension-task-item';
+import { checklistExtensions } from '@/components/Canvas/extensions/checklistExtension';
 import { common, createLowlight } from 'lowlight';
 import CalloutExtension from '@/components/Canvas/extensions/CalloutExtension';
 import TaskRefNode, { taskRefPluginKey } from '@/components/Canvas/extensions/TaskRefExtension';
@@ -30,8 +29,7 @@ const baseExtensions = [
   Placeholder.configure({ placeholder: 'Add description...' }),
   CodeBlockLowlight.configure({ lowlight }),
   Highlight.configure({ multicolor: true }),
-  TaskList,
-  TaskItem.configure({ nested: true, HTMLAttributes: { 'data-type': 'taskItem' } }),
+  ...checklistExtensions({ nested: true }),
   CalloutExtension,
   TaskRefNode,
   SlashCommandsExtension.configure({ enabled: ['/t', '/ta'] }),
