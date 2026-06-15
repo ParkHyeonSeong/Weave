@@ -1,0 +1,116 @@
+@use '../../variables' as *;
+
+.Lightbox {
+  &__Backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+  }
+
+  &__Topbar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    color: #fff;
+    z-index: 2;
+  }
+  &__Counter { font-size: 13px; opacity: 0.85; }
+  &__TopActions { display: flex; gap: 8px; margin-left: auto; }
+
+  &__IconBtn,
+  &__ZoomBtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 34px;
+    min-width: 34px;
+    padding: 0 8px;
+    border: none;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.15s ease;
+    &:hover { background: rgba(255, 255, 255, 0.24); }
+  }
+
+  &__Stage {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  &__Image {
+    max-width: 92vw;
+    max-height: 84vh;
+    object-fit: contain;
+    transform-origin: center center;
+    will-change: transform;
+    touch-action: none;
+  }
+  &__Error { color: #fff; opacity: 0.8; font-size: 14px; }
+
+  &__Nav {
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2;
+    width: 44px; height: 44px;
+    display: flex; align-items: center; justify-content: center;
+    border: none; border-radius: 50%;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    cursor: pointer;
+    &:hover { background: rgba(255, 255, 255, 0.24); }
+    &--prev { left: 16px; }
+    &--next { right: 16px; }
+  }
+
+  &__Zoombar {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(6px);
+  }
+
+  @include mobile {
+    &__Image { max-width: 96vw; max-height: 78vh; }
+    &__Nav { width: 38px; height: 38px; &--prev { left: 8px; } &--next { right: 8px; } }
+  }
+}
+
+// 읽기전용 콘텐츠 이미지에 확대 가능 커서(편집모드/아바타/북마크 제외)
+// ⚠️ 아래 선택자 목록은 lightboxImages.js의 READONLY_CONTAINERS와 동기화 유지할 것.
+.CanvasPageView__Content,
+.TaskDescReadonly,
+.CommentItem__Content,
+.RefPreviewPanel__HtmlContent,
+.AnnotationSidebar__ReplyContent,
+.CanvasOverview__OverviewContent,
+.TrackDetail__Description {
+  img:not(.Avatar__Img):not(.bookmark-card__favicon):not(.bookmark-card__image) {
+    cursor: zoom-in;
+  }
+  // EntityIcon 아이콘 이미지는 isContentImage()가 제외하므로 커서도 제외(어포던스 일치)
+  .EntityIcon img { cursor: default; }
+}

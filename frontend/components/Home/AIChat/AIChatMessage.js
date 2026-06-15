@@ -1,7 +1,10 @@
 import ReactMarkdown from 'react-markdown';
 import { Bookmark } from 'lucide-react';
+import { useLightbox } from '@/components/common/LightboxProvider';
+import { deriveFilename } from '@/library/lightboxImages';
 
 export default function AIChatMessage({ message, onTogglePin, isStreaming }) {
+  const { open: openLightbox } = useLightbox();
   const isUser = message.role === 'user';
   const isPinned = message.is_pinned;
 
@@ -18,7 +21,21 @@ export default function AIChatMessage({ message, onTogglePin, isStreaming }) {
           message.content
         ) : (
           <div className="AIChatMessage__Markdown">
-            <ReactMarkdown>{message.content}</ReactMarkdown>
+            <ReactMarkdown
+              components={{
+                img: ({ node, ...props }) => (
+                  <img
+                    {...props}
+                    style={{ cursor: 'zoom-in', maxWidth: '100%' }}
+                    onClick={() =>
+                      openLightbox([{ src: props.src, alt: props.alt || '', filename: deriveFilename(props.src, props.alt) }], 0)
+                    }
+                  />
+                ),
+              }}
+            >
+              {message.content}
+            </ReactMarkdown>
           </div>
         )}
         {isStreaming && <span className="AIChatMessage__Cursor" />}

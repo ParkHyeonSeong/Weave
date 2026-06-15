@@ -5,6 +5,7 @@ import Layout from '@/components/Layout/Layout';
 import ErrorBoundary from '@/components/Layout/ErrorBoundary';
 import Toast from '@/components/Layout/Toast';
 import { UiPrefsProvider } from '@/library/UiPrefsContext';
+import LightboxProvider from '@/components/common/LightboxProvider';
 import "@/styles/globals.scss";
 import "@/styles/fonts.css";
 import "@/styles/components/auth/login.scss";
@@ -91,6 +92,7 @@ import "@/styles/components/track/tracksIndex.scss";
 import "@/styles/components/track/trackSettings.scss";
 import "@/styles/components/scrum/scrum.scss";
 import "@/styles/components/shared/refPanelPageLayout.scss";
+import "@/styles/components/common/lightbox.scss";
 
 const publicPaths = ['/auth/login', '/auth/change-password', '/auth/reset', '/setup'];
 const noLayoutPaths = ['/auth/login', '/auth/change-password', '/auth/reset', '/setup', '/admin'];
@@ -196,10 +198,12 @@ export default function App({ Component, pageProps }) {
 
   return (
     <ErrorBoundary>
-      {needsLayout
-        ? <UiPrefsProvider><Layout><Component {...pageProps} /></Layout></UiPrefsProvider>
-        : <Component {...pageProps} />}
-      <Toast />
+      <LightboxProvider>
+        {needsLayout
+          ? <UiPrefsProvider><Layout><Component {...pageProps} /></Layout></UiPrefsProvider>
+          : <Component {...pageProps} />}
+        <Toast />
+      </LightboxProvider>
     </ErrorBoundary>
   );
 }

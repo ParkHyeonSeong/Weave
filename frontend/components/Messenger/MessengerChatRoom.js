@@ -12,6 +12,7 @@ import IssueRefCard from './IssueRefCard';
 import MentionSearchPopup from './MentionSearchPopup';
 import SlashCommandMenu from '@/components/Canvas/extensions/SlashCommandMenu';
 import { filterSlashCommands } from '@/components/Canvas/extensions/slashCommands';
+import { useLightbox } from '@/components/common/LightboxProvider';
 
 const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
 const FILE_EXTENSIONS = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt', '.csv', '.zip'];
@@ -33,6 +34,7 @@ const getFileExtension = (filename) => {
 };
 
 export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, headerLeft, headerRight }) {
+  const { open: openLightbox } = useLightbox();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [roomName, setRoomName] = useState('Chat');
@@ -535,7 +537,14 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
           <div className={`MessengerChatRoom__ImageGrid MessengerChatRoom__ImageGrid--${gridClass}`}>
             {images.map((att, i) => (
               <a key={i} href={att.file_url} target="_blank" rel="noopener noreferrer"
-                 className="MessengerChatRoom__ImageLink">
+                 className="MessengerChatRoom__ImageLink"
+                 onClick={(e) => {
+                   e.preventDefault();
+                   openLightbox(
+                     images.map((a) => ({ src: a.file_url, alt: a.file_name, filename: a.file_name })),
+                     i
+                   );
+                 }}>
                 <img src={att.file_url} alt={att.file_name} loading="lazy" />
               </a>
             ))}
