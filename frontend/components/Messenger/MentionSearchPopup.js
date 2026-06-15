@@ -3,13 +3,24 @@ import { Search } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import Avatar from '@/components/common/Avatar';
 
-export default function MentionSearchPopup({ keyword, roomId, onSelect, onClose }) {
+export default function MentionSearchPopup({ keyword, roomId, members, onSelect, onClose }) {
   const [users, setUsers] = useState([]);
   const [activeIdx, setActiveIdx] = useState(0);
   const [loading, setLoading] = useState(false);
   const timerRef = useRef(null);
 
   useEffect(() => {
+    // roomId 없고 members가 주어지면(새 채팅) 선택된 수신자를 로컬 필터
+    if (!roomId && Array.isArray(members)) {
+      const kw = (keyword || '').toLowerCase();
+      const filtered = members.filter((u) =>
+        !kw || u.username?.toLowerCase().includes(kw) || u.email?.toLowerCase().includes(kw)
+      );
+      setUsers(filtered);
+      setActiveIdx(0);
+      setLoading(false);
+      return;
+    }
     clearTimeout(timerRef.current);
     timerRef.current = setTimeout(async () => {
       setLoading(true);
@@ -25,7 +36,7 @@ export default function MentionSearchPopup({ keyword, roomId, onSelect, onClose 
       setLoading(false);
     }, 300);
     return () => clearTimeout(timerRef.current);
-  }, [keyword, roomId]);
+  }, [keyword, roomId, members]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {

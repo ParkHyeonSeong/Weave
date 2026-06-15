@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Send, X } from 'lucide-react';
+import { ArrowLeft, X } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import Avatar from '@/components/common/Avatar';
+import MessengerComposer from './MessengerComposer';
+import { showToast } from '@/components/Layout/Toast';
+import { buildSendMessage } from '@/library/messengerCompose';
 
 export default function MessengerNewChat({ wsRef, onBack, onOpenRoom }) {
   const [users, setUsers] = useState([]);
   const [selected, setSelected] = useState([]);
   const [search, setSearch] = useState('');
-  const [input, setInput] = useState('');
 
   let myUserId = 0;
   try {
@@ -47,42 +49,40 @@ export default function MessengerNewChat({ wsRef, onBack, onOpenRoom }) {
            u.email.toLowerCase().includes(search.toLowerCase());
   });
 
-  const handleSend = async () => {
-    const content = input.trim();
-    if (!content || selected.length === 0) return;
-
+  // composer 전송: 방 생성 → 원본 첨부 업로드 → 첫 메시지 전송 → 방 오픈
+  const handleComposerSubmit = async (payload) => {
+    if (selected.length === 0) return false;
     try {
       const memberIds = selected.map((u) => u.user_id);
       const isDm = memberIds.length === 1;
-
-      // 채팅방 생성
       const res = await axios.post('/chat', {
         room_type: isDm ? 'dm' : 'group',
         room_name: isDm ? null : selected.map((u) => u.username).join(', '),
         member_ids: memberIds,
       });
+      if (!res.data.status) { showToast('채팅방을 만들지 못했습니다.', 'error'); return false; }
+      const roomId = res.data.room_id;
 
-      if (res.data.status) {
-        const roomId = res.data.room_id;
-
-        // 첫 메시지 전송
-        if (wsRef.current?.readyState === WebSocket.OPEN) {
-          wsRef.current.send(JSON.stringify({
-            action: 'send_message',
-            room_id: roomId,
-            content,
-          }));
-        }
-
-        onOpenRoom(roomId);
+      // 원본(uploaded:false) 첨부를 새 방에 업로드
+      const uploaded = [];
+      for (const a of payload.attachments) {
+        const fd = new FormData();
+        fd.append('file', a.file);
+        const up = await axios.post(`/chat/upload?room_id=${roomId}`, fd, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        if (!up.data.status) { showToast('이미지 업로드에 실패했습니다.', 'error'); return false; }
+        uploaded.push({ url: up.data.url, file_name: up.data.file_name, file_type: up.data.file_type, file_size: up.data.file_size });
       }
-    } catch {}
-  };
 
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-      e.preventDefault();
-      handleSend();
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify(buildSendMessage(roomId, payload, uploaded)));
+      }
+      onOpenRoom(roomId);
+      return true;
+    } catch {
+      showToast('메시지를 보내지 못했습니다.', 'error');
+      return false;
     }
   };
 
@@ -135,24 +135,13 @@ export default function MessengerNewChat({ wsRef, onBack, onOpenRoom }) {
         ))}
       </div>
 
-      <div className="MessengerNewChat__Input">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={selected.length > 0 ? 'Type a message...' : 'Select users first'}
-          className="MessengerNewChat__InputField"
-          disabled={selected.length === 0}
-        />
-        <button
-          className="MessengerNewChat__SendBtn"
-          onClick={handleSend}
-          disabled={selected.length === 0 || !input.trim()}
-        >
-          <Send size={14} />
-        </button>
-      </div>
+      <MessengerComposer
+        roomId={null}
+        members={selected}
+        disabled={selected.length === 0}
+        selfDrop
+        onSubmit={handleComposerSubmit}
+      />
     </div>
   );
 }
