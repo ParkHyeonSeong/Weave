@@ -84,6 +84,7 @@ export default function CanvasEditor({ content, onChange, canvasId }) {
     TaskList,
     TaskItem.configure({
       nested: true,
+      HTMLAttributes: { 'data-type': 'taskItem' },
     }),
     CalloutExtension,
     TaskRefNode,

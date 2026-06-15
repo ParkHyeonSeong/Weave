@@ -131,6 +131,7 @@ function CollabEditorInner({
       TaskList,
       TaskItem.configure({
         nested: true,
+        HTMLAttributes: { 'data-type': 'taskItem' },
       }),
       CalloutExtension,
       TaskRefNode,

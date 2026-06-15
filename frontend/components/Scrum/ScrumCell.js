@@ -31,7 +31,7 @@ function ScrumCellInner({ ydoc, fragmentKey, placeholder, members }) {
       StarterKit.configure({ history: false, codeBlock: false, heading: false, blockquote: false, horizontalRule: false, link: { openOnClick: false, autolink: false, HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' } } }),
       Placeholder.configure({ placeholder: placeholder || '' }),
       TaskList,
-      TaskItem.configure({ nested: false }),
+      TaskItem.configure({ nested: false, HTMLAttributes: { 'data-type': 'taskItem' } }),
       TaskRefNode,
       DocRefNode,
       MentionNode.configure({ members }),

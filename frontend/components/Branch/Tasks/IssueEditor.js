@@ -31,7 +31,7 @@ const makeBaseExtensions = (placeholder) => [
   CodeBlockLowlight.configure({ lowlight }),
   Highlight.configure({ multicolor: true }),
   TaskList,
-  TaskItem.configure({ nested: true }),
+  TaskItem.configure({ nested: true, HTMLAttributes: { 'data-type': 'taskItem' } }),
   CalloutExtension,
   TaskRefNode,
   SlashCommandsExtension.configure({ enabled: ['/t', '/ta'] }),
