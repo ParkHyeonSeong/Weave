@@ -4,7 +4,7 @@ Exposes Weave project-management tools (tasks, sprints, epics, issues, docs, and
 Claude sessions over MCP (stdio). Talks to Weave's REST API only — the Weave backend is not
 modified. Each tool acts as the token's owner; `?` marks optional arguments.
 
-## Tools (119)
+## Tools (125)
 
 > The authoritative, always-current description of each tool is its docstring in
 > `weave_mcp/tools/*.py` (that's what the model reads). This list is the human-readable overview.
@@ -109,8 +109,16 @@ modified. Each tool acts as the token's owner; `?` marks optional arguments.
 
 **Scrum** (weekly daily-scrum + retro boards)
 - `list_scrum_boards()` — call first to get a `board_id`
-- `get_scrum_board(board_id)` — board metadata only; daily-scrum/retro content is real-time (Yjs) and not over REST
+- `get_scrum_board(board_id)` — board metadata (config/members/your role)
 - `get_scrum_home_cards()` — cross-board cards (today's unwritten daily-scrum, due retros)
+- `get_scrum_week(board_id, iso_year?, iso_week?)` — read the weekly daily-scrum grid cells (per member × weekday × plan/gap) as plain text; defaults to the current ISO week (KST)
+- `write_scrum_daily(board_id, text, row?, day?, mode?, iso_year?, iso_week?)` — write YOUR OWN daily-scrum cell; defaults to today's `plan` cell (KST), `mode` replace/append, weekends need an explicit `day` (0=Mon..4=Fri)
+- `get_current_retro(board_id)` — get-or-create the current period's retrospective doc (`retro_id`); null for 'manual' cadence boards
+- `get_scrum_retro_cells(board_id, retro_id)` — read the retro KPT cells (per member × keep/problem/try) as plain text
+- `write_scrum_retro(board_id, retro_id, key, text, mode?)` — write YOUR OWN retro KPT cell (`key` = keep/problem/try)
+- `list_scrum_retros(board_id)` — past retrospectives, newest first
+
+> Live editing of daily-scrum/retro cells still flows over Yjs/WebSocket; these tools read a snapshot and write your own cells over REST (writes broadcast to anyone with the board open).
 
 ## Use it (recommended — no clone needed)
 
