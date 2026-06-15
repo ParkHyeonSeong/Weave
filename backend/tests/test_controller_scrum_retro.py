@@ -5,6 +5,7 @@ from sqlalchemy import text
 from core.controller import scrum_retro as ctrl
 from core.controller import scrum_board as board_ctrl
 from routers.schema import scrum_board as schema
+from routers.schema.scrum_cell import RetroCellWrite
 
 
 def _req(user_id):
@@ -69,3 +70,48 @@ async def test_list_retros_returns_created_for_member(db_session):
     out = await ctrl.list_retros(bid, _req(owner), db_session)
     assert out["status"] is True
     assert any(r["retro_id"] == rid for r in out["retros"])
+
+
+async def _board_with_retro(db, owner):
+    res = await board_ctrl.create(schema.ScrumBoardCreate(name="t"), _req(owner), db)
+    bid = res["board_id"]
+    cur = await ctrl.get_current(bid, _req(owner), db)   # weekly → retro 자동 생성
+    return bid, cur["retro"]["retro_id"]
+
+
+async def test_write_and_read_retro_cell_roundtrip(db_session):
+    owner = await _make_user(db_session, "rcell1@test.local", "rcell1")
+    bid, rid = await _board_with_retro(db_session, owner)
+    body = RetroCellWrite(key="keep", text="페어 리뷰 좋았음", mode="replace")
+    w = await ctrl.write_retro_cell(bid, rid, body, _req(owner), db_session)
+    assert w["status"] is True
+    out = await ctrl.get_retro_cells(bid, rid, _req(owner), db_session)
+    assert out["cells"][f"{owner}:keep"] == "페어 리뷰 좋았음"
+
+
+async def test_write_retro_cell_denies_nonmember(db_session):
+    owner = await _make_user(db_session, "rcell2@test.local", "rcell2")
+    stranger = await _make_user(db_session, "rcell2b@test.local", "rcell2b")
+    bid, rid = await _board_with_retro(db_session, owner)
+    body = RetroCellWrite(key="try", text="x")
+    out = await ctrl.write_retro_cell(bid, rid, body, _req(stranger), db_session)
+    assert out["status"] is False
+    assert out["message"] == "PERMISSION_DENIED"
+
+
+async def test_write_retro_cell_invalid_key(db_session):
+    owner = await _make_user(db_session, "rcell3@test.local", "rcell3")
+    bid, rid = await _board_with_retro(db_session, owner)
+    body = RetroCellWrite(key="nope", text="x")
+    out = await ctrl.write_retro_cell(bid, rid, body, _req(owner), db_session)
+    assert out["status"] is False
+    assert out["message"] == "INVALID_CELL"
+
+
+async def test_retro_cell_wrong_board(db_session):
+    owner = await _make_user(db_session, "rcell4@test.local", "rcell4")
+    bid, rid = await _board_with_retro(db_session, owner)
+    other_bid, _ = await _board_with_retro(db_session, owner)
+    out = await ctrl.get_retro_cells(other_bid, rid, _req(owner), db_session)
+    assert out["status"] is False
+    assert out["message"] == "RETRO_NOT_FOUND"

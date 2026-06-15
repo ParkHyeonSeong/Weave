@@ -6,6 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.model import scrum_board as board_model
 from core.model import scrum_member as member_model
 from core.model import scrum_retro as retro_model
+from library.scrum_cells import read_cells, write_cell_into_doc
+from library.ws_collab_manager import scrum_retro_collab_manager
+from routers.schema.scrum_cell import VALID_MODES, VALID_RETRO_KEYS, RetroCellWrite
 
 KST = timezone(timedelta(hours=9))
 
@@ -40,3 +43,37 @@ async def list_retros(board_id: int, request: Request, db: AsyncSession):
     if err:
         return err
     return {'status': True, 'retros': await retro_model.list_by_board(board_id, db)}
+
+
+async def get_retro_cells(board_id: int, retro_id: int, request: Request, db: AsyncSession):
+    """회고 KPT 셀(멤버×keep/problem/try) 내용을 평문으로 반환. 멤버 전용."""
+    _, err = await _require_member(board_id, request, db)
+    if err:
+        return err
+    retro = await retro_model.find_by_id(retro_id, db)
+    if not retro or retro['board_id'] != board_id:
+        return {'status': False, 'message': 'RETRO_NOT_FOUND'}
+    members = await member_model.find_by_board(board_id, db)
+    keys = [f"{m['user_id']}:{k}" for m in members for k in VALID_RETRO_KEYS]
+    state = await scrum_retro_collab_manager.snapshot_state(retro_id, db)
+    return {'status': True, 'retro': retro, 'cells': read_cells(state, keys)}
+
+
+async def write_retro_cell(board_id: int, retro_id: int, body: RetroCellWrite,
+                           request: Request, db: AsyncSession):
+    """토큰 주체 본인의 회고 KPT 셀 1개를 쓴다. 멤버 전용."""
+    _, err = await _require_member(board_id, request, db)
+    if err:
+        return err
+    retro = await retro_model.find_by_id(retro_id, db)
+    if not retro or retro['board_id'] != board_id:
+        return {'status': False, 'message': 'RETRO_NOT_FOUND'}
+    if body.key not in VALID_RETRO_KEYS or body.mode not in VALID_MODES:
+        return {'status': False, 'message': 'INVALID_CELL'}
+    user_id = request.state.payload.get('user_id')
+    key = f"{user_id}:{body.key}"  # 본인 강제
+    await scrum_retro_collab_manager.apply_external_mutation(
+        retro_id,
+        lambda doc: write_cell_into_doc(doc, key, body.text, body.mode),
+        db)
+    return {'status': True, 'retro_id': retro_id, 'cell': key}
