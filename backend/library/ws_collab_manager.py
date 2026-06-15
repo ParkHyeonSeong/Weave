@@ -252,6 +252,41 @@ class CollabManager:
                     logger.error("Shutdown persist failed for room %d: %s",
                                  room_id, e)
 
+    async def apply_external_mutation(self, room_id: int, mutate, db_session) -> None:
+        """REST 등 외부 경로에서 room 문서를 변경한다.
+
+        활성 룸이 있으면 라이브 doc에 적용하고 변경분을 연결된 클라이언트에 브로드캐스트
+        (열린 브라우저 즉시 반영, 다음 persist에 영속화). 없으면 DB state를 로드해
+        변경 후 저장하되 rooms에는 등록하지 않는다(메모리 누수 방지). mutate(doc)는 동기.
+        """
+        room = self.rooms.get(room_id)
+        if room is None:
+            # 활성 룸 없음: DB state 로드 → 변경 → 저장. get_yjs_state await 동안 WS
+            # 클라이언트가 join해 룸이 생길 수 있으므로, 저장 직전 다시 확인해 그 경우
+            # 라이브 경로로 합류시킨다(전체 doc 덮어쓰기로 인한 WS 편집 유실 방지).
+            state = await self.store.get_yjs_state(room_id, db_session)
+            room = self.rooms.get(room_id)
+            if room is None:
+                doc = Doc()
+                if state:
+                    doc.apply_update(state)
+                mutate(doc)
+                await self.store.save_yjs_state(room_id, doc.get_update(), db_session)
+                return
+        before = room.doc.get_state()
+        mutate(room.doc)
+        msg = _encode_update(room.doc, before)
+        await self._broadcast(room, None, msg)
+        room.dirty = True
+        self._schedule_persist(room)
+
+    async def snapshot_state(self, room_id: int, db_session) -> bytes | None:
+        """현재 yjs_state: 활성 룸이면 인메모리 doc(최신), 아니면 DB."""
+        room = self.rooms.get(room_id)
+        if room is not None:
+            return room.doc.get_update()
+        return await self.store.get_yjs_state(room_id, db_session)
+
 
 class CanvasPageStore:
     """캔버스 페이지 yjs_state store (기존 동작 보존)."""

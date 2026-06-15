@@ -1,4 +1,4 @@
-from pycrdt import Doc, Text
+from pycrdt import Doc, Text, XmlElement, XmlFragment, XmlText
 
 from library import ws_collab_manager as cm
 
@@ -64,3 +64,49 @@ def test_default_managers_exist():
     assert isinstance(cm.collab_manager.store, cm.CanvasPageStore)
     assert isinstance(cm.scrum_week_collab_manager.store, cm.ScrumWeekStore)
     assert isinstance(cm.scrum_retro_collab_manager.store, cm.ScrumRetroStore)
+
+
+def _write_hi(doc):
+    frag = doc.get("c", type=XmlFragment)
+    para = XmlElement("paragraph")
+    frag.children.append(para)
+    para.children.append(XmlText("hi"))
+
+
+async def test_external_mutation_no_room_writes_to_store():
+    store = FakeStore()
+    mgr = cm.CollabManager(store)
+    await mgr.apply_external_mutation(5, _write_hi, db_session=None)
+    assert store.saved is not None
+    # 저장된 state를 다시 읽으면 내용이 보존됨
+    doc = Doc(); doc.apply_update(store.saved)
+    assert "hi" in str(doc.get("c", type=XmlFragment))
+
+
+async def test_external_mutation_active_room_broadcasts_and_marks_dirty():
+    store = FakeStore()
+    mgr = cm.CollabManager(store)
+    ws = FakeWS()
+    await mgr.join(6, 1, ws, db_session=None)
+    await mgr.apply_external_mutation(6, _write_hi, db_session=None)
+    room = mgr.rooms[6]
+    assert room.dirty is True
+    assert "hi" in str(room.doc.get("c", type=XmlFragment))
+    assert ws.sent, "연결된 클라이언트에 브로드캐스트되어야 함"
+
+
+async def test_snapshot_state_prefers_live_room():
+    store = FakeStore(initial=None)
+    mgr = cm.CollabManager(store)
+    await mgr.join(8, 1, FakeWS(), db_session=None)
+    await mgr.apply_external_mutation(8, _write_hi, db_session=None)
+    snap = await mgr.snapshot_state(8, db_session=None)
+    doc = Doc(); doc.apply_update(snap)
+    assert "hi" in str(doc.get("c", type=XmlFragment))
+
+
+async def test_snapshot_state_falls_back_to_store():
+    seed = Doc(); seed["t"] = Text("x")
+    mgr = cm.CollabManager(FakeStore(initial=seed.get_update()))
+    snap = await mgr.snapshot_state(9, db_session=None)
+    assert snap is not None
