@@ -121,7 +121,7 @@ Requires [`uv`](https://docs.astral.sh/uv/). Add this to your MCP client's `.mcp
   "mcpServers": {
     "weave": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/your-org/Weave#subdirectory=mcp", "weave-mcp"],
+      "args": ["--from", "git+https://github.com/ParkHyeonseong/weave#subdirectory=mcp", "weave-mcp"],
       "env": {
         "WEAVE_BASE_URL": "https://weave.example.com",
         "WEAVE_API_TOKEN": "${WEAVE_API_TOKEN}"
