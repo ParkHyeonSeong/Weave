@@ -13,12 +13,31 @@ import MentionSearchPopup from './MentionSearchPopup';
 import SlashCommandMenu from '@/components/Canvas/extensions/SlashCommandMenu';
 import { filterSlashCommands } from '@/components/Canvas/extensions/slashCommands';
 import { useLightbox } from '@/components/common/LightboxProvider';
+import { showToast } from '@/components/Layout/Toast';
 
 const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
 const FILE_EXTENSIONS = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt', '.csv', '.zip'];
 const ALLOWED_EXTENSIONS = [...IMAGE_EXTENSIONS, ...FILE_EXTENSIONS];
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_FILE_SIZE_MB = 10;
+const MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024;
 const MAX_FILES = 10;
+
+// 백엔드 업로드 실패 코드 → 사용자 안내 메시지 (채팅은 이미지+문서 첨부)
+function uploadErrorMessage(code) {
+  switch (code) {
+    case 'FILE_TOO_LARGE':
+      return `파일이 ${MAX_FILE_SIZE_MB}MB를 초과해 첨부할 수 없습니다.`;
+    case 'INVALID_FILE_TYPE':
+    case 'INVALID_FILE_CONTENT':
+      return '지원하지 않는 파일 형식입니다.';
+    case 'NOT_A_MEMBER':
+      return '파일을 업로드할 권한이 없습니다.';
+    case 'NO_FILE':
+      return '첨부할 파일을 찾을 수 없습니다.';
+    default:
+      return '파일 업로드에 실패했습니다.';
+  }
+}
 
 const isImageType = (fileType) => fileType?.startsWith('image/');
 
@@ -155,14 +174,23 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
   // -- 파일 업로드 --
   const uploadFile = useCallback(async (file) => {
     const ext = getFileExtension(file.name);
-    if (!ALLOWED_EXTENSIONS.includes(ext)) return;
-    if (file.size > MAX_FILE_SIZE) return;
+    if (!ALLOWED_EXTENSIONS.includes(ext)) {
+      showToast(uploadErrorMessage('INVALID_FILE_TYPE'), 'error');
+      return;
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      showToast(uploadErrorMessage('FILE_TOO_LARGE'), 'error');
+      return;
+    }
 
     const tempId = `${Date.now()}_${Math.random()}`;
     const preview = file.type.startsWith('image/') ? URL.createObjectURL(file) : null;
 
     setPendingFiles((prev) => {
-      if (prev.length >= MAX_FILES) return prev;
+      if (prev.length >= MAX_FILES) {
+        if (preview) URL.revokeObjectURL(preview);
+        return prev;
+      }
       return [...prev, {
         id: tempId, file_name: file.name, file_type: file.type,
         file_size: file.size, preview, status: 'uploading', progress: 0,
@@ -192,9 +220,11 @@ export default function MessengerChatRoom({ roomId, wsRef, onBack, hideback, hea
           } : f)
         );
       } else {
+        showToast(uploadErrorMessage(res.data?.message), 'error');
         setPendingFiles((prev) => prev.filter((f) => f.id !== tempId));
       }
     } catch {
+      showToast(uploadErrorMessage(), 'error');
       setPendingFiles((prev) => prev.filter((f) => f.id !== tempId));
     }
   }, [roomId]);
