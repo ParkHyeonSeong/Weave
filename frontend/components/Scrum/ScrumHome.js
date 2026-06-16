@@ -151,7 +151,7 @@ export default function ScrumHome() {
       ) : (
         <div className={view === 'list' ? 'HList' : 'HGrid'}>
           {processed.map((b) => (
-            <AppCard key={b.board_id} accent={b.color} onClick={() => router.push(`/scrum/${b.board_id}`)} onContextMenu={(e) => openCardMenu(e, b)}>
+            <AppCard key={b.board_id} accent={b.color} href={`/scrum/${b.board_id}`} onContextMenu={(e) => openCardMenu(e, b)}>
               <div className="HCard__Top">
                 <div>
                   <div className="HCard__Title">{b.name}</div>

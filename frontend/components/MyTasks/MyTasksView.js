@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/router';
 import { CheckSquare, Inbox } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import CustomSelect from '@/components/common/CustomSelect';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import EntityIcon from '@/components/common/EntityIcon';
+import NavLink from '@/components/common/NavLink';
 
 const STATUS_CATEGORY_OPTIONS = [
   { value: 'todo', label: 'To Do' },
@@ -28,7 +28,6 @@ const sortOptions = [
 ];
 
 export default function MyTasksView() {
-  const router = useRouter();
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
@@ -154,7 +153,6 @@ export default function MyTasksView() {
 
 // -- Row --
 function MyTasksRow({ task, onRefresh }) {
-  const router = useRouter();
 
   const handleFieldChange = async (field, value) => {
     try {
@@ -172,10 +170,15 @@ function MyTasksRow({ task, onRefresh }) {
   const isOverdue = task.due_date && category !== 'done' && category !== 'cancelled' && new Date(task.due_date) < new Date();
 
   return (
-    <div
-      className="MyTasksRow"
-      onClick={() => router.push(`/branch/${task.branch_id}/task/${task.task_id}`)}
-    >
+    <div className="MyTasksRow">
+      {/* 행 전체를 덮는 오버레이 링크(stretched link): 가운데/ctrl/우클릭 새 탭 지원.
+          내부 인터랙티브(브랜치 링크·셀렉트)는 z-index로 이 위에 떠서 각자 동작한다. */}
+      <NavLink
+        className="MyTasksRow__Overlay"
+        href={`/branch/${task.branch_id}/task/${task.task_id}`}
+        aria-label={task.title}
+      />
+
       {/* 타입 아이콘 */}
       <span className="MyTasksRow__TypeIcon">
         <TaskTypeIcon name="CheckSquare" size={14} color="#5E6AD2" />
@@ -200,13 +203,11 @@ function MyTasksRow({ task, onRefresh }) {
         ))}
       </div>
 
-      {/* 브랜치 */}
-      <button
+      {/* 브랜치 (오버레이 위 별도 링크) */}
+      <NavLink
         className="MyTasksRow__Branch"
-        onClick={(e) => {
-          e.stopPropagation();
-          router.push(`/branch/${task.branch_id}`);
-        }}
+        href={`/branch/${task.branch_id}`}
+        onClick={(e) => e.stopPropagation()}
       >
         <EntityIcon
           icon={task.branch_icon}
@@ -215,7 +216,7 @@ function MyTasksRow({ task, onRefresh }) {
           entityType="branch"
         />
         {task.branch_key}
-      </button>
+      </NavLink>
 
       {/* 상태 */}
       <div className="MyTasksRow__Cell" onClick={(e) => e.stopPropagation()}>

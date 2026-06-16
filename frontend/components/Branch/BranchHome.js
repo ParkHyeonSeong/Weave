@@ -10,6 +10,7 @@ import HomeSkeleton from '@/components/Home/shared/HomeSkeleton';
 import HomeEmptyState from '@/components/Home/shared/HomeEmptyState';
 import ProgressRing from '@/components/Home/shared/ProgressRing';
 import AppCard, { AvatarSet } from '@/components/Home/shared/AppCard';
+import NavLink from '@/components/common/NavLink';
 import { useUiPrefs } from '@/library/UiPrefsContext';
 import useHomeListControls from '@/library/useHomeListControls';
 import { byTextAsc, byNumberDesc, byDateDesc, ROLE_GROUP } from '@/library/homeListControls';
@@ -197,7 +198,7 @@ export default function BranchHome() {
           title: it.title,
           dotColor: it.status_color,
           meta: `${it.display_number} · ${getRelativeTime(it.viewed_at)}`,
-          onClick: () => router.push(`/branch/${it.branch_id}/task/${it.task_id}`),
+          href: `/branch/${it.branch_id}/task/${it.task_id}`,
         }))}
         emptyText="최근 작업한 태스크가 없습니다"
       />
@@ -230,7 +231,7 @@ export default function BranchHome() {
             <AppCard
               key={b.branch_id}
               accent={b.color}
-              onClick={() => router.push(`/branch/${b.branch_id}`)}
+              href={`/branch/${b.branch_id}`}
               onContextMenu={(e) => openCardMenu(e, b)}
             >
               <div className="HCard__Top">

@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/router';
 import { axios } from '@/library/_axios';
 import { Clock, FileText } from 'lucide-react';
 import { useUiPrefs } from '@/library/UiPrefsContext';
+import NavLink from '@/components/common/NavLink';
 
 export default function RecentItems() {
-  const router = useRouter();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const { isHidden } = useUiPrefs();
@@ -38,13 +37,7 @@ export default function RecentItems() {
     return `${Math.floor(diff / 86400)}d ago`;
   };
 
-  const handleClick = (item) => {
-    if (item.type === 'task') {
-      router.push(`/branch/${item.branch_id}/task/${item.task_id}`);
-    } else if (item.type === 'doc') {
-      router.push(`/canvas/${item.canvas_id}/${item.page_id}`);
-    }
-  };
+
 
   const visibleItems = items.filter((it) =>
     it.type === 'task'
@@ -77,33 +70,38 @@ export default function RecentItems() {
           <div className="Widget__Empty">No recent items</div>
         ) : (
           <div className="RecentItems__List">
-            {visibleItems.map((item) => (
-              <div
-                key={`${item.type}-${item.type === 'task' ? item.task_id : item.page_id}`}
-                className="RecentItems__Item"
-                onClick={() => handleClick(item)}
-              >
-                {item.type === 'task' ? (
-                  <div
-                    className="RecentItems__StatusDot"
-                    style={item.status_color
-                      ? (item.status_category === 'todo'
-                        ? { border: `1.5px solid ${item.status_color}`, background: 'transparent' }
-                        : { backgroundColor: item.status_color })
-                      : undefined}
-                  />
-                ) : (
-                  <FileText size={12} className="RecentItems__DocIcon" />
-                )}
-                <span className="RecentItems__TaskId">
-                  {item.type === 'task' ? item.display_number : item.canvas_name}
-                </span>
-                <span className="RecentItems__TaskTitle">{item.title}</span>
-                <span className="RecentItems__TaskTime">
-                  {getRelativeTime(item.viewed_at)}
-                </span>
-              </div>
-            ))}
+            {visibleItems.map((item) => {
+              const href = item.type === 'task'
+                ? `/branch/${item.branch_id}/task/${item.task_id}`
+                : `/canvas/${item.canvas_id}/${item.page_id}`;
+              return (
+                <NavLink
+                  key={`${item.type}-${item.type === 'task' ? item.task_id : item.page_id}`}
+                  href={href}
+                  className="RecentItems__Item"
+                >
+                  {item.type === 'task' ? (
+                    <div
+                      className="RecentItems__StatusDot"
+                      style={item.status_color
+                        ? (item.status_category === 'todo'
+                          ? { border: `1.5px solid ${item.status_color}`, background: 'transparent' }
+                          : { backgroundColor: item.status_color })
+                        : undefined}
+                    />
+                  ) : (
+                    <FileText size={12} className="RecentItems__DocIcon" />
+                  )}
+                  <span className="RecentItems__TaskId">
+                    {item.type === 'task' ? item.display_number : item.canvas_name}
+                  </span>
+                  <span className="RecentItems__TaskTitle">{item.title}</span>
+                  <span className="RecentItems__TaskTime">
+                    {getRelativeTime(item.viewed_at)}
+                  </span>
+                </NavLink>
+              );
+            })}
           </div>
         )}
       </div>

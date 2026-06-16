@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/router';
 import { axios } from '@/library/_axios';
 import { Circle, Loader, CheckCircle2, XCircle, ListTodo } from 'lucide-react';
+import NavLink from '@/components/common/NavLink';
 
 export default function TaskSummary() {
-  const router = useRouter();
   const [counts, setCounts] = useState({ todo: 0, in_progress: 0, done: 0, cancelled: 0 });
   const [loading, setLoading] = useState(true);
 
@@ -35,9 +34,7 @@ export default function TaskSummary() {
     }
   };
 
-  const handleClick = () => {
-    router.push('/my-tasks');
-  };
+
 
   if (loading) {
     return (
@@ -61,26 +58,26 @@ export default function TaskSummary() {
       </div>
       <div className="Widget__Body">
         <div className="TaskSummary__Stats">
-          <div className="TaskSummary__Stat" onClick={handleClick}>
+          <NavLink href="/my-tasks" className="TaskSummary__Stat">
             <Circle size={18} color="#6B7280" />
             <span className="TaskSummary__StatCount">{counts.todo}</span>
             <span className="TaskSummary__StatLabel">Todo</span>
-          </div>
-          <div className="TaskSummary__Stat" onClick={handleClick}>
+          </NavLink>
+          <NavLink href="/my-tasks" className="TaskSummary__Stat">
             <Loader size={18} color="#1E40AF" />
             <span className="TaskSummary__StatCount">{counts.in_progress}</span>
             <span className="TaskSummary__StatLabel">In Progress</span>
-          </div>
-          <div className="TaskSummary__Stat" onClick={handleClick}>
+          </NavLink>
+          <NavLink href="/my-tasks" className="TaskSummary__Stat">
             <CheckCircle2 size={18} color="#16A34A" />
             <span className="TaskSummary__StatCount">{counts.done}</span>
             <span className="TaskSummary__StatLabel">Done</span>
-          </div>
-          <div className="TaskSummary__Stat" onClick={handleClick}>
+          </NavLink>
+          <NavLink href="/my-tasks" className="TaskSummary__Stat">
             <XCircle size={18} color="#DC2626" />
             <span className="TaskSummary__StatCount">{counts.cancelled}</span>
             <span className="TaskSummary__StatLabel">Cancelled</span>
-          </div>
+          </NavLink>
         </div>
       </div>
     </div>

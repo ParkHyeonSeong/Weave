@@ -196,7 +196,7 @@ export default function TrackHome() {
             <AppCard
               key={t.track_id}
               accent={t.color}
-              onClick={() => router.push(`/tracks/${t.track_id}`)}
+              href={`/tracks/${t.track_id}`}
               onContextMenu={(e) => openCardMenu(e, t)}
             >
               <div className="HCard__Top">

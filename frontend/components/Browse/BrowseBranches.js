@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/router';
 import { axios } from '@/library/_axios';
 import { Search, Users, Globe, GitBranch, FileText } from 'lucide-react';
 import EntityIcon from '@/components/common/EntityIcon';
+import NavLink from '@/components/common/NavLink';
 
 export default function BrowseBranches() {
-  const router = useRouter();
   const [branches, setBranches] = useState([]);
   const [canvases, setCanvases] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -125,12 +124,12 @@ export default function BrowseBranches() {
                   </div>
                 </div>
                 {branch.is_member ? (
-                  <button
+                  <NavLink
+                    href={`/branch/${branch.branch_id}`}
                     className="BrowseBranches__JoinBtn BrowseBranches__JoinBtn--joined"
-                    onClick={() => router.push(`/branch/${branch.branch_id}`)}
                   >
                     Open
-                  </button>
+                  </NavLink>
                 ) : (
                   <button
                     className="BrowseBranches__JoinBtn"
@@ -173,12 +172,12 @@ export default function BrowseBranches() {
                   </div>
                 </div>
                 {canvas.is_member ? (
-                  <button
+                  <NavLink
+                    href={`/canvas/${canvas.canvas_id}`}
                     className="BrowseBranches__JoinBtn BrowseBranches__JoinBtn--joined"
-                    onClick={() => router.push(`/canvas/${canvas.canvas_id}`)}
                   >
                     Open
-                  </button>
+                  </NavLink>
                 ) : (
                   <button
                     className="BrowseBranches__JoinBtn"

@@ -1,5 +1,4 @@
 import { useMemo } from 'react';
-import { useRouter } from 'next/router';
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
 } from '@dnd-kit/core';
@@ -9,6 +8,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { GitBranch, FileEdit, Workflow, Compass, CalendarCheck } from 'lucide-react';
 import { APP_HOME } from '@/library/appContext';
+import NavLink from '@/components/common/NavLink';
 import { DEFAULT_COLORS } from '@/library/entityAppearance';
 import { useUiPrefs } from '@/library/UiPrefsContext';
 
@@ -51,7 +51,7 @@ function TileBody({ app }) {
   );
 }
 
-function SortableTile({ app, onOpen }) {
+function SortableTile({ app }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: app.key });
   const style = {
@@ -60,21 +60,20 @@ function SortableTile({ app, onOpen }) {
     opacity: isDragging ? 0.4 : 1,
   };
   return (
-    <button
+    <NavLink
       ref={setNodeRef}
+      href={app.path}
       style={style}
       className="Launchpad__Tile Launchpad__Tile--sortable"
-      onClick={onOpen}
       {...attributes}
       {...listeners}
     >
       <TileBody app={app} />
-    </button>
+    </NavLink>
   );
 }
 
 export default function Launchpad() {
-  const router = useRouter();
   const { prefs, setNamespace } = useUiPrefs();
   const order = useMemo(() => normalizeOrder(prefs.launchpad_order), [prefs.launchpad_order]);
   const sensors = useSensors(
@@ -97,14 +96,14 @@ export default function Launchpad() {
           {order.map((key) => {
             const app = APP_REGISTRY[key];
             return (
-              <SortableTile key={app.key} app={app} onOpen={() => router.push(app.path)} />
+              <SortableTile key={app.key} app={app} />
             );
           })}
         </SortableContext>
       </DndContext>
-      <button className="Launchpad__Tile" onClick={() => router.push(BROWSE_TILE.path)}>
+      <NavLink href={BROWSE_TILE.path} className="Launchpad__Tile">
         <TileBody app={BROWSE_TILE} />
-      </button>
+      </NavLink>
     </div>
   );
 }

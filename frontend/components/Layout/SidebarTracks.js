@@ -12,6 +12,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { axios } from '@/library/_axios';
 import EntityIcon from '@/components/common/EntityIcon';
 import SidebarItemActions from './SidebarItemActions';
+import NavLink from '@/components/common/NavLink';
 import useContextMenu from '@/components/common/useContextMenu';
 import ContextMenu from '@/components/common/ContextMenu';
 import useInlineRename from '@/components/common/useInlineRename';
@@ -20,7 +21,6 @@ import ConfirmModal from '@/components/modal/ConfirmModal';
 import { showToast } from '@/components/Layout/Toast';
 
 function SortableTrackItem({ track, isActive, onMenu, rename }) {  // isActive는 boolean (caller가 계산)
-  const router = useRouter();
   const {
     attributes, listeners, setNodeRef, transform, transition, isDragging,
   } = useSortable({ id: track.track_id });
@@ -40,22 +40,30 @@ function SortableTrackItem({ track, isActive, onMenu, rename }) {  // isActive�
       className={`Sidebar__BranchRow ${isActive ? 'Sidebar__BranchRow--active' : ''}`}
       onContextMenu={(e) => onMenu(e, track)}
     >
-      <button
-        className={`Sidebar__BranchItem ${isActive ? 'Sidebar__BranchItem--active' : ''}`}
-        onClick={() => { if (!editing) router.push(`/tracks/${track.track_id}`); }}
-        {...attributes}
-        {...listeners}
-      >
+      {!editing ? (
+        <NavLink
+          href={`/tracks/${track.track_id}`}
+          className={`Sidebar__BranchItem ${isActive ? 'Sidebar__BranchItem--active' : ''}`}
+          {...attributes}
+          {...listeners}
+        >
         <EntityIcon
           icon={track.icon}
           color={track.color}
           size={14}
           entityType="track"
         />
-        {editing
-          ? <input className="Sidebar__RenameInput" {...rename.inputProps} />
-          : <span className="Sidebar__BranchName">{track.track_name}</span>}
-      </button>
+        <span className="Sidebar__BranchName">{track.track_name}</span>
+        </NavLink>
+      ) : (
+        <button
+          className={`Sidebar__BranchItem ${isActive ? 'Sidebar__BranchItem--active' : ''}`}
+          {...attributes}
+          {...listeners}
+        >
+          <input className="Sidebar__RenameInput" {...rename.inputProps} />
+        </button>
+      )}
       <div className="Sidebar__BranchActions">
         <SidebarItemActions onMenu={(e) => onMenu(e, track)} />
       </div>
@@ -240,10 +248,10 @@ export default function SidebarTracks({ onCreateTrack, savedOrder, onOrderChange
                     className="Sidebar__BranchRow Sidebar__BranchRow--hidden"
                     onContextMenu={(e) => openMenu(e, track)}
                   >
-                    <button className="Sidebar__BranchItem" onClick={() => router.push(`/tracks/${track.track_id}`)}>
+                    <NavLink href={`/tracks/${track.track_id}`} className="Sidebar__BranchItem">
                       <EntityIcon icon={track.icon} color={track.color} size={14} entityType="track" />
                       <span className="Sidebar__BranchName">{track.track_name}</span>
-                    </button>
+                    </NavLink>
                     <button className="Sidebar__UnhideBtn" onClick={() => onUnhide(track.track_id)}>숨김 해제</button>
                   </div>
                 ))}

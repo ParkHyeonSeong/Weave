@@ -12,6 +12,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { axios } from '@/library/_axios';
 import EntityIcon from '@/components/common/EntityIcon';
 import SidebarItemActions from './SidebarItemActions';
+import NavLink from '@/components/common/NavLink';
 import useContextMenu from '@/components/common/useContextMenu';
 import ContextMenu from '@/components/common/ContextMenu';
 import useInlineRename from '@/components/common/useInlineRename';
@@ -20,7 +21,6 @@ import ConfirmModal from '@/components/modal/ConfirmModal';
 import { showToast } from '@/components/Layout/Toast';
 
 function SortableBoardItem({ board, isActive, onMenu, rename }) {  // isActive는 boolean (caller가 계산)
-  const router = useRouter();
   const {
     attributes, listeners, setNodeRef, transform, transition, isDragging,
   } = useSortable({ id: board.board_id });
@@ -40,22 +40,30 @@ function SortableBoardItem({ board, isActive, onMenu, rename }) {  // isActive�
       className={`Sidebar__BranchRow ${isActive ? 'Sidebar__BranchRow--active' : ''}`}
       onContextMenu={(e) => onMenu(e, board)}
     >
-      <button
-        className={`Sidebar__BranchItem ${isActive ? 'Sidebar__BranchItem--active' : ''}`}
-        onClick={() => { if (!editing) router.push(`/scrum/${board.board_id}`); }}
-        {...attributes}
-        {...listeners}
-      >
+      {!editing ? (
+        <NavLink
+          href={`/scrum/${board.board_id}`}
+          className={`Sidebar__BranchItem ${isActive ? 'Sidebar__BranchItem--active' : ''}`}
+          {...attributes}
+          {...listeners}
+        >
         <EntityIcon
           icon={board.icon}
           color={board.color}
           size={14}
           entityType="track"
         />
-        {editing
-          ? <input className="Sidebar__RenameInput" {...rename.inputProps} />
-          : <span className="Sidebar__BranchName">{board.name}</span>}
-      </button>
+        <span className="Sidebar__BranchName">{board.name}</span>
+        </NavLink>
+      ) : (
+        <button
+          className={`Sidebar__BranchItem ${isActive ? 'Sidebar__BranchItem--active' : ''}`}
+          {...attributes}
+          {...listeners}
+        >
+          <input className="Sidebar__RenameInput" {...rename.inputProps} />
+        </button>
+      )}
       <div className="Sidebar__BranchActions">
         <SidebarItemActions onMenu={(e) => onMenu(e, board)} />
       </div>
@@ -240,10 +248,10 @@ export default function SidebarScrums({ onCreateScrum, savedOrder, onOrderChange
                     className="Sidebar__BranchRow Sidebar__BranchRow--hidden"
                     onContextMenu={(e) => openMenu(e, board)}
                   >
-                    <button className="Sidebar__BranchItem" onClick={() => router.push(`/scrum/${board.board_id}`)}>
+                    <NavLink href={`/scrum/${board.board_id}`} className="Sidebar__BranchItem">
                       <EntityIcon icon={board.icon} color={board.color} size={14} entityType="track" />
                       <span className="Sidebar__BranchName">{board.name}</span>
-                    </button>
+                    </NavLink>
                     <button className="Sidebar__UnhideBtn" onClick={() => onUnhide(board.board_id)}>숨김 해제</button>
                   </div>
                 ))}

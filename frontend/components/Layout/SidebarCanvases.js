@@ -22,6 +22,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { axios } from '@/library/_axios';
 import EntityIcon from '@/components/common/EntityIcon';
+import NavLink from '@/components/common/NavLink';
 
 // 트리 렌더 재귀의 조상 page_id 집합 기본값 (parent_page_id 순환 시 무한 재귀 방지용)
 const EMPTY_ANCESTORS = [];
@@ -647,10 +648,10 @@ export default function SidebarCanvases({ onCreateCanvas, savedOrder, onOrderCha
                   className="Sidebar__BranchRow Sidebar__BranchRow--hidden"
                   onContextMenu={(e) => openCanvasMenu(e, canvas)}
                 >
-                  <button className="Sidebar__BranchItem" onClick={() => router.push(`/canvas/${canvas.canvas_id}`)}>
+                  <NavLink href={`/canvas/${canvas.canvas_id}`} className="Sidebar__BranchItem">
                     <EntityIcon icon={canvas.icon} color={canvas.color} size={14} entityType="canvas" />
                     <span className="Sidebar__BranchName">{canvas.canvas_name}</span>
-                  </button>
+                  </NavLink>
                   <button className="Sidebar__UnhideBtn" onClick={() => onUnhide(canvas.canvas_id)}>숨김 해제</button>
                 </div>
               ))}

@@ -12,6 +12,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { axios } from '@/library/_axios';
 import EntityIcon from '@/components/common/EntityIcon';
 import SidebarItemActions from './SidebarItemActions';
+import NavLink from '@/components/common/NavLink';
 import useContextMenu from '@/components/common/useContextMenu';
 import ContextMenu from '@/components/common/ContextMenu';
 import useInlineRename from '@/components/common/useInlineRename';
@@ -20,7 +21,6 @@ import ConfirmModal from '@/components/modal/ConfirmModal';
 import { showToast } from '@/components/Layout/Toast';
 
 function SortableBranchItem({ branch, isActive, onMenu, rename }) {
-  const router = useRouter();
   const {
     attributes, listeners, setNodeRef, transform, transition, isDragging,
   } = useSortable({ id: branch.branch_id });
@@ -40,22 +40,30 @@ function SortableBranchItem({ branch, isActive, onMenu, rename }) {
       className={`Sidebar__BranchRow ${isActive ? 'Sidebar__BranchRow--active' : ''}`}
       onContextMenu={(e) => onMenu(e, branch)}
     >
-      <button
-        className={`Sidebar__BranchItem ${isActive ? 'Sidebar__BranchItem--active' : ''}`}
-        onClick={() => { if (!editing) router.push(`/branch/${branch.branch_id}`); }}
-        {...attributes}
-        {...listeners}
-      >
+      {!editing ? (
+        <NavLink
+          href={`/branch/${branch.branch_id}`}
+          className={`Sidebar__BranchItem ${isActive ? 'Sidebar__BranchItem--active' : ''}`}
+          {...attributes}
+          {...listeners}
+        >
         <EntityIcon
           icon={branch.icon}
           color={branch.color}
           size={14}
           entityType="branch"
         />
-        {editing
-          ? <input className="Sidebar__RenameInput" {...rename.inputProps} />
-          : <span className="Sidebar__BranchName">{branch.branch_name}</span>}
-      </button>
+        <span className="Sidebar__BranchName">{branch.branch_name}</span>
+        </NavLink>
+      ) : (
+        <button
+          className={`Sidebar__BranchItem ${isActive ? 'Sidebar__BranchItem--active' : ''}`}
+          {...attributes}
+          {...listeners}
+        >
+          <input className="Sidebar__RenameInput" {...rename.inputProps} />
+        </button>
+      )}
       <div className="Sidebar__BranchActions">
         <SidebarItemActions onMenu={(e) => onMenu(e, branch)} />
       </div>
@@ -237,10 +245,10 @@ export default function SidebarBranches({ onCreateBranch, savedOrder, onOrderCha
                     className="Sidebar__BranchRow Sidebar__BranchRow--hidden"
                     onContextMenu={(e) => openMenu(e, branch)}
                   >
-                    <button className="Sidebar__BranchItem" onClick={() => router.push(`/branch/${branch.branch_id}`)}>
+                    <NavLink href={`/branch/${branch.branch_id}`} className="Sidebar__BranchItem">
                       <EntityIcon icon={branch.icon} color={branch.color} size={14} entityType="branch" />
                       <span className="Sidebar__BranchName">{branch.branch_name}</span>
-                    </button>
+                    </NavLink>
                     <button className="Sidebar__UnhideBtn" onClick={() => onUnhide(branch.branch_id)}>숨김 해제</button>
                   </div>
                 ))}

@@ -116,6 +116,7 @@
 
 // -- Row --
 .MyTasksRow {
+  position: relative;
   display: grid;
   grid-template-columns: 20px 70px 1fr auto 100px 92px 56px 80px;
   align-items: center;
@@ -124,6 +125,19 @@
   border-bottom: 1px solid $color-border;
   cursor: pointer;
   transition: background $transition-fast;
+
+  // 행 전체를 덮는 stretched-link 오버레이 + 그 위에 떠서 각자 클릭되는 인터랙티브 요소
+  &__Overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+  }
+
+  &__Branch,
+  &__Cell {
+    position: relative;
+    z-index: 1;
+  }
 
   // Mobile: 카드 레이아웃
   @include mobile {

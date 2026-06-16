@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/router';
 import { axios } from '@/library/_axios';
 import { Star, FileText } from 'lucide-react';
 import { useUiPrefs } from '@/library/UiPrefsContext';
+import NavLink from '@/components/common/NavLink';
 
 export default function StarredItems() {
-  const router = useRouter();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const { isHidden } = useUiPrefs();
@@ -27,13 +26,7 @@ export default function StarredItems() {
     }
   };
 
-  const handleClick = (item) => {
-    if (item.type === 'task') {
-      router.push(`/branch/${item.branch_id}/task/${item.task_id}`);
-    } else if (item.type === 'doc') {
-      router.push(`/canvas/${item.canvas_id}/${item.page_id}`);
-    }
-  };
+
 
   const visibleItems = items.filter((it) =>
     it.type === 'task'
@@ -66,30 +59,35 @@ export default function StarredItems() {
           <div className="Widget__Empty">No starred items</div>
         ) : (
           <div className="StarredItems__List">
-            {visibleItems.map((item) => (
-              <div
-                key={`${item.type}-${item.type === 'task' ? item.task_id : item.page_id}`}
-                className="StarredItems__Item"
-                onClick={() => handleClick(item)}
-              >
-                {item.type === 'task' ? (
-                  <div
-                    className="StarredItems__StatusDot"
-                    style={item.status_color
-                      ? (item.status_category === 'todo'
-                        ? { border: `1.5px solid ${item.status_color}`, background: 'transparent' }
-                        : { backgroundColor: item.status_color })
-                      : undefined}
-                  />
-                ) : (
-                  <FileText size={12} className="StarredItems__DocIcon" />
-                )}
-                <span className="StarredItems__TaskId">
-                  {item.type === 'task' ? item.display_number : item.canvas_name}
-                </span>
-                <span className="StarredItems__TaskTitle">{item.title}</span>
-              </div>
-            ))}
+            {visibleItems.map((item) => {
+              const href = item.type === 'task'
+                ? `/branch/${item.branch_id}/task/${item.task_id}`
+                : `/canvas/${item.canvas_id}/${item.page_id}`;
+              return (
+                <NavLink
+                  key={`${item.type}-${item.type === 'task' ? item.task_id : item.page_id}`}
+                  href={href}
+                  className="StarredItems__Item"
+                >
+                  {item.type === 'task' ? (
+                    <div
+                      className="StarredItems__StatusDot"
+                      style={item.status_color
+                        ? (item.status_category === 'todo'
+                          ? { border: `1.5px solid ${item.status_color}`, background: 'transparent' }
+                          : { backgroundColor: item.status_color })
+                        : undefined}
+                    />
+                  ) : (
+                    <FileText size={12} className="StarredItems__DocIcon" />
+                  )}
+                  <span className="StarredItems__TaskId">
+                    {item.type === 'task' ? item.display_number : item.canvas_name}
+                  </span>
+                  <span className="StarredItems__TaskTitle">{item.title}</span>
+                </NavLink>
+              );
+            })}
           </div>
         )}
       </div>

@@ -10,6 +10,7 @@ import HomeToolbar from '@/components/Home/shared/HomeToolbar';
 import HomeSkeleton from '@/components/Home/shared/HomeSkeleton';
 import HomeEmptyState from '@/components/Home/shared/HomeEmptyState';
 import AppCard, { AvatarSet } from '@/components/Home/shared/AppCard';
+import NavLink from '@/components/common/NavLink';
 import { useUiPrefs } from '@/library/UiPrefsContext';
 import useHomeListControls from '@/library/useHomeListControls';
 import { byTextAsc, byNumberDesc, byDateDesc, ROLE_GROUP } from '@/library/homeListControls';
@@ -176,7 +177,7 @@ export default function CanvasHome() {
     title: it.title,
     dotColor: it.color || DEFAULT_DOC_COLOR,
     meta: `${it.canvas_name} · ${getRelativeTime(it.viewed_at || it.starred_at)}`,
-    onClick: () => router.push(`/canvas/${it.canvas_id}/${it.page_id}`),
+    href: `/canvas/${it.canvas_id}/${it.page_id}`,
   }));
 
   return (
@@ -255,7 +256,7 @@ export default function CanvasHome() {
             <AppCard
               key={c.canvas_id}
               accent={c.color}
-              onClick={() => router.push(`/canvas/${c.canvas_id}`)}
+              href={`/canvas/${c.canvas_id}`}
               onContextMenu={(e) => openCardMenu(e, c)}
             >
               <div className="HCard__Top">

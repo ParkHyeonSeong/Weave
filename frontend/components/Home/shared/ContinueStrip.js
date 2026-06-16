@@ -1,4 +1,5 @@
 // title, onMore, tabs?: [{key,label}], activeTab, onTab, items: [{title, dotColor, meta, onClick}], loading
+import NavLink from '@/components/common/NavLink';
 export default function ContinueStrip({
   title,
   onMore,
@@ -40,15 +41,28 @@ export default function ContinueStrip({
         <div className="ContinueStrip__Empty">{emptyText}</div>
       ) : (
         <div className="ContinueStrip__Grid">
-          {items.map((it, i) => (
-            <button key={i} className="HRecentCard" onClick={it.onClick}>
-              <div className="HRecentCard__Title">{it.title}</div>
-              <div className="HRecentCard__Meta">
-                <span className="HDot" style={{ background: it.dotColor }} />
-                {it.meta}
-              </div>
-            </button>
-          ))}
+          {items.map((it, i) => {
+            if (it.href) {
+              return (
+                <NavLink key={i} href={it.href} className="HRecentCard">
+                  <div className="HRecentCard__Title">{it.title}</div>
+                  <div className="HRecentCard__Meta">
+                    <span className="HDot" style={{ background: it.dotColor }} />
+                    {it.meta}
+                  </div>
+                </NavLink>
+              );
+            }
+            return (
+              <button key={i} className="HRecentCard" onClick={it.onClick}>
+                <div className="HRecentCard__Title">{it.title}</div>
+                <div className="HRecentCard__Meta">
+                  <span className="HDot" style={{ background: it.dotColor }} />
+                  {it.meta}
+                </div>
+              </button>
+            );
+          })}
         </div>
       )}
     </section>
