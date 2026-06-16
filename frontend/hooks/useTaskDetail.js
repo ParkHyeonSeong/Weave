@@ -132,13 +132,20 @@ export default function useTaskDetail(branchId, taskId) {
     const newIds = currentIds.includes(labelId)
       ? currentIds.filter((id) => id !== labelId)
       : [...currentIds, labelId];
+    // 낙관적 반영: 패널 재로딩 없이 즉시 칩을 추가/제거해 라벨 드롭다운을 연 채로 연속 토글할 수 있고,
+    // 직전 토글이 재동기화 전에 유실되는 레이스도 막는다. labels(전체)에서 라벨 객체를 보강.
+    const optimistic = newIds.map((id) => labels.find((l) => l.label_id === id)).filter(Boolean);
+    const seq = ++resyncSeq.current;
+    setTask((prev) => (prev ? { ...prev, labels: optimistic } : prev));
     try {
       const res = await axios.patch(`/branches/${branchId}/tasks/${task.task_id}`, { label_ids: newIds });
+      await fetchTask({ silent: true, seq });
       if (res.data.status) {
-        fetchTask();
         window.dispatchEvent(new Event('task:updated'));
       }
-    } catch {}
+    } catch {
+      await fetchTask({ silent: true, seq });
+    }
   };
 
   // 라벨 생성 후 태스크에 할당
@@ -156,7 +163,9 @@ export default function useTaskDetail(branchId, taskId) {
           label_ids: [...currentIds, newLabelId],
         });
         if (patchRes.data.status) {
-          fetchTask();
+          // 생성 직후 다른 라벨을 빠르게 토글하는 경우를 대비해 toggleLabel/updateAssignees와 같은 seq 규약에 합류
+          const seq = ++resyncSeq.current;
+          await fetchTask({ silent: true, seq });
           window.dispatchEvent(new Event('task:updated'));
         }
       }
@@ -169,7 +178,7 @@ export default function useTaskDetail(branchId, taskId) {
       const res = await axios.patch(`/branches/${branchId}/labels/${labelId}`, updates);
       if (res.data.status) {
         await fetchOptions();
-        fetchTask();
+        fetchTask({ silent: true });
         window.dispatchEvent(new Event('task:updated'));
       }
     } catch {}
@@ -181,7 +190,7 @@ export default function useTaskDetail(branchId, taskId) {
       const res = await axios.delete(`/branches/${branchId}/labels/${labelId}`);
       if (res.data.status) {
         await fetchOptions();
-        fetchTask();
+        fetchTask({ silent: true });
         window.dispatchEvent(new Event('task:updated'));
       }
     } catch {}
