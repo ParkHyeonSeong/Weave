@@ -45,3 +45,4 @@ backend/uploads/
 docs/
 .mcp.json
 .superpowers/
+.playwright-mcp/
