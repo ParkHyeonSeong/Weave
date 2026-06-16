@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/router';
 import { Plus, FileText, X } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import NavLink from '@/components/common/NavLink';
 
 export default function TaskPageLinkSection({ branchId, taskId }) {
-  const router = useRouter();
   const [links, setLinks] = useState([]);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -70,6 +69,7 @@ export default function TaskPageLinkSection({ branchId, taskId }) {
   };
 
   const handleUnlink = async (e, linkId) => {
+    e.preventDefault(); // 행이 NavLink라 앵커 기본 네비를 막아야 한다(X 클릭 시 페이지 이동 방지)
     e.stopPropagation();
     try {
       await axios.delete(`/branches/${branchId}/tasks/${taskId}/pages/${linkId}`);
@@ -126,10 +126,10 @@ export default function TaskPageLinkSection({ branchId, taskId }) {
       ) : (
         <div className="TaskPageLinkSection__List">
           {links.map((link) => (
-            <div
+            <NavLink
               key={link.link_id}
+              href={`/canvas/${link.canvas_id}/${link.page_id}`}
               className="TaskPageLinkSection__Item"
-              onClick={() => router.push(`/canvas/${link.canvas_id}?page=${link.page_id}`)}
             >
               <FileText size={14} className="TaskPageLinkSection__Icon" />
               <span className="TaskPageLinkSection__PageTitle">{link.title || 'Untitled'}</span>
@@ -140,7 +140,7 @@ export default function TaskPageLinkSection({ branchId, taskId }) {
               >
                 <X size={12} />
               </button>
-            </div>
+            </NavLink>
           ))}
         </div>
       )}

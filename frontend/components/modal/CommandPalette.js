@@ -5,6 +5,7 @@ import {
   Compass, User, CircleDot, Clock, Settings, PanelLeft,
 } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import NavLink from '@/components/common/NavLink';
 import { LOGIN_PATH } from '@/library/authRedirect';
 import { useUiPrefs } from '@/library/UiPrefsContext';
 import Avatar from '@/components/common/Avatar';
@@ -122,36 +123,31 @@ export default function CommandPalette({ onClose }) {
     }
   };
 
-  // 아이템 실행
-  const executeItem = (item) => {
-    switch (item.type) {
-      case 'action':
-        executeAction(item);
-        break;
-      case 'recent-task':
-        onClose();
-        router.push(`/branch/${item.data.branch_id}/task/${item.data.task_id}`);
-        break;
-      case 'recent-doc':
-        onClose();
-        router.push(`/canvas/${item.data.canvas_id}/${item.data.page_id}`);
-        break;
-      case 'search-task':
-        onClose();
-        router.push(`/branch/${item.data.branch_id}/task/${item.data.task_id}`);
-        break;
-      case 'search-doc':
-        onClose();
-        router.push(`/canvas/${item.data.canvas_id}/${item.data.page_id}`);
-        break;
-      case 'search-issue':
-        onClose();
-        router.push(`/branch/${item.data.branch_id}/task/${item.data.task_id}/issue/${item.data.issue_id}`);
-        break;
-      case 'search-member':
-        // v1: 표시만
-        break;
+  // nav 항목의 목적지 URL. 렌더의 NavLink와 키보드 Enter가 같은 소스를 쓰도록 공유한다.
+  const getItemHref = (item) => {
+    if (item.type === 'recent-task' || item.type === 'search-task') {
+      return `/branch/${item.data.branch_id}/task/${item.data.task_id}`;
     }
+    if (item.type === 'recent-doc' || item.type === 'search-doc') {
+      return `/canvas/${item.data.canvas_id}/${item.data.page_id}`;
+    }
+    if (item.type === 'search-issue') {
+      return `/branch/${item.data.branch_id}/task/${item.data.task_id}/issue/${item.data.issue_id}`;
+    }
+    if (item.type === 'action' && item.data.route) return item.data.route;
+    return null;
+  };
+
+  // 아이템 실행: 마우스 클릭은 NavLink가, 키보드 Enter는 여기서 라우팅한다.
+  const executeItem = (item) => {
+    const href = getItemHref(item);
+    if (href) {
+      onClose();
+      router.push(href);
+      return;
+    }
+    if (item.type === 'action') executeAction(item);
+    // search-member: v1 표시만
   };
 
   const executeAction = (item) => {
@@ -216,16 +212,38 @@ export default function CommandPalette({ onClose }) {
             groups.map((group) => (
               <div key={group.label} className="CommandPalette__Group">
                 <div className="CommandPalette__GroupLabel">{group.label}</div>
-                {group.items.map((item) => (
-                  <button
-                    key={item.key}
-                    className={`CommandPalette__Item ${item.flatIndex === activeIndex ? 'CommandPalette__Item--active' : ''}`}
-                    onClick={() => executeItem(item)}
-                    onMouseEnter={() => setActiveIndex(item.flatIndex)}
-                  >
-                    {renderItem(item)}
-                  </button>
-                ))}
+                {group.items.map((item) => {
+                  // Navigation items: recent-task, recent-doc, search-task, search-doc, search-issue
+                  // Action items with routes: nav-dashboard, nav-my-tasks, nav-browse, nav-profile, nav-admin
+                  // Command actions (create, logout): stay as button
+                  const href = getItemHref(item);
+
+                  if (!href) {
+                    // 네비게이션이 아닌 항목 (create-branch, create-canvas, logout, search-member)
+                    return (
+                      <button
+                        key={item.key}
+                        className={`CommandPalette__Item ${item.flatIndex === activeIndex ? 'CommandPalette__Item--active' : ''}`}
+                        onClick={() => executeItem(item)}
+                        onMouseEnter={() => setActiveIndex(item.flatIndex)}
+                      >
+                        {renderItem(item)}
+                      </button>
+                    );
+                  }
+
+                  return (
+                    <NavLink
+                      key={item.key}
+                      href={href}
+                      className={`CommandPalette__Item ${item.flatIndex === activeIndex ? 'CommandPalette__Item--active' : ''}`}
+                      onClick={onClose}
+                      onMouseEnter={() => setActiveIndex(item.flatIndex)}
+                    >
+                      {renderItem(item)}
+                    </NavLink>
+                  );
+                })}
               </div>
             ))
           )}

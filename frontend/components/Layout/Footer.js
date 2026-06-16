@@ -1,4 +1,5 @@
 import { useRouter } from 'next/router';
+import NavLink from '@/components/common/NavLink';
 import { PanelLeft, PanelRight, LayoutDashboard, CheckSquare, Compass, Menu, MessageSquare } from 'lucide-react';
 
 const isMac = typeof navigator !== 'undefined' && /Mac/.test(navigator.userAgent);
@@ -18,27 +19,27 @@ export default function Footer({
   if (isMobile) {
     return (
       <footer className="Footer Footer--mobile">
-        <button
+        <NavLink
+          href="/"
           className={`Footer__NavItem ${router.pathname === '/' ? 'Footer__NavItem--active' : ''}`}
-          onClick={() => router.push('/')}
         >
           <LayoutDashboard size={20} />
           <span className="Footer__NavLabel">Home</span>
-        </button>
-        <button
+        </NavLink>
+        <NavLink
+          href="/my-tasks"
           className={`Footer__NavItem ${router.pathname === '/my-tasks' ? 'Footer__NavItem--active' : ''}`}
-          onClick={() => router.push('/my-tasks')}
         >
           <CheckSquare size={20} />
           <span className="Footer__NavLabel">Tasks</span>
-        </button>
-        <button
+        </NavLink>
+        <NavLink
+          href="/browse"
           className={`Footer__NavItem ${router.pathname === '/browse' ? 'Footer__NavItem--active' : ''}`}
-          onClick={() => router.push('/browse')}
         >
           <Compass size={20} />
           <span className="Footer__NavLabel">Browse</span>
-        </button>
+        </NavLink>
         {hasSidebar && (
           <button
             className={`Footer__NavItem ${!isSidebarCollapsed ? 'Footer__NavItem--active' : ''}`}

@@ -19,6 +19,7 @@ import TaskDescriptionEditor from './TaskDescriptionEditor';
 import TaskCommentSection from './TaskCommentSection';
 import ConfirmModal from '@/components/modal/ConfirmModal';
 import ActivityTimeline from '@/components/common/ActivityTimeline';
+import NavLink from '@/components/common/NavLink';
 
 export default function TaskDetailPanel({ branchId, branchKey, taskTypes: externalTaskTypes, workflowStatuses: externalStatuses, taskSummary, onClose, onSelectTask }) {
   const router = useRouter();
@@ -114,13 +115,13 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
           >
             <Star size={14} fill={starred ? 'currentColor' : 'none'} />
           </button>
-          <button
+          <NavLink
+            href={`/branch/${branchId}/task/${task.task_id}`}
             className="TaskDetailPanel__ExpandBtn"
-            onClick={() => router.push(`/branch/${branchId}/task/${task.task_id}`)}
             title="Open full page"
           >
             <Maximize2 size={14} />
-          </button>
+          </NavLink>
           <button className="TaskDetailPanel__CloseBtn" onClick={onClose}>
             <X size={16} />
           </button>

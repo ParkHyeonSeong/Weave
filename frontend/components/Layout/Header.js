@@ -5,6 +5,7 @@ import { formatMessageTime } from '@/library/formatTime';
 import { LOGIN_PATH } from '@/library/authRedirect';
 import AppSwitcher from './AppSwitcher';
 import Avatar from '@/components/common/Avatar';
+import NavLink from '@/components/common/NavLink';
 
 const NOTI_ICONS = {
   mention: AtSign,
@@ -124,7 +125,7 @@ export default function Header({ isMobile, hasSidebar = false, onToggleSidebar, 
             <Menu size={20} />
           </button>
         )}
-        <div className="Header__Logo" onClick={() => router.push('/')} style={{ cursor: 'pointer' }}>
+        <NavLink href="/" className="Header__Logo">
           <img src="/icons/weave_square.svg" alt="Weave" className="Header__LogoIcon" />
           {!isMobile && <span className="Header__LogoText">Weave</span>}
           {!isMobile && workspaceName && (
@@ -133,7 +134,7 @@ export default function Header({ isMobile, hasSidebar = false, onToggleSidebar, 
               <span className="Header__WorkspaceName">{workspaceName}</span>
             </>
           )}
-        </div>
+        </NavLink>
         <span className="Header__Separator">/</span>
         <AppSwitcher />
       </div>
@@ -195,6 +196,56 @@ export default function Header({ isMobile, hasSidebar = false, onToggleSidebar, 
                 ) : (
                   notifications.map((noti) => {
                     const Icon = NOTI_ICONS[noti.type] || Bell;
+                    // Only navigate if notification has a link
+                    if (noti.link) {
+                      return (
+                        <NavLink
+                          key={noti.notification_id}
+                          href={noti.link}
+                          className={`Header__NotiItem ${!noti.is_read ? 'Header__NotiItem--unread' : ''}`}
+                          onClick={(e) => {
+                            // Mark as read before navigation
+                            if (!noti.is_read && onReadNotification) {
+                              onReadNotification(noti.notification_id);
+                            }
+                            if (onNotiClick) {
+                              onNotiClick(noti);
+                            }
+                            setShowNotiMenu(false);
+                          }}
+                        >
+                          {noti.actor_id ? (
+                            <div className="Header__NotiAvatar">
+                              <Avatar
+                                user={{
+                                  name: noti.actor_name,
+                                  id: noti.actor_id,
+                                  avatar_url: noti.actor_avatar_url,
+                                  avatar_color: noti.actor_avatar_color,
+                                }}
+                                size="sm"
+                              />
+                              <span className="Header__NotiTypeBadge">
+                                <Icon size={10} />
+                              </span>
+                            </div>
+                          ) : (
+                            // 행위자 없는 시스템 알림은 타입 아이콘을 메인 그래픽으로
+                            <div className="Header__NotiIcon">
+                              <Icon size={14} />
+                            </div>
+                          )}
+                          <div className="Header__NotiBody">
+                            <div className="Header__NotiItemTop">
+                              <span className="Header__NotiSender">{noti.actor_name || 'System'}</span>
+                              <span className="Header__NotiTime">{formatMessageTime(noti.created_at)}</span>
+                            </div>
+                            <span className="Header__NotiContent">{noti.title}</span>
+                          </div>
+                        </NavLink>
+                      );
+                    }
+                    // No link: plain button for click side-effects only
                     return (
                       <button
                         key={noti.notification_id}
@@ -247,13 +298,14 @@ export default function Header({ isMobile, hasSidebar = false, onToggleSidebar, 
           </button>
           {showSettingsMenu && (
             <div className="Header__SettingsMenu">
-              <button
+              <NavLink
+                href="/admin"
                 className="Header__SettingsItem"
-                onClick={() => { setShowSettingsMenu(false); router.push('/admin'); }}
+                onClick={() => { setShowSettingsMenu(false); }}
               >
                 <Shield size={15} />
                 <span>Admin Settings</span>
-              </button>
+              </NavLink>
             </div>
           )}
         </div>
@@ -274,13 +326,14 @@ export default function Header({ isMobile, hasSidebar = false, onToggleSidebar, 
           </button>
           {showUserMenu && (
             <div className="Header__SettingsMenu">
-              <button
+              <NavLink
+                href="/profile"
                 className="Header__SettingsItem"
-                onClick={() => { setShowUserMenu(false); router.push('/profile'); }}
+                onClick={() => { setShowUserMenu(false); }}
               >
                 <User size={15} />
                 <span>프로필 설정</span>
-              </button>
+              </NavLink>
               <button
                 className="Header__SettingsItem Header__SettingsItem--danger"
                 onClick={handleLogout}

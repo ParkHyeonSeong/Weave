@@ -5,6 +5,7 @@ import { axios } from '@/library/_axios';
 import { useUiPrefs } from '@/library/UiPrefsContext';
 import { getAppContext, APP_HOME } from '@/library/appContext';
 import { DEFAULT_COLORS } from '@/library/entityAppearance';
+import NavLink from '@/components/common/NavLink';
 
 const APPS = [
   { key: 'home',   label: 'Home',   Icon: LayoutDashboard, color: '#64748b',             path: '/' },
@@ -41,13 +42,7 @@ export default function AppSwitcher() {
     return () => document.removeEventListener('mousedown', onDown);
   }, [open]);
 
-  const goApp = (path) => { setOpen(false); router.push(path); };
 
-  const goRecent = (item) => {
-    setOpen(false);
-    if (item.type === 'task') router.push(`/branch/${item.branch_id}/task/${item.task_id}`);
-    else if (item.type === 'doc') router.push(`/canvas/${item.canvas_id}/${item.page_id}`);
-  };
 
   const visibleRecent = recent.filter((it) =>
     it.type === 'task'
@@ -80,17 +75,18 @@ export default function AppSwitcher() {
             const Icon = app.Icon;
             const active = app.key === currentKey;
             return (
-              <button
+              <NavLink
                 key={app.key}
+                href={app.path}
                 className={`AppSwitcher__Item ${active ? 'AppSwitcher__Item--active' : ''}`}
-                onClick={() => goApp(app.path)}
+                onClick={() => setOpen(false)}
               >
                 <span className="AppSwitcher__ItemIcon" style={{ color: app.color }}>
                   <Icon size={16} strokeWidth={2.2} />
                 </span>
                 <span className="AppSwitcher__ItemLabel">{app.label}</span>
                 {active && <Check size={14} className="AppSwitcher__ItemCheck" />}
-              </button>
+              </NavLink>
             );
           })}
 
@@ -98,23 +94,29 @@ export default function AppSwitcher() {
             <>
               <div className="AppSwitcher__Divider" />
               <div className="AppSwitcher__Label">최근</div>
-              {visibleRecent.map((item) => (
-                <button
-                  key={`${item.type}-${item.type === 'task' ? item.task_id : item.page_id}`}
-                  className="AppSwitcher__Recent"
-                  onClick={() => goRecent(item)}
-                >
-                  {item.type === 'task' ? (
-                    <span
-                      className="AppSwitcher__RecentDot"
-                      style={item.status_color ? { background: item.status_color } : undefined}
-                    />
-                  ) : (
-                    <FileText size={13} className="AppSwitcher__RecentDocIcon" />
-                  )}
-                  <span className="AppSwitcher__RecentTitle">{item.title}</span>
-                </button>
-              ))}
+              {visibleRecent.map((item) => {
+                const href = item.type === 'task'
+                  ? `/branch/${item.branch_id}/task/${item.task_id}`
+                  : `/canvas/${item.canvas_id}/${item.page_id}`;
+                return (
+                  <NavLink
+                    key={`${item.type}-${item.type === 'task' ? item.task_id : item.page_id}`}
+                    href={href}
+                    className="AppSwitcher__Recent"
+                    onClick={() => setOpen(false)}
+                  >
+                    {item.type === 'task' ? (
+                      <span
+                        className="AppSwitcher__RecentDot"
+                        style={item.status_color ? { background: item.status_color } : undefined}
+                      />
+                    ) : (
+                      <FileText size={13} className="AppSwitcher__RecentDocIcon" />
+                    )}
+                    <span className="AppSwitcher__RecentTitle">{item.title}</span>
+                  </NavLink>
+                );
+              })}
             </>
           )}
         </div>

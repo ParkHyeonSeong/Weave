@@ -9,6 +9,7 @@ import ScrumMembersModal from './ScrumMembersModal';
 import Avatar from '@/components/common/Avatar';
 import RefPanelHost, { useRefPreview } from '@/components/shared/RefPanelHost';
 import { currentISOWeek, addWeeks, weekDates } from '@/library/isoWeek';
+import NavLink from '@/components/common/NavLink';
 
 const getProfile = () => {
   try { return JSON.parse(sessionStorage.getItem('profile') || '{}'); } catch { return {}; }
@@ -114,15 +115,14 @@ export default function ScrumBoardView() {
             <Users size={14} />
             멤버 {members.length}
           </button>
-          <button
-            type="button"
+          <NavLink
+            href={`/scrum/${boardId}/settings`}
             className="ScrumBoard__SettingsBtn"
-            onClick={() => router.push(`/scrum/${boardId}/settings`)}
             title="보드 설정"
             aria-label="보드 설정"
           >
             <Settings size={15} />
-          </button>
+          </NavLink>
         </div>
       </header>
       <div className="ScrumBoard__Body">

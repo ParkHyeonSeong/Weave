@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/router';
 import { Plus, MessageCircle, CircleDot, CheckCircle2 } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import { formatRelative } from '@/library/formatTime';
 import Avatar from '@/components/common/Avatar';
+import NavLink from '@/components/common/NavLink';
 
 export default function TaskIssueSection({ branchId, taskId, expanded = false }) {
-  const router = useRouter();
   const [issues, setIssues] = useState([]);
 
   const fetchIssues = async () => {
@@ -50,10 +49,10 @@ export default function TaskIssueSection({ branchId, taskId, expanded = false })
             </span>
           )}
         </span>
-        <button className="TaskIssueSection__AddBtn" onClick={() => router.push(`/branch/${branchId}/task/${taskId}/issue/new`)}>
+        <NavLink href={`/branch/${branchId}/task/${taskId}/issue/new`} className="TaskIssueSection__AddBtn">
           <Plus size={14} />
           {expanded && <span>New issue</span>}
-        </button>
+        </NavLink>
       </div>
 
       {displayIssues.length === 0 ? (
@@ -61,10 +60,10 @@ export default function TaskIssueSection({ branchId, taskId, expanded = false })
       ) : (
         <div className="TaskIssueSection__List">
           {displayIssues.map((issue) => (
-            <button
+            <NavLink
               key={issue.issue_id}
+              href={`/branch/${branchId}/task/${taskId}/issue/${issue.issue_id}`}
               className="TaskIssueSection__Item"
-              onClick={() => router.push(`/branch/${branchId}/task/${taskId}/issue/${issue.issue_id}`)}
             >
               {issue.status === 'open'
                 ? <CircleDot size={14} className="TaskIssueSection__StatusIcon TaskIssueSection__StatusIcon--open" />
@@ -93,18 +92,18 @@ export default function TaskIssueSection({ branchId, taskId, expanded = false })
                   {issue.comment_count}
                 </span>
               )}
-            </button>
+            </NavLink>
           ))}
         </div>
       )}
 
       {!expanded && issues.length > 5 && (
-        <button
+        <NavLink
+          href={`/branch/${branchId}/task/${taskId}`}
           className="TaskIssueSection__More"
-          onClick={() => router.push(`/branch/${branchId}/task/${taskId}`)}
         >
           View all {issues.length} issues
-        </button>
+        </NavLink>
       )}
 
     </div>
