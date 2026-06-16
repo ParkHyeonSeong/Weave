@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { axios } from '@/library/_axios';
 
 export default function useTaskDetail(branchId, taskId) {
@@ -14,22 +14,30 @@ export default function useTaskDetail(branchId, taskId) {
   const [workflowStatuses, setWorkflowStatuses] = useState([]);
   const [taskTypes, setTaskTypes] = useState([]);
   const [customFields, setCustomFields] = useState([]);
+  // 낙관적 변경의 백그라운드 재동기화 순번. 늦게 도착한 응답이 더 최신 변경을 덮어쓰지 않도록 가드한다.
+  const resyncSeq = useRef(0);
 
-  const fetchTask = useCallback(async () => {
+  // silent=true: 변경 저장 후 백그라운드 재동기화용. 스켈레톤/에러로 패널을 갈아끼우지 않아
+  // 인라인 편집(서브담당자 멀티선택 등) 중 열린 드롭다운/포커스가 유지된다.
+  // seq: 전달 시, 응답 도착 시점에 더 최신 재동기화가 시작됐다면(seq != 현재) 결과를 폐기한다.
+  const fetchTask = useCallback(async ({ silent = false, seq } = {}) => {
     if (!branchId || !taskId) return;
-    setLoading(true);
-    setError(null);
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const res = await axios.get(`/branches/${branchId}/tasks/${taskId}`);
+      if (seq !== undefined && seq !== resyncSeq.current) return; // 더 최신 재동기화에 추월됨 — 폐기
       if (res.data.status) {
         setTask(res.data.task);
-      } else {
+      } else if (!silent) {
         setError(res.data.message || 'UNKNOWN_ERROR');
       }
     } catch {
-      setError('NETWORK_ERROR');
+      if (!silent) setError('NETWORK_ERROR');
     }
-    setLoading(false);
+    if (!silent) setLoading(false);
   }, [branchId, taskId]);
 
   const fetchOptions = useCallback(async () => {
@@ -94,15 +102,27 @@ export default function useTaskDetail(branchId, taskId) {
   // 담당자 업데이트
   const updateAssignees = async (mainId, subIds) => {
     if (!task) return;
+    // 낙관적 반영: 패널 재로딩 없이 즉시 체크 상태를 갱신해 드롭다운을 연 채로 연속 선택할 수 있고,
+    // 직전 선택이 재동기화 전에 유실되는 레이스(빠르게 여러 명 체크)도 막는다. members로 username 등 보강.
+    const enrich = (id, role) => ({ ...(members.find((m) => m.user_id === id) || {}), user_id: id, role });
+    const optimistic = [
+      ...(mainId ? [enrich(mainId, 'main')] : []),
+      ...subIds.map((id) => enrich(id, 'sub')),
+    ];
+    const seq = ++resyncSeq.current; // 이 변경이 최신임을 표시 — 늦게 온 이전 재동기화는 폐기됨
+    setTask((prev) => (prev ? { ...prev, assignees: optimistic } : prev));
     try {
       const res = await axios.patch(`/branches/${branchId}/tasks/${task.task_id}`, {
         assignees: { main: mainId || null, sub: subIds },
       });
+      // 성공/실패 모두 서버 상태로 조용히 동기화 (실패 시 낙관적 반영이 서버값으로 롤백됨)
+      await fetchTask({ silent: true, seq });
       if (res.data.status) {
-        await fetchTask();
         window.dispatchEvent(new Event('task:updated'));
       }
-    } catch {}
+    } catch {
+      await fetchTask({ silent: true, seq });
+    }
   };
 
   // 라벨 토글
