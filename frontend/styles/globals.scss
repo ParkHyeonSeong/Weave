@@ -32,6 +32,13 @@ a {
   }
 }
 
+// 내부 네비게이션 링크(NavLink). 전역 a{color}가 카드/행 텍스트로 번지지 않게 색을 상속받되,
+// 컴포넌트별 active/hover 색 규칙(동일 specificity, 이후 로드)이 이길 수 있도록 클래스로 둔다.
+.NavLink {
+  color: inherit;
+  text-decoration: none;
+}
+
 button {
   cursor: pointer;
   border: none;
