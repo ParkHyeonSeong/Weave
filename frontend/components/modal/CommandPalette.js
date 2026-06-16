@@ -5,6 +5,7 @@ import {
   Compass, User, CircleDot, Clock, Settings, PanelLeft,
 } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import { LOGIN_PATH } from '@/library/authRedirect';
 import { useUiPrefs } from '@/library/UiPrefsContext';
 import Avatar from '@/components/common/Avatar';
 
@@ -174,7 +175,8 @@ export default function CommandPalette({ onClose }) {
         sessionStorage.removeItem('profile');
         sessionStorage.removeItem('avatar_url');
         sessionStorage.removeItem('app_initialized');
-        router.replace('/auth/login');
+        // returnTo 미전달: 로그아웃 후 다시 보호 페이지로 복귀시키지 않는다
+        router.replace(LOGIN_PATH);
         onClose();
         break;
     }

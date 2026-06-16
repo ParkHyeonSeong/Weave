@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/router';
 import { Lock, Eye, EyeOff, Loader2, CheckCircle2 } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import { LOGIN_PATH } from '@/library/authRedirect';
 import Alert from '@/components/modal/Alert';
 
 
@@ -39,7 +40,7 @@ export default function ResetPassword({ token }) {
           <button
             type="button"
             className="ChangePassword__SubmitBtn"
-            onClick={() => router.replace('/auth/login')}
+            onClick={() => router.replace(LOGIN_PATH)}
           >
             Go to Sign In
           </button>
@@ -99,7 +100,7 @@ export default function ResetPassword({ token }) {
           <button
             type="button"
             className="ChangePassword__SubmitBtn"
-            onClick={() => router.replace('/auth/login')}
+            onClick={() => router.replace(LOGIN_PATH)}
           >
             Go to Sign In
           </button>

@@ -5,6 +5,9 @@ import {
   buildChangePasswordPath,
   buildLoginPath,
   getReturnToFromQuery,
+  LOGIN_PATH,
+  PUBLIC_PATHS,
+  SETUP_PATH,
 } from '@/library/authRedirect';
 import Layout from '@/components/Layout/Layout';
 import ErrorBoundary from '@/components/Layout/ErrorBoundary';
@@ -99,8 +102,8 @@ import "@/styles/components/scrum/scrum.scss";
 import "@/styles/components/shared/refPanelPageLayout.scss";
 import "@/styles/components/common/lightbox.scss";
 
-const publicPaths = ['/auth/login', '/auth/change-password', '/auth/reset', '/setup'];
-const noLayoutPaths = ['/auth/login', '/auth/change-password', '/auth/reset', '/setup', '/admin'];
+// 공개 경로는 authRedirect.PUBLIC_PATHS를 단일 소스로 쓰고, /admin은 레이아웃 없이만 렌더한다.
+const noLayoutPaths = [...PUBLIC_PATHS, '/admin'];
 
 export default function App({ Component, pageProps }) {
   const router = useRouter();
@@ -139,7 +142,7 @@ export default function App({ Component, pageProps }) {
 
     // 인증 상태 확인: 캐시된 프로필 우선, 없으면 쿠키 기반 서버 확인
     let isLoggedIn = !!sessionStorage.getItem('profile');
-    if (!isLoggedIn && !publicPaths.includes(router.pathname) && router.pathname !== '/setup') {
+    if (!isLoggedIn && !PUBLIC_PATHS.includes(router.pathname)) {
       try {
         const res = await axios.get('/auth/me');
         if (res.data.status) {
@@ -152,14 +155,14 @@ export default function App({ Component, pageProps }) {
     if (!initialized) {
       // 미초기화 상태: /setup 외 모든 경로 차단
       if (router.pathname !== '/setup') {
-        router.replace('/setup');
+        router.replace(SETUP_PATH);
         return;
       }
     } else if (router.pathname === '/setup') {
       // 초기화 완료 후 /setup 접근 차단
-      router.replace(isLoggedIn ? '/' : '/auth/login');
+      router.replace(isLoggedIn ? '/' : LOGIN_PATH);
       return;
-    } else if (!isLoggedIn && !publicPaths.includes(router.pathname)) {
+    } else if (!isLoggedIn && !PUBLIC_PATHS.includes(router.pathname)) {
       // 미인증 + 비공개 경로
       router.replace(buildLoginPath(router.asPath));
       return;

@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { Search, Bell, Settings, Shield, AtSign, UserPlus, AlertCircle, MessageSquare, CheckCircle2, Menu, User, LogOut } from 'lucide-react';
 import { formatMessageTime } from '@/library/formatTime';
+import { LOGIN_PATH } from '@/library/authRedirect';
 import AppSwitcher from './AppSwitcher';
 import Avatar from '@/components/common/Avatar';
 
@@ -96,7 +97,8 @@ export default function Header({ isMobile, hasSidebar = false, onToggleSidebar, 
     sessionStorage.removeItem('profile');
     sessionStorage.removeItem('avatar_url');
     sessionStorage.removeItem('app_initialized');
-    router.replace('/auth/login');
+    // returnTo 미전달: 로그아웃 후 다시 보호 페이지로 복귀시키지 않는다
+    router.replace(LOGIN_PATH);
   };
 
   // 알림 클릭 시 읽음 처리 + 해당 페이지로 이동
