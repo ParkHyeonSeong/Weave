@@ -52,4 +52,39 @@ describe('auth redirect helpers', () => {
     expect(getReturnToFromQuery({ returnTo: '' })).toBe('/');
     expect(getReturnToFromQuery({})).toBe('/');
   });
+
+  it('falls back for backslash and ASCII control-char payloads that the URL parser later re-normalizes', () => {
+    // 브라우저/Next URL 파서는 백슬래시를 '/'로 바꾸고 탭/LF/CR을 제거한다. 원본 문자열만 보는
+    // prefix 검사를 통과시킨 뒤 '//evil.com'(외부 탈출)이나 blocked prefix로 붕괴할 수 있는 값들.
+    const redirectBypass = [
+      '/\t/evil.com', // 탭 -> //evil.com
+      '/\n/evil.com', // LF
+      '/\r/evil.com', // CR
+      '/\\evil.com',
+      '/\\/evil.com',
+      '\\evil.com',
+      '/au\tth/login', // 제어문자가 사라지며 blocked prefix로 붕괴
+      '/auth/log\tin',
+      '/set\nup',
+    ];
+
+    for (const value of redirectBypass) {
+      expect(normalizeReturnTo(value)).toBe('/');
+    }
+    // 비출력 제어문자(DEL 0x7F, C0 0x01)도 동일하게 차단 — escape 표기 대신 fromCharCode로 명시
+    expect(normalizeReturnTo('/x' + String.fromCharCode(0x7f))).toBe('/');
+    expect(normalizeReturnTo('/y' + String.fromCharCode(0x01))).toBe('/');
+    // 쿼리 경로(getReturnToFromQuery)도 같은 가드를 거친다
+    expect(getReturnToFromQuery({ returnTo: '/\t/evil.com' })).toBe('/');
+  });
+
+  it('blocks nested auth/setup paths but preserves lookalikes (no over-blocking)', () => {
+    expect(normalizeReturnTo('/auth/login/callback')).toBe('/');
+    expect(normalizeReturnTo('/auth/change-password/step2')).toBe('/');
+    expect(normalizeReturnTo('/setup/wizard')).toBe('/');
+    // 접두만 같은 정상 경로는 통과해야 한다
+    expect(normalizeReturnTo('/setups')).toBe('/setups');
+    expect(normalizeReturnTo('/auth/loginx')).toBe('/auth/loginx');
+    expect(normalizeReturnTo('/branch/1/sub/2?x=1#h')).toBe('/branch/1/sub/2?x=1#h');
+  });
 });
