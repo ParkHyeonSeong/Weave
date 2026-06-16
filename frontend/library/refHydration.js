@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { axios } from '@/library/_axios';
+import { attachRefChipAuxNav } from '@/library/refUrl';
 
 // 인라인 ref 칩(taskRef/docRef/issueRef/mention) 라이브 하이드레이션.
 // 칩 attrs는 삽입 시점 스냅샷(폴백)이고, 표면이 마운트될 때마다 /ref-status로
@@ -299,9 +300,15 @@ export function useRefHydration(ref, deps, enabled = true) {
   useEffect(() => {
     if (!enabled || !ref.current) return;
     hydrateDom(ref.current);
-    return subscribeRefresh(() => {
+    // 칩 가운데/ctrl·cmd 클릭 → 전체 페이지를 새 탭으로 (칩은 <span>이라 네이티브 새 탭 불가)
+    const detachAuxNav = attachRefChipAuxNav(ref.current);
+    const unsubscribe = subscribeRefresh(() => {
       if (ref.current) hydrateDom(ref.current);
     });
+    return () => {
+      detachAuxNav();
+      unsubscribe();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, ...deps]);
 }

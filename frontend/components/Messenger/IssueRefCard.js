@@ -1,5 +1,5 @@
-import { useRouter } from 'next/router';
 import { X, CircleDot } from 'lucide-react';
+import NavLink from '@/components/common/NavLink';
 
 const STATUS_LABELS = {
   open: 'Open',
@@ -7,21 +7,15 @@ const STATUS_LABELS = {
 };
 
 export default function IssueRefCard({ issueRef, removable, onRemove }) {
-  const router = useRouter();
   if (!issueRef) return null;
 
-  const handleClick = () => {
-    if (removable) return;
-    if (issueRef.branch_id && issueRef.task_id && issueRef.issue_id) {
-      router.push(`/branch/${issueRef.branch_id}/task/${issueRef.task_id}/issue/${issueRef.issue_id}`);
-    }
-  };
+  // 클릭 가능(전송된 메시지)일 때만 링크. compose 프리뷰(removable)는 이동 안 함.
+  const navUrl = !removable && issueRef.branch_id && issueRef.task_id && issueRef.issue_id
+    ? `/branch/${issueRef.branch_id}/task/${issueRef.task_id}/issue/${issueRef.issue_id}`
+    : null;
 
-  return (
-    <div
-      className={`IssueRefCard ${!removable ? 'IssueRefCard--clickable' : ''}`}
-      onClick={handleClick}
-    >
+  const content = (
+    <>
       <div className="IssueRefCard__Header">
         <CircleDot size={12} className="IssueRefCard__Icon" />
         <span className="IssueRefCard__DisplayId">{issueRef.display_id}</span>
@@ -35,6 +29,11 @@ export default function IssueRefCard({ issueRef, removable, onRemove }) {
         )}
       </div>
       <div className="IssueRefCard__Title">{issueRef.title}</div>
-    </div>
+    </>
   );
+
+  if (navUrl) {
+    return <NavLink className="IssueRefCard IssueRefCard--clickable" href={navUrl}>{content}</NavLink>;
+  }
+  return <div className="IssueRefCard">{content}</div>;
 }
