@@ -10,7 +10,6 @@ import HomeToolbar from '@/components/Home/shared/HomeToolbar';
 import HomeSkeleton from '@/components/Home/shared/HomeSkeleton';
 import HomeEmptyState from '@/components/Home/shared/HomeEmptyState';
 import AppCard, { AvatarSet } from '@/components/Home/shared/AppCard';
-import NavLink from '@/components/common/NavLink';
 import { useUiPrefs } from '@/library/UiPrefsContext';
 import useHomeListControls from '@/library/useHomeListControls';
 import { byTextAsc, byNumberDesc, byDateDesc, ROLE_GROUP } from '@/library/homeListControls';

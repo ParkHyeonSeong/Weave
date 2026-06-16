@@ -1043,6 +1043,7 @@
   }
 
   &__Item {
+    position: relative;
     display: flex;
     align-items: center;
     gap: $space-2;
@@ -1059,6 +1060,14 @@
         opacity: 1;
       }
     }
+  }
+
+  // 행 전체를 덮는 stretched-link(가운데/ctrl 클릭 새 탭). unlink 버튼은 z-index로 이 위에 둔다.
+  &__ItemOverlay {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    border-radius: $radius-md;
   }
 
   &__Icon {
@@ -1085,6 +1094,8 @@
   }
 
   &__UnlinkBtn {
+    position: relative;
+    z-index: 1;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1095,6 +1106,11 @@
     opacity: 0;
     transition: all $transition-fast;
     flex-shrink: 0;
+
+    // 키보드 포커스 시에도 보이게 (마우스 hover 외)
+    &:focus-visible {
+      opacity: 1;
+    }
 
     &:hover {
       background: $color-surface;

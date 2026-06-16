@@ -318,9 +318,12 @@ export function useEditorRefHydration(editor, delay = 0) {
   useEffect(() => {
     if (!editor) return;
     const t = setTimeout(() => hydrateEditor(editor), delay);
+    // 칩 가운데/ctrl·cmd 클릭 → 새 탭. 좌클릭(=NodeView 기본 동작인 태스크/문서 패널 열기)은 그대로 둔다.
+    const detachAuxNav = attachRefChipAuxNav(editor.view?.dom);
     const unsubscribe = subscribeRefresh(() => hydrateEditor(editor));
     return () => {
       clearTimeout(t);
+      detachAuxNav();
       unsubscribe();
     };
   }, [editor, delay]);

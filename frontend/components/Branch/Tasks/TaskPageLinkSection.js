@@ -69,7 +69,6 @@ export default function TaskPageLinkSection({ branchId, taskId }) {
   };
 
   const handleUnlink = async (e, linkId) => {
-    e.preventDefault(); // 행이 NavLink라 앵커 기본 네비를 막아야 한다(X 클릭 시 페이지 이동 방지)
     e.stopPropagation();
     try {
       await axios.delete(`/branches/${branchId}/tasks/${taskId}/pages/${linkId}`);
@@ -126,11 +125,13 @@ export default function TaskPageLinkSection({ branchId, taskId }) {
       ) : (
         <div className="TaskPageLinkSection__List">
           {links.map((link) => (
-            <NavLink
-              key={link.link_id}
-              href={`/canvas/${link.canvas_id}/${link.page_id}`}
-              className="TaskPageLinkSection__Item"
-            >
+            <div key={link.link_id} className="TaskPageLinkSection__Item">
+              {/* stretched-link 오버레이: unlink 버튼을 <a> 안에 중첩하지 않으려고 행을 덮는 링크로 분리 */}
+              <NavLink
+                className="TaskPageLinkSection__ItemOverlay"
+                href={`/canvas/${link.canvas_id}/${link.page_id}`}
+                aria-label={link.title || 'Untitled'}
+              />
               <FileText size={14} className="TaskPageLinkSection__Icon" />
               <span className="TaskPageLinkSection__PageTitle">{link.title || 'Untitled'}</span>
               <span className="TaskPageLinkSection__CanvasName">{link.canvas_name}</span>
@@ -140,7 +141,7 @@ export default function TaskPageLinkSection({ branchId, taskId }) {
               >
                 <X size={12} />
               </button>
-            </NavLink>
+            </div>
           ))}
         </div>
       )}
