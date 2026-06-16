@@ -106,10 +106,13 @@ export default function App({ Component, pageProps }) {
   const router = useRouter();
   const [appReady, setAppReady] = useState(false);
 
+  // 인증 게이트는 route 템플릿(pathname) 기준으로만 재평가한다. asPath를 deps에 넣으면 쿼리/해시/
+  // shallow 라우팅(탭 전환 등)마다 게이트가 다시 돌아 불필요하다. 리다이렉트에 쓰는 asPath는
+  // pathname 변경으로 게이트가 도는 시점의 값(같은 렌더)이라 returnTo가 정확히 잡힌다.
   useEffect(() => {
     if (!router.isReady) return;
     checkAppState();
-  }, [router.isReady, router.pathname, router.asPath]);
+  }, [router.isReady, router.pathname]);
 
   const checkAppState = async () => {
     setAppReady(false);
