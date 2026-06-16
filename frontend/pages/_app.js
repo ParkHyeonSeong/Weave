@@ -1,6 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { axios } from '@/library/_axios';
+import {
+  buildChangePasswordPath,
+  buildLoginPath,
+  getReturnToFromQuery,
+} from '@/library/authRedirect';
 import Layout from '@/components/Layout/Layout';
 import ErrorBoundary from '@/components/Layout/ErrorBoundary';
 import Toast from '@/components/Layout/Toast';
@@ -102,8 +107,9 @@ export default function App({ Component, pageProps }) {
   const [appReady, setAppReady] = useState(false);
 
   useEffect(() => {
+    if (!router.isReady) return;
     checkAppState();
-  }, [router.pathname]);
+  }, [router.isReady, router.pathname, router.asPath]);
 
   const checkAppState = async () => {
     setAppReady(false);
@@ -120,7 +126,7 @@ export default function App({ Component, pageProps }) {
       } catch {
         // API 실패 시: 프로필 캐시 없으면 로그인으로
         if (!sessionStorage.getItem('profile') && router.pathname !== '/auth/login') {
-          router.replace('/auth/login');
+          router.replace(buildLoginPath(router.asPath));
           return;
         }
         setAppReady(true);
@@ -152,11 +158,7 @@ export default function App({ Component, pageProps }) {
       return;
     } else if (!isLoggedIn && !publicPaths.includes(router.pathname)) {
       // 미인증 + 비공개 경로
-      router.replace('/auth/login');
-      return;
-    } else if (isLoggedIn && router.pathname === '/auth/login') {
-      // 인증 상태에서 로그인 페이지 접근
-      router.replace('/');
+      router.replace(buildLoginPath(router.asPath));
       return;
     }
 
@@ -165,10 +167,19 @@ export default function App({ Component, pageProps }) {
       try {
         const profile = JSON.parse(sessionStorage.getItem('profile') || '{}');
         if (profile.must_change_password && router.pathname !== '/auth/change-password') {
-          router.replace('/auth/change-password');
+          const returnTo = router.pathname === '/auth/login'
+            ? getReturnToFromQuery(router.query)
+            : router.asPath;
+          router.replace(buildChangePasswordPath(returnTo));
           return;
         }
       } catch {}
+    }
+
+    if (isLoggedIn && router.pathname === '/auth/login') {
+      // 인증 상태에서 로그인 페이지 접근
+      router.replace(getReturnToFromQuery(router.query));
+      return;
     }
 
     setAppReady(true);
@@ -186,11 +197,11 @@ export default function App({ Component, pageProps }) {
     const handleExpired = () => {
       sessionStorage.removeItem('profile');
       sessionStorage.removeItem('avatar_url');
-      router.replace('/auth/login');
+      router.replace(buildLoginPath(router.asPath));
     };
     window.addEventListener('auth:expired', handleExpired);
     return () => window.removeEventListener('auth:expired', handleExpired);
-  }, []);
+  }, [router, router.asPath]);
 
   if (!appReady) return null;
 

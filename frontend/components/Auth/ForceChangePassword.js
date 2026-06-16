@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/router';
 import { Lock, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import { getReturnToFromQuery } from '@/library/authRedirect';
 import Alert from '@/components/modal/Alert';
 
 
@@ -49,7 +50,7 @@ export default function ForceChangePassword() {
         const profile = JSON.parse(sessionStorage.getItem('profile') || '{}');
         delete profile.must_change_password;
         sessionStorage.setItem('profile', JSON.stringify(profile));
-        router.replace('/');
+        router.replace(getReturnToFromQuery(router.query));
       } else {
         const messages = {
           'NOT_ALLOWED': 'Password change is not required.',

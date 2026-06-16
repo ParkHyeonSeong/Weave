@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { Mail, Lock, User, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import { buildChangePasswordPath, getReturnToFromQuery } from '@/library/authRedirect';
 import Alert from '@/components/modal/Alert';
 
 
@@ -93,12 +94,14 @@ export default function Login() {
           sessionStorage.removeItem('avatar_url');
         }
 
+        const returnTo = getReturnToFromQuery(router.query);
+
         // 비밀번호 변경 강제
         if (response.data.profile.must_change_password) {
-          router.push('/auth/change-password');
+          router.replace(buildChangePasswordPath(returnTo));
           return;
         }
-        router.push('/');
+        router.replace(returnTo);
       } else {
         const messages = {
           'INVALID_CREDENTIALS': 'Invalid email or password.',
