@@ -332,6 +332,22 @@
       background: $color-surface;
       color: $color-text;
     }
+
+    &--danger {
+      color: $color-error;
+
+      &:hover {
+        background: $color-error-bg;
+        color: $color-error;
+      }
+    }
+  }
+
+  // -- User menu (avatar dropdown) --
+  &__UserWrap {
+    position: relative;
+    display: flex;
+    align-items: center;
   }
 
   &__Avatar {
@@ -340,6 +356,7 @@
     justify-content: center;
     width: 28px;
     height: 28px;
+    padding: 0;
     border-radius: 50%;
     background: $color-primary;
     color: $color-text-inverse;

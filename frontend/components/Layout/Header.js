@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/router';
-import { Search, Bell, Settings, Shield, AtSign, UserPlus, AlertCircle, MessageSquare, CheckCircle2, Menu } from 'lucide-react';
+import { Search, Bell, Settings, Shield, AtSign, UserPlus, AlertCircle, MessageSquare, CheckCircle2, Menu, User, LogOut } from 'lucide-react';
 import { formatMessageTime } from '@/library/formatTime';
 import AppSwitcher from './AppSwitcher';
 import Avatar from '@/components/common/Avatar';
@@ -24,8 +24,10 @@ export default function Header({ isMobile, hasSidebar = false, onToggleSidebar, 
   const [avatarColor, setAvatarColor] = useState(null);
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [showNotiMenu, setShowNotiMenu] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const settingsRef = useRef(null);
   const notiRef = useRef(null);
+  const userMenuRef = useRef(null);
 
   useEffect(() => {
     try {
@@ -66,7 +68,7 @@ export default function Header({ isMobile, hasSidebar = false, onToggleSidebar, 
 
   // 클릭 외부 감지로 드롭다운 닫기
   useEffect(() => {
-    if (!showSettingsMenu && !showNotiMenu) return;
+    if (!showSettingsMenu && !showNotiMenu && !showUserMenu) return;
     const handleClickOutside = (e) => {
       if (settingsRef.current && !settingsRef.current.contains(e.target)) {
         setShowSettingsMenu(false);
@@ -74,10 +76,28 @@ export default function Header({ isMobile, hasSidebar = false, onToggleSidebar, 
       if (notiRef.current && !notiRef.current.contains(e.target)) {
         setShowNotiMenu(false);
       }
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
+        setShowUserMenu(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showSettingsMenu, showNotiMenu]);
+  }, [showSettingsMenu, showNotiMenu, showUserMenu]);
+
+  // 로그아웃: 서버 세션(쿠키+refresh 토큰) 폐기 후 JS 세션 상태 정리 → 로그인으로
+  const handleLogout = async () => {
+    setShowUserMenu(false);
+    try {
+      const { axios } = await import('@/library/_axios');
+      await axios.post('/auth/logout');
+    } catch {
+      // 쿠키 폐기는 서버 책임이라 네트워크 실패해도 클라이언트는 계속 정리한다
+    }
+    sessionStorage.removeItem('profile');
+    sessionStorage.removeItem('avatar_url');
+    sessionStorage.removeItem('app_initialized');
+    router.replace('/auth/login');
+  };
 
   // 알림 클릭 시 읽음 처리 + 해당 페이지로 이동
   const handleNotiClick = (noti) => {
@@ -235,14 +255,39 @@ export default function Header({ isMobile, hasSidebar = false, onToggleSidebar, 
             </div>
           )}
         </div>
-        <div className="Header__Avatar" onClick={() => router.push('/profile')}>
-          <Avatar
-            name={username}
-            userId={userId}
-            avatarUrl={avatarUrl}
-            avatarColor={avatarColor}
-            size={28}
-          />
+        <div className="Header__UserWrap" ref={userMenuRef}>
+          <button
+            type="button"
+            className="Header__Avatar"
+            onClick={() => setShowUserMenu((prev) => !prev)}
+            title={username || '내 계정'}
+          >
+            <Avatar
+              name={username}
+              userId={userId}
+              avatarUrl={avatarUrl}
+              avatarColor={avatarColor}
+              size={28}
+            />
+          </button>
+          {showUserMenu && (
+            <div className="Header__SettingsMenu">
+              <button
+                className="Header__SettingsItem"
+                onClick={() => { setShowUserMenu(false); router.push('/profile'); }}
+              >
+                <User size={15} />
+                <span>프로필 설정</span>
+              </button>
+              <button
+                className="Header__SettingsItem Header__SettingsItem--danger"
+                onClick={handleLogout}
+              >
+                <LogOut size={15} />
+                <span>로그아웃</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </header>
