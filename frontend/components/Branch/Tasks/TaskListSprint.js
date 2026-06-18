@@ -8,6 +8,7 @@ import { CSS } from '@dnd-kit/utilities';
 import TaskListRow from './TaskListRow';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import ConfirmModal from '@/components/modal/ConfirmModal';
+import { progressLabel, progressPercent, isParentExpanded } from '@/library/subtaskProgress';
 
 function formatSprintDate(start, end) {
   const fmt = (d) => {
@@ -24,6 +25,7 @@ export default function TaskListSprint({
   onEditTask, onTaskContextMenu, onEditSprint, onCompleteSprint, isBacklog,
   selectedTaskIds, dragOverContainerId, sortActive,
   collapsed, onToggleCollapse,
+  expandedParents, onToggleSubtasks,
 }) {
   const [inlineTitle, setInlineTitle] = useState('');
   const [inlineType, setInlineType] = useState('');
@@ -133,6 +135,36 @@ export default function TaskListSprint({
     }
   };
 
+  const [subtaskParentId, setSubtaskParentId] = useState(null);
+  const [subtaskTitle, setSubtaskTitle] = useState('');
+  const [subtaskCreating, setSubtaskCreating] = useState(false);
+  const [subtaskError, setSubtaskError] = useState('');
+
+  const handleSubtaskCreate = async (e, parentTask) => {
+    e.preventDefault();
+    if (!subtaskTitle.trim() || subtaskCreating) return;
+    setSubtaskCreating(true);
+    setSubtaskError('');
+    try {
+      const res = await axios.post(`/branches/${branchId}/tasks`, {
+        title: subtaskTitle.trim(),
+        parent_task_id: parentTask.task_id,
+        task_type: inlineType,
+      });
+      if (res.data.status) {
+        setSubtaskTitle('');
+        window.dispatchEvent(new Event('task:updated'));
+      } else {
+        // 컨트롤러 검증 실패는 200 + {status:false} (silent-200 계약). 호출부에서 확인.
+        setSubtaskError(res.data.message || res.data.detail || '하위태스크를 만들지 못했어요.');
+      }
+    } catch {
+      setSubtaskError('하위태스크를 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
+    } finally {
+      setSubtaskCreating(false);
+    }
+  };
+
   const handleStartSprint = async () => {
     setShowStartConfirm(false);
     setStartError('');
@@ -235,20 +267,69 @@ export default function TaskListSprint({
             {tasks.length === 0 && !showInline && (
               <div className="TaskList__Empty">No tasks</div>
             )}
-            {tasks.map((task) => (
-              <TaskListRow
-                key={task.task_id}
-                task={task}
-                branchId={branchId}
-                taskTypes={taskTypes}
-                workflowStatuses={workflowStatuses}
-                epics={epics}
-                members={members}
-                onClick={(e) => onEditTask(task, e)}
-                onContextMenu={(e) => onTaskContextMenu?.(e, task)}
-                isSelected={selectedTaskIds && selectedTaskIds.has(task.task_id)}
-              />
-            ))}
+            {tasks.map((task) => {
+              const subtasks = task.subtasks || [];
+              const hasSubtasks = subtasks.length > 0;
+              const expanded = isParentExpanded(expandedParents, task.task_id);
+              return (
+                <div className="TaskList__ParentGroup" key={task.task_id}>
+                  <TaskListRow
+                    task={task}
+                    branchId={branchId}
+                    taskTypes={taskTypes}
+                    workflowStatuses={workflowStatuses}
+                    epics={epics}
+                    members={members}
+                    onClick={(e) => onEditTask(task, e)}
+                    onContextMenu={(e) => onTaskContextMenu?.(e, task)}
+                    isSelected={selectedTaskIds && selectedTaskIds.has(task.task_id)}
+                    expandable={hasSubtasks}
+                    expanded={expanded}
+                    onToggleExpand={() => onToggleSubtasks?.(task.task_id)}
+                    progress={hasSubtasks ? task.subtask_progress : null}
+                  />
+                  {expanded && (
+                    <>
+                      {subtasks.map((sub) => (
+                        <TaskListRow
+                          key={sub.task_id}
+                          task={sub}
+                          branchId={branchId}
+                          taskTypes={taskTypes}
+                          workflowStatuses={workflowStatuses}
+                          epics={epics}
+                          members={members}
+                          onClick={(e) => onEditTask(sub, e)}
+                          onContextMenu={(e) => onTaskContextMenu?.(e, sub)}
+                          isSelected={selectedTaskIds && selectedTaskIds.has(sub.task_id)}
+                          indent
+                        />
+                      ))}
+                      <form
+                        className="TaskList__SubtaskAdd"
+                        onSubmit={(e) => handleSubtaskCreate(e, task)}
+                      >
+                        <span className="TaskList__SubtaskAddIndent" />
+                        <Plus size={13} />
+                        <input
+                          className="TaskList__SubtaskAddInput"
+                          type="text"
+                          placeholder="＋ 하위태스크 추가"
+                          value={subtaskParentId === task.task_id ? subtaskTitle : ''}
+                          onFocus={() => { setSubtaskParentId(task.task_id); setSubtaskError(''); }}
+                          onChange={(e) => { setSubtaskParentId(task.task_id); setSubtaskTitle(e.target.value); }}
+                          onKeyDown={(e) => { if (e.key === 'Escape') { setSubtaskTitle(''); setSubtaskParentId(null); } }}
+                          disabled={subtaskCreating}
+                        />
+                      </form>
+                      {subtaskParentId === task.task_id && subtaskError && (
+                        <div className="TaskList__InlineError">{subtaskError}</div>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })}
           </SortableContext>
 
           {/* 인라인 생성 */}

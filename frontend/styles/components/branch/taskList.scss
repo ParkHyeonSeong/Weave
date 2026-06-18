@@ -1,3 +1,4 @@
+@use 'sass:color';
 @use '../../variables' as *;
 
 .TaskList {
@@ -1003,5 +1004,93 @@
       color: $color-text-tertiary;
       flex-shrink: 0;
     }
+  }
+}
+
+// 하위태스크 중첩 (Task 4)
+.TaskListRow {
+  &__Chevron {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border: none;
+    background: none;
+    color: $color-text-tertiary;
+    cursor: pointer;
+    border-radius: $radius-sm;
+    flex-shrink: 0;
+
+    &:hover { background: $color-surface; color: $color-text-secondary; }
+  }
+
+  &__ChevronSpacer {
+    width: 18px;
+    flex-shrink: 0;
+  }
+
+  &__Badge {
+    font-size: 11px;
+    font-weight: 600;
+    color: $color-text-tertiary;
+    background: $color-surface;
+    padding: 0 6px;
+    border-radius: $radius-sm;
+    line-height: 18px;
+    flex-shrink: 0;
+  }
+
+  &__Progress {
+    display: inline-block;
+    width: 64px;
+    height: 4px;
+    border-radius: 2px;
+    background: $color-border;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  &__ProgressFill {
+    display: block;
+    height: 100%;
+    background: $color-success;
+    transition: width $transition-fast;
+  }
+
+  &--subtask {
+    padding-left: $space-8;
+    position: relative;
+    background: color.adjust($color-surface, $lightness: 1%);
+
+    &::before {
+      content: '';
+      position: absolute;
+      left: $space-5;
+      top: 0;
+      bottom: 0;
+      width: 1px;
+      background: $color-border;
+    }
+  }
+}
+
+.TaskList__SubtaskAdd {
+  display: flex;
+  align-items: center;
+  gap: $space-2;
+  padding: $space-2 $space-4 $space-2 $space-8;
+  color: $color-text-tertiary;
+  border-bottom: 1px solid $color-border;
+
+  &Input {
+    flex: 1;
+    border: none;
+    background: none;
+    font-size: 13px;
+    color: $color-text;
+    outline: none;
+
+    &::placeholder { color: $color-text-tertiary; }
   }
 }

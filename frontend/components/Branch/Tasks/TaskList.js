@@ -66,6 +66,9 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
   // 스프린트 접힘 상태 (localStorage에서 복원)
   const [collapsedSprints, setCollapsedSprints] = useState(new Set());
 
+  // 하위태스크 펼침 상태 (per-branch localStorage, sprint-collapse와 동일 패턴)
+  const [expandedSubtaskParents, setExpandedSubtaskParents] = useState(new Set());
+
   // localStorage 초기화 완료 여부 (마운트 시 불필요한 write 방지)
   const [initialized, setInitialized] = useState(false);
 
@@ -119,6 +122,10 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
     const savedCollapsed = loadJSON(storageKey(branchId, 'collapsed'), []);
     setCollapsedSprints(new Set(savedCollapsed));
 
+    // 하위태스크 펼침 복원
+    const savedExpanded = loadJSON(storageKey(branchId, 'subtasks_expanded'), []);
+    setExpandedSubtaskParents(new Set(savedExpanded));
+
     setInitialized(true);
   }, [branchId]);
 
@@ -150,6 +157,15 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
     if (!initialized) return;
     localStorage.setItem(storageKey(branchId, 'collapsed'), JSON.stringify(setToArray(collapsedSprints)));
   }, [branchId, collapsedSprints, initialized]);
+
+  // 하위태스크 펼침 변경 시 localStorage 저장
+  useEffect(() => {
+    if (!initialized) return;
+    localStorage.setItem(
+      storageKey(branchId, 'subtasks_expanded'),
+      JSON.stringify(setToArray(expandedSubtaskParents)),
+    );
+  }, [branchId, expandedSubtaskParents, initialized]);
 
   useEffect(() => {
     fetchData();
@@ -314,6 +330,16 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
       const next = new Set(prev);
       if (next.has(sprintKey)) next.delete(sprintKey);
       else next.add(sprintKey);
+      return next;
+    });
+  }, []);
+
+  // 하위태스크 펼침 토글 (parent task_id 기준)
+  const handleToggleSubtasks = useCallback((parentTaskId) => {
+    setExpandedSubtaskParents((prev) => {
+      const next = new Set(prev);
+      if (next.has(parentTaskId)) next.delete(parentTaskId);
+      else next.add(parentTaskId);
       return next;
     });
   }, []);
@@ -624,6 +650,8 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
               sortActive={sortActive}
               collapsed={collapsedSprints.has(sprint.sprint_id)}
               onToggleCollapse={() => handleToggleCollapse(sprint.sprint_id)}
+              expandedParents={expandedSubtaskParents}
+              onToggleSubtasks={handleToggleSubtasks}
             />
           ))}
         </SortableContext>
@@ -645,6 +673,8 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
           sortActive={sortActive}
           collapsed={collapsedSprints.has('backlog')}
           onToggleCollapse={() => handleToggleCollapse('backlog')}
+          expandedParents={expandedSubtaskParents}
+          onToggleSubtasks={handleToggleSubtasks}
         />
 
         {/* 드래그 오버레이 */}

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { User, GripVertical, MessageCircle } from 'lucide-react';
+import { User, GripVertical, MessageCircle, ChevronRight, ChevronDown } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import { selectableEpics } from '@/library/epics';
 import { useSortable } from '@dnd-kit/sortable';
@@ -7,6 +7,7 @@ import { CSS } from '@dnd-kit/utilities';
 import CustomSelect from '@/components/common/CustomSelect';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import Avatar from '@/components/common/Avatar';
+import { progressLabel, progressPercent } from '@/library/subtaskProgress';
 
 const priorityOptions = [
   { value: 'urgent', label: 'Urgent', color: '#DC2626' },
@@ -22,7 +23,7 @@ const DEFAULT_STATUS_OPTIONS = [
   { value: 'cancelled', label: 'Cancelled', color: '#DC2626' },
 ];
 
-export default function TaskListRow({ task, branchId, taskTypes, workflowStatuses, epics, members, onClick, onContextMenu, isSelected, isOverlay }) {
+export default function TaskListRow({ task, branchId, taskTypes, workflowStatuses, epics, members, onClick, onContextMenu, isSelected, isOverlay, indent, expandable, expanded, onToggleExpand, progress }) {
   const statusOptions = (workflowStatuses && workflowStatuses.length > 0)
     ? workflowStatuses.map((ws) => ({ value: ws.key, label: ws.label, color: ws.color }))
     : DEFAULT_STATUS_OPTIONS;
@@ -87,7 +88,7 @@ export default function TaskListRow({ task, branchId, taskTypes, workflowStatuse
 
   return (
     <div
-      className={`TaskListRow ${isSelected ? 'TaskListRow--selected' : ''} ${isDragging ? 'TaskListRow--dragging' : ''}`}
+      className={`TaskListRow ${isSelected ? 'TaskListRow--selected' : ''} ${isDragging ? 'TaskListRow--dragging' : ''} ${indent ? 'TaskListRow--subtask' : ''}`}
       ref={setNodeRef}
       style={style}
       onClick={onClick}
@@ -102,6 +103,22 @@ export default function TaskListRow({ task, branchId, taskTypes, workflowStatuse
       >
         <GripVertical size={14} />
       </span>
+
+      {/* 하위태스크 펼침 셰브론 (없으면 자리만 차지) */}
+      {indent ? (
+        <span className="TaskListRow__ChevronSpacer" />
+      ) : expandable ? (
+        <button
+          type="button"
+          className="TaskListRow__Chevron"
+          onClick={(e) => { e.stopPropagation(); onToggleExpand?.(); }}
+          title={expanded ? '하위태스크 접기' : '하위태스크 펼치기'}
+        >
+          {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </button>
+      ) : (
+        <span className="TaskListRow__ChevronSpacer" />
+      )}
 
       {/* 타입 아이콘 */}
       <span className="TaskListRow__TypeIcon">
@@ -118,10 +135,23 @@ export default function TaskListRow({ task, branchId, taskTypes, workflowStatuse
       {/* 제목 + 이슈 카운트 */}
       <div className="TaskListRow__TitleWrap">
         <span className="TaskListRow__Title">{task.title}</span>
+        {progress && progress.total > 0 && (
+          <span className="TaskListRow__Badge" title="완료/전체 하위태스크">
+            {progressLabel(progress)}
+          </span>
+        )}
         {task.issue_count > 0 && (
           <span className="TaskListRow__Issues">
             +{task.issue_count}
             <MessageCircle size={12} />
+          </span>
+        )}
+        {expandable && expanded && progress && progress.total > 0 && (
+          <span className="TaskListRow__Progress">
+            <span
+              className="TaskListRow__ProgressFill"
+              style={{ width: `${progressPercent(progress)}%` }}
+            />
           </span>
         )}
       </div>
