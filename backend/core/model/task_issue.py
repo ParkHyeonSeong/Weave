@@ -84,25 +84,37 @@ async def find_by_id_simple(issue_id: int, db: AsyncSession):
 
 
 async def search_for_chat(user_id: int, keyword: str, db: AsyncSession):
-    """채팅용 이슈 검색 (유저가 속한 branch의 이슈만)"""
+    """채팅용 이슈 검색 (유저가 속한 branch의 이슈만). 제목·본문·부모 task ID 매칭."""
+    keyword_like = f'%{keyword}%' if keyword else '%'
     result = await db.execute(text("""
         SELECT i.issue_id, i.task_id, i.title, i.status,
                t.display_number, t.title AS task_title,
-               t.branch_id, b.key AS branch_key
+               t.branch_id, b.key AS branch_key,
+               CASE
+                   -- (b.key || '-' || display_number) = 'KEY-123' 사용자 노출 task ID
+                   WHEN (b.key || '-' || t.display_number::text) ILIKE :keyword THEN 0
+                   WHEN i.title ILIKE :keyword THEN 1
+                   ELSE 2
+               END AS _rank
         FROM task_issue i
         INNER JOIN task t ON i.task_id = t.task_id
         INNER JOIN branch b ON t.branch_id = b.branch_id
         INNER JOIN branch_member bm ON b.branch_id = bm.branch_id
         WHERE bm.user_id = :user_id
           AND b.is_archived = FALSE
-          AND i.title ILIKE :keyword
-        ORDER BY i.created_at DESC
+          AND (
+              i.title ILIKE :keyword
+              OR i.body ILIKE :keyword
+              OR (b.key || '-' || t.display_number::text) ILIKE :keyword
+          )
+        ORDER BY _rank, i.created_at DESC
         LIMIT 10
-    """), {'user_id': user_id, 'keyword': f'%{keyword}%'})
+    """), {'user_id': user_id, 'keyword': keyword_like})
     rows = result.fetchall()
     results = []
     for row in rows:
         d = dict(row._mapping)
+        d.pop('_rank', None)
         d['display_id'] = f"{d['branch_key']}-{d['display_number']}"
         results.append(d)
     return results

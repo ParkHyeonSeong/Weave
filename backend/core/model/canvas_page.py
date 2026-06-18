@@ -285,22 +285,29 @@ async def save_yjs_state(page_id: int, yjs_state: bytes,
 
 
 async def search_for_chat(user_id: int, keyword: str, db: AsyncSession):
-    """채팅용 캔버스 페이지 검색 (유저가 접근 가능한 캔버스만)"""
+    """채팅용 캔버스 페이지 검색 (유저가 접근 가능한 캔버스만). 제목·본문·캔버스명 매칭."""
+    keyword_like = f'%{keyword}%' if keyword else '%'
     result = await db.execute(text("""
         SELECT p.page_id, p.canvas_id, p.title,
-               c.canvas_name, p.updated_at
+               c.canvas_name, p.updated_at,
+               CASE WHEN p.title ILIKE :keyword THEN 0 ELSE 1 END AS _rank
         FROM canvas_page p
         INNER JOIN canvas c ON p.canvas_id = c.canvas_id
         INNER JOIN canvas_member cm ON c.canvas_id = cm.canvas_id
         WHERE cm.user_id = :user_id
           AND c.is_archived = FALSE
           AND p.is_archived = FALSE
-          AND (p.title ILIKE :keyword OR p.content ILIKE :keyword)
-        ORDER BY p.updated_at DESC
+          AND (p.title ILIKE :keyword OR p.content ILIKE :keyword OR c.canvas_name ILIKE :keyword)
+        ORDER BY _rank, p.updated_at DESC
         LIMIT 10
-    """), {'user_id': user_id, 'keyword': f'%{keyword}%'})
+    """), {'user_id': user_id, 'keyword': keyword_like})
     rows = result.fetchall()
-    return [dict(row._mapping) for row in rows]
+    pages = []
+    for row in rows:
+        page = dict(row._mapping)
+        page.pop('_rank', None)
+        pages.append(page)
+    return pages
 
 
 async def get_next_position(canvas_id: int, parent_page_id: int, db: AsyncSession) -> int:

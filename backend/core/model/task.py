@@ -569,21 +569,34 @@ async def search_for_chat(user_id: int, keyword: str, my_only: bool, db: AsyncSe
         SELECT DISTINCT t.task_id, t.branch_id, t.display_number, t.title, t.status, t.priority,
                b.key AS branch_key,
                t.updated_at, t.created_at,
-               ws.label AS status_label, ws.color AS status_color, ws.category AS status_category
+               ws.label AS status_label, ws.color AS status_color, ws.category AS status_category,
+               CASE
+                   -- (b.key || '-' || display_number) = 'KEY-123' 사용자 노출 task ID
+                   WHEN (b.key || '-' || t.display_number::text) ILIKE :keyword_like
+                        OR t.display_number::text ILIKE :keyword_like THEN 0
+                   WHEN t.title ILIKE :keyword_like THEN 1
+                   ELSE 2
+               END AS _rank
         FROM task t
         INNER JOIN branch b ON t.branch_id = b.branch_id
         INNER JOIN branch_member bm ON b.branch_id = bm.branch_id AND bm.user_id = :user_id
         LEFT JOIN workflow_status ws ON ws.branch_id = t.branch_id AND ws.key = t.status
-        WHERE t.title ILIKE :keyword_like
+        WHERE (
+                  t.title ILIKE :keyword_like
+                  OR t.description ILIKE :keyword_like
+                  OR (b.key || '-' || t.display_number::text) ILIKE :keyword_like
+                  OR t.display_number::text ILIKE :keyword_like
+              )
               AND b.is_archived = FALSE
               {assignee_filter}
-        ORDER BY t.updated_at DESC NULLS LAST, t.created_at DESC
+        ORDER BY _rank, t.updated_at DESC NULLS LAST, t.created_at DESC
         LIMIT 10
     """), {'user_id': user_id, 'keyword_like': keyword_like})
     rows = result.fetchall()
     tasks = []
     for row in rows:
         task = dict(row._mapping)
+        task.pop('_rank', None)
         task['display_id'] = f"{task['branch_key']}-{task['display_number']}"
         tasks.append(task)
 
