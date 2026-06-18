@@ -47,7 +47,7 @@ async def find_by_branch(branch_id: int, db: AsyncSession):
                e.sort_order, e.created_at,
                COUNT(t.task_id) AS task_count
         FROM epic e
-        LEFT JOIN task t ON e.epic_id = t.epic_id
+        LEFT JOIN task t ON e.epic_id = t.epic_id AND t.parent_task_id IS NULL
         WHERE e.branch_id = :branch_id
         GROUP BY e.epic_id
         ORDER BY e.sort_order, e.created_at, e.epic_id
@@ -98,7 +98,7 @@ async def find_for_calendar(branch_id: int, range_start, range_end, db: AsyncSes
                e.start_date, e.due_date,
                COUNT(t.task_id) AS task_count
         FROM epic e
-        LEFT JOIN task t ON e.epic_id = t.epic_id
+        LEFT JOIN task t ON e.epic_id = t.epic_id AND t.parent_task_id IS NULL
         WHERE e.branch_id = :branch_id
           AND (
             (e.start_date IS NOT NULL AND e.start_date <= :range_end AND e.start_date >= :range_start)

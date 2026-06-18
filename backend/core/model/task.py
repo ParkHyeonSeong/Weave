@@ -554,7 +554,7 @@ async def count_by_sprint_status(sprint_id: int, db: AsyncSession):
             COUNT(*) FILTER (WHERE COALESCE(ws.category, 'done') NOT IN ('done', 'cancelled')) AS incomplete_count
         FROM task t
         LEFT JOIN workflow_status ws ON t.branch_id = ws.branch_id AND t.status = ws.key
-        WHERE t.sprint_id = :sprint_id
+        WHERE t.sprint_id = :sprint_id AND t.parent_task_id IS NULL
     """), {'sprint_id': sprint_id})
     row = result.fetchone()
     return {'done_count': row[0], 'incomplete_count': row[1]}

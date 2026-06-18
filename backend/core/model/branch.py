@@ -161,6 +161,7 @@ async def home_stats(user_id: int, db: AsyncSession):
             INNER JOIN my_branches mb ON mb.branch_id = t.branch_id
             LEFT JOIN workflow_status ws
                 ON ws.branch_id = t.branch_id AND ws.key = t.status
+            WHERE t.parent_task_id IS NULL
         )
         SELECT
             COUNT(*) FILTER (
