@@ -1,6 +1,7 @@
 from typing import Any
 
 from .._app import mcp, get_client
+from .._pagination import paginate
 
 
 @mcp.tool
@@ -84,12 +85,21 @@ async def delete_epic(branch_id: int, epic_id: int) -> Any:
 
 
 @mcp.tool
-async def list_epic_tasks(branch_id: int, epic_id: int) -> Any:
+async def list_epic_tasks(
+    branch_id: int,
+    epic_id: int,
+    limit: int | None = None,
+    offset: int | None = None,
+) -> Any:
     """List the tasks belonging to an epic.
 
     list_branch_tasks can only filter by sprint, so this is the way to enumerate an
     epic's tasks.
+
+    Paginated client-side: returns the first `limit` tasks (default 50) from `offset`,
+    plus a "pagination" summary (total/returned/has_more). Page with offset for the rest.
     """
-    return await get_client().call_json(
+    result = await get_client().call_json(
         "GET", f"/api/branches/{branch_id}/epics/{epic_id}/tasks"
     )
+    return paginate(result, "tasks", limit=limit, offset=offset)

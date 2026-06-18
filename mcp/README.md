@@ -16,19 +16,25 @@ modified. Each tool acts as the token's owner; `?` marks optional arguments.
 - `create_branch(branch_name, key, description?, visibility?)` — `key`: 2-10 uppercase, starts with a letter
 - `list_branch_members(branch_id)` · `search_branch_non_members(branch_id, q?)` — resolve names → user ids
 - `get_branch_home_stats()` — open / in-progress / due-this-week / active-sprint counts across your branches
-- `list_my_tasks(status?, priority?, branch_id?, status_category?, sort_by?)` — your assigned tasks across branches
+- `list_my_tasks(status?, priority?, branch_id?, status_category?, sort_by?, limit?, offset?)` — your assigned tasks across branches
+
+> **Pagination**: the unbounded list/search tools (`list_my_tasks`, `list_branch_tasks`, `list_archived_tasks`,
+> `list_epic_tasks`, `list_track_items`, `search_tasks`/`docs`/`issues`) page client-side — they return the first
+> `limit` rows (default 50) from `offset` plus a `pagination` summary (`total`/`returned`/`has_more`/`size_capped`),
+> and auto-shrink a page that would overflow the MCP token limit (so `returned` can be < `limit` — use `has_more`,
+> not `returned`, to tell whether more remain). Page with `offset`, or narrow with filters.
 
 **Search** (keyword lookup — find ids without listing everything; `query` capped at 100 chars)
-- `search_tasks(query, scope?)` — `scope`: "my" (default) | "all"
-- `search_docs(query)` · `search_issues(query)`
+- `search_tasks(query, scope?, limit?, offset?)` — `scope`: "my" (default) | "all"
+- `search_docs(query, limit?, offset?)` · `search_issues(query, limit?, offset?)`
 
 **Tasks**
-- `list_branch_tasks(branch_id, sprint_id?)` — all tasks in a branch
+- `list_branch_tasks(branch_id, sprint_id?, limit?, offset?)` — all tasks in a branch
 - `get_task(branch_id, task_id)` — full task detail
 - `create_task(branch_id, title, description?, priority?, status?, task_type?, due_date?, start_date?, sprint_id?, epic_id?, parent_task_id?, assignee_main?, assignee_sub?, label_ids?, custom_fields?)` — create a task
 - `update_task(branch_id, task_id, title?, description?, status?, priority?, task_type?, sprint_id?, epic_id?, start_date?, due_date?, assignee_main?, assignee_sub?, label_ids?, custom_fields?)` — update a task
 - `reorder_tasks(branch_id, task_ids, sprint_id?, after_task_id?)` — reorder / move tasks between sprints (omit `sprint_id` for backlog)
-- `list_archived_tasks(branch_id)` — done/cancelled tasks (excluded from `list_branch_tasks`)
+- `list_archived_tasks(branch_id, limit?, offset?)` — done/cancelled tasks (excluded from `list_branch_tasks`)
 - `delete_task(branch_id, task_id)` — delete a task
 - `list_task_pages(branch_id, task_id)` · `link_task_page(branch_id, task_id, page_id)` · `search_task_pages(branch_id, task_id, q)` · `unlink_task_page(branch_id, task_id, link_id)` — task ↔ Canvas page links
 
@@ -62,7 +68,7 @@ modified. Each tool acts as the token's owner; `?` marks optional arguments.
 - `list_epics(branch_id)` · `get_epic(branch_id, epic_id)`
 - `create_epic(branch_id, epic_name, description?, status?, color?, start_date?, due_date?)`
 - `update_epic(branch_id, epic_id, epic_name?, description?, status?, color?, start_date?, due_date?)`
-- `delete_epic(branch_id, epic_id)` · `list_epic_tasks(branch_id, epic_id)`
+- `delete_epic(branch_id, epic_id)` · `list_epic_tasks(branch_id, epic_id, limit?, offset?)`
 
 **Branch config** (the valid values for task fields; status/type writes are admin-only)
 - `list_labels(branch_id)` · `list_workflow_statuses(branch_id)` · `list_task_types(branch_id)`
@@ -90,7 +96,7 @@ modified. Each tool acts as the token's owner; `?` marks optional arguments.
 - `update_track(track_id, track_name?, description?, color?, icon?, visibility?, default_view?)` · `delete_track(track_id)` (archive)
 - `list_track_branches(track_id)` · `add_track_branch(track_id, branch_id)` · `remove_track_branch(track_id, branch_id)`
 - `search_track_sources(track_id, q?, branch_id?, sprint_id?, epic_id?, status?, priority?, exclude_done?, limit?)` — find candidate `source_task_id`s
-- `list_track_items(track_id)` · `add_track_item(track_id, source_task_id, position_x?, position_y?)`
+- `list_track_items(track_id, limit?, offset?)` · `add_track_item(track_id, source_task_id, position_x?, position_y?)`
 - `add_track_items_bulk(track_id, source_task_ids, scope_mode?, scope_id?)` — `scope_mode`: sprint | epic | filter (`scope_id` required for sprint/epic)
 - `delete_track_item(track_id, item_id)`
 - `list_track_links(track_id)` · `add_track_link(track_id, source_item_id, target_item_id, link_type?, materialize?)` — `link_type`: flow_to | relates_to

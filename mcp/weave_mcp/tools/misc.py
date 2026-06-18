@@ -1,6 +1,7 @@
 from typing import Any
 
 from .._app import mcp, get_client
+from .._pagination import paginate
 
 
 @mcp.tool
@@ -92,12 +93,18 @@ async def list_my_tasks(
     branch_id: int | None = None,
     status_category: str | None = None,
     sort_by: str | None = None,
+    limit: int | None = None,
+    offset: int | None = None,
 ) -> Any:
     """List tasks assigned to the account across branches.
 
     Optional filters: status, priority (low/medium/high/urgent), branch_id,
     status_category (todo/in_progress/done). sort_by is "updated" (default), "created",
     "priority", or "due_date".
+
+    Paginated client-side: returns the first `limit` tasks (default 50) from `offset`,
+    plus a "pagination" summary (total/returned/has_more). Page with offset to see the
+    rest; narrow with the filters above when you can.
     """
     params = {
         k: v
@@ -110,4 +117,5 @@ async def list_my_tasks(
         }.items()
         if v is not None
     }
-    return await get_client().call_json("GET", "/api/my-tasks", params=params)
+    result = await get_client().call_json("GET", "/api/my-tasks", params=params)
+    return paginate(result, "tasks", limit=limit, offset=offset)

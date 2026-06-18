@@ -1,6 +1,7 @@
 from typing import Any
 
 from .._app import mcp, get_client
+from .._pagination import paginate
 
 
 @mcp.tool
@@ -43,11 +44,19 @@ async def list_track_branches(track_id: int) -> Any:
 
 
 @mcp.tool
-async def list_track_items(track_id: int) -> Any:
+async def list_track_items(
+    track_id: int,
+    limit: int | None = None,
+    offset: int | None = None,
+) -> Any:
     """List the work items collected in a track — tasks pulled in from its
     linked branches. For tasks scoped to a single branch use list_branch_tasks.
+
+    Paginated client-side: returns the first `limit` items (default 50) from `offset`,
+    plus a "pagination" summary (total/returned/has_more). Page with offset for the rest.
     """
-    return await get_client().call_json("GET", f"/api/tracks/{track_id}/items")
+    result = await get_client().call_json("GET", f"/api/tracks/{track_id}/items")
+    return paginate(result, "items", limit=limit, offset=offset)
 
 
 @mcp.tool

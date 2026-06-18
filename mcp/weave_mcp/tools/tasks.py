@@ -1,6 +1,7 @@
 from typing import Any
 
 from .._app import mcp, get_client
+from .._pagination import paginate
 
 
 @mcp.tool
@@ -72,12 +73,19 @@ async def add_task_comment(branch_id: int, task_id: int, content: str) -> Any:
 async def list_branch_tasks(
     branch_id: int,
     sprint_id: int | None = None,
+    limit: int | None = None,
+    offset: int | None = None,
 ) -> Any:
-    """List all tasks in a branch, optionally filtered by sprint."""
+    """List all tasks in a branch, optionally filtered by sprint.
+
+    Paginated client-side: returns the first `limit` tasks (default 50) from `offset`,
+    plus a "pagination" summary (total/returned/has_more). Page with offset for the rest.
+    """
     params = {k: v for k, v in {"sprint_id": sprint_id}.items() if v is not None}
-    return await get_client().call_json(
+    result = await get_client().call_json(
         "GET", f"/api/branches/{branch_id}/tasks", params=params
     )
+    return paginate(result, "tasks", limit=limit, offset=offset)
 
 
 @mcp.tool
@@ -195,15 +203,23 @@ async def delete_task_comment(branch_id: int, task_id: int, comment_id: int) -> 
 
 
 @mcp.tool
-async def list_archived_tasks(branch_id: int) -> Any:
+async def list_archived_tasks(
+    branch_id: int,
+    limit: int | None = None,
+    offset: int | None = None,
+) -> Any:
     """List a branch's archived (done/cancelled) tasks.
 
     list_branch_tasks excludes terminal tasks, so this is the way to see what was
     completed (e.g. "what shipped last sprint").
+
+    Paginated client-side: returns the first `limit` tasks (default 50) from `offset`,
+    plus a "pagination" summary (total/returned/has_more). Page with offset for the rest.
     """
-    return await get_client().call_json(
+    result = await get_client().call_json(
         "GET", f"/api/branches/{branch_id}/tasks/archive"
     )
+    return paginate(result, "tasks", limit=limit, offset=offset)
 
 
 @mcp.tool
