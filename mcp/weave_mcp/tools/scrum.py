@@ -38,6 +38,94 @@ async def get_scrum_home_cards() -> Any:
 
 
 @mcp.tool
+async def create_scrum_board(
+    name: str,
+    icon: str | None = None,
+    color: str | None = None,
+    visibility: str | None = None,
+    retro_cadence: str | None = None,
+    retro_interval_weeks: int | None = None,
+    retro_template: str | None = None,
+    retro_anchor_weekday: int | None = None,
+) -> Any:
+    """Create a new Scrum board (weekly daily-scrum + retro); you become its admin.
+
+    Only name is required. color is #RRGGBB hex (default #16A34A). visibility is
+    "private" (default) or "public". retro_cadence is "weekly" (default), "biweekly",
+    "every_n_weeks", "monthly", or "manual"; retro_interval_weeks sets N for
+    "every_n_weeks". retro_template is "kpt". retro_anchor_weekday is 0..4 (Mon..Fri,
+    default 4=Fri) — the day a retro period closes. Omitted fields take server defaults.
+    """
+    body = {"name": name}
+    body.update({k: v for k, v in {
+        "icon": icon,
+        "color": color,
+        "visibility": visibility,
+        "retro_cadence": retro_cadence,
+        "retro_interval_weeks": retro_interval_weeks,
+        "retro_template": retro_template,
+        "retro_anchor_weekday": retro_anchor_weekday,
+    }.items() if v is not None})
+    return await get_client().call_json("POST", "/api/scrum", json=body)
+
+
+@mcp.tool
+async def update_scrum_board(
+    board_id: int,
+    name: str | None = None,
+    icon: str | None = None,
+    color: str | None = None,
+    visibility: str | None = None,
+    retro_cadence: str | None = None,
+    retro_interval_weeks: int | None = None,
+    retro_template: str | None = None,
+    retro_anchor_weekday: int | None = None,
+) -> Any:
+    """Update a Scrum board's config; only provided fields change. Admin-only.
+
+    Same field rules/enums as create_scrum_board (cadence, template, 0..4 weekday).
+    """
+    body = {k: v for k, v in {
+        "name": name,
+        "icon": icon,
+        "color": color,
+        "visibility": visibility,
+        "retro_cadence": retro_cadence,
+        "retro_interval_weeks": retro_interval_weeks,
+        "retro_template": retro_template,
+        "retro_anchor_weekday": retro_anchor_weekday,
+    }.items() if v is not None}
+    return await get_client().call_json("PATCH", f"/api/scrum/{board_id}", json=body)
+
+
+@mcp.tool
+async def delete_scrum_board(board_id: int) -> Any:
+    """Archive (soft-delete) a Scrum board. Reversible via restore_scrum_board. Admin-only."""
+    return await get_client().call_json("DELETE", f"/api/scrum/{board_id}")
+
+
+@mcp.tool
+async def restore_scrum_board(board_id: int) -> Any:
+    """Restore an archived Scrum board (see list_archived_scrum_boards). Admin-only."""
+    return await get_client().call_json("POST", f"/api/scrum/{board_id}/restore")
+
+
+@mcp.tool
+async def leave_scrum_board(board_id: int) -> Any:
+    """Leave a Scrum board (remove yourself as a member); any member may leave.
+
+    May be rejected with a business error if you are the board's last admin.
+    """
+    return await get_client().call_json("POST", f"/api/scrum/{board_id}/leave")
+
+
+@mcp.tool
+async def list_archived_scrum_boards() -> Any:
+    """List your archived Scrum boards (candidates for restore_scrum_board)."""
+    return await get_client().call_json("GET", "/api/scrum/archived")
+
+
+@mcp.tool
 async def get_scrum_week(board_id: int, iso_year: int | None = None,
                          iso_week: int | None = None) -> Any:
     """Read a weekly daily-scrum grid's cells (per member × weekday × plan/gap) as plain text.
