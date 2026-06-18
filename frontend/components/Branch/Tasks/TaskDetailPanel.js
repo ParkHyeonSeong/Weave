@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
-import { X, Maximize2, Trash2, ChevronDown, Star, Pencil } from 'lucide-react';
+import { X, Maximize2, Trash2, ChevronDown, Star, Pencil, ArrowUp } from 'lucide-react';
 import useStar from '@/hooks/useStar';
 import LabelTagInput from '@/components/common/LabelTagInput';
 import CustomSelect from '@/components/common/CustomSelect';
@@ -13,6 +13,7 @@ import { selectableEpics } from '@/library/epics';
 import { useRefHydration } from '@/library/refHydration';
 import Avatar from '@/components/common/Avatar';
 import TaskIssueSection from './TaskIssueSection';
+import TaskSubtaskSection from './TaskSubtaskSection';
 import TaskDependencySection from './TaskDependencySection';
 import TaskPageLinkSection from './TaskPageLinkSection';
 import TaskDescriptionEditor from './TaskDescriptionEditor';
@@ -27,7 +28,7 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
   const {
     task, loading, error, sprints, epics, members, labels,
     workflowStatuses: hookStatuses, taskTypes: hookTaskTypes, customFields,
-    updateField, updateAssignees, toggleLabel, createLabel, updateLabel, deleteLabel, handleDelete, handleSelectChange,
+    fetchTask, updateField, updateAssignees, toggleLabel, createLabel, updateLabel, deleteLabel, handleDelete, handleSelectChange,
   } = useTaskDetail(branchId, taskSummary?.task_id);
 
   const workflowStatuses = (externalStatuses && externalStatuses.length > 0) ? externalStatuses : hookStatuses;
@@ -127,6 +128,18 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
           </button>
         </div>
       </div>
+
+      {task?.parent && (
+        <NavLink
+          href={`/branch/${branchId}/task/${task.parent.task_id}`}
+          className="TaskDetailPanel__ParentCrumb"
+          onClick={(e) => { if (onSelectTask) { e.preventDefault(); onSelectTask({ task_id: task.parent.task_id }); } }}
+        >
+          <ArrowUp size={12} />
+          <span className="TaskDetailPanel__ParentId">{task.parent.display_id}</span>
+          <span className="TaskDetailPanel__ParentTitle">{task.parent.title}</span>
+        </NavLink>
+      )}
 
       <div className="TaskDetailPanel__Body">
         {/* 제목 + 상태 */}
@@ -253,32 +266,44 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
 
             {/* Sprint */}
             <DetailRow label="Sprint">
-              <CustomSelect
-                value={task.sprint_id || ''}
-                options={[
-                  { value: '', label: 'Backlog' },
-                  ...sprints.map((s) => ({ value: s.sprint_id, label: s.sprint_name })),
-                ]}
-                onChange={(val) => handleSelectChange('sprint_id', val)}
-                size="sm"
-              />
+              {task.parent ? (
+                <span className="TaskDetailPanel__Inherited" title="부모 태스크에서 상속">
+                  {task.parent.sprint_name || 'Backlog'}
+                </span>
+              ) : (
+                <CustomSelect
+                  value={task.sprint_id || ''}
+                  options={[
+                    { value: '', label: 'Backlog' },
+                    ...sprints.map((s) => ({ value: s.sprint_id, label: s.sprint_name })),
+                  ]}
+                  onChange={(val) => handleSelectChange('sprint_id', val)}
+                  size="sm"
+                />
+              )}
             </DetailRow>
 
             {/* Epic */}
             <DetailRow label="Epic">
-              <CustomSelect
-                value={task.epic_id || ''}
-                options={[
-                  { value: '', label: 'None' },
-                  ...selectableEpics(epics, task.epic_id).map((ep) => ({
-                    value: ep.epic_id,
-                    label: ep.epic_name,
-                    color: ep.color || '#5E6AD2',
-                  })),
-                ]}
-                onChange={(val) => handleSelectChange('epic_id', val)}
-                size="sm"
-              />
+              {task.parent ? (
+                <span className="TaskDetailPanel__Inherited" title="부모 태스크에서 상속">
+                  {task.parent.epic_name || 'None'}
+                </span>
+              ) : (
+                <CustomSelect
+                  value={task.epic_id || ''}
+                  options={[
+                    { value: '', label: 'None' },
+                    ...selectableEpics(epics, task.epic_id).map((ep) => ({
+                      value: ep.epic_id,
+                      label: ep.epic_name,
+                      color: ep.color || '#5E6AD2',
+                    })),
+                  ]}
+                  onChange={(val) => handleSelectChange('epic_id', val)}
+                  size="sm"
+                />
+              )}
             </DetailRow>
 
             {/* 메인 담당자 */}
@@ -398,6 +423,19 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
           branchId={branchId}
           taskId={task.task_id}
           onSelectTask={onSelectTask}
+        />
+
+        <div className="TaskDetailPanel__Divider" />
+
+        {/* 하위태스크 섹션 */}
+        <TaskSubtaskSection
+          branchId={branchId}
+          taskId={task.task_id}
+          subtasks={task.subtasks || []}
+          progress={task.subtask_progress}
+          workflowStatuses={workflowStatuses}
+          onSelectTask={onSelectTask}
+          onChanged={() => fetchTask({ silent: true })}
         />
 
         <div className="TaskDetailPanel__Divider" />

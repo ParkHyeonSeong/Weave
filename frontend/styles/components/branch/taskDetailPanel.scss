@@ -1183,4 +1183,34 @@
     color: $color-text-tertiary;
     padding: $space-1 0;
   }
+
+  &__ParentCrumb {
+    display: flex;
+    align-items: center;
+    gap: $space-1;
+    padding: $space-1 $space-4;
+    margin: 0 0 $space-2;
+    font-size: $font-size-xs;
+    color: $color-text-secondary;
+
+    &:hover {
+      color: $color-text;
+    }
+  }
+
+  &__ParentId {
+    font-weight: $font-weight-medium;
+    flex-shrink: 0;
+  }
+
+  &__ParentTitle {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__Inherited {
+    font-size: $font-size-sm;
+    color: $color-text-secondary;
+  }
 }

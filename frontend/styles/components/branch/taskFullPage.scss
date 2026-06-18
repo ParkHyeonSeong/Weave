@@ -456,4 +456,37 @@
       box-shadow: $shadow-focus;
     }
   }
+
+  &__ParentCrumb {
+    display: flex;
+    align-items: center;
+    gap: $space-1;
+    padding: $space-1 $space-2;
+    border-radius: $radius-md;
+    font-size: $font-size-xs;
+    color: $color-text-secondary;
+    max-width: 200px;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+      color: $color-text;
+    }
+  }
+
+  &__ParentId {
+    font-weight: $font-weight-medium;
+    flex-shrink: 0;
+  }
+
+  &__ParentTitle {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__Inherited {
+    font-size: $font-size-sm;
+    color: $color-text-secondary;
+  }
 }

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
-import { ArrowLeft, Trash2, ChevronDown, ShieldAlert, Star, Pencil } from 'lucide-react';
+import { ArrowLeft, Trash2, ChevronDown, ShieldAlert, Star, Pencil, ArrowUp } from 'lucide-react';
 import useStar from '@/hooks/useStar';
 import LabelTagInput from '@/components/common/LabelTagInput';
 import { axios } from '@/library/_axios';
@@ -14,6 +14,7 @@ import { selectableEpics } from '@/library/epics';
 import { useRefHydration } from '@/library/refHydration';
 import Avatar from '@/components/common/Avatar';
 import TaskIssueSection from './TaskIssueSection';
+import TaskSubtaskSection from './TaskSubtaskSection';
 import TaskCommentSection from './TaskCommentSection';
 import TaskDependencySection from './TaskDependencySection';
 import TaskPageLinkSection from './TaskPageLinkSection';
@@ -31,7 +32,7 @@ export default function TaskFullPage() {
   const {
     task, loading, error, sprints, epics, members, labels,
     workflowStatuses, taskTypes, customFields,
-    updateField, updateAssignees, toggleLabel, createLabel, updateLabel, deleteLabel, handleDelete, handleSelectChange,
+    fetchTask, updateField, updateAssignees, toggleLabel, createLabel, updateLabel, deleteLabel, handleDelete, handleSelectChange,
   } = useTaskDetail(branchId, taskId);
 
   const { starred, toggle: toggleStar } = useStar('task', task?.task_id);
@@ -126,6 +127,17 @@ export default function TaskFullPage() {
             color={typeConfig?.color || '#5E6AD2'}
           />
           <span className="TaskFullPage__DisplayId">{displayId}</span>
+          {task.parent && (
+            <button
+              type="button"
+              className="TaskFullPage__ParentCrumb"
+              onClick={() => router.push(`/branch/${branchId}/task/${task.parent.task_id}`)}
+            >
+              <ArrowUp size={12} />
+              <span className="TaskFullPage__ParentId">{task.parent.display_id}</span>
+              <span className="TaskFullPage__ParentTitle">{task.parent.title}</span>
+            </button>
+          )}
           <button
             className={`TaskFullPage__StarBtn ${starred ? 'TaskFullPage__StarBtn--active' : ''}`}
             onClick={toggleStar}
@@ -234,6 +246,19 @@ export default function TaskFullPage() {
 
           <div className="TaskFullPage__Divider" />
 
+          {/* 하위태스크 */}
+          <TaskSubtaskSection
+            branchId={branchId}
+            taskId={task.task_id}
+            subtasks={task.subtasks || []}
+            progress={task.subtask_progress}
+            workflowStatuses={workflowStatuses}
+            onSelectTask={(st) => router.push(`/branch/${branchId}/task/${st.task_id}`)}
+            onChanged={() => fetchTask({ silent: true })}
+          />
+
+          <div className="TaskFullPage__Divider" />
+
           {/* 연결된 페이지 */}
           <TaskPageLinkSection branchId={branchId} taskId={task.task_id} />
 
@@ -294,31 +319,43 @@ export default function TaskFullPage() {
             </FieldRow>
 
             <FieldRow label="Sprint">
-              <CustomSelect
-                value={task.sprint_id || ''}
-                options={[
-                  { value: '', label: 'Backlog' },
-                  ...sprints.map((s) => ({ value: s.sprint_id, label: s.sprint_name })),
-                ]}
-                onChange={(val) => handleSelectChange('sprint_id', val)}
-                size="sm"
-              />
+              {task.parent ? (
+                <span className="TaskFullPage__Inherited" title="부모 태스크에서 상속">
+                  {task.parent.sprint_name || 'Backlog'}
+                </span>
+              ) : (
+                <CustomSelect
+                  value={task.sprint_id || ''}
+                  options={[
+                    { value: '', label: 'Backlog' },
+                    ...sprints.map((s) => ({ value: s.sprint_id, label: s.sprint_name })),
+                  ]}
+                  onChange={(val) => handleSelectChange('sprint_id', val)}
+                  size="sm"
+                />
+              )}
             </FieldRow>
 
             <FieldRow label="Epic">
-              <CustomSelect
-                value={task.epic_id || ''}
-                options={[
-                  { value: '', label: 'None' },
-                  ...selectableEpics(epics, task.epic_id).map((ep) => ({
-                    value: ep.epic_id,
-                    label: ep.epic_name,
-                    color: ep.color || '#5E6AD2',
-                  })),
-                ]}
-                onChange={(val) => handleSelectChange('epic_id', val)}
-                size="sm"
-              />
+              {task.parent ? (
+                <span className="TaskFullPage__Inherited" title="부모 태스크에서 상속">
+                  {task.parent.epic_name || 'None'}
+                </span>
+              ) : (
+                <CustomSelect
+                  value={task.epic_id || ''}
+                  options={[
+                    { value: '', label: 'None' },
+                    ...selectableEpics(epics, task.epic_id).map((ep) => ({
+                      value: ep.epic_id,
+                      label: ep.epic_name,
+                      color: ep.color || '#5E6AD2',
+                    })),
+                  ]}
+                  onChange={(val) => handleSelectChange('epic_id', val)}
+                  size="sm"
+                />
+              )}
             </FieldRow>
 
             <FieldRow label="Main Assignee">

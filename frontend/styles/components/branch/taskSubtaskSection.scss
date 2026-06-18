@@ -1,0 +1,172 @@
+@use '../../variables' as *;
+
+.TaskSubtaskSection {
+  display: flex;
+  flex-direction: column;
+  gap: $space-2;
+
+  &__Header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  &__Label {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-semibold;
+    color: $color-text-secondary;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+  }
+
+  &__Count {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    color: $color-text-tertiary;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  &__AddBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 26px;
+    padding: 0 $space-2;
+    border-radius: $radius-md;
+    color: $color-text-tertiary;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: $color-surface;
+      color: $color-text;
+    }
+  }
+
+  &__Empty {
+    font-size: $font-size-sm;
+    color: $color-text-tertiary;
+    padding: $space-2 0;
+  }
+
+  &__List {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+    overflow: hidden;
+  }
+
+  &__Item {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: $space-2 $space-3;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    border-bottom: 1px solid $color-border;
+    transition: background $transition-fast;
+
+    &:last-child {
+      border-bottom: none;
+    }
+
+    &:hover {
+      background: $color-surface;
+    }
+  }
+
+  &__StatusIcon {
+    flex-shrink: 0;
+    color: $color-text-tertiary;
+
+    &--done {
+      color: #16A34A;
+    }
+  }
+
+  &__ItemId {
+    flex-shrink: 0;
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+    font-weight: $font-weight-medium;
+  }
+
+  &__ItemTitle {
+    flex: 1;
+    min-width: 0;
+    font-size: $font-size-sm;
+    color: $color-text;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__Pill {
+    flex-shrink: 0;
+    font-size: $font-size-xs;
+    padding: 1px $space-2;
+    border: 1px solid;
+    border-radius: 999px;
+  }
+
+  &__Assignee {
+    flex-shrink: 0;
+  }
+
+  &__AddForm {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+  }
+
+  &__AddInput {
+    flex: 1;
+    height: 30px;
+    padding: 0 $space-2;
+    font-size: $font-size-sm;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    background: $color-bg;
+    color: $color-text;
+
+    &:focus {
+      outline: none;
+      border-color: $color-primary;
+    }
+  }
+
+  &__AddSubmit {
+    height: 30px;
+    padding: 0 $space-3;
+    border-radius: $radius-md;
+    background: $color-primary;
+    color: #fff;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+  }
+
+  &__AddCancel {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 30px;
+    width: 30px;
+    border-radius: $radius-md;
+    color: $color-text-tertiary;
+
+    &:hover {
+      background: $color-surface;
+      color: $color-text;
+    }
+  }
+}
