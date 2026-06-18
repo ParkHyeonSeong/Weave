@@ -287,6 +287,8 @@ async def save_yjs_state(page_id: int, yjs_state: bytes,
 async def search_for_chat(user_id: int, keyword: str, db: AsyncSession):
     """채팅용 캔버스 페이지 검색 (유저가 접근 가능한 캔버스만). 제목·본문·캔버스명 매칭."""
     keyword_like = f'%{keyword}%' if keyword else '%'
+    # content의 regexp_replace 태그 제거 식은 마이그레이션 054의 함수형 trgm
+    # 인덱스(idx_canvas_page_content_trgm)와 글자 그대로 같아야 플래너가 인덱스를 쓴다.
     result = await db.execute(text("""
         SELECT p.page_id, p.canvas_id, p.title,
                c.canvas_name, p.updated_at,
@@ -297,7 +299,7 @@ async def search_for_chat(user_id: int, keyword: str, db: AsyncSession):
         WHERE cm.user_id = :user_id
           AND c.is_archived = FALSE
           AND p.is_archived = FALSE
-          AND (p.title ILIKE :keyword OR p.content ILIKE :keyword OR c.canvas_name ILIKE :keyword)
+          AND (p.title ILIKE :keyword OR regexp_replace(p.content, '<[^>]+>', ' ', 'g') ILIKE :keyword OR c.canvas_name ILIKE :keyword)
         ORDER BY _rank, p.updated_at DESC
         LIMIT 10
     """), {'user_id': user_id, 'keyword': keyword_like})

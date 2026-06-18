@@ -224,3 +224,53 @@ async def test_doc_search_ranks_title_above_content(db_session):
     ids = [p["page_id"] for p in res]
     assert ids.index(title_hit) < ids.index(body_hit)
     assert "_rank" not in res[0]
+
+
+# --------------------------------------------------------------------------
+# HTML 노이즈 제거 (Phase 2)
+# --------------------------------------------------------------------------
+
+async def test_task_search_strips_html_tags_and_attrs(db_session):
+    """description HTML의 태그·속성은 검색에서 제외, 본문 텍스트·멘션 이름은 포함."""
+    uid, bid = await _seed_branch_with_member(db_session, "h1@ref.test", "RFN")
+    tid, _ = await _make_task(
+        db_session, bid, uid, title="무관",
+        description='<p>hello</p><span data-id="5" data-type="mention">@Alice</span>')
+
+    async def hit(q):
+        res = await task_model.search_for_chat(uid, q, False, db_session)
+        return any(t["task_id"] == tid for t in res)
+
+    assert await hit("hello")        # 본문 텍스트
+    assert await hit("Alice")        # 멘션 이름
+    assert not await hit("span")     # 태그명
+    assert not await hit("data-id")  # 속성명
+
+
+async def test_issue_search_strips_html_tags(db_session):
+    """issue body HTML의 태그는 검색에서 제외, 본문 텍스트는 포함."""
+    uid, bid = await _seed_branch_with_member(db_session, "h2@ref.test", "RFO")
+    tid, _ = await _make_task(db_session, bid, uid, title="parent")
+    iid = await _make_issue(db_session, tid, uid, title="무관",
+                            body='<p>refresh token leak</p>')
+
+    async def hit(q):
+        res = await issue_model.search_for_chat(uid, q, db_session)
+        return any(i["issue_id"] == iid for i in res)
+
+    assert await hit("refresh")
+    assert not await hit("p")        # <p> 태그명
+
+
+async def test_doc_search_strips_html_tags(db_session):
+    """canvas page content HTML의 태그는 검색에서 제외, 본문 텍스트는 포함."""
+    uid, cid = await _seed_canvas_with_member(db_session, "h3@ref.test", "CVC")
+    pid = await _make_page(db_session, cid, uid, title="무관",
+                           content='<ul><li>quarterly roadmap</li></ul>')
+
+    async def hit(q):
+        res = await canvas_page_model.search_for_chat(uid, q, db_session)
+        return any(p["page_id"] == pid for p in res)
+
+    assert await hit("roadmap")
+    assert not await hit("li")       # <li> 태그명

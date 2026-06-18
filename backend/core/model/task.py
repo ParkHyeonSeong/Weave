@@ -565,6 +565,8 @@ async def search_for_chat(user_id: int, keyword: str, my_only: bool, db: AsyncSe
     keyword_like = f'%{keyword}%' if keyword else '%'
     assignee_filter = "AND t.task_id IN (SELECT task_id FROM task_assignee WHERE user_id = :user_id)" if my_only else ""
 
+    # description의 regexp_replace 태그 제거 식은 마이그레이션 054의 함수형 trgm
+    # 인덱스(idx_task_desc_trgm)와 글자 그대로 같아야 플래너가 인덱스를 쓴다.
     result = await db.execute(text(f"""
         SELECT DISTINCT t.task_id, t.branch_id, t.display_number, t.title, t.status, t.priority,
                b.key AS branch_key,
@@ -583,7 +585,7 @@ async def search_for_chat(user_id: int, keyword: str, my_only: bool, db: AsyncSe
         LEFT JOIN workflow_status ws ON ws.branch_id = t.branch_id AND ws.key = t.status
         WHERE (
                   t.title ILIKE :keyword_like
-                  OR t.description ILIKE :keyword_like
+                  OR regexp_replace(t.description, '<[^>]+>', ' ', 'g') ILIKE :keyword_like
                   OR (b.key || '-' || t.display_number::text) ILIKE :keyword_like
                   OR t.display_number::text ILIKE :keyword_like
               )

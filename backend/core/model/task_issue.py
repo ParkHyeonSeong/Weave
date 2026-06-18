@@ -86,6 +86,8 @@ async def find_by_id_simple(issue_id: int, db: AsyncSession):
 async def search_for_chat(user_id: int, keyword: str, db: AsyncSession):
     """채팅용 이슈 검색 (유저가 속한 branch의 이슈만). 제목·본문·부모 task ID 매칭."""
     keyword_like = f'%{keyword}%' if keyword else '%'
+    # body의 regexp_replace 태그 제거 식은 마이그레이션 054의 함수형 trgm
+    # 인덱스(idx_issue_body_trgm)와 글자 그대로 같아야 플래너가 인덱스를 쓴다.
     result = await db.execute(text("""
         SELECT i.issue_id, i.task_id, i.title, i.status,
                t.display_number, t.title AS task_title,
@@ -104,7 +106,7 @@ async def search_for_chat(user_id: int, keyword: str, db: AsyncSession):
           AND b.is_archived = FALSE
           AND (
               i.title ILIKE :keyword
-              OR i.body ILIKE :keyword
+              OR regexp_replace(i.body, '<[^>]+>', ' ', 'g') ILIKE :keyword
               OR (b.key || '-' || t.display_number::text) ILIKE :keyword
           )
         ORDER BY _rank, i.created_at DESC
