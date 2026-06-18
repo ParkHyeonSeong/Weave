@@ -216,6 +216,7 @@ async def find_by_branch(branch_id: int, sprint_id, db: AsyncSession):
             task['labels'] = label_map.get(task['task_id'], [])
             task['assignees'] = assignee_map.get(task['task_id'], [])
 
+    await attach_subtasks(tasks, db)
     return tasks
 
 
@@ -290,7 +291,106 @@ async def find_for_board(branch_id: int, sprint_id, db: AsyncSession):
             task['labels'] = label_map.get(task['task_id'], [])
             task['assignees'] = assignee_map.get(task['task_id'], [])
 
+    await attach_subtasks(tasks, db)
     return tasks
+
+
+async def attach_subtasks(tasks: list, db: AsyncSession):
+    """상위 task 목록에 subtasks[] + subtask_progress{done,total}를 배치 부착.
+
+    parent_task_id = ANY(:ids) 단일 쿼리로 모든 하위를 가져와 부모별로 그룹핑한다
+    (per-parent find_subtasks = N+1 금지). 하위 행에 라벨/담당자도 배치 조인.
+    progress: total = category != 'cancelled' 개수, done = category = 'done' 개수
+    (cancelled은 분자·분모 모두 제외).
+    """
+    for t in tasks:
+        t['subtasks'] = []
+        t['subtask_progress'] = {'done': 0, 'total': 0}
+    if not tasks:
+        return
+
+    parent_ids = [t['task_id'] for t in tasks]
+    result = await db.execute(text("""
+        SELECT t.task_id, t.branch_id, t.parent_task_id, t.display_number,
+               t.title, t.status, t.priority, t.sort_order, t.created_at,
+               b.key AS branch_key,
+               ws.category AS status_category
+        FROM task t
+        INNER JOIN branch b ON t.branch_id = b.branch_id
+        LEFT JOIN workflow_status ws ON ws.branch_id = t.branch_id AND ws.key = t.status
+        WHERE t.parent_task_id = ANY(:parent_ids)
+        ORDER BY t.sort_order, t.created_at, t.task_id
+    """), {'parent_ids': parent_ids})
+    sub_rows = result.fetchall()
+    if not sub_rows:
+        return
+
+    subs = []
+    sub_ids = []
+    for row in sub_rows:
+        s = dict(row._mapping)
+        s['display_id'] = f"{s['branch_key']}-{s['display_number']}"
+        subs.append(s)
+        sub_ids.append(s['task_id'])
+
+    # 라벨 일괄 조회
+    labels_result = await db.execute(text("""
+        SELECT tl.task_id, l.label_id, l.label_name, l.color
+        FROM task_label tl
+        INNER JOIN label l ON tl.label_id = l.label_id
+        WHERE tl.task_id = ANY(:sub_ids)
+        ORDER BY l.label_name
+    """), {'sub_ids': sub_ids})
+    label_map = {}
+    for lr in labels_result.fetchall():
+        ld = dict(lr._mapping)
+        label_map.setdefault(ld['task_id'], []).append({
+            'label_id': ld['label_id'],
+            'label_name': ld['label_name'],
+            'color': ld['color'],
+        })
+
+    # 담당자 일괄 조회
+    assignees_result = await db.execute(text("""
+        SELECT ta.task_id, ta.user_id, u.username, u.avatar_url, u.avatar_color, ta.role
+        FROM task_assignee ta
+        INNER JOIN "user" u ON ta.user_id = u.user_id
+        WHERE ta.task_id = ANY(:sub_ids)
+          AND u.deleted_at IS NULL
+        ORDER BY ta.role, u.username
+    """), {'sub_ids': sub_ids})
+    assignee_map = {}
+    for ar in assignees_result.fetchall():
+        ad = dict(ar._mapping)
+        assignee_map.setdefault(ad['task_id'], []).append({
+            'user_id': ad['user_id'],
+            'username': ad['username'],
+            'avatar_url': ad.get('avatar_url'),
+            'avatar_color': ad.get('avatar_color'),
+            'role': ad['role'],
+        })
+
+    # 부모별 그룹핑 + 진행도 집계
+    groups = {}
+    progress = {}
+    for s in subs:
+        pid = s['parent_task_id']
+        category = s.pop('status_category', None)
+        s.pop('branch_key', None)
+        s.pop('sort_order', None)
+        s.pop('created_at', None)
+        s['labels'] = label_map.get(s['task_id'], [])
+        s['assignees'] = assignee_map.get(s['task_id'], [])
+        groups.setdefault(pid, []).append(s)
+        prog = progress.setdefault(pid, {'done': 0, 'total': 0})
+        if category != 'cancelled':
+            prog['total'] += 1
+            if category == 'done':
+                prog['done'] += 1
+
+    for t in tasks:
+        t['subtasks'] = groups.get(t['task_id'], [])
+        t['subtask_progress'] = progress.get(t['task_id'], {'done': 0, 'total': 0})
 
 
 async def find_by_epic(epic_id: int, branch_id: int, db: AsyncSession):
@@ -394,9 +494,9 @@ async def find_archived(branch_id: int, db: AsyncSession):
 
 
 async def find_subtasks(parent_task_id: int, db: AsyncSession):
-    """하위 Task 목록"""
+    """하위 Task 목록 (라벨 + 담당자 포함, get_detail Subtasks 섹션용)"""
     result = await db.execute(text("""
-        SELECT t.task_id, t.display_number, t.title,
+        SELECT t.task_id, t.branch_id, t.parent_task_id, t.display_number, t.title,
                t.task_type, t.status, t.priority,
                t.sort_order, t.created_at,
                b.key AS branch_key
@@ -412,9 +512,27 @@ async def find_subtasks(parent_task_id: int, db: AsyncSession):
         task['display_id'] = f"{task['branch_key']}-{task['display_number']}"
         tasks.append(task)
 
-    # 담당자 일괄 조회
     if tasks:
         task_ids = [t['task_id'] for t in tasks]
+
+        # 라벨 일괄 조회
+        labels_result = await db.execute(text("""
+            SELECT tl.task_id, l.label_id, l.label_name, l.color
+            FROM task_label tl
+            INNER JOIN label l ON tl.label_id = l.label_id
+            WHERE tl.task_id = ANY(:task_ids)
+            ORDER BY l.label_name
+        """), {'task_ids': task_ids})
+        label_map = {}
+        for lr in labels_result.fetchall():
+            ld = dict(lr._mapping)
+            label_map.setdefault(ld['task_id'], []).append({
+                'label_id': ld['label_id'],
+                'label_name': ld['label_name'],
+                'color': ld['color'],
+            })
+
+        # 담당자 일괄 조회
         assignees_result = await db.execute(text("""
             SELECT ta.task_id, ta.user_id, u.username, u.avatar_url, u.avatar_color, ta.role
             FROM task_assignee ta
@@ -433,7 +551,9 @@ async def find_subtasks(parent_task_id: int, db: AsyncSession):
                 'avatar_color': ad.get('avatar_color'),
                 'role': ad['role'],
             })
+
         for task in tasks:
+            task['labels'] = label_map.get(task['task_id'], [])
             task['assignees'] = assignee_map.get(task['task_id'], [])
 
     return tasks
