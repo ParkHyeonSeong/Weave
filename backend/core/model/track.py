@@ -69,13 +69,17 @@ async def find_accessible(user_id: int, db: AsyncSession):
             -- track_item 도 사라지므로 t.task_id NULL 케이스는 발생하지 않음.
             SELECT ti.track_id,
                    COUNT(*) AS item_count,
-                   COUNT(*) FILTER (WHERE ti.source_type = 'task') AS task_total,
+                   COUNT(*) FILTER (
+                       WHERE ti.source_type = 'task' AND bk.is_archived = FALSE
+                   ) AS task_total,
                    COUNT(*) FILTER (
                        WHERE ti.source_type = 'task'
+                         AND bk.is_archived = FALSE
                          AND COALESCE(ws.category, 'done') IN ('done', 'cancelled')
                    ) AS task_done
             FROM track_item ti
             LEFT JOIN task tk ON tk.task_id = ti.source_task_id
+            LEFT JOIN branch bk ON bk.branch_id = tk.branch_id
             LEFT JOIN workflow_status ws
                 ON ws.branch_id = tk.branch_id AND ws.key = tk.status
             GROUP BY ti.track_id
@@ -158,6 +162,7 @@ async def home_stats(user_id: int, db: AsyncSession):
             FROM track_item ti
             INNER JOIN my_tracks mt ON mt.track_id = ti.track_id
             INNER JOIN task tk ON tk.task_id = ti.source_task_id
+            INNER JOIN branch b ON b.branch_id = tk.branch_id AND b.is_archived = FALSE
             LEFT JOIN workflow_status ws
                 ON ws.branch_id = tk.branch_id AND ws.key = tk.status
             WHERE ti.source_type = 'task'

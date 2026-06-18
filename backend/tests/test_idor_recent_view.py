@@ -130,6 +130,35 @@ async def test_recent_doc_hidden_after_canvas_membership_removed(db_session):
 # regression — current members still see their items with correct metadata
 # ---------------------------------------------------------------------------
 
+async def test_recent_task_hidden_when_branch_archived(db_session):
+    """아카이브된 branch의 최근 본 task는 멤버라도 목록에서 빠진다."""
+    alice = await _make_user(db_session, "arch@recentv.test", "arch_rv")
+    branch = await _make_branch(db_session, alice, name="AR", key="RVARC")
+    await _add_branch_member(db_session, branch, alice, "member")
+    task = await _make_task(db_session, branch, alice, "Archived Task")
+    await _view(db_session, alice, "task", task)
+    await db_session.execute(text("UPDATE branch SET is_archived = TRUE WHERE branch_id = :b"),
+                             {"b": branch})
+
+    items = await recent_view_model.find_recent(alice, 50, db_session)
+    assert all(i.get("task_id") != task for i in items)
+
+
+async def test_recent_doc_hidden_when_canvas_archived(db_session):
+    """아카이브된 canvas의 최근 본 page는 멤버라도 목록에서 빠진다."""
+    carol = await _make_user(db_session, "archd@recentv.test", "archd_rv")
+    branch = await _make_branch(db_session, carol, name="ARD", key="RVARD")
+    canvas = await _make_canvas(db_session, branch, carol, key="rvard")
+    await _add_canvas_member(db_session, canvas, carol, "member")
+    page = await _make_canvas_page(db_session, canvas, carol, "Archived Page")
+    await _view(db_session, carol, "doc", page)
+    await db_session.execute(text("UPDATE canvas SET is_archived = TRUE WHERE canvas_id = :c"),
+                             {"c": canvas})
+
+    items = await recent_view_model.find_recent(carol, 50, db_session)
+    assert all(i.get("page_id") != page for i in items)
+
+
 async def test_recent_task_member_returned_with_metadata(db_session):
     """현재 branch 멤버는 최근 본 task를 메타데이터와 함께 정상 반환."""
     alice = await _make_user(db_session, "ok@recentv.test", "ok_rv")

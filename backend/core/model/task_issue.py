@@ -73,6 +73,7 @@ async def find_by_id_simple(issue_id: int, db: AsyncSession):
         INNER JOIN task t ON i.task_id = t.task_id
         INNER JOIN branch b ON t.branch_id = b.branch_id
         WHERE i.issue_id = :issue_id
+          AND b.is_archived = FALSE
     """), {'issue_id': issue_id})
     row = result.fetchone()
     if not row:
@@ -93,6 +94,7 @@ async def search_for_chat(user_id: int, keyword: str, db: AsyncSession):
         INNER JOIN branch b ON t.branch_id = b.branch_id
         INNER JOIN branch_member bm ON b.branch_id = bm.branch_id
         WHERE bm.user_id = :user_id
+          AND b.is_archived = FALSE
           AND i.title ILIKE :keyword
         ORDER BY i.created_at DESC
         LIMIT 10
@@ -114,8 +116,10 @@ async def batch_statuses(issue_ids: list[int], user_id: int, db: AsyncSession) -
         SELECT ti.issue_id, ti.status, ti.title
         FROM task_issue ti
         INNER JOIN task t ON t.task_id = ti.task_id
+        INNER JOIN branch b ON b.branch_id = t.branch_id
         INNER JOIN branch_member bm ON bm.branch_id = t.branch_id AND bm.user_id = :user_id
         WHERE ti.issue_id = ANY(:ids)
+          AND b.is_archived = FALSE
     """), {'ids': issue_ids, 'user_id': user_id})
     return {str(r.issue_id): {'status': r.status, 'title': r.title} for r in result.fetchall()}
 

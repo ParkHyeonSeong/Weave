@@ -23,6 +23,7 @@ async def find_by_event(schedule_event_id: int, db: AsyncSession):
         INNER JOIN branch b ON t.branch_id = b.branch_id
         LEFT JOIN workflow_status ws ON ws.branch_id = t.branch_id AND ws.key = t.status
         WHERE st.schedule_event_id = :schedule_event_id
+          AND b.is_archived = FALSE
         ORDER BY st.created_at
     """), {'schedule_event_id': schedule_event_id})
     rows = result.fetchall()
@@ -51,6 +52,7 @@ async def search_tasks(branch_id: int, keyword: str, exclude_event_id: int, db: 
         INNER JOIN branch b ON t.branch_id = b.branch_id
         LEFT JOIN workflow_status ws ON ws.branch_id = t.branch_id AND ws.key = t.status
         WHERE t.branch_id = :branch_id
+          AND b.is_archived = FALSE
           AND t.title ILIKE :keyword
           AND t.task_id NOT IN (
               SELECT task_id FROM schedule_event_task WHERE schedule_event_id = :exclude_event_id

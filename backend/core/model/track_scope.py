@@ -69,6 +69,7 @@ _SCOPE_TASK_QUERY = """
     LEFT JOIN workflow_status ws
         ON ws.branch_id = t.branch_id AND ws.key = t.status
     WHERE t.{filter_col} = ANY(:ids)
+      AND b.is_archived = FALSE
       AND t.parent_task_id IS NULL
       AND (COALESCE(sp.status, '') = 'active'
            OR ws.category IS NULL

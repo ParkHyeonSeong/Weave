@@ -34,6 +34,10 @@ from sqlalchemy import text
 
 from core.model import task as task_model
 from core.model import task_issue as issue_model
+from core.model import canvas_page as canvas_page_model
+from core.model import chat_message as chat_message_model
+from core.model import task_page_link as task_page_link_model
+from core.model import schedule_event_task as schedule_event_task_model
 
 
 # ---------------------------------------------------------------------------
@@ -93,6 +97,265 @@ async def _make_issue(db, task_id, created_by, title="Issue", status="open"):
         VALUES (:t, :title, 'body', :s, :u) RETURNING issue_id
     """), {"t": task_id, "title": title, "s": status, "u": created_by})
     return res.scalar_one()
+
+
+async def _archive_branch(db, branch_id):
+    await db.execute(text("UPDATE branch SET is_archived = TRUE WHERE branch_id = :b"),
+                     {"b": branch_id})
+
+
+async def _make_canvas(db, created_by, name="Canvas", key="CKEY"):
+    row = await db.execute(text("""
+        INSERT INTO canvas (canvas_name, key, visibility, created_by)
+        VALUES (:n, :k, 'private', :u) RETURNING canvas_id
+    """), {"n": name, "k": key, "u": created_by})
+    return row.scalar_one()
+
+
+async def _add_canvas_member(db, canvas_id, user_id, role="member"):
+    await db.execute(text("""
+        INSERT INTO canvas_member (canvas_id, user_id, role)
+        VALUES (:c, :u, :r)
+    """), {"c": canvas_id, "u": user_id, "r": role})
+
+
+async def _make_page(db, canvas_id, created_by, title="Page"):
+    row = await db.execute(text("""
+        INSERT INTO canvas_page (canvas_id, title, content, created_by)
+        VALUES (:c, :t, :body, :u) RETURNING page_id
+    """), {"c": canvas_id, "t": title, "body": title, "u": created_by})
+    return row.scalar_one()
+
+
+async def _archive_canvas(db, canvas_id):
+    await db.execute(text("UPDATE canvas SET is_archived = TRUE WHERE canvas_id = :c"),
+                     {"c": canvas_id})
+
+
+async def _assign(db, task_id, user_id, role="main"):
+    await db.execute(text("""
+        INSERT INTO task_assignee (task_id, user_id, role)
+        VALUES (:t, :u, :r)
+    """), {"t": task_id, "u": user_id, "r": role})
+
+
+async def _make_room(db, created_by):
+    row = await db.execute(text("""
+        INSERT INTO chat_room (room_type, created_by) VALUES ('dm', :u) RETURNING room_id
+    """), {"u": created_by})
+    return row.scalar_one()
+
+
+async def _link_task_page(db, task_id, page_id):
+    await db.execute(text("""
+        INSERT INTO task_page_link (task_id, page_id) VALUES (:t, :p)
+    """), {"t": task_id, "p": page_id})
+
+
+# ---------------------------------------------------------------------------
+# archived-container filtering — ref hydration must not surface entities whose
+# parent branch/canvas was archived (soft-deleted). Archive keeps the *_member
+# row, so membership alone does not exclude them; the model SQL must filter
+# is_archived. Each test locks both directions (archived absent, active present).
+# ---------------------------------------------------------------------------
+
+async def test_task_batch_excludes_archived_branch(db_session):
+    """아카이브된 branch의 task는 멤버라도 batch_statuses에서 제외된다."""
+    alice = await _make_user(db_session, "alice_ar@refstatus.test", "alice_ar")
+    b_live = await _make_branch(db_session, alice, name="Live", key="ARTL")
+    await _add_member(db_session, b_live, alice, "member")
+    t_live = await _make_task(db_session, b_live, alice, title="Live", status="todo")
+
+    b_arch = await _make_branch(db_session, alice, name="Arch", key="ARTA")
+    await _add_member(db_session, b_arch, alice, "member")
+    t_arch = await _make_task(db_session, b_arch, alice, title="Archived", status="todo")
+    await _archive_branch(db_session, b_arch)
+
+    out = await task_model.batch_statuses([t_live, t_arch], alice, db_session)
+    assert str(t_arch) not in out
+    assert str(t_live) in out
+
+
+async def test_issue_batch_excludes_archived_branch(db_session):
+    """아카이브된 branch task의 issue는 batch_statuses에서 제외된다."""
+    alice = await _make_user(db_session, "alice_ari@refstatus.test", "alice_ari")
+    b_live = await _make_branch(db_session, alice, name="Live", key="ARIL")
+    await _add_member(db_session, b_live, alice, "member")
+    t_live = await _make_task(db_session, b_live, alice, title="Live")
+    i_live = await _make_issue(db_session, t_live, alice, title="Live issue")
+
+    b_arch = await _make_branch(db_session, alice, name="Arch", key="ARIA")
+    await _add_member(db_session, b_arch, alice, "member")
+    t_arch = await _make_task(db_session, b_arch, alice, title="Arch")
+    i_arch = await _make_issue(db_session, t_arch, alice, title="Arch issue")
+    await _archive_branch(db_session, b_arch)
+
+    out = await issue_model.batch_statuses([i_live, i_arch], alice, db_session)
+    assert str(i_arch) not in out
+    assert str(i_live) in out
+
+
+async def test_doc_batch_excludes_archived_canvas(db_session):
+    """아카이브된 canvas의 page는 batch_titles에서 제외된다."""
+    alice = await _make_user(db_session, "alice_ard@refstatus.test", "alice_ard")
+    c_live = await _make_canvas(db_session, alice, name="Live", key="ARDL")
+    await _add_canvas_member(db_session, c_live, alice, "member")
+    p_live = await _make_page(db_session, c_live, alice, title="Live page")
+
+    c_arch = await _make_canvas(db_session, alice, name="Arch", key="ARDA")
+    await _add_canvas_member(db_session, c_arch, alice, "member")
+    p_arch = await _make_page(db_session, c_arch, alice, title="Arch page")
+    await _archive_canvas(db_session, c_arch)
+
+    out = await canvas_page_model.batch_titles([p_live, p_arch], alice, db_session)
+    assert str(p_arch) not in out
+    assert str(p_live) in out
+
+
+async def test_task_search_excludes_archived_branch(db_session):
+    """search_for_chat(/ta)는 아카이브된 branch의 task를 반환하지 않는다."""
+    alice = await _make_user(db_session, "alice_ars@refstatus.test", "alice_ars")
+    b_live = await _make_branch(db_session, alice, name="Live", key="ARSL")
+    await _add_member(db_session, b_live, alice, "member")
+    t_live = await _make_task(db_session, b_live, alice, title="ZxqLive")
+
+    b_arch = await _make_branch(db_session, alice, name="Arch", key="ARSA")
+    await _add_member(db_session, b_arch, alice, "member")
+    t_arch = await _make_task(db_session, b_arch, alice, title="ZxqArch")
+    await _archive_branch(db_session, b_arch)
+
+    rows = await task_model.search_for_chat(alice, "Zxq", False, db_session)
+    ids = {r["task_id"] for r in rows}
+    assert t_arch not in ids
+    assert t_live in ids
+
+
+async def test_issue_search_excludes_archived_branch(db_session):
+    """issue search_for_chat은 아카이브된 branch의 issue를 반환하지 않는다."""
+    alice = await _make_user(db_session, "alice_aris@refstatus.test", "alice_aris")
+    b_live = await _make_branch(db_session, alice, name="Live", key="ARISL")
+    await _add_member(db_session, b_live, alice, "member")
+    t_live = await _make_task(db_session, b_live, alice, title="t")
+    i_live = await _make_issue(db_session, t_live, alice, title="WqxLive")
+
+    b_arch = await _make_branch(db_session, alice, name="Arch", key="ARISA")
+    await _add_member(db_session, b_arch, alice, "member")
+    t_arch = await _make_task(db_session, b_arch, alice, title="t")
+    i_arch = await _make_issue(db_session, t_arch, alice, title="WqxArch")
+    await _archive_branch(db_session, b_arch)
+
+    rows = await issue_model.search_for_chat(alice, "Wqx", db_session)
+    ids = {r["issue_id"] for r in rows}
+    assert i_arch not in ids
+    assert i_live in ids
+
+
+async def test_doc_search_excludes_archived_canvas(db_session):
+    """canvas_page search_for_chat은 아카이브된 canvas의 page를 반환하지 않는다."""
+    alice = await _make_user(db_session, "alice_ards@refstatus.test", "alice_ards")
+    c_live = await _make_canvas(db_session, alice, name="Live", key="ARDSL")
+    await _add_canvas_member(db_session, c_live, alice, "member")
+    p_live = await _make_page(db_session, c_live, alice, title="VkpLive")
+
+    c_arch = await _make_canvas(db_session, alice, name="Arch", key="ARDSA")
+    await _add_canvas_member(db_session, c_arch, alice, "member")
+    p_arch = await _make_page(db_session, c_arch, alice, title="VkpArch")
+    await _archive_canvas(db_session, c_arch)
+
+    rows = await canvas_page_model.search_for_chat(alice, "Vkp", db_session)
+    ids = {r["page_id"] for r in rows}
+    assert p_arch not in ids
+    assert p_live in ids
+
+
+async def test_my_tasks_excludes_archived_branch(db_session):
+    """find_by_assignee(My Tasks)는 아카이브된 branch의 담당 task를 빼고 반환한다."""
+    alice = await _make_user(db_session, "alice_mt@refstatus.test", "alice_mt")
+    b_live = await _make_branch(db_session, alice, name="Live", key="ARMTL")
+    await _add_member(db_session, b_live, alice, "member")
+    t_live = await _make_task(db_session, b_live, alice, title="Live")
+    await _assign(db_session, t_live, alice)
+
+    b_arch = await _make_branch(db_session, alice, name="Arch", key="ARMTA")
+    await _add_member(db_session, b_arch, alice, "member")
+    t_arch = await _make_task(db_session, b_arch, alice, title="Arch")
+    await _assign(db_session, t_arch, alice)
+    await _archive_branch(db_session, b_arch)
+
+    rows = await task_model.find_by_assignee(alice, None, None, None, None, "updated", db_session)
+    ids = {r["task_id"] for r in rows}
+    assert t_arch not in ids
+    assert t_live in ids
+
+
+async def test_chat_history_nulls_archived_branch_ref(db_session):
+    """find_by_room: 아카이브된 branch의 task_ref는 카드만 None 처리하고 메시지 행은 유지한다."""
+    alice = await _make_user(db_session, "alice_ch@refstatus.test", "alice_ch")
+    b_live = await _make_branch(db_session, alice, name="Live", key="ARCHL")
+    await _add_member(db_session, b_live, alice, "member")
+    t_live = await _make_task(db_session, b_live, alice, title="Live")
+
+    b_arch = await _make_branch(db_session, alice, name="Arch", key="ARCHA")
+    await _add_member(db_session, b_arch, alice, "member")
+    t_arch = await _make_task(db_session, b_arch, alice, title="Arch")
+    await _archive_branch(db_session, b_arch)
+
+    room = await _make_room(db_session, alice)
+    m_live = await chat_message_model.create(room, alice, "live", db_session, task_id=t_live)
+    m_arch = await chat_message_model.create(room, alice, "arch", db_session, task_id=t_arch)
+
+    msgs = await chat_message_model.find_by_room(room, 50, 0, db_session)
+    by_id = {m["message_id"]: m for m in msgs}
+
+    # 메시지 행은 둘 다 남아있어야 한다 (drop 금지)
+    assert m_live["message_id"] in by_id
+    assert m_arch["message_id"] in by_id
+    # 아카이브 branch의 ref 카드만 None
+    assert by_id[m_arch["message_id"]]["task_ref"] is None
+    assert by_id[m_live["message_id"]]["task_ref"] is not None
+    assert by_id[m_live["message_id"]]["task_ref"]["task_id"] == t_live
+
+
+async def test_task_page_link_excludes_archived_canvas(db_session):
+    """태스크 상세 Linked Docs는 아카이브된 canvas의 page를 빼고 반환한다."""
+    alice = await _make_user(db_session, "alice_tpl@refstatus.test", "alice_tpl")
+    b = await _make_branch(db_session, alice, name="B", key="ARTPL")
+    await _add_member(db_session, b, alice, "member")
+    task = await _make_task(db_session, b, alice, title="t")
+
+    c_live = await _make_canvas(db_session, alice, name="Live", key="TPLL")
+    p_live = await _make_page(db_session, c_live, alice, title="Live page")
+    await _link_task_page(db_session, task, p_live)
+
+    c_arch = await _make_canvas(db_session, alice, name="Arch", key="TPLA")
+    p_arch = await _make_page(db_session, c_arch, alice, title="Arch page")
+    await _link_task_page(db_session, task, p_arch)
+    await _archive_canvas(db_session, c_arch)
+
+    rows = await task_page_link_model.find_by_task(task, db_session)
+    ids = {r["page_id"] for r in rows}
+    assert p_arch not in ids
+    assert p_live in ids
+
+
+async def test_schedule_search_excludes_archived_branch(db_session):
+    """일정 이벤트 태스크 연결 검색은 아카이브된 branch의 task를 반환하지 않는다."""
+    alice = await _make_user(db_session, "alice_sk@refstatus.test", "alice_sk")
+    b_live = await _make_branch(db_session, alice, name="Live", key="ARSKL")
+    await _add_member(db_session, b_live, alice, "member")
+    t_live = await _make_task(db_session, b_live, alice, title="SkedXyz")
+
+    b_arch = await _make_branch(db_session, alice, name="Arch", key="ARSKA")
+    await _add_member(db_session, b_arch, alice, "member")
+    t_arch = await _make_task(db_session, b_arch, alice, title="SkedXyz")
+    await _archive_branch(db_session, b_arch)
+
+    live_ids = {r["task_id"] for r in
+                await schedule_event_task_model.search_tasks(b_live, "SkedXyz", 0, db_session)}
+    arch_ids = {r["task_id"] for r in
+                await schedule_event_task_model.search_tasks(b_arch, "SkedXyz", 0, db_session)}
+    assert t_live in live_ids
+    assert t_arch not in arch_ids
 
 
 # ---------------------------------------------------------------------------

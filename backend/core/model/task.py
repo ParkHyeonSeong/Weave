@@ -575,6 +575,7 @@ async def search_for_chat(user_id: int, keyword: str, my_only: bool, db: AsyncSe
         INNER JOIN branch_member bm ON b.branch_id = bm.branch_id AND bm.user_id = :user_id
         LEFT JOIN workflow_status ws ON ws.branch_id = t.branch_id AND ws.key = t.status
         WHERE t.title ILIKE :keyword_like
+              AND b.is_archived = FALSE
               {assignee_filter}
         ORDER BY t.updated_at DESC NULLS LAST, t.created_at DESC
         LIMIT 10
@@ -653,6 +654,7 @@ async def find_by_assignee(user_id: int, status: str, status_category: str, prio
         INNER JOIN branch_member bm ON bm.branch_id = t.branch_id AND bm.user_id = :user_id
         LEFT JOIN workflow_status ws ON ws.branch_id = t.branch_id AND ws.key = t.status
         WHERE t.task_id IN (SELECT task_id FROM task_assignee WHERE user_id = :user_id)
+              AND b.is_archived = FALSE
               {filter_clause}
         ORDER BY {order_clause}
     """), params)
@@ -734,6 +736,7 @@ async def batch_statuses(task_ids: list[int], user_id: int, db: AsyncSession) ->
         INNER JOIN branch b ON b.branch_id = t.branch_id
         LEFT JOIN workflow_status ws ON ws.branch_id = t.branch_id AND ws.key = t.status
         WHERE t.task_id = ANY(:ids)
+          AND b.is_archived = FALSE
     """), {'ids': task_ids, 'user_id': user_id})
     out = {}
     for r in result.fetchall():

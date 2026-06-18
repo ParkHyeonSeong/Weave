@@ -21,6 +21,7 @@ from types import SimpleNamespace
 from sqlalchemy import text
 
 from core.controller import track as ctrl
+from core.model import track_item as track_item_model
 from routers.schema.track import TrackItemsBulkAdd
 
 
@@ -111,12 +112,57 @@ async def _make_sprint(db, branch_id, created_by, name="Sprint", status="active"
     return res.scalar_one()
 
 
+async def _make_track_item(db, track_id, source_task_id):
+    row = await db.execute(text("""
+        INSERT INTO track_item (track_id, source_type, source_task_id)
+        VALUES (:t, 'task', :st) RETURNING item_id
+    """), {"t": track_id, "st": source_task_id})
+    return row.scalar_one()
+
+
 async def _scope_rows(db, track_id):
     res = await db.execute(text("""
         SELECT branch_id, scope_type, scope_id FROM track_scope
         WHERE track_id = :t
     """), {"t": track_id})
     return [dict(r._mapping) for r in res.fetchall()]
+
+
+# ---------------------------------------------------------------------------
+# archive — find_by_track restricts tasks whose branch was archived
+# ---------------------------------------------------------------------------
+
+async def test_find_by_track_restricts_archived_branch_task(db_session):
+    """아카이브된 branch의 task는 track 다이어그램에서 restricted 처리(본문 가림)된다."""
+    alice = await _make_user(db_session, "arch@idtrk.test", "arch_idtrk")
+    track = await _make_track(db_session, alice, name="TArch")
+    await _add_track_member(db_session, track, alice, "owner")
+
+    b_live = await _make_branch(db_session, alice, name="Live", key="ITARL")
+    await _add_branch_member(db_session, b_live, alice, "admin")
+    await _link_branch(db_session, track, b_live)
+    t_live = await _make_task(db_session, b_live, alice)
+    await _make_track_item(db_session, track, t_live)
+
+    b_arch = await _make_branch(db_session, alice, name="Arch", key="ITARA")
+    await _add_branch_member(db_session, b_arch, alice, "admin")
+    await _link_branch(db_session, track, b_arch)
+    t_arch = await _make_task(db_session, b_arch, alice)
+    item_arch = await _make_track_item(db_session, track, t_arch)
+    await db_session.execute(text("UPDATE branch SET is_archived = TRUE WHERE branch_id = :b"),
+                             {"b": b_arch})
+
+    items = await track_item_model.find_by_track(track, alice, db_session)
+    arch_item = next(i for i in items if i["item_id"] == item_arch)
+    live_by_task = {i.get("task_id"): i for i in items if i.get("task_id")}
+
+    # 아카이브 branch task: restricted=True, title/status 등 본문 가림
+    assert arch_item["restricted"] is True
+    assert "title" not in arch_item
+    # 살아있는 branch task: 정상 노출 (회귀)
+    assert t_live in live_by_task
+    assert live_by_task[t_live]["restricted"] is False
+    assert live_by_task[t_live]["title"]
 
 
 # ---------------------------------------------------------------------------

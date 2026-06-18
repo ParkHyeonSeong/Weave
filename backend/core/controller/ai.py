@@ -102,7 +102,9 @@ async def _get_task_summary(user_id: int, db: AsyncSession) -> str:
         SELECT t.status, COUNT(*) AS cnt
         FROM task t
         INNER JOIN task_assignee ta ON t.task_id = ta.task_id
+        INNER JOIN branch b ON t.branch_id = b.branch_id
         WHERE ta.user_id = :user_id
+          AND b.is_archived = FALSE
         GROUP BY t.status
         ORDER BY t.status
     """), {'user_id': user_id})

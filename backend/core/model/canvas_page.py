@@ -53,7 +53,7 @@ async def find_by_id_simple(page_id: int, db: AsyncSession):
         SELECT p.page_id, p.canvas_id, p.title, c.canvas_name
         FROM canvas_page p
         INNER JOIN canvas c ON p.canvas_id = c.canvas_id
-        WHERE p.page_id = :page_id AND p.is_archived = FALSE
+        WHERE p.page_id = :page_id AND p.is_archived = FALSE AND c.is_archived = FALSE
     """), {'page_id': page_id})
     row = result.fetchone()
     return dict(row._mapping) if row else None
@@ -68,7 +68,7 @@ async def batch_titles(page_ids: list[int], user_id: int, db: AsyncSession) -> d
         FROM canvas_page p
         INNER JOIN canvas c ON c.canvas_id = p.canvas_id
         INNER JOIN canvas_member cm ON cm.canvas_id = p.canvas_id AND cm.user_id = :user_id
-        WHERE p.page_id = ANY(:ids) AND p.is_archived = FALSE
+        WHERE p.page_id = ANY(:ids) AND p.is_archived = FALSE AND c.is_archived = FALSE
     """), {'ids': page_ids, 'user_id': user_id})
     return {str(r.page_id): {'title': r.title, 'canvas_name': r.canvas_name} for r in result.fetchall()}
 
@@ -293,6 +293,7 @@ async def search_for_chat(user_id: int, keyword: str, db: AsyncSession):
         INNER JOIN canvas c ON p.canvas_id = c.canvas_id
         INNER JOIN canvas_member cm ON c.canvas_id = cm.canvas_id
         WHERE cm.user_id = :user_id
+          AND c.is_archived = FALSE
           AND p.is_archived = FALSE
           AND (p.title ILIKE :keyword OR p.content ILIKE :keyword)
         ORDER BY p.updated_at DESC

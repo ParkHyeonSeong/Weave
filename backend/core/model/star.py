@@ -38,8 +38,8 @@ async def find_starred(user_id: int, limit: int, db: AsyncSession, item_type: st
     where = """
         WHERE us.user_id = :user_id
           AND (
-            (us.item_type = 'task' AND bm.user_id IS NOT NULL)
-            OR (us.item_type = 'doc' AND cm.user_id IS NOT NULL)
+            (us.item_type = 'task' AND bm.user_id IS NOT NULL AND b.is_archived = FALSE)
+            OR (us.item_type = 'doc' AND cm.user_id IS NOT NULL AND c.is_archived = FALSE)
           )
     """
     params = {'user_id': user_id, 'limit': limit}

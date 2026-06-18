@@ -20,7 +20,7 @@ async def find_by_task(task_id: int, db: AsyncSession):
         FROM task_page_link tpl
         INNER JOIN canvas_page p ON tpl.page_id = p.page_id
         INNER JOIN canvas c ON p.canvas_id = c.canvas_id
-        WHERE tpl.task_id = :task_id AND p.is_archived = FALSE
+        WHERE tpl.task_id = :task_id AND p.is_archived = FALSE AND c.is_archived = FALSE
         ORDER BY tpl.created_at
     """), {'task_id': task_id})
     return [dict(row._mapping) for row in result.fetchall()]

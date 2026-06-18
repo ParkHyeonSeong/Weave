@@ -70,7 +70,7 @@ async def find_by_track(track_id: int, user_id: int, db: AsyncSession):
             t.status, t.priority, t.start_date, t.due_date,
             b.branch_id, b.branch_name, b.key AS branch_key, b.color AS branch_color, b.icon AS branch_icon,
             ws.label AS status_label, ws.color AS status_color, ws.category AS status_category,
-            CASE WHEN bm.user_id IS NULL THEN TRUE ELSE FALSE END AS restricted
+            CASE WHEN bm.user_id IS NULL OR b.is_archived THEN TRUE ELSE FALSE END AS restricted
         FROM track_item ti
         LEFT JOIN task t ON ti.source_task_id = t.task_id
         LEFT JOIN branch b ON t.branch_id = b.branch_id
@@ -291,6 +291,7 @@ async def search_sources(track_id: int, user_id: int, q: str, branch_id,
         LEFT JOIN workflow_status ws
             ON ws.branch_id = t.branch_id AND ws.key = t.status
         WHERE (t.title ILIKE :q OR (b.key || '-' || t.display_number) ILIKE :q)
+          AND b.is_archived = FALSE
           AND (CAST(:branch_id AS INTEGER) IS NULL OR t.branch_id = CAST(:branch_id AS INTEGER))
           AND (CAST(:epic_id AS INTEGER) IS NULL OR t.epic_id = CAST(:epic_id AS INTEGER))
           AND (CAST(:sprint_id AS INTEGER) IS NULL OR t.sprint_id = CAST(:sprint_id AS INTEGER))

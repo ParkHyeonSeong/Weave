@@ -24,7 +24,10 @@ async def find_by_room(room_id: int, limit: int, offset: int, db: AsyncSession):
         SELECT cm.message_id, cm.room_id, cm.sender_id, cm.content, cm.created_at,
                u.username AS sender_name,
                u.avatar_url AS sender_avatar_url, u.avatar_color AS sender_avatar_color,
-               t.task_id AS ref_task_id, t.branch_id AS ref_branch_id,
+               -- 아카이브된 컨테이너(브랜치/캔버스)의 ref는 가드 컬럼을 NULL로 떨궈
+               -- ref 카드만 사라지게 한다(메시지 행은 유지). find_by_id_simple과 동일 의미.
+               CASE WHEN b.is_archived THEN NULL ELSE t.task_id END AS ref_task_id,
+               t.branch_id AS ref_branch_id,
                t.display_number AS ref_display_number,
                t.title AS ref_task_title, t.status AS ref_task_status,
                t.priority AS ref_task_priority,
@@ -33,10 +36,12 @@ async def find_by_room(room_id: int, limit: int, offset: int, db: AsyncSession):
                 INNER JOIN "user" u2 ON ta2.user_id = u2.user_id
                 WHERE ta2.task_id = t.task_id AND ta2.role = 'main' AND u2.deleted_at IS NULL
                 LIMIT 1) AS ref_main_assignee_name,
-               cp.page_id AS ref_page_id, cp.canvas_id AS ref_canvas_id,
+               CASE WHEN c.is_archived OR cp.is_archived THEN NULL ELSE cp.page_id END AS ref_page_id,
+               cp.canvas_id AS ref_canvas_id,
                cp.title AS ref_page_title,
                c.canvas_name AS ref_canvas_name,
-               ti.issue_id AS ref_issue_id, ti.task_id AS ref_issue_task_id,
+               CASE WHEN ib.is_archived THEN NULL ELSE ti.issue_id END AS ref_issue_id,
+               ti.task_id AS ref_issue_task_id,
                ti.title AS ref_issue_title, ti.status AS ref_issue_status,
                it.branch_id AS ref_issue_branch_id,
                it.display_number AS ref_issue_display_number,

@@ -20,8 +20,8 @@ async def find_recent(user_id: int, limit: int, db: AsyncSession, item_type: str
     where = """
         WHERE rv.user_id = :user_id
           AND (
-            (rv.item_type = 'task' AND bm.user_id IS NOT NULL)
-            OR (rv.item_type = 'doc' AND cm.user_id IS NOT NULL)
+            (rv.item_type = 'task' AND bm.user_id IS NOT NULL AND b.is_archived = FALSE)
+            OR (rv.item_type = 'doc' AND cm.user_id IS NOT NULL AND c.is_archived = FALSE)
           )
     """
     params = {'user_id': user_id, 'limit': limit}
