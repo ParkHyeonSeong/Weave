@@ -42,6 +42,7 @@ class TaskUpdate(BaseModel):
     priority: Optional[str] = None
     epic_id: Optional[int] = None
     sprint_id: Optional[int] = None
+    parent_task_id: Optional[int] = None
     assignees: Optional[AssigneeInput] = None
     label_ids: Optional[List[int]] = None
     start_date: Optional[date] = None

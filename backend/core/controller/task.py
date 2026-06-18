@@ -24,6 +24,26 @@ def _collect_assignee_ids(assignees) -> set[int]:
     return ids
 
 
+async def _validate_parent_target(task_id, parent_task_id: int, branch_id: int,
+                                  db: AsyncSession):
+    """하위로 이동/생성 시 1단계 불변식 검증.
+
+    위반 시 {'status': False, 'message': ...} 반환(라우터 4xx 금지, 호출부에서 status 확인).
+    통과 시 None. parent_task_id is None(승격)인 경우 호출하지 않는다.
+    """
+    if task_id is not None and parent_task_id == task_id:
+        return {'status': False, 'message': 'PARENT_SELF'}
+    parent = await task_model.find_by_id(parent_task_id, db)
+    if not parent or parent['branch_id'] != branch_id:
+        return {'status': False, 'message': 'PARENT_NOT_FOUND'}
+    if parent['parent_task_id'] is not None:
+        return {'status': False, 'message': 'PARENT_NOT_TOP_LEVEL'}
+    # 대상 태스크가 자기 하위를 가지면 하위가 될 수 없음(2단계 방지). 생성 시엔 task_id=None.
+    if task_id is not None and await task_model.count_subtasks(task_id, db) > 0:
+        return {'status': False, 'message': 'TARGET_HAS_SUBTASKS'}
+    return None
+
+
 async def _assignees_valid_for_branch(assignees, branch_id: int, db: AsyncSession) -> bool:
     """지정된 모든 담당자가 해당 branch의 멤버인지 검증 (all-or-nothing).
 
@@ -56,6 +76,12 @@ async def create(body, branch_id: int, request: Request, db: AsyncSession):
     # 담당자 소속 검증 (모든 담당자가 branch 멤버여야 함)
     if body.assignees and not await _assignees_valid_for_branch(body.assignees, branch_id, db):
         return {'status': False, 'message': 'INVALID_ASSIGNEE'}
+
+    # 하위 생성: 부모가 top-level·동일 branch인지 검증 (1단계 불변식). sprint/epic은 복사 X(§4).
+    if body.parent_task_id is not None:
+        err = await _validate_parent_target(None, body.parent_task_id, branch_id, db)
+        if err:
+            return err
 
     # display_number 발급
     display_number = await task_model.next_display_number(branch_id, db)
@@ -180,6 +206,13 @@ async def update(task_id: int, body, branch_id: int, request: Request, db: Async
     # 담당자 소속 검증 (모델 변경 전, all-or-nothing)
     if body.assignees is not None and not await _assignees_valid_for_branch(body.assignees, branch_id, db):
         return {'status': False, 'message': 'INVALID_ASSIGNEE'}
+
+    # parent_task_id 전환 검증: 명시적으로 보낸 경우만(생략은 무시 — exclude_unset과 동일 시맨틱).
+    # 명시적 null = 승격(검증 불필요, NULL set). 값 지정 = 하위로 이동(1단계 불변식 검증).
+    if 'parent_task_id' in body.model_fields_set and body.parent_task_id is not None:
+        err = await _validate_parent_target(task_id, body.parent_task_id, branch_id, db)
+        if err:
+            return err
 
     fields = body.model_dump(exclude_unset=True, exclude={'label_ids', 'assignees'})
 

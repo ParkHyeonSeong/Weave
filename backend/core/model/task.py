@@ -559,12 +559,20 @@ async def find_subtasks(parent_task_id: int, db: AsyncSession):
     return tasks
 
 
+async def count_subtasks(parent_task_id: int, db: AsyncSession) -> int:
+    """parent_task_id를 부모로 갖는 하위 태스크 개수 (1단계 불변식 검증용)."""
+    result = await db.execute(text("""
+        SELECT COUNT(*) FROM task WHERE parent_task_id = :parent_task_id
+    """), {'parent_task_id': parent_task_id})
+    return result.scalar_one()
+
+
 async def update(task_id: int, fields: dict, db: AsyncSession):
     """Task 수정 (동적 필드)"""
     import json
     allowed = {'title', 'description', 'task_type', 'status', 'priority',
-               'epic_id', 'sprint_id', 'start_date', 'due_date', 'sort_order',
-               'custom_fields'}
+               'epic_id', 'sprint_id', 'parent_task_id', 'start_date', 'due_date',
+               'sort_order', 'custom_fields'}
     updates = {k: v for k, v in fields.items() if k in allowed}
     if 'custom_fields' in updates and isinstance(updates['custom_fields'], dict):
         updates['custom_fields'] = json.dumps(updates['custom_fields'])
