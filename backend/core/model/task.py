@@ -567,6 +567,29 @@ async def count_subtasks(parent_task_id: int, db: AsyncSession) -> int:
     return result.scalar_one()
 
 
+async def find_parent_summary(task_id: int, db: AsyncSession):
+    """하위 Task의 부모 요약(브레드크럼 + 상속 sprint/epic live 조인). top-level이면 None."""
+    result = await db.execute(text("""
+        SELECT p.task_id, p.display_number, p.title,
+               p.sprint_id, p.epic_id,
+               b.key AS branch_key,
+               s.sprint_name,
+               e.epic_name
+        FROM task t
+        INNER JOIN task p ON t.parent_task_id = p.task_id
+        INNER JOIN branch b ON p.branch_id = b.branch_id
+        LEFT JOIN sprint s ON p.sprint_id = s.sprint_id
+        LEFT JOIN epic e ON p.epic_id = e.epic_id
+        WHERE t.task_id = :task_id
+    """), {'task_id': task_id})
+    row = result.fetchone()
+    if not row:
+        return None
+    parent = dict(row._mapping)
+    parent['display_id'] = f"{parent['branch_key']}-{parent['display_number']}"
+    return parent
+
+
 async def update(task_id: int, fields: dict, db: AsyncSession):
     """Task 수정 (동적 필드)"""
     import json

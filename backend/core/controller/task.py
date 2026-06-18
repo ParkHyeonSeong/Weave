@@ -144,6 +144,12 @@ async def get_detail(task_id: int, branch_id: int, request: Request, db: AsyncSe
     subtasks = await task_model.find_subtasks(task_id, db)
     task['subtasks'] = subtasks
 
+    # 하위 Task이면 부모 요약(브레드크럼 + 상속 sprint/epic). top-level이면 None.
+    task['parent'] = (
+        await task_model.find_parent_summary(task_id, db)
+        if task.get('parent_task_id') else None
+    )
+
     # 조회 기록
     await recent_view.upsert(user_id, 'task', task_id, db)
 
