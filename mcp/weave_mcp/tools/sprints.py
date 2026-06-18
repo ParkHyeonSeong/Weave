@@ -84,8 +84,8 @@ async def complete_sprint(
 ) -> Any:
     """Complete a sprint in a branch.
 
-    move_to can be "backlog" (default) or a sprint_id string to move
-    incomplete tasks to another sprint.
+    move_to is where incomplete tasks go: "backlog" (default) or the destination
+    sprint_id AS A STRING (e.g. "42", not the integer 42 — the backend expects a string).
     """
     return await get_client().call_json(
         "POST",

@@ -8,7 +8,8 @@ class WeaveClient:
 
     The token is sent as an ``Authorization: Bearer`` header on every request. PATs are
     long-lived, so there is no login, cookie, session, or refresh logic — an invalid or
-    revoked token simply yields a 401, surfaced as an error result by ``call_json``.
+    revoked token yields a 401, surfaced by ``call_json`` as ``{"error": "auth"}`` (distinct
+    from a forbidden resource) so a dead token can be detected without retrying every tool.
     """
 
     def __init__(self, settings: Settings | None = None):
@@ -16,8 +17,15 @@ class WeaveClient:
         headers = {}
         if self._settings.token:
             headers["Authorization"] = f"Bearer {self._settings.token}"
+        # Granular timeouts: fail a stuck connect fast, but allow long reads for big
+        # list/search payloads. retries=2 only retries idempotent connect-level failures
+        # (a transient reset/DNS blip), never a received HTTP error response.
+        timeout = httpx.Timeout(connect=5.0, read=30.0, write=10.0, pool=5.0)
         self._http = httpx.AsyncClient(
-            base_url=self._settings.base_url, timeout=30.0, headers=headers
+            base_url=self._settings.base_url,
+            timeout=timeout,
+            headers=headers,
+            transport=httpx.AsyncHTTPTransport(retries=2),
         )
 
     async def call(self, method: str, path: str, **kwargs) -> httpx.Response:
@@ -56,6 +64,11 @@ class WeaveClient:
             detail = resp.json()
         except ValueError:
             detail = resp.text
+        # 401 = the token itself is invalid/expired/revoked — flag it as "auth" so the
+        # model/orchestrator can stop instead of hammering every tool with a dead token.
+        # 403 (forbidden THIS resource) keeps its numeric code: the token is still fine.
+        if resp.status_code == 401:
+            return {"error": "auth", "detail": detail}
         return {"error": resp.status_code, "detail": detail}
 
     async def aclose(self) -> None:

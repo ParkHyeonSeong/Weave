@@ -23,8 +23,9 @@ Before creating or updating tasks:
 Conventions: ids are integers and dates are ISO YYYY-MM-DD. Every tool returns the API's
 JSON on success, or a dict with an "error" key on failure — including
 {"error": "business", "detail": ...} when the backend rejects an action (e.g. not a
-member, or a change that would create a cycle). Treat any "error" key as failure, never
-as success."""
+member, or a change that would create a cycle), and {"error": "auth"} when the token is
+invalid/expired (stop and surface this — retrying other tools won't help). Treat any
+"error" key as failure, never as success."""
 
 mcp = FastMCP("weave", instructions=INSTRUCTIONS)
 

@@ -40,13 +40,27 @@ async def test_call_json_http_error_returns_error_dict():
 
 
 @respx.mock
-async def test_call_json_401_returns_error_dict_no_retry():
+async def test_call_json_401_returns_auth_error_no_http_retry():
+    # A revoked/expired token (401) is surfaced as error="auth" — distinct from a
+    # forbidden resource — so the model can stop hammering every tool with a dead token.
     route = respx.get("http://test/api/branches").mock(return_value=httpx.Response(401))
     c = make_client()
     result = await c.call_json("GET", "/api/branches")
     await c.aclose()
-    assert result["error"] == 401
-    assert route.call_count == 1  # no retry
+    assert result["error"] == "auth"
+    assert route.call_count == 1  # a 401 response is not a connect error → no retry
+
+
+@respx.mock
+async def test_call_json_403_stays_distinct_from_auth():
+    # 403 = authenticated but forbidden THIS resource — not a dead token, so it keeps
+    # the numeric code (an agent should not treat it as "stop, bad token").
+    respx.get("http://test/api/branches/9").mock(return_value=httpx.Response(403, json={"message": "FORBIDDEN"}))
+    c = make_client()
+    result = await c.call_json("GET", "/api/branches/9")
+    await c.aclose()
+    assert result["error"] == 403
+    assert result["detail"] == {"message": "FORBIDDEN"}
 
 
 @respx.mock
@@ -56,6 +70,15 @@ async def test_call_json_network_error_returns_error_dict():
     result = await c.call_json("GET", "/api/branches")
     await c.aclose()
     assert result["error"] == "network"
+
+
+def test_client_uses_granular_timeout():
+    c = make_client()
+    t = c._http.timeout
+    assert t.connect == 5.0
+    assert t.read == 30.0
+    assert t.write == 10.0
+    assert t.pool == 5.0
 
 
 async def test_call_json_missing_token_returns_auth_error():

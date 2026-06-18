@@ -113,7 +113,9 @@ async def update_task(
     list_workflow_statuses / list_task_types). assignee_main/assignee_sub are user ids
     (resolve via list_branch_members, or "me" via get_current_user). Dates are ISO.
     NOTE: assignees REPLACE the whole set — pass assignee_main and assignee_sub together,
-    since providing only one clears the other.
+    since providing only one clears the other. label_ids and custom_fields are likewise
+    REPLACE, not merge: pass the complete desired list/object (e.g. label_ids=[] clears all
+    labels), not just the ones to add.
     """
     body = {k: v for k, v in {
         "title": title,
