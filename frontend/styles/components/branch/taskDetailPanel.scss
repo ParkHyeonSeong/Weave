@@ -537,17 +537,25 @@
   }
 
   // 하위태스크 자신의 상세: 부모 브레드크럼 + 상속 sprint/epic 읽기전용
+  // 제목 바로 위에 콘텐츠만 감싸는 컴팩트 칩(전체폭 띄움 방지)
   &__ParentCrumb {
-    display: flex;
+    display: inline-flex;
+    align-self: flex-start;   // 본문이 flex-column이어도 stretch 방지(콘텐츠만 감쌈)
+    width: fit-content;
+    max-width: 100%;
     align-items: center;
     gap: $space-1;
-    padding: $space-1 $space-4;
-    margin: 0 0 $space-2;
     font-size: $font-size-xs;
     color: $color-text-secondary;
 
     &:hover {
       color: $color-text;
+    }
+
+    .TaskDetailPanel__ParentTitle {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
   }
 

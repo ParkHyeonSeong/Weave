@@ -129,19 +129,19 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
         </div>
       </div>
 
-      {task?.parent && (
-        <NavLink
-          href={`/branch/${branchId}/task/${task.parent.task_id}`}
-          className="TaskDetailPanel__ParentCrumb"
-          onClick={(e) => { if (onSelectTask) { e.preventDefault(); onSelectTask({ task_id: task.parent.task_id }); } }}
-        >
-          <ArrowUp size={12} />
-          <span className="TaskDetailPanel__ParentId">{task.parent.display_id}</span>
-          <span className="TaskDetailPanel__ParentTitle">{task.parent.title}</span>
-        </NavLink>
-      )}
-
       <div className="TaskDetailPanel__Body">
+        {task?.parent && (
+          <NavLink
+            href={`/branch/${branchId}/task/${task.parent.task_id}`}
+            className="TaskDetailPanel__ParentCrumb"
+            onClick={(e) => { if (onSelectTask) { e.preventDefault(); onSelectTask({ task_id: task.parent.task_id }); } }}
+          >
+            <ArrowUp size={12} />
+            <span className="TaskDetailPanel__ParentId">{task.parent.display_id}</span>
+            <span className="TaskDetailPanel__ParentTitle">{task.parent.title}</span>
+          </NavLink>
+        )}
+
         {/* 제목 + 상태 */}
         <div className="TaskDetailPanel__TitleWrap">
           {editingTitle ? (
