@@ -4,7 +4,7 @@ import { useRefSearchPopup } from './useRefSearchPopup';
 export default function DocRefPopup({ onSelect, onClose, onDismiss, onBack }) {
   const {
     keyword, setKeyword, items: docs, activeIdx, setActiveIdx, loading,
-    inputRef, finish, handleKeyDown, handleBlur,
+    inputRef, listRef, finish, handleKeyDown, handleBlur,
   } = useRefSearchPopup({
     url: '/chat/doc-search',
     pickItems: (data) => data.docs,
@@ -27,7 +27,7 @@ export default function DocRefPopup({ onSelect, onClose, onDismiss, onBack }) {
           onBlur={handleBlur}
         />
       </div>
-      <ul className="DocRefPopup__List">
+      <ul className="DocRefPopup__List" ref={listRef}>
         {loading && <li className="DocRefPopup__Empty">Searching...</li>}
         {!loading && docs.length === 0 && (
           <li className="DocRefPopup__Empty">No documents found</li>

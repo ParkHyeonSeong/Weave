@@ -6,7 +6,7 @@ const STATUS_LABELS = { open: 'Open', closed: 'Closed' };
 export default function IssueRefPopup({ onSelect, onClose, onDismiss, onBack }) {
   const {
     keyword, setKeyword, items: issues, activeIdx, setActiveIdx, loading,
-    inputRef, finish, handleKeyDown, handleBlur,
+    inputRef, listRef, finish, handleKeyDown, handleBlur,
   } = useRefSearchPopup({
     url: '/chat/issue-search',
     pickItems: (data) => data.issues,
@@ -29,7 +29,7 @@ export default function IssueRefPopup({ onSelect, onClose, onDismiss, onBack }) 
           onBlur={handleBlur}
         />
       </div>
-      <ul className="IssueRefPopup__List">
+      <ul className="IssueRefPopup__List" ref={listRef}>
         {loading && <li className="IssueRefPopup__Empty">Searching...</li>}
         {!loading && issues.length === 0 && (
           <li className="IssueRefPopup__Empty">No issues found</li>

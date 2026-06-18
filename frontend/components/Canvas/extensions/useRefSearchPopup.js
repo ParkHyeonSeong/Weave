@@ -10,6 +10,7 @@ export function useRefSearchPopup({ url, params, pickItems, onSelect, onClose, o
   const [loading, setLoading] = useState(false);
   const timerRef = useRef(null);
   const inputRef = useRef(null);
+  const listRef = useRef(null); // 활성 항목 스크롤 추적용 ul
   const doneRef = useRef(false); // 선택/닫기 확정 후의 blur는 무시
 
   // ReactRenderer(flushSync)가 popup DOM 부착 전에 mount effect를 동기 실행하므로
@@ -18,6 +19,13 @@ export function useRefSearchPopup({ url, params, pickItems, onSelect, onClose, o
     const raf = requestAnimationFrame(() => inputRef.current?.focus());
     return () => cancelAnimationFrame(raf);
   }, []);
+
+  // 방향키로 옮긴 활성 항목을 overflow 리스트의 가시영역으로 따라가게 한다.
+  // items 변경(새 검색 결과·activeIdx 0 리셋) 시에도 맨 위로 되돌린다.
+  // children[activeIdx]: loading/empty placeholder는 items 0개일 때만 렌더라 인덱스 일치.
+  useEffect(() => {
+    listRef.current?.children[activeIdx]?.scrollIntoView({ block: 'nearest' });
+  }, [activeIdx, items]);
 
   // 디바운스 검색
   useEffect(() => {
@@ -63,5 +71,5 @@ export function useRefSearchPopup({ url, params, pickItems, onSelect, onClose, o
 
   const handleBlur = () => { if (!doneRef.current) onDismiss(); };
 
-  return { keyword, setKeyword, items, activeIdx, setActiveIdx, loading, inputRef, finish, handleKeyDown, handleBlur };
+  return { keyword, setKeyword, items, activeIdx, setActiveIdx, loading, inputRef, listRef, finish, handleKeyDown, handleBlur };
 }

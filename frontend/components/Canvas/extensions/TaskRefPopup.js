@@ -6,7 +6,7 @@ const formatStatusKey = (key) => key.replace(/_/g, ' ').replace(/\b\w/g, (c) => 
 export default function TaskRefPopup({ mode, onSelect, onClose, onDismiss, onBack }) {
   const {
     keyword, setKeyword, items: tasks, activeIdx, setActiveIdx, loading,
-    inputRef, finish, handleKeyDown, handleBlur,
+    inputRef, listRef, finish, handleKeyDown, handleBlur,
   } = useRefSearchPopup({
     url: '/chat/task-search',
     params: { mode: mode || 'my' },
@@ -30,7 +30,7 @@ export default function TaskRefPopup({ mode, onSelect, onClose, onDismiss, onBac
           onBlur={handleBlur}
         />
       </div>
-      <ul className="TaskRefPopup__List">
+      <ul className="TaskRefPopup__List" ref={listRef}>
         {loading && <li className="TaskRefPopup__Empty">Searching...</li>}
         {!loading && tasks.length === 0 && (
           <li className="TaskRefPopup__Empty">No tasks found</li>

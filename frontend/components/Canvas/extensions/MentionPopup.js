@@ -8,6 +8,7 @@ const MentionPopup = forwardRef(({ keyword, branchId, roomId, canvasId, members,
   const [activeIdx, setActiveIdx] = useState(0);
   const [loading, setLoading] = useState(false);
   const timerRef = useRef(null);
+  const listRef = useRef(null); // 활성 항목 스크롤 추적용 ul
 
   useImperativeHandle(ref, () => ({}));
 
@@ -67,13 +68,18 @@ const MentionPopup = forwardRef(({ keyword, branchId, roomId, canvasId, members,
     return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [users, activeIdx, onSelect, onClose]);
 
+  // 방향키로 옮긴 활성 항목을 overflow 리스트의 가시영역으로 따라가게 한다.
+  useEffect(() => {
+    listRef.current?.children[activeIdx]?.scrollIntoView({ block: 'nearest' });
+  }, [activeIdx, users]);
+
   return (
     <div className="MentionPopup">
       <div className="MentionPopup__Header">
         <Search size={12} />
         Mention a user
       </div>
-      <ul className="MentionPopup__List">
+      <ul className="MentionPopup__List" ref={listRef}>
         {loading && <li className="MentionPopup__Empty">Searching...</li>}
         {!loading && users.length === 0 && (
           <li className="MentionPopup__Empty">No users found</li>
