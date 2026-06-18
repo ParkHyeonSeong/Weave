@@ -169,4 +169,10 @@
       color: $color-text;
     }
   }
+
+  &__Error {
+    font-size: $font-size-xs;
+    color: $color-error;
+    padding-top: $space-1;
+  }
 }

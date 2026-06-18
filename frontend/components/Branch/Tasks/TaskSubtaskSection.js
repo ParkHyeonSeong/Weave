@@ -24,6 +24,7 @@ export default function TaskSubtaskSection({
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState('');
   const [busy, setBusy] = useState(false);
+  const [subtaskError, setSubtaskError] = useState('');
 
   const prog = progress || progressFromRows(subtasks, workflowStatuses);
 
@@ -39,6 +40,7 @@ export default function TaskSubtaskSection({
     const t = title.trim();
     if (!t || busy) return;
     setBusy(true);
+    setSubtaskError('');
     try {
       const res = await axios.post(`/branches/${branchId}/tasks`, {
         title: t,
@@ -47,11 +49,18 @@ export default function TaskSubtaskSection({
       if (res.data.status) {
         setTitle('');
         setAdding(false);
+        setSubtaskError('');
         window.dispatchEvent(new Event('subtask:changed'));
         onChanged?.();
+      } else {
+        // 컨트롤러 검증 실패는 200 + {status:false} (silent-200 계약). 호출부에서 확인.
+        setSubtaskError(res.data.message || res.data.detail || '하위태스크를 만들지 못했어요.');
       }
-    } catch {}
-    setBusy(false);
+    } catch {
+      setSubtaskError('하위태스크를 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -66,7 +75,7 @@ export default function TaskSubtaskSection({
         <button
           type="button"
           className="TaskSubtaskSection__AddBtn"
-          onClick={() => setAdding((v) => !v)}
+          onClick={() => { setAdding((v) => !v); setSubtaskError(''); }}
         >
           <Plus size={14} />
         </button>
@@ -124,15 +133,18 @@ export default function TaskSubtaskSection({
             autoFocus
             placeholder="Subtask title…"
             onChange={(e) => setTitle(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Escape') { setAdding(false); setTitle(''); } }}
+            onKeyDown={(e) => { if (e.key === 'Escape') { setAdding(false); setTitle(''); setSubtaskError(''); } }}
           />
           <button type="submit" className="TaskSubtaskSection__AddSubmit" disabled={busy || !title.trim()}>
             Add
           </button>
-          <button type="button" className="TaskSubtaskSection__AddCancel" onClick={() => { setAdding(false); setTitle(''); }}>
+          <button type="button" className="TaskSubtaskSection__AddCancel" onClick={() => { setAdding(false); setTitle(''); setSubtaskError(''); }}>
             <X size={14} />
           </button>
         </form>
+      )}
+      {adding && subtaskError && (
+        <div className="TaskSubtaskSection__Error">{subtaskError}</div>
       )}
     </div>
   );
