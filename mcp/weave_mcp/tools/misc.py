@@ -182,6 +182,39 @@ async def remove_branch_member(branch_id: int, user_id: int) -> Any:
 
 
 @mcp.tool
+async def list_recent_views(limit: int | None = None, item_type: str | None = None) -> Any:
+    """List the items you recently viewed, newest first.
+
+    limit defaults to 10 (max 30). item_type optionally filters by kind (e.g. "task"
+    or "doc"). Useful to orient to what you were last working on.
+    """
+    params = {k: v for k, v in {"limit": limit, "type": item_type}.items() if v is not None}
+    return await get_client().call_json("GET", "/api/recent-views", params=params)
+
+
+@mcp.tool
+async def batch_ref_status(
+    task_ids: list[int] | None = None,
+    issue_ids: list[int] | None = None,
+    page_ids: list[int] | None = None,
+    user_ids: list[int] | None = None,
+) -> Any:
+    """Resolve many refs at once → their current titles/statuses (and usernames).
+
+    Pass any combination of id lists; each is capped by the backend. Returns
+    {tasks, issues, pages, users} maps keyed by id. Cheaper than one get_* per ref
+    when hydrating several `[[...]]`-style references.
+    """
+    body = {
+        "task_ids": task_ids or [],
+        "issue_ids": issue_ids or [],
+        "page_ids": page_ids or [],
+        "user_ids": user_ids or [],
+    }
+    return await get_client().call_json("POST", "/api/ref-status", json=body)
+
+
+@mcp.tool
 async def list_my_tasks(
     status: str | None = None,
     priority: str | None = None,

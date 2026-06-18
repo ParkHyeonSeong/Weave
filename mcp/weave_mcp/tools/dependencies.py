@@ -12,6 +12,17 @@ async def list_task_dependencies(branch_id: int, task_id: int) -> Any:
 
 
 @mcp.tool
+async def list_epic_dependencies(branch_id: int, epic_id: int) -> Any:
+    """List the dependencies among an epic's tasks (epic-level dependency graph).
+
+    Complements list_task_dependencies (which is per single task).
+    """
+    return await get_client().call_json(
+        "GET", f"/api/branches/{branch_id}/dependencies/epic/{epic_id}"
+    )
+
+
+@mcp.tool
 async def create_dependency(
     branch_id: int,
     source_task_id: int,

@@ -18,6 +18,33 @@ async def list_schedule_events(branch_id: int, range_start: str, range_end: str)
 
 
 @mcp.tool
+async def list_calendar_tasks(branch_id: int, range_start: str, range_end: str) -> Any:
+    """List a branch's due-dated tasks falling in a date range, for calendar display.
+
+    range_start/range_end are REQUIRED ISO dates (YYYY-MM-DD). Complements
+    list_schedule_events by surfacing tasks (not just events) on the timeline.
+    """
+    return await get_client().call_json(
+        "GET",
+        f"/api/branches/{branch_id}/schedule-events/calendar-tasks",
+        params={"range_start": range_start, "range_end": range_end},
+    )
+
+
+@mcp.tool
+async def list_calendar_epics(branch_id: int, range_start: str, range_end: str) -> Any:
+    """List a branch's epics spanning a date range, for calendar display.
+
+    range_start/range_end are REQUIRED ISO dates (YYYY-MM-DD).
+    """
+    return await get_client().call_json(
+        "GET",
+        f"/api/branches/{branch_id}/schedule-events/calendar-epics",
+        params={"range_start": range_start, "range_end": range_end},
+    )
+
+
+@mcp.tool
 async def create_schedule_event(
     branch_id: int,
     title: str,

@@ -4,7 +4,7 @@ Exposes Weave project-management tools (tasks, sprints, epics, issues, docs, and
 Claude sessions over MCP (stdio). Talks to Weave's REST API only — the Weave backend is not
 modified. Each tool acts as the token's owner; `?` marks optional arguments.
 
-## Tools (164)
+## Tools (175)
 
 > The authoritative, always-current description of each tool is its docstring in
 > `weave_mcp/tools/*.py` (that's what the model reads). This list is the human-readable overview.
@@ -30,6 +30,12 @@ modified. Each tool acts as the token's owner; `?` marks optional arguments.
 - `search_tasks(query, scope?, limit?, offset?)` — `scope`: "my" (default) | "all"
 - `search_docs(query, limit?, offset?)` · `search_issues(query, limit?, offset?)`
 
+**Activity & recent** (read-only history/context)
+- `list_task_activity(branch_id, task_id, limit?, offset?)` · `list_branch_activity(branch_id, limit?, offset?)` — who changed what (server-paginated, default 20/30)
+- `list_canvas_activity(canvas_id, limit?, offset?)` · `list_canvas_page_activity(canvas_id, page_id, limit?, offset?)`
+- `list_recent_views(limit?, item_type?)` — what you recently viewed (default 10, max 30)
+- `batch_ref_status(task_ids?, issue_ids?, page_ids?, user_ids?)` — resolve many refs → titles/statuses/usernames in one call
+
 **Tasks**
 - `list_branch_tasks(branch_id, sprint_id?, limit?, offset?)` — all tasks in a branch
 - `get_task(branch_id, task_id)` — full task detail
@@ -54,7 +60,7 @@ modified. Each tool acts as the token's owner; `?` marks optional arguments.
 - `add_issue_comment(branch_id, task_id, issue_id, content)` · `update_issue_comment(..., comment_id, content)` · `delete_issue_comment(..., comment_id)` — comments are read via `get_task_issue`
 
 **Dependencies**
-- `list_task_dependencies(branch_id, task_id)`
+- `list_task_dependencies(branch_id, task_id)` · `list_epic_dependencies(branch_id, epic_id)` — epic-level dependency graph
 - `create_dependency(branch_id, source_task_id, target_task_id, dep_type?)` — `dep_type`: finish_to_start | relates_to
 - `delete_dependency(branch_id, dependency_id)`
 
@@ -62,7 +68,7 @@ modified. Each tool acts as the token's owner; `?` marks optional arguments.
 - `list_sprints(branch_id)`
 - `create_sprint(branch_id, sprint_name, goal?, start_date?, end_date?)`
 - `update_sprint(branch_id, sprint_id, sprint_name?, goal?, start_date?, end_date?, status?)`
-- `delete_sprint(branch_id, sprint_id)` · `start_sprint(branch_id, sprint_id)`
+- `delete_sprint(branch_id, sprint_id)` · `start_sprint(branch_id, sprint_id)` · `reorder_sprints(branch_id, sprint_ids)`
 - `complete_sprint(branch_id, sprint_id, move_to?)` — `move_to`: "backlog" or a sprint id
 - `get_sprint_task_counts(branch_id, sprint_id)` — progress summary without listing tasks
 
@@ -70,7 +76,7 @@ modified. Each tool acts as the token's owner; `?` marks optional arguments.
 - `list_epics(branch_id)` · `get_epic(branch_id, epic_id)`
 - `create_epic(branch_id, epic_name, description?, status?, color?, start_date?, due_date?)`
 - `update_epic(branch_id, epic_id, epic_name?, description?, status?, color?, start_date?, due_date?)`
-- `delete_epic(branch_id, epic_id)` · `list_epic_tasks(branch_id, epic_id, limit?, offset?)`
+- `delete_epic(branch_id, epic_id)` · `list_epic_tasks(branch_id, epic_id, limit?, offset?)` · `reorder_epics(branch_id, epic_ids)`
 
 **Branch config** (the valid values for task fields; status/type writes are admin-only)
 - `list_labels(branch_id)` · `list_workflow_statuses(branch_id)` · `list_task_types(branch_id)`
@@ -112,6 +118,7 @@ modified. Each tool acts as the token's owner; `?` marks optional arguments.
 
 **Schedule** (branch calendar)
 - `list_schedule_events(branch_id, range_start, range_end)` — `range_start`/`range_end` are required ISO dates
+- `list_calendar_tasks(branch_id, range_start, range_end)` · `list_calendar_epics(branch_id, range_start, range_end)` — due-dated tasks/epics for calendar display
 - `create_schedule_event(branch_id, title, start_date, end_date?, description?, color?, participant_ids?)`
 - `update_schedule_event(branch_id, event_id, title?, start_date?, end_date?, description?, color?, participant_ids?)`
 - `delete_schedule_event(branch_id, event_id)`

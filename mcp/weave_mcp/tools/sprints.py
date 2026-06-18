@@ -95,6 +95,14 @@ async def complete_sprint(
 
 
 @mcp.tool
+async def reorder_sprints(branch_id: int, sprint_ids: list[int]) -> Any:
+    """Reorder a branch's sprints. sprint_ids is the full list in the desired order."""
+    return await get_client().call_json(
+        "POST", f"/api/branches/{branch_id}/sprints/reorder", json={"sprint_ids": sprint_ids}
+    )
+
+
+@mcp.tool
 async def get_sprint_task_counts(branch_id: int, sprint_id: int) -> Any:
     """Get a sprint's task counts / progress summary without listing every task."""
     return await get_client().call_json(
