@@ -149,6 +149,12 @@ const MentionNode = Node.create({
             popup.style.left = `${Math.min(coords.left, window.innerWidth - 360)}px`;
             popup.style.top = `${coords.bottom + 4}px`;
             popup.style.zIndex = '500';
+            // 팝업 내부 클릭이 에디터 blur를 일으키지 않게 막는다 — task desc 등에서 blur 저장이
+            // 멘션 선택(onClick) 전에 끼어들어 미선택 상태로 저장·닫힘되는 것을 방지한다.
+            // (ref 검색 팝업 createPopup과 동일 패턴. mousedown preventDefault는 focus만 막고
+            //  click은 그대로 발생하므로 onSelect는 정상 동작한다. 팝업에 input이 생겨도
+            //  그 input은 포커스를 받도록 INPUT은 예외 처리한다.)
+            popup.addEventListener('mousedown', (e) => { if (e.target.tagName !== 'INPUT') e.preventDefault(); });
             document.body.appendChild(popup);
             // 화면 아래로 넘치면 커서 위로 뒤집어 띄움 (하단 셀에서 안 묻히게)
             requestAnimationFrame(() => {
