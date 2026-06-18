@@ -58,6 +58,7 @@ export default function DatePicker({
   size = 'md',
   className = '',
   disabled = false,
+  trigger = null,
 }) {
   const [open, setOpen] = useState(false);
   const [view, setView] = useState('days');
@@ -99,6 +100,16 @@ export default function DatePicker({
       document.removeEventListener('keydown', onKeyDown);
     };
   }, [open]);
+
+  // 팝오버가 열린 채로 value가 바뀌면(외부에서 선택 날짜 변경) 보이는 달/연도도 동기화.
+  // 달력 안 월 이동(shiftMonth)은 value/open을 바꾸지 않으므로 사용자의 탐색을 방해하지 않는다.
+  useEffect(() => {
+    if (open && parsed) {
+      setViewYear(parsed.y);
+      setViewMonth(parsed.m);
+      setYearGridStart(parsed.y - 6);
+    }
+  }, [parsed, open]);
 
   useLayoutEffect(() => {
     if (!open || !rootRef.current) return;
@@ -289,32 +300,44 @@ export default function DatePicker({
       onMouseEnter={() => setHoverTrigger(true)}
       onMouseLeave={() => setHoverTrigger(false)}
     >
-      <button
-        type="button"
-        className="DatePicker__Trigger"
-        onClick={handleTriggerClick}
-        disabled={disabled}
-      >
-        <span className="DatePicker__Value">
-          {value || <span className="DatePicker__Placeholder">{placeholder}</span>}
-        </span>
-        {showClear ? (
-          <span
-            className="DatePicker__ClearBtn"
-            role="button"
-            tabIndex={-1}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={handleClear}
-            aria-label="Clear date"
-          >
-            <X size={iconSize} />
+      {trigger ? (
+        // 호출부가 넘긴 임의 마크업(라벨 등)을 트리거로 사용 — 캘린더 점프 진입점
+        <button
+          type="button"
+          className="DatePicker__CustomTrigger"
+          onClick={handleTriggerClick}
+          disabled={disabled}
+        >
+          {trigger}
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="DatePicker__Trigger"
+          onClick={handleTriggerClick}
+          disabled={disabled}
+        >
+          <span className="DatePicker__Value">
+            {value || <span className="DatePicker__Placeholder">{placeholder}</span>}
           </span>
-        ) : (
-          <span className="DatePicker__Icon">
-            <Calendar size={iconSize} />
-          </span>
-        )}
-      </button>
+          {showClear ? (
+            <span
+              className="DatePicker__ClearBtn"
+              role="button"
+              tabIndex={-1}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={handleClear}
+              aria-label="Clear date"
+            >
+              <X size={iconSize} />
+            </span>
+          ) : (
+            <span className="DatePicker__Icon">
+              <Calendar size={iconSize} />
+            </span>
+          )}
+        </button>
+      )}
 
       {popover && createPortal(popover, document.body)}
     </div>

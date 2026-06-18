@@ -1,5 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
-import { axios } from '@/library/_axios';
+import { useMemo } from 'react';
 import useScrumRetroCollab from '@/library/useScrumRetroCollab';
 import ScrumCell from './ScrumCell';
 import Avatar from '@/components/common/Avatar';
@@ -9,33 +8,19 @@ const COLS = [['keep', 'Keep · 잘한 것'], ['problem', 'Problem · 문제'], 
 
 // 회고도 멤버별로 각자 KPT를 적는다. 한 회고 문서(period) 안에서 멤버마다
 // 별도 fragment(`${userId}:keep|problem|try`)에 바인딩 → 동시 협업·격리.
-export default function RetroView({ boardId, members = [] }) {
-  const [retro, setRetro] = useState(null);
-  const [manual, setManual] = useState(false);
+// 기간 선택/이동·라벨은 상위(ScrumBoardView) 헤더 nav가 담당하고, 여기선 넘겨받은
+// retro(기간 문서)를 멤버별로 렌더한다.
+export default function RetroView({ boardId, members = [], retro = null, manual = false }) {
   const user = useMemo(() => { const p = getProfile(); return p.user_id ? { user_id: p.user_id, username: p.username, avatar_url: p.avatar_url, avatar_color: p.avatar_color } : null; }, []);
-
-  useEffect(() => {
-    if (!boardId) return;
-    (async () => {
-      try {
-        const res = await axios.get(`/scrum/${boardId}/retros/current`);
-        if (res.data.status) {
-          if (res.data.retro) setRetro(res.data.retro);
-          else setManual(true);   // manual 주기 → 자동 회고 없음
-        }
-      } catch {}
-    })();
-  }, [boardId]);
 
   const { ydoc } = useScrumRetroCollab(boardId, retro?.retro_id, user);
 
   if (manual) return <div className="RetroView__Empty">이 보드는 회고 주기가 ‘수동’입니다. (자동 회고 없음)</div>;
   if (!retro || !ydoc) return <div className="RetroView__Loading">회고 불러오는 중…</div>;
 
-  const fmt = (s) => s?.slice(5).replace('-', '/');
   return (
     <div className="RetroView">
-      <div className="RetroView__Period">{fmt(retro.period_start)} – {fmt(retro.period_end)} 회고 · KPT · 멤버별</div>
+      <div className="RetroView__Period">KPT · 멤버별 회고</div>
       {members.map((m) => (
         <div key={m.user_id} className="RetroMember">
           <div className="RetroMember__Head">

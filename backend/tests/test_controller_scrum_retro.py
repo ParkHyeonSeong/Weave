@@ -72,6 +72,45 @@ async def test_list_retros_returns_created_for_member(db_session):
     assert any(r["retro_id"] == rid for r in out["retros"])
 
 
+async def test_get_period_current_and_navigation(db_session):
+    from datetime import date as d
+    owner = await _make_user(db_session, "rp1@test.local", "rp1")
+    res = await board_ctrl.create(schema.ScrumBoardCreate(name="t"), _req(owner), db_session)  # weekly
+    bid = res["board_id"]
+    cur = await ctrl.get_period(bid, _req(owner), db_session)
+    assert cur["status"] is True
+    assert cur["retro"] is not None
+    assert cur["is_current"] is True
+    assert cur["prev_date"] and cur["next_date"]
+    # 이전 기간으로 이동 → 다른 회고, 현재 아님
+    prev = await ctrl.get_period(bid, _req(owner), db_session, d.fromisoformat(cur["prev_date"]))
+    assert prev["retro"]["retro_id"] != cur["retro"]["retro_id"]
+    assert prev["is_current"] is False
+    # prev의 next로 돌아오면 다시 현재 회고
+    back = await ctrl.get_period(bid, _req(owner), db_session, d.fromisoformat(prev["next_date"]))
+    assert back["retro"]["retro_id"] == cur["retro"]["retro_id"]
+    assert back["is_current"] is True
+
+
+async def test_get_period_manual_returns_none(db_session):
+    owner = await _make_user(db_session, "rp2@test.local", "rp2")
+    res = await board_ctrl.create(
+        schema.ScrumBoardCreate(name="t", retro_cadence="manual"), _req(owner), db_session)
+    out = await ctrl.get_period(res["board_id"], _req(owner), db_session)
+    assert out["status"] is True
+    assert out["retro"] is None
+    assert out["prev_date"] is None and out["next_date"] is None
+
+
+async def test_get_period_denies_nonmember(db_session):
+    owner = await _make_user(db_session, "rp3@test.local", "rp3")
+    stranger = await _make_user(db_session, "rp3b@test.local", "rp3b")
+    res = await board_ctrl.create(schema.ScrumBoardCreate(name="t"), _req(owner), db_session)
+    out = await ctrl.get_period(res["board_id"], _req(stranger), db_session)
+    assert out["status"] is False
+    assert out["message"] == "PERMISSION_DENIED"
+
+
 async def _board_with_retro(db, owner):
     res = await board_ctrl.create(schema.ScrumBoardCreate(name="t"), _req(owner), db)
     bid = res["board_id"]

@@ -38,6 +38,36 @@ async def get_current(board_id: int, request: Request, db: AsyncSession):
     return {'status': True, 'retro': retro}
 
 
+async def get_period(board_id: int, request: Request, db: AsyncSession,
+                     target: date | None = None):
+    """앵커 날짜(target, 기본=오늘 KST)가 속한 회고 기간을 보장/반환.
+    이전·다음 기간 이동 앵커(prev_date/next_date)와 현재 기간 여부(is_current)도 함께 준다.
+    manual 주기면 retro=None(자동 회고 없음)."""
+    board, err = await _require_member(board_id, request, db)
+    if err:
+        return err
+    cadence = board['retro_cadence']
+    interval = board['retro_interval_weeks']
+    anchor_weekday = board['retro_anchor_weekday']
+    when = target or _today_kst()
+    retro = await retro_model.get_or_create_for_date(
+        board_id, cadence, interval, anchor_weekday, when, db)
+    if retro is None:
+        return {'status': True, 'retro': None,
+                'prev_date': None, 'next_date': None, 'is_current': True}
+    prev_date, next_date = retro_model.neighbor_anchors(
+        cadence, interval, anchor_weekday, when)
+    today_period = retro_model.compute_period(
+        cadence, interval, anchor_weekday, _today_kst())
+    return {
+        'status': True,
+        'retro': retro,
+        'prev_date': prev_date.isoformat() if prev_date else None,
+        'next_date': next_date.isoformat() if next_date else None,
+        'is_current': bool(today_period and today_period[0] == retro['period_start']),
+    }
+
+
 async def list_retros(board_id: int, request: Request, db: AsyncSession):
     board, err = await _require_member(board_id, request, db)
     if err:

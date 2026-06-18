@@ -4,6 +4,24 @@
   position: relative;
   display: inline-flex;
 
+  // 호출부가 라벨 등 임의 마크업을 트리거로 넘긴 경우 — 버튼 기본 스타일만 리셋,
+  // 시각 표현은 넘긴 마크업이 그대로 담당한다(주간/회고 nav 라벨 클릭 → 캘린더).
+  &__CustomTrigger {
+    display: inline-flex;
+    align-items: center;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+  }
+
   &__Trigger {
     display: inline-flex;
     align-items: center;

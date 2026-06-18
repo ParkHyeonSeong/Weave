@@ -50,6 +50,50 @@ def test_compute_period_manual_is_none():
     assert retro_model.compute_period('manual', None, 4, date(2026, 6, 10)) is None
 
 
+def test_neighbor_anchors_weekly():
+    # 현재 주(6/8~)에서 직전은 6/1 주, 직후는 6/15 주.
+    prev, nxt = retro_model.neighbor_anchors('weekly', None, 4, date(2026, 6, 10))
+    assert retro_model.compute_period('weekly', None, 4, prev)[0] == date(2026, 6, 1)
+    assert retro_model.compute_period('weekly', None, 4, nxt)[0] == date(2026, 6, 15)
+
+def test_neighbor_anchors_next_skips_weekend_gap():
+    # anchor=금(4): period_end=금. 토(6/13)는 여전히 같은 기간이므로 단순 +1일은 오답 →
+    # next 앵커는 반드시 '다른' 기간이어야 한다.
+    assert retro_model.compute_period('weekly', None, 4, date(2026, 6, 13))[0] == date(2026, 6, 8)
+    _, nxt = retro_model.neighbor_anchors('weekly', None, 4, date(2026, 6, 10))
+    assert retro_model.compute_period('weekly', None, 4, nxt)[0] != date(2026, 6, 8)
+
+def test_neighbor_anchors_monthly():
+    prev, nxt = retro_model.neighbor_anchors('monthly', None, 4, date(2026, 6, 10))
+    assert retro_model.compute_period('monthly', None, 4, prev)[0] == date(2026, 5, 1)
+    assert retro_model.compute_period('monthly', None, 4, nxt)[0] == date(2026, 7, 1)
+
+def test_neighbor_anchors_biweekly_roundtrip():
+    # next로 갔다가 그 기간의 prev로 오면 원래 기간으로 돌아와야 한다(왕복 안정성).
+    base = retro_model.compute_period('biweekly', None, 4, date(2026, 6, 10))
+    _, nxt = retro_model.neighbor_anchors('biweekly', None, 4, date(2026, 6, 10))
+    prev_back, _ = retro_model.neighbor_anchors('biweekly', None, 4, nxt)
+    assert retro_model.compute_period('biweekly', None, 4, prev_back) == base
+
+def test_neighbor_anchors_manual_none():
+    assert retro_model.neighbor_anchors('manual', None, 4, date(2026, 6, 10)) == (None, None)
+
+
+async def test_get_or_create_for_date(db_session):
+    uid = await _user(db_session, "rfd@t.l", "rfd")
+    bid = await _board(db_session, uid)
+    r = await retro_model.get_or_create_for_date(bid, 'weekly', None, 4, date(2026, 5, 20), db_session)
+    assert r['period_start'].isoformat() == '2026-05-18'   # 그 주 월요일
+    # 같은 기간 안 다른 날짜 → 같은 행(idempotent)
+    r2 = await retro_model.get_or_create_for_date(bid, 'weekly', None, 4, date(2026, 5, 22), db_session)
+    assert r2['retro_id'] == r['retro_id']
+
+async def test_get_or_create_for_date_manual_none(db_session):
+    uid = await _user(db_session, "rfd2@t.l", "rfd2")
+    bid = await _board(db_session, uid, cadence='manual')
+    assert await retro_model.get_or_create_for_date(bid, 'manual', None, 4, date(2026, 5, 20), db_session) is None
+
+
 async def test_get_or_create_current_idempotent(db_session):
     uid = await _user(db_session, "r1@t.l", "r1")
     bid = await _board(db_session, uid)

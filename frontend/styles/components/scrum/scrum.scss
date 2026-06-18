@@ -8,8 +8,13 @@
 .ScrumBoard__BodyMain { flex:1; min-width:0; overflow-y:auto; }
 .ScrumBoard__Title { font-weight:800; font-size:16px; border-left:3px solid var(--accent,#16A34A); padding-left:10px; }
 .ScrumBoard__WeekNav { display:flex; align-items:center; gap:8px; }
-.ScrumBoard__WeekNav button { border:1px solid $color-border; border-radius:7px; padding:3px 6px; background:#fff; cursor:pointer; }
-.ScrumBoard__WeekLabel { font-weight:700; font-size:13px; }
+.ScrumBoard__WeekNav > button { border:1px solid $color-border; border-radius:7px; padding:3px 6px; background:#fff; cursor:pointer; }
+// 라벨(주/회고 범위)을 클릭하면 캘린더로 임의 기간 점프 — 클릭 가능함을 hover로 암시
+.ScrumBoard__WeekNav .DatePicker__CustomTrigger { padding:3px 8px; border-radius:7px; }
+.ScrumBoard__WeekNav .DatePicker__CustomTrigger:hover { background:color.adjust(#16A34A, $lightness:52%); }
+.ScrumBoard__WeekLabel { font-weight:700; font-size:13px; white-space:nowrap; }
+.ScrumBoard__WeekNav .ScrumBoard__TodayBtn { padding:3px 9px; font-size:12px; font-weight:700; color:#16A34A; }
+.ScrumBoard__WeekNav .ScrumBoard__TodayBtn:hover { background:color.adjust(#16A34A, $lightness:52%); border-color:color.adjust(#16A34A, $lightness:30%); }
 .ScrumBoard__Presence { margin-left:auto; display:flex; align-items:center; gap:10px; }
 // 색/사진은 <Avatar size="xs">가 처리. 여기선 살짝 겹치게만.
 .ScrumBoard__Live { display:flex; align-items:center; }
