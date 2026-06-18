@@ -113,7 +113,7 @@ async def update_track(
 
 @mcp.tool
 async def delete_track(track_id: int) -> Any:
-    """Archive (soft-delete) a track. Reversible — it can be restored later."""
+    """Archive (soft-delete) a track. Reversible via restore_track. Owner-only."""
     return await get_client().call_json("DELETE", f"/api/tracks/{track_id}")
 
 
@@ -299,3 +299,24 @@ async def remove_track_member(track_id: int, user_id: int) -> Any:
     return await get_client().call_json(
         "DELETE", f"/api/tracks/{track_id}/members/{user_id}"
     )
+
+
+@mcp.tool
+async def restore_track(track_id: int) -> Any:
+    """Restore an archived track (see list_archived_tracks). Owner-only."""
+    return await get_client().call_json("POST", f"/api/tracks/{track_id}/restore")
+
+
+@mcp.tool
+async def leave_track(track_id: int) -> Any:
+    """Leave a track (remove yourself as a member); any member may leave.
+
+    May be rejected with a business error if you are the track's last owner.
+    """
+    return await get_client().call_json("POST", f"/api/tracks/{track_id}/leave")
+
+
+@mcp.tool
+async def list_archived_tracks() -> Any:
+    """List your archived tracks (candidates for restore_track)."""
+    return await get_client().call_json("GET", "/api/tracks/archived")

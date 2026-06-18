@@ -66,6 +66,72 @@ async def create_branch(
 
 
 @mcp.tool
+async def update_branch(
+    branch_id: int,
+    branch_name: str | None = None,
+    key: str | None = None,
+    description: str | None = None,
+    visibility: str | None = None,
+    color: str | None = None,
+    icon: str | None = None,
+) -> Any:
+    """Update a branch's metadata; only provided fields change. Admin-only.
+
+    key (if set) is 2-10 uppercase alnum starting with a letter; visibility is
+    "public"/"private"; color is #RRGGBB hex; icon is a "lucide:"/"emoji:"/"image:"
+    prefixed string or a bare lucide name.
+    """
+    body = {k: v for k, v in {
+        "branch_name": branch_name,
+        "key": key,
+        "description": description,
+        "visibility": visibility,
+        "color": color,
+        "icon": icon,
+    }.items() if v is not None}
+    return await get_client().call_json("PATCH", f"/api/branches/{branch_id}", json=body)
+
+
+@mcp.tool
+async def delete_branch(branch_id: int) -> Any:
+    """Archive (soft-delete) a branch. Reversible via restore_branch. Admin-only."""
+    return await get_client().call_json("DELETE", f"/api/branches/{branch_id}")
+
+
+@mcp.tool
+async def restore_branch(branch_id: int) -> Any:
+    """Restore an archived branch (see list_archived_branches). Admin-only."""
+    return await get_client().call_json("POST", f"/api/branches/{branch_id}/restore")
+
+
+@mcp.tool
+async def leave_branch(branch_id: int) -> Any:
+    """Leave a branch (remove yourself as a member); any member may leave.
+
+    May be rejected with a business error if you are the branch's last admin.
+    """
+    return await get_client().call_json("POST", f"/api/branches/{branch_id}/leave")
+
+
+@mcp.tool
+async def join_branch(branch_id: int) -> Any:
+    """Join a public branch as a member (discover candidates via list_public_branches)."""
+    return await get_client().call_json("POST", f"/api/branches/{branch_id}/join")
+
+
+@mcp.tool
+async def list_archived_branches() -> Any:
+    """List your archived branches (candidates for restore_branch)."""
+    return await get_client().call_json("GET", "/api/branches/archived")
+
+
+@mcp.tool
+async def list_public_branches() -> Any:
+    """List public branches you can discover and join (see join_branch)."""
+    return await get_client().call_json("GET", "/api/branches/public")
+
+
+@mcp.tool
 async def list_branch_members(branch_id: int) -> Any:
     """List a branch's members (user_id, name, role).
 

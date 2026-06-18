@@ -128,8 +128,41 @@ async def update_canvas(
 
 @mcp.tool
 async def delete_canvas(canvas_id: int) -> Any:
-    """Archive (soft-delete) a canvas. Reversible — it can be restored later."""
+    """Archive (soft-delete) a canvas. Reversible via restore_canvas. Admin-only."""
     return await get_client().call_json("DELETE", f"/api/canvases/{canvas_id}")
+
+
+@mcp.tool
+async def restore_canvas(canvas_id: int) -> Any:
+    """Restore an archived canvas (see list_archived_canvases). Admin-only."""
+    return await get_client().call_json("POST", f"/api/canvases/{canvas_id}/restore")
+
+
+@mcp.tool
+async def leave_canvas(canvas_id: int) -> Any:
+    """Leave a canvas (remove yourself as a member); any member may leave.
+
+    May be rejected with a business error if you are the canvas's last admin.
+    """
+    return await get_client().call_json("POST", f"/api/canvases/{canvas_id}/leave")
+
+
+@mcp.tool
+async def join_canvas(canvas_id: int) -> Any:
+    """Join a public canvas as a member (discover candidates via list_public_canvases)."""
+    return await get_client().call_json("POST", f"/api/canvases/{canvas_id}/join")
+
+
+@mcp.tool
+async def list_archived_canvases() -> Any:
+    """List your archived canvases (candidates for restore_canvas)."""
+    return await get_client().call_json("GET", "/api/canvases/archived")
+
+
+@mcp.tool
+async def list_public_canvases() -> Any:
+    """List public canvases you can discover and join (see join_canvas)."""
+    return await get_client().call_json("GET", "/api/canvases/public")
 
 
 @mcp.tool

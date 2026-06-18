@@ -4,7 +4,7 @@ Exposes Weave project-management tools (tasks, sprints, epics, issues, docs, and
 Claude sessions over MCP (stdio). Talks to Weave's REST API only — the Weave backend is not
 modified. Each tool acts as the token's owner; `?` marks optional arguments.
 
-## Tools (149)
+## Tools (164)
 
 > The authoritative, always-current description of each tool is its docstring in
 > `weave_mcp/tools/*.py` (that's what the model reads). This list is the human-readable overview.
@@ -14,6 +14,7 @@ modified. Each tool acts as the token's owner; `?` marks optional arguments.
 - `list_branches()` — list branches (projects); call first to get a `branch_id`
 - `get_branch(branch_id)` — one branch's detail incl. your role
 - `create_branch(branch_name, key, description?, visibility?)` — `key`: 2-10 uppercase, starts with a letter
+- `update_branch(branch_id, branch_name?, key?, description?, visibility?, color?, icon?)` · `delete_branch(branch_id)` (archive) · `restore_branch(branch_id)` · `leave_branch(branch_id)` · `join_branch(branch_id)` · `list_archived_branches()` · `list_public_branches()` — container lifecycle (update/delete/restore admin-only)
 - `list_branch_members(branch_id)` · `search_branch_non_members(branch_id, q?)` — resolve names → user ids
 - `add_branch_member(branch_id, user_id, role?)` · `update_branch_member_role(branch_id, user_id, role)` · `remove_branch_member(branch_id, user_id)` — `role`: admin | member; invite/role-change/remove (admin-only)
 - `get_branch_home_stats()` — open / in-progress / due-this-week / active-sprint counts across your branches
@@ -82,7 +83,7 @@ modified. Each tool acts as the token's owner; `?` marks optional arguments.
 - `list_canvases()` · `get_canvas(canvas_id)` · `get_canvas_home_stats()` — total-docs / edited-this-week / starred counts
 - `list_canvas_members(canvas_id)` · `search_canvas_non_members(canvas_id, q?)` · `add_canvas_member(canvas_id, user_id, role?)` · `update_canvas_member_role(canvas_id, user_id, role)` · `remove_canvas_member(canvas_id, user_id)` — `role`: admin | member (admin-only)
 - `create_canvas(canvas_name, key, description?, visibility?, branch_id?)` — `key`: 2-10 uppercase, starts with a letter
-- `update_canvas(canvas_id, canvas_name?, key?, description?, visibility?, color?, icon?)` · `delete_canvas(canvas_id)` (archive)
+- `update_canvas(canvas_id, canvas_name?, key?, description?, visibility?, color?, icon?)` · `delete_canvas(canvas_id)` (archive) · `restore_canvas(canvas_id)` · `leave_canvas(canvas_id)` · `join_canvas(canvas_id)` · `list_archived_canvases()` · `list_public_canvases()`
 - `get_canvas_page_tree(canvas_id)` · `get_canvas_page(canvas_id, page_id)`
 - `create_canvas_page(canvas_id, title, content?, parent_page_id?, type?)` — `type`: document | folder | typst
 - `update_canvas_page(canvas_id, page_id, title?, content?, wide_mode?)` — `content` replaces the whole page body
@@ -96,7 +97,7 @@ modified. Each tool acts as the token's owner; `?` marks optional arguments.
 - `list_track_members(track_id)` · `search_track_non_members(track_id, q?)` · `add_track_member(track_id, user_id, role?)` · `update_track_member_role(track_id, user_id, role)` · `remove_track_member(track_id, user_id)` — `role`: viewer | editor | owner (owner-only)
 - `get_track(track_id)` · `get_track_home_stats()` — active-track / connected-branch / in-progress / due-this-week counts
 - `create_track(track_name, description?, color?, icon?, visibility?, default_view?, participating_branch_ids?)` — `default_view`: flow | timeline | tree
-- `update_track(track_id, track_name?, description?, color?, icon?, visibility?, default_view?)` · `delete_track(track_id)` (archive)
+- `update_track(track_id, track_name?, description?, color?, icon?, visibility?, default_view?)` · `delete_track(track_id)` (archive) · `restore_track(track_id)` · `leave_track(track_id)` · `list_archived_tracks()`
 - `list_track_branches(track_id)` · `add_track_branch(track_id, branch_id)` · `remove_track_branch(track_id, branch_id)`
 - `search_track_sources(track_id, q?, branch_id?, sprint_id?, epic_id?, status?, priority?, exclude_done?, limit?)` — find candidate `source_task_id`s
 - `list_track_items(track_id, limit?, offset?)` · `add_track_item(track_id, source_task_id, position_x?, position_y?)`
