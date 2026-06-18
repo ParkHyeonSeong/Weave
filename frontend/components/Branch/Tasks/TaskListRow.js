@@ -94,15 +94,19 @@ export default function TaskListRow({ task, branchId, taskTypes, workflowStatuse
       onClick={onClick}
       onContextMenu={onContextMenu}
     >
-      {/* 드래그 핸들 */}
-      <span
-        className="TaskListRow__DragHandle"
-        {...attributes}
-        {...listeners}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <GripVertical size={14} />
-      </span>
+      {/* 드래그 핸들 — 하위태스크(indent)에서는 숨기고 너비 동일 스페이서 렌더 */}
+      {indent ? (
+        <span className="TaskListRow__DragHandleSpacer" aria-hidden="true" />
+      ) : (
+        <span
+          className="TaskListRow__DragHandle"
+          {...attributes}
+          {...listeners}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <GripVertical size={14} />
+        </span>
+      )}
 
       {/* 하위태스크 펼침 셰브론 (없으면 자리만 차지) */}
       {indent ? (

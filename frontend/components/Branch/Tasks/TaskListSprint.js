@@ -8,7 +8,7 @@ import { CSS } from '@dnd-kit/utilities';
 import TaskListRow from './TaskListRow';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import ConfirmModal from '@/components/modal/ConfirmModal';
-import { progressLabel, progressPercent, isParentExpanded } from '@/library/subtaskProgress';
+import { isParentExpanded } from '@/library/subtaskProgress';
 
 function formatSprintDate(start, end) {
   const fmt = (d) => {
@@ -309,7 +309,6 @@ export default function TaskListSprint({
                         className="TaskList__SubtaskAdd"
                         onSubmit={(e) => handleSubtaskCreate(e, task)}
                       >
-                        <span className="TaskList__SubtaskAddIndent" />
                         <Plus size={13} />
                         <input
                           className="TaskList__SubtaskAddInput"

@@ -754,6 +754,12 @@
     opacity: 1;
   }
 
+  &__DragHandleSpacer {
+    display: inline-block;
+    width: 14px; // GripVertical size=14 과 동일 너비
+    flex-shrink: 0;
+  }
+
   &__TypeIcon {
     flex-shrink: 0;
   }
