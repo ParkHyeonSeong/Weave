@@ -6,6 +6,7 @@ import TaskFilterBar from '../TaskFilterBar';
 import useTaskContextMenu from '@/components/Branch/Tasks/taskMenu';
 import ContextMenu from '@/components/common/ContextMenu';
 import ConfirmModal from '@/components/modal/ConfirmModal';
+import ParentPickerPopup from '@/components/Branch/Tasks/ParentPickerPopup';
 
 export default function BoardView({ branchId, branchKey, taskTypes, workflowStatuses, onSelectTask }) {
   const taskMenu = useTaskContextMenu({ branchId, onSelectTask });
@@ -244,11 +245,21 @@ export default function BoardView({ branchId, branchKey, taskTypes, workflowStat
         isOpen={!!taskMenu.confirmTask}
         onClose={taskMenu.clearConfirm}
         onConfirm={taskMenu.handleConfirmDelete}
-        title="Delete Task"
-        message={`${taskMenu.confirmTask?.display_id ?? ''} 태스크를 삭제하시겠습니까?`}
+        title={taskMenu.confirmTitle}
+        message={taskMenu.confirmMessage}
         confirmLabel="Delete"
         variant="danger"
       />
+      {taskMenu.parentPicker && (
+        <div className="ParentPickerPopup__Backdrop" onMouseDown={taskMenu.closeParentPicker}>
+          <ParentPickerPopup
+            branchId={branchId}
+            sourceTask={taskMenu.parentPicker.task}
+            onPick={taskMenu.handlePickParent}
+            onClose={taskMenu.closeParentPicker}
+          />
+        </div>
+      )}
     </div>
   );
 }

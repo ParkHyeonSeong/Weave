@@ -1,4 +1,5 @@
 @use '../../variables' as *;
+@use 'sass:color';
 
 .BoardView {
   // -- Empty state --
@@ -274,4 +275,103 @@
     color: $color-text-secondary;
     margin-left: 2px;
   }
+
+  &__Progress {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    color: #6B7280;
+    font-size: 11px;
+  }
+
+  &__ProgressIcon {
+    color: #16A34A;
+    flex-shrink: 0;
+  }
+
+  &__ProgressText {
+    font-weight: 600;
+    color: #4B5563;
+  }
+
+  &__ProgressBar {
+    flex: 1;
+    height: 4px;
+    border-radius: 2px;
+    background: #E5E7EB;
+    overflow: hidden;
+  }
+
+  &__ProgressFill {
+    display: block;
+    height: 100%;
+    border-radius: 2px;
+    background: #16A34A;
+  }
+}
+
+.ParentPickerPopup {
+  &__Backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 18vh;
+    background: rgba(17, 24, 39, 0.28);
+  }
+
+  width: 360px;
+  background: #FFFFFF;
+  border: 1px solid #E5E7EB;
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.16);
+  overflow: hidden;
+
+  &__Header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #6B7280;
+    border-bottom: 1px solid #F3F4F6;
+  }
+
+  &__Search input {
+    width: 100%;
+    padding: 10px 12px;
+    border: none;
+    outline: none;
+    font-size: 13px;
+    box-sizing: border-box;
+  }
+
+  &__List {
+    max-height: 280px;
+    overflow-y: auto;
+    margin: 0;
+    padding: 4px;
+    list-style: none;
+  }
+
+  &__Item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+
+    &--active { background: #F3F4F6; }
+  }
+
+  &__ItemIcon { color: #9CA3AF; flex-shrink: 0; }
+  &__ItemId { color: #6B7280; font-weight: 600; flex-shrink: 0; }
+  &__ItemTitle { color: #111827; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  &__Empty { padding: 12px; color: #9CA3AF; font-size: 13px; text-align: center; }
 }

@@ -1,3 +1,4 @@
+import { CheckSquare } from 'lucide-react';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import Avatar from '@/components/common/Avatar';
 
@@ -29,6 +30,25 @@ export default function BoardCard({ task, taskTypes, onClick, onContextMenu }) {
       </div>
 
       <div className="BoardCard__Title">{task.title}</div>
+
+      {task.subtask_progress?.total > 0 && (
+        <div className="BoardCard__Progress">
+          <CheckSquare size={12} className="BoardCard__ProgressIcon" />
+          <span className="BoardCard__ProgressText">
+            {task.subtask_progress.done}/{task.subtask_progress.total}
+          </span>
+          <span className="BoardCard__ProgressBar">
+            <span
+              className="BoardCard__ProgressFill"
+              style={{
+                width: `${task.subtask_progress.total
+                  ? Math.round((task.subtask_progress.done / task.subtask_progress.total) * 100)
+                  : 0}%`,
+              }}
+            />
+          </span>
+        </div>
+      )}
 
       {/* 라벨 */}
       {task.labels && task.labels.length > 0 && (

@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useRouter } from 'next/router';
-import { ArrowRight, Maximize2, Link2, Trash2 } from 'lucide-react';
+import { ArrowRight, Maximize2, Link2, Trash2, ArrowUpToLine, FolderInput } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import useContextMenu from '@/components/common/useContextMenu';
 import { showToast } from '@/components/Layout/Toast';
@@ -12,18 +12,53 @@ import { showToast } from '@/components/Layout/Toast';
  *   const menu = useTaskContextMenu({ branchId, onSelectTask });
  *   행/카드: onContextMenu={(e) => menu.openMenu(e, task)}
  *   렌더: <ContextMenu {...menu.menuProps} /> + ConfirmModal(menu.confirmTask 기반)
+ *         + ParentPickerPopup(menu.parentPicker 기반)
  */
 export default function useTaskContextMenu({ branchId, onSelectTask }) {
   const router = useRouter();
   const ctx = useContextMenu();
   const { open } = ctx;
   const [confirmTask, setConfirmTask] = useState(null);
+  const [parentPicker, setParentPicker] = useState(null); // { task } | null
+
+  const patchParent = useCallback(async (task, parentTaskId) => {
+    try {
+      const res = await axios.patch(
+        `/branches/${branchId}/tasks/${task.task_id}`,
+        { parent_task_id: parentTaskId },
+      );
+      if (res.data?.status) {
+        window.dispatchEvent(new Event('task:updated'));
+        showToast(parentTaskId === null ? '상위 태스크로 승격했습니다' : '하위 태스크로 이동했습니다');
+      } else {
+        showToast(res.data?.detail || res.data?.message || '이동하지 못했습니다.', 'error');
+      }
+    } catch {
+      showToast('이동하지 못했습니다. 잠시 후 다시 시도해 주세요.', 'error');
+    }
+  }, [branchId]);
 
   const openMenu = useCallback((e, task) => {
     const path = `/branch/${branchId}/task/${task.task_id}`;
-    open(e, [
+    const isSubtask = !!task.parent_task_id;
+    const hasSubtasks = (task.subtasks?.length || 0) > 0;
+    const items = [
       { id: 'open', group: 'open', icon: ArrowRight, label: '열기', onSelect: () => onSelectTask?.(task) },
       { id: 'open-full', group: 'open', icon: Maximize2, label: '풀페이지로 열기', onSelect: () => router.push(path) },
+    ];
+    if (isSubtask) {
+      items.push({
+        id: 'promote', group: 'organize', icon: ArrowUpToLine, label: '상위로 승격',
+        onSelect: () => patchParent(task, null),
+      });
+    } else if (!hasSubtasks) {
+      // 하위를 가진 태스크는 하위가 될 수 없음(1단계 불변식)
+      items.push({
+        id: 'move-under', group: 'organize', icon: FolderInput, label: '…의 하위로 이동',
+        onSelect: () => setParentPicker({ task }),
+      });
+    }
+    items.push(
       {
         id: 'copy-link', group: 'share', icon: Link2, label: '링크 복사',
         onSelect: () => {
@@ -33,8 +68,17 @@ export default function useTaskContextMenu({ branchId, onSelectTask }) {
         },
       },
       { id: 'delete', group: 'danger', icon: Trash2, variant: 'danger', label: '삭제', onSelect: () => setConfirmTask(task) },
-    ]);
-  }, [branchId, onSelectTask, router, open]);
+    );
+    open(e, items);
+  }, [branchId, onSelectTask, router, open, patchParent]);
+
+  const handlePickParent = useCallback((parentTask) => {
+    const source = parentPicker?.task;
+    setParentPicker(null);
+    if (source && parentTask) patchParent(source, parentTask.task_id);
+  }, [parentPicker, patchParent]);
+
+  const closeParentPicker = useCallback(() => setParentPicker(null), []);
 
   const handleConfirmDelete = useCallback(async () => {
     const task = confirmTask;
@@ -56,11 +100,22 @@ export default function useTaskContextMenu({ branchId, onSelectTask }) {
 
   const clearConfirm = useCallback(() => setConfirmTask(null), []);
 
+  const subtaskCount = confirmTask?.subtasks?.length || 0;
+  const confirmTitle = 'Delete Task';
+  const confirmMessage = subtaskCount > 0
+    ? `${confirmTask?.display_id ?? ''} 태스크를 삭제하시겠습니까? 하위태스크 ${subtaskCount}개도 함께 삭제됩니다.`
+    : `${confirmTask?.display_id ?? ''} 태스크를 삭제하시겠습니까?`;
+
   return {
     openMenu,
     menuProps: ctx.props,
     confirmTask,
+    confirmTitle,
+    confirmMessage,
     clearConfirm,
     handleConfirmDelete,
+    parentPicker,
+    closeParentPicker,
+    handlePickParent,
   };
 }

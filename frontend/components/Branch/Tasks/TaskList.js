@@ -19,6 +19,7 @@ import TaskListRow from './TaskListRow';
 import useTaskContextMenu from './taskMenu';
 import ContextMenu from '@/components/common/ContextMenu';
 import ConfirmModal from '@/components/modal/ConfirmModal';
+import ParentPickerPopup from './ParentPickerPopup';
 
 // localStorage 키 헬퍼
 const storageKey = (branchId, type) => `weave_tasks_${branchId}_${type}`;
@@ -722,11 +723,21 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
         isOpen={!!taskMenu.confirmTask}
         onClose={taskMenu.clearConfirm}
         onConfirm={taskMenu.handleConfirmDelete}
-        title="Delete Task"
-        message={`${taskMenu.confirmTask?.display_id ?? ''} 태스크를 삭제하시겠습니까?`}
+        title={taskMenu.confirmTitle}
+        message={taskMenu.confirmMessage}
         confirmLabel="Delete"
         variant="danger"
       />
+      {taskMenu.parentPicker && (
+        <div className="ParentPickerPopup__Backdrop" onMouseDown={taskMenu.closeParentPicker}>
+          <ParentPickerPopup
+            branchId={branchId}
+            sourceTask={taskMenu.parentPicker.task}
+            onPick={taskMenu.handlePickParent}
+            onClose={taskMenu.closeParentPicker}
+          />
+        </div>
+      )}
     </div>
   );
 }
