@@ -4,6 +4,54 @@ from .._app import mcp, get_client
 
 
 @mcp.tool
+async def list_canvas_members(canvas_id: int) -> Any:
+    """List a canvas's members (user_id, name, role).
+
+    Resolve a person's name to the user_id needed by the member-write tools.
+    """
+    return await get_client().call_json("GET", f"/api/canvases/{canvas_id}/members")
+
+
+@mcp.tool
+async def search_canvas_non_members(canvas_id: int, q: str = "") -> Any:
+    """Search users who are NOT yet members of a canvas (candidates to invite).
+
+    q matches name/email.
+    """
+    return await get_client().call_json(
+        "GET", f"/api/canvases/{canvas_id}/members/search", params={"q": q}
+    )
+
+
+@mcp.tool
+async def add_canvas_member(canvas_id: int, user_id: int, role: str = "member") -> Any:
+    """Add (invite) a user to a canvas. role is "admin" or "member" (default).
+
+    Resolve user_id via search_canvas_non_members(canvas_id). Admin-only.
+    """
+    return await get_client().call_json(
+        "POST", f"/api/canvases/{canvas_id}/members",
+        json={"user_id": user_id, "role": role},
+    )
+
+
+@mcp.tool
+async def update_canvas_member_role(canvas_id: int, user_id: int, role: str) -> Any:
+    """Change a canvas member's role. role is "admin" or "member". Admin-only."""
+    return await get_client().call_json(
+        "PATCH", f"/api/canvases/{canvas_id}/members/{user_id}", json={"role": role}
+    )
+
+
+@mcp.tool
+async def remove_canvas_member(canvas_id: int, user_id: int) -> Any:
+    """Remove a member from a canvas. Admin-only."""
+    return await get_client().call_json(
+        "DELETE", f"/api/canvases/{canvas_id}/members/{user_id}"
+    )
+
+
+@mcp.tool
 async def list_canvases() -> Any:
     """List all canvases available to the current user.
 

@@ -115,3 +115,52 @@ async def write_scrum_retro(board_id: int, retro_id: int, key: str, text: str,
 async def list_scrum_retros(board_id: int) -> Any:
     """List a board's past retrospectives (newest first)."""
     return await get_client().call_json("GET", f"/api/scrum/{board_id}/retros")
+
+
+@mcp.tool
+async def list_scrum_members(board_id: int) -> Any:
+    """List a Scrum board's members (user_id, name, role).
+
+    Resolve a person's name to the user_id needed by the member-write tools.
+    (get_scrum_board also embeds the member list.)
+    """
+    return await get_client().call_json("GET", f"/api/scrum/{board_id}/members")
+
+
+@mcp.tool
+async def search_scrum_non_members(board_id: int, q: str = "") -> Any:
+    """Search users who are NOT yet members of a Scrum board (candidates to invite).
+
+    q matches name/email.
+    """
+    return await get_client().call_json(
+        "GET", f"/api/scrum/{board_id}/members/search", params={"q": q}
+    )
+
+
+@mcp.tool
+async def add_scrum_member(board_id: int, user_id: int, role: str = "member") -> Any:
+    """Add (invite) a user to a Scrum board. role is "admin" or "member" (default).
+
+    Resolve user_id via search_scrum_non_members(board_id). Admin-only.
+    """
+    return await get_client().call_json(
+        "POST", f"/api/scrum/{board_id}/members",
+        json={"user_id": user_id, "role": role},
+    )
+
+
+@mcp.tool
+async def update_scrum_member_role(board_id: int, user_id: int, role: str) -> Any:
+    """Change a Scrum board member's role. role is "admin" or "member". Admin-only."""
+    return await get_client().call_json(
+        "PATCH", f"/api/scrum/{board_id}/members/{user_id}", json={"role": role}
+    )
+
+
+@mcp.tool
+async def remove_scrum_member(board_id: int, user_id: int) -> Any:
+    """Remove a member from a Scrum board. Admin-only."""
+    return await get_client().call_json(
+        "DELETE", f"/api/scrum/{board_id}/members/{user_id}"
+    )

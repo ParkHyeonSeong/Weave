@@ -251,3 +251,51 @@ async def delete_track_link(track_id: int, link_id: int) -> Any:
     return await get_client().call_json(
         "DELETE", f"/api/tracks/{track_id}/links/{link_id}"
     )
+
+
+@mcp.tool
+async def list_track_members(track_id: int) -> Any:
+    """List a track's members (user_id, name, role).
+
+    Resolve a person's name to the user_id needed by the member-write tools.
+    """
+    return await get_client().call_json("GET", f"/api/tracks/{track_id}/members")
+
+
+@mcp.tool
+async def search_track_non_members(track_id: int, q: str = "") -> Any:
+    """Search users who are NOT yet members of a track (candidates to invite).
+
+    q matches name/email.
+    """
+    return await get_client().call_json(
+        "GET", f"/api/tracks/{track_id}/members/search", params={"q": q}
+    )
+
+
+@mcp.tool
+async def add_track_member(track_id: int, user_id: int, role: str = "editor") -> Any:
+    """Add (invite) a user to a track. role is "viewer", "editor" (default), or "owner".
+
+    Resolve user_id via search_track_non_members(track_id). Owner-only.
+    """
+    return await get_client().call_json(
+        "POST", f"/api/tracks/{track_id}/members",
+        json={"user_id": user_id, "role": role},
+    )
+
+
+@mcp.tool
+async def update_track_member_role(track_id: int, user_id: int, role: str) -> Any:
+    """Change a track member's role. role is "viewer", "editor", or "owner". Owner-only."""
+    return await get_client().call_json(
+        "PATCH", f"/api/tracks/{track_id}/members/{user_id}", json={"role": role}
+    )
+
+
+@mcp.tool
+async def remove_track_member(track_id: int, user_id: int) -> Any:
+    """Remove a member from a track. Owner-only."""
+    return await get_client().call_json(
+        "DELETE", f"/api/tracks/{track_id}/members/{user_id}"
+    )

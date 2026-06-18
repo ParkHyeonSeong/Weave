@@ -87,6 +87,35 @@ async def search_branch_non_members(branch_id: int, q: str = "") -> Any:
 
 
 @mcp.tool
+async def add_branch_member(branch_id: int, user_id: int, role: str = "member") -> Any:
+    """Add (invite) a user to a branch. role is "admin" or "member" (default).
+
+    Resolve user_id via search_branch_non_members(branch_id). Admin-only — a
+    non-admin caller gets an {"error": "business", ...} rejection.
+    """
+    return await get_client().call_json(
+        "POST", f"/api/branches/{branch_id}/members",
+        json={"user_id": user_id, "role": role},
+    )
+
+
+@mcp.tool
+async def update_branch_member_role(branch_id: int, user_id: int, role: str) -> Any:
+    """Change a branch member's role. role is "admin" or "member". Admin-only."""
+    return await get_client().call_json(
+        "PATCH", f"/api/branches/{branch_id}/members/{user_id}", json={"role": role},
+    )
+
+
+@mcp.tool
+async def remove_branch_member(branch_id: int, user_id: int) -> Any:
+    """Remove a member from a branch. Admin-only."""
+    return await get_client().call_json(
+        "DELETE", f"/api/branches/{branch_id}/members/{user_id}",
+    )
+
+
+@mcp.tool
 async def list_my_tasks(
     status: str | None = None,
     priority: str | None = None,
