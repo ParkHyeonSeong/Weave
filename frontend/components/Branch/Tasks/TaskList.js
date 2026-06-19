@@ -693,7 +693,7 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
           sortActive={sortActive}
           collapsed={collapsedSprints.has('backlog')}
           onToggleCollapse={() => handleToggleCollapse('backlog')}
-          expandedParents={expandedSubtaskParents}
+          expandedParents={effectiveExpandedParents}
           onToggleSubtasks={handleToggleSubtasks}
         />
 
