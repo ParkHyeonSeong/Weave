@@ -29,7 +29,10 @@ export default function EpicDetailPanel({ branchId, workflowStatuses = [], epicS
   useEffect(() => {
     if (!epicSummary) return;
     fetchEpic();
-  }, [epicSummary?.epic_id]);
+    // branchId도 의존성에 포함 — 호스트가 브랜치를 옮겨 같은 epic_id를 다른 브랜치로
+    // 조회하게 되는 경우 재조회하도록(현재는 key remount로도 방어되나 명시)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [epicSummary?.epic_id, branchId]);
 
   const fetchEpic = async () => {
     setLoading(true);
@@ -83,9 +86,10 @@ export default function EpicDetailPanel({ branchId, workflowStatuses = [], epicS
     } catch {}
   };
 
-  // 태스크 클릭 -> 태스크탭 + 상세패널 열기
+  // 태스크 클릭 -> 태스크탭 + 상세패널 열기. 에픽 태스크는 이 에픽(=branchId)의 브랜치 소속이라,
+  // 호스트가 브랜치를 옮긴 뒤에도 현재 브랜치가 아닌 이 브랜치로 조회하도록 branch_id를 박는다.
   const handleTaskClick = (task) => {
-    if (onSelectTask) onSelectTask(task);
+    if (onSelectTask) onSelectTask({ ...task, branch_id: task.branch_id ?? branchId });
   };
 
   if (loading || !epic) {

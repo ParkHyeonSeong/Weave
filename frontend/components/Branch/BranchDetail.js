@@ -158,14 +158,18 @@ export default function BranchDetail() {
     router.replace(`/branch/${id}?tab=${tab}`, undefined, { shallow: true });
   };
 
+  // 패널은 브랜치를 옮겨도 그대로 유지된다(같은 라우트 컴포넌트). 그래서 패널이
+  // 자기 태스크/에픽의 브랜치로 조회하도록, 선택 시점에 소속 브랜치를 박아둔다.
+  // 목록 행에는 branch_id가 없으므로(=현재 브랜치) 현재 branch.branch_id로 보강하고,
+  // 패널 내부 체이닝(부모/하위/칩)은 칩이 직접 branch_id를 실어 보낸다.
   const handleSelectEpic = (epic) => {
     setSelectedTask(null);
-    setSelectedEpic(epic);
+    setSelectedEpic({ ...epic, branch_id: epic.branch_id ?? branch?.branch_id });
   };
 
   const handleSelectTask = (task) => {
     setSelectedEpic(null);
-    setSelectedTask(task);
+    setSelectedTask({ ...task, branch_id: task.branch_id ?? branch?.branch_id });
   };
 
   // 에픽 패널에서 태스크 클릭 -> 태스크탭 + 상세패널 열기
@@ -174,12 +178,20 @@ export default function BranchDetail() {
     setActiveTab('tasks');
     router.replace(`/branch/${id}?tab=tasks`, undefined, { shallow: true });
     // activeTab 변경 후 cleanup이 먼저 실행되므로 다음 틱에서 설정
-    setTimeout(() => setSelectedTask(task), 0);
+    setTimeout(() => setSelectedTask({ ...task, branch_id: task.branch_id ?? branch?.branch_id }), 0);
   };
 
   const panelOpen = selectedTask || selectedEpic;
 
   if (loading || !branch) return null;
+
+  // 패널이 가리키는 태스크/에픽의 브랜치. 현재 브랜치와 다르면(브랜치 이동 후 잔존)
+  // 그 브랜치로 조회하고, 현재 브랜치 전용 메타(key·taskTypes·statuses)는 넘기지 않아
+  // 패널이 자기 브랜치 데이터를 직접 받도록 한다(useTaskDetail가 항상 자체 fetch).
+  const taskBranchId = selectedTask ? (selectedTask.branch_id ?? branch.branch_id) : null;
+  const taskSameBranch = taskBranchId === branch.branch_id;
+  const epicBranchId = selectedEpic ? (selectedEpic.branch_id ?? branch.branch_id) : null;
+  const epicSameBranch = epicBranchId === branch.branch_id;
 
   return (
     <div className={`BranchDetail ${panelOpen ? 'BranchDetail--panel-open' : ''}`}>
@@ -294,10 +306,11 @@ export default function BranchDetail() {
       {/* Task 상세 패널 */}
       {selectedTask && (
         <TaskDetailPanel
-          branchId={branch.branch_id}
-          branchKey={branch.key}
-          taskTypes={taskTypes}
-          workflowStatuses={workflowStatuses}
+          key={`${taskBranchId}-${selectedTask.task_id}`}
+          branchId={taskBranchId}
+          branchKey={taskSameBranch ? branch.key : undefined}
+          taskTypes={taskSameBranch ? taskTypes : undefined}
+          workflowStatuses={taskSameBranch ? workflowStatuses : undefined}
           taskSummary={selectedTask}
           onClose={() => setSelectedTask(null)}
           onSelectTask={handleSelectTask}
@@ -307,8 +320,9 @@ export default function BranchDetail() {
       {/* Epic 상세 패널 */}
       {selectedEpic && (
         <EpicDetailPanel
-          branchId={branch.branch_id}
-          workflowStatuses={workflowStatuses}
+          key={`${epicBranchId}-${selectedEpic.epic_id}`}
+          branchId={epicBranchId}
+          workflowStatuses={epicSameBranch ? workflowStatuses : undefined}
           epicSummary={selectedEpic}
           onClose={() => setSelectedEpic(null)}
           onSelectTask={handleEpicTaskClick}

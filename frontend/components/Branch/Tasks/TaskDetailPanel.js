@@ -35,6 +35,14 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
   const workflowStatuses = (externalStatuses && externalStatuses.length > 0) ? externalStatuses : hookStatuses;
   const taskTypes = (externalTaskTypes && externalTaskTypes.length > 0) ? externalTaskTypes : hookTaskTypes;
 
+  // 패널 내부 체이닝(부모 크럼·하위태스크·의존성·설명 칩) 선택 시 branch_id를 보강한다.
+  // 칩이 cross-branch면 자기 branch_id를 싣고, 없으면(부모/의존성=동일 브랜치) 이 패널의 branchId로.
+  // 호스트가 브랜치를 옮긴 뒤에도 체이닝이 현재 브랜치가 아닌 이 태스크의 브랜치를 따라가게 한다.
+  const selectChainedTask = useCallback(
+    (t) => onSelectTask?.({ ...t, branch_id: t.branch_id ?? branchId }),
+    [onSelectTask, branchId],
+  );
+
   const { starred, toggle: toggleStar } = useStar('task', task?.task_id);
 
   const currentUserId = typeof window !== 'undefined'
@@ -135,7 +143,7 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
           <NavLink
             href={`/branch/${branchId}/task/${task.parent.task_id}`}
             className="TaskDetailPanel__ParentCrumb"
-            onClick={(e) => { if (onSelectTask) { e.preventDefault(); onSelectTask({ task_id: task.parent.task_id }); } }}
+            onClick={(e) => { if (onSelectTask) { e.preventDefault(); selectChainedTask({ task_id: task.parent.task_id }); } }}
           >
             <ArrowUp size={12} />
             <span className="TaskDetailPanel__ParentId">{task.parent.display_id}</span>
@@ -215,7 +223,7 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
                       // cross-branch 칩 체이닝을 위해 칩의 branch_id도 함께 전달
                       const refBranchId = ref.dataset.branchId;
                       if (taskId) {
-                        onSelectTask({
+                        selectChainedTask({
                           task_id: Number(taskId),
                           branch_id: refBranchId ? Number(refBranchId) : undefined,
                         });
@@ -423,7 +431,7 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
         <TaskDependencySection
           branchId={branchId}
           taskId={task.task_id}
-          onSelectTask={onSelectTask}
+          onSelectTask={selectChainedTask}
         />
 
         <div className="TaskDetailPanel__Divider" />
@@ -437,7 +445,7 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
           workflowStatuses={workflowStatuses}
           taskTypes={taskTypes}
           defaultTaskType={task.task_type}
-          onSelectTask={onSelectTask}
+          onSelectTask={selectChainedTask}
           onChanged={() => fetchTask({ silent: true })}
         />
 
