@@ -288,27 +288,30 @@ export default function Header({ isMobile, hasSidebar = false, onToggleSidebar, 
             </div>
           )}
         </div>
-        <div className="Header__SettingsWrap" ref={settingsRef}>
-          <button
-            className="Header__IconBtn"
-            title="Settings"
-            onClick={() => { if (role === 'admin') setShowSettingsMenu((prev) => !prev); }}
-          >
-            <Settings size={18} />
-          </button>
-          {showSettingsMenu && (
-            <div className="Header__SettingsMenu">
-              <NavLink
-                href="/admin"
-                className="Header__SettingsItem"
-                onClick={() => { setShowSettingsMenu(false); }}
-              >
-                <Shield size={15} />
-                <span>Admin Settings</span>
-              </NavLink>
-            </div>
-          )}
-        </div>
+        {/* 관리자 설정: 글로벌 admin 권한 보유자에게만 노출 (비관리자에겐 버튼 자체를 숨김) */}
+        {role === 'admin' && (
+          <div className="Header__SettingsWrap" ref={settingsRef}>
+            <button
+              className="Header__IconBtn"
+              title="Settings"
+              onClick={() => setShowSettingsMenu((prev) => !prev)}
+            >
+              <Settings size={18} />
+            </button>
+            {showSettingsMenu && (
+              <div className="Header__SettingsMenu">
+                <NavLink
+                  href="/admin"
+                  className="Header__SettingsItem"
+                  onClick={() => { setShowSettingsMenu(false); }}
+                >
+                  <Shield size={15} />
+                  <span>Admin Settings</span>
+                </NavLink>
+              </div>
+            )}
+          </div>
+        )}
         <div className="Header__UserWrap" ref={userMenuRef}>
           <button
             type="button"
