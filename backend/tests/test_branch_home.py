@@ -267,3 +267,84 @@ async def test_home_stats(client, db_session):
 async def test_home_stats_requires_auth(client):
     res = await client.get("/api/branches/home-stats")
     assert res.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Task 2 — GET /api/branches/home-stats/items (드릴인 엔드포인트)
+# ---------------------------------------------------------------------------
+
+async def test_home_stats_items_due_this_week(db_session, client):
+    db = db_session
+    uid = await _make_user(db, "items1@test.com", "items1")
+    bid = await _make_branch(db, uid, "백엔드", "BE", "#16A34A")
+    await _add_member(db, bid, uid, "owner")
+    # due 안: 오늘(D-day), +3일 / due 밖: +10일(주간 밖), 과거(-1) → 과거는 제외(>= CURRENT_DATE)
+    # tz 흔들림 방지: 기준일을 Python date.today() 대신 DB CURRENT_DATE 로 잡는다(컨테이너/DB 시간대 차).
+    from datetime import timedelta
+    today = (await db.execute(text("SELECT CURRENT_DATE"))).scalar()
+    await _make_task(db, bid, uid, status="todo", due_date=today)
+    await _make_task(db, bid, uid, status="todo", due_date=today + timedelta(days=3))
+    await _make_task(db, bid, uid, status="todo", due_date=today + timedelta(days=10))
+    await _make_task(db, bid, uid, status="todo", due_date=today - timedelta(days=1))
+    raw = await _make_token(db, uid, "tok_items_due_aaaaaaaaaaaaaaaaaaaa")
+    headers = {"Authorization": f"Bearer {raw}"}
+
+    res = await client.get("/api/branches/home-stats/items?bucket=due_this_week", headers=headers)
+    assert res.status_code == 200
+    body = res.json()
+    assert body["status"] is True
+    assert body["bucket"] == "due_this_week"
+    assert body["total_count"] == 2
+    assert len(body["items"]) == 2
+    # 임박순 정렬: 오늘(D-day)이 +3일보다 먼저
+    assert body["items"][0]["due_date"] == today.isoformat()
+    assert body["items"][1]["due_date"] == (today + timedelta(days=3)).isoformat()
+    # 행에 브랜치명 포함
+    assert body["items"][0]["branch_name"] == "백엔드"
+
+
+async def test_home_stats_items_open_matches_count(db_session, client):
+    db = db_session
+    uid = await _make_user(db, "items2@test.com", "items2")
+    bid = await _make_branch(db, uid, "코어", "CORE", "#5E6AD2")
+    await _add_member(db, bid, uid, "owner")
+    await _make_task(db, bid, uid, status="todo")                 # open
+    await _make_task(db, bid, uid, status="todo")                 # open
+    await _make_task(db, bid, uid, status="in_progress")          # in_progress (open 아님)
+    await _make_task(db, bid, uid, status="done")                 # 제외
+    raw = await _make_token(db, uid, "tok_items_open_bbbbbbbbbbbbbbbbbbbb")
+    headers = {"Authorization": f"Bearer {raw}"}
+
+    count_res = await client.get("/api/branches/home-stats", headers=headers)
+    items_res = await client.get("/api/branches/home-stats/items?bucket=open", headers=headers)
+    assert items_res.json()["total_count"] == count_res.json()["open_count"] == 2
+    assert {i["status_category"] for i in items_res.json()["items"]} == {"todo"}
+
+
+async def test_home_stats_items_member_scope(db_session, client):
+    """다른 사람 브랜치(내가 멤버 아님)의 태스크는 목록에서 제외."""
+    db = db_session
+    me = await _make_user(db, "items3@test.com", "items3")
+    other = await _make_user(db, "items3b@test.com", "items3b")
+    my_b = await _make_branch(db, me, "내브랜치", "MINE", "#16A34A")
+    await _add_member(db, my_b, me, "owner")
+    their_b = await _make_branch(db, other, "남브랜치", "THEIRS", "#DC2626")
+    await _add_member(db, their_b, other, "owner")
+    await _make_task(db, my_b, me, status="todo")
+    await _make_task(db, their_b, other, status="todo")
+    raw = await _make_token(db, me, "tok_items_scope_cccccccccccccccccccc")
+    headers = {"Authorization": f"Bearer {raw}"}
+
+    res = await client.get("/api/branches/home-stats/items?bucket=open", headers=headers)
+    assert res.json()["total_count"] == 1
+    assert res.json()["items"][0]["branch_name"] == "내브랜치"
+
+
+async def test_home_stats_items_invalid_bucket(db_session, client):
+    db = db_session
+    uid = await _make_user(db, "items4@test.com", "items4")
+    raw = await _make_token(db, uid, "tok_items_bad_dddddddddddddddddddddd")
+    headers = {"Authorization": f"Bearer {raw}"}
+    res = await client.get("/api/branches/home-stats/items?bucket=nope", headers=headers)
+    assert res.json()["status"] is False
+    assert res.json()["message"] == "INVALID_BUCKET"

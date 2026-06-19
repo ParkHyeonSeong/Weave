@@ -74,6 +74,20 @@ async def get_home_stats(request: Request, db: AsyncSession):
     return {'status': True, **stats}
 
 
+# Task 1 시점엔 task 3종만 유효. active_sprint 는 Task 2(모델 분기 추가)에서 set 에 추가한다.
+# (먼저 넣으면 모델에 분기가 없어 active_sprint 호출이 KeyError/500 → Task 1 커밋 상태가 깨짐.)
+_VALID_BUCKETS = {'open', 'in_progress', 'due_this_week'}
+
+
+async def get_home_stats_items(request: Request, bucket: str, limit: int, db: AsyncSession):
+    """홈 KPI 카드 드릴인 — bucket 별 실제 행 목록."""
+    if bucket not in _VALID_BUCKETS:
+        return {'status': False, 'message': 'INVALID_BUCKET'}
+    user_id = request.state.payload.get('user_id')
+    data = await branch_model.home_stat_items(user_id, bucket, limit, db)
+    return {'status': True, 'bucket': bucket, **data}
+
+
 async def get_detail(branch_id: int, request: Request, db: AsyncSession):
     """Branch 상세 (현재 사용자의 role 포함)"""
     branch = await branch_model.find_by_id(branch_id, db)

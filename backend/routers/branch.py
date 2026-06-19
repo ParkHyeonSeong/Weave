@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Depends, UploadFile, File
+from fastapi import APIRouter, Request, Depends, UploadFile, File, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .schema import branch as branch_schema
@@ -32,6 +32,17 @@ async def list_public_branches(request: Request, session: AsyncSession = Depends
 @limiter.limit(AGGREGATE_RATE_LIMIT, key_func=user_or_ip_key)  # 집계 부하 남용 방지(SEC-11)
 async def get_branch_home_stats(request: Request, session: AsyncSession = Depends(db.session)):
     return await branch_controller.get_home_stats(request, session)
+
+
+# 주의: /{branch_id} 보다 위에 선언. /home-stats 의 하위 경로.
+@router.get("/home-stats/items", summary="Branch 홈 KPI 카드 드릴인",
+            dependencies=[Depends(require_login)])
+@limiter.limit(AGGREGATE_RATE_LIMIT, key_func=user_or_ip_key)
+async def get_branch_home_stats_items(request: Request,
+                                      bucket: str = Query('open'),
+                                      limit: int = Query(50, ge=1, le=200),
+                                      session: AsyncSession = Depends(db.session)):
+    return await branch_controller.get_home_stats_items(request, bucket, limit, session)
 
 
 # 주의: /{branch_id} 보다 위에 선언해야 "archived"가 branch_id로 매칭되지 않음.

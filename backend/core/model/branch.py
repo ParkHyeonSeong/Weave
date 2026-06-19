@@ -188,6 +188,64 @@ async def home_stats(user_id: int, db: AsyncSession):
     }
 
 
+# bucket별 task WHERE 조건 — home_stats 와 동일 필터(카운트=목록 1:1).
+_TASK_BUCKET_WHERE = {
+    'open': "category NOT IN ('done', 'cancelled', 'in_progress')",
+    'in_progress': "category = 'in_progress'",
+    'due_this_week': (
+        "category NOT IN ('done', 'cancelled') "
+        "AND due_date IS NOT NULL "
+        "AND due_date >= CURRENT_DATE AND due_date < CURRENT_DATE + 7"
+    ),
+}
+
+
+async def home_stat_items(user_id: int, bucket: str, limit: int, db: AsyncSession):
+    """home_stats 카드 숫자 뒤의 실제 행. bucket 으로 분기.
+
+    태스크 버킷(open/in_progress/due_this_week)은 home_stats 와 동일한
+    my_branches CTE + 동일 필터를 재사용해 카운트와 1:1 일치한다.
+    active_sprint 버킷은 Task 2 에서 추가.
+    반환: {'total_count': int, 'items': [...]}  (COUNT(*) OVER() 로 cap 전 총계).
+    """
+    where = _TASK_BUCKET_WHERE[bucket]
+    result = await db.execute(text(f"""
+        WITH my_branches AS (
+            SELECT b.branch_id, b.branch_name
+            FROM branch b
+            INNER JOIN branch_member bm ON b.branch_id = bm.branch_id
+            WHERE bm.user_id = :user_id AND b.is_archived = FALSE
+        ),
+        my_tasks AS (
+            SELECT t.task_id, t.title, t.due_date, t.branch_id,
+                   mb.branch_name,
+                   COALESCE(ws.category, 'done') AS category
+            FROM task t
+            INNER JOIN my_branches mb ON mb.branch_id = t.branch_id
+            LEFT JOIN workflow_status ws
+                ON ws.branch_id = t.branch_id AND ws.key = t.status
+            WHERE t.parent_task_id IS NULL
+        )
+        SELECT task_id, title, branch_id, branch_name, due_date, category,
+               COUNT(*) OVER() AS total_count
+        FROM my_tasks
+        WHERE {where}
+        ORDER BY due_date ASC NULLS LAST, task_id
+        LIMIT :limit
+    """), {'user_id': user_id, 'limit': limit})
+    rows = result.fetchall()
+    items = [{
+        'task_id': r._mapping['task_id'],
+        'title': r._mapping['title'],
+        'branch_id': r._mapping['branch_id'],
+        'branch_name': r._mapping['branch_name'],
+        'due_date': r._mapping['due_date'].isoformat() if r._mapping['due_date'] else None,
+        'status_category': r._mapping['category'],
+    } for r in rows]
+    total = rows[0]._mapping['total_count'] if rows else 0
+    return {'total_count': total, 'items': items}
+
+
 async def update(branch_id: int, fields: dict, db: AsyncSession):
     """Branch 정보 수정"""
     set_clauses = ', '.join(f'{k} = :{k}' for k in fields)
