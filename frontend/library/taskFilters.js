@@ -53,7 +53,9 @@ export function filterTaskTree(tasks, ctx) {
  *     (하위는 autoExpand 대상이 아니라 접혀 있으므로 세지 않음 — 기존 "부모 행 수" 모델 유지)
  *   - 컨텍스트 부모(isContextOnly=true): 자기 자신은 결과가 아니고, autoExpand 로 펼쳐진
  *     매칭 하위(visibleSubtasks)가 결과이므로 그 수만큼.
- * 이렇게 하면 "부모 done + done 하위(접힘)" 케이스에서 배지(1)와 화면 행 수(1)가 일치한다.
+ * 따라서 배지는 "자동으로 드러나는 매칭 행 수"와 일치한다(예: 부모 done + done 하위가
+ * 접혀 있으면 배지 1 = 화면 1). 단 사용자가 직접 매칭 부모를 수동으로 펼치면 그 매칭
+ * 하위까지 렌더되어 화면 행 수가 배지보다 많을 수 있다(배지는 보수적으로 작게 셈 — 의도).
  * 필터 비활성 원본 배열(플래그 미부여)에서는 각 항목이 1 → length 와 동일(기존 동작 보존).
  */
 export function countMatchedTasks(filteredTasks) {
