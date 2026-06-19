@@ -4,6 +4,7 @@ import { ArrowRight, Maximize2, Link2, Trash2, ArrowUpToLine, FolderInput } from
 import { axios } from '@/library/_axios';
 import useContextMenu from '@/components/common/useContextMenu';
 import { showToast } from '@/components/Layout/Toast';
+import { taskDeleteMessage } from '@/library/taskDeleteMessage';
 
 /**
  * 태스크 행/카드 공용 우클릭 메뉴 훅. 리스트·보드 뷰가 같이 쓴다.
@@ -100,11 +101,12 @@ export default function useTaskContextMenu({ branchId, onSelectTask }) {
 
   const clearConfirm = useCallback(() => setConfirmTask(null), []);
 
-  const subtaskCount = confirmTask?.subtasks?.length || 0;
   const confirmTitle = 'Delete Task';
-  const confirmMessage = subtaskCount > 0
-    ? `${confirmTask?.display_id ?? ''} 태스크를 삭제하시겠습니까? 하위태스크 ${subtaskCount}개도 함께 삭제됩니다.`
-    : `${confirmTask?.display_id ?? ''} 태스크를 삭제하시겠습니까?`;
+  const confirmMessage = confirmTask
+    ? taskDeleteMessage(confirmTask, {
+      prefix: `${confirmTask.display_id ?? ''} 태스크를 삭제하시겠습니까?`,
+    })
+    : '';
 
   return {
     openMenu,

@@ -21,6 +21,7 @@ import TaskPageLinkSection from './TaskPageLinkSection';
 import TaskDescriptionEditor from './TaskDescriptionEditor';
 import ConfirmModal from '@/components/modal/ConfirmModal';
 import ActivityTimeline from '@/components/common/ActivityTimeline';
+import { taskDeleteMessage } from '@/library/taskDeleteMessage';
 
 export default function TaskFullPage() {
   const router = useRouter();
@@ -460,7 +461,9 @@ export default function TaskFullPage() {
         onClose={() => setShowDeleteConfirm(false)}
         onConfirm={onDelete}
         title="Delete Task"
-        message={`"${displayId} - ${task.title}" 을(를) 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`}
+        message={taskDeleteMessage(task, {
+          prefix: `"${displayId} - ${task.title}" 을(를) 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`,
+        })}
         confirmLabel="Delete"
         variant="danger"
       />

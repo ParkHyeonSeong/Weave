@@ -21,6 +21,7 @@ import TaskCommentSection from './TaskCommentSection';
 import ConfirmModal from '@/components/modal/ConfirmModal';
 import ActivityTimeline from '@/components/common/ActivityTimeline';
 import NavLink from '@/components/common/NavLink';
+import { taskDeleteMessage } from '@/library/taskDeleteMessage';
 
 export default function TaskDetailPanel({ branchId, branchKey, taskTypes: externalTaskTypes, workflowStatuses: externalStatuses, taskSummary, onClose, onSelectTask }) {
   const router = useRouter();
@@ -480,7 +481,9 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
         onClose={() => setShowDeleteConfirm(false)}
         onConfirm={onDelete}
         title="Delete Task"
-        message={`"${displayId} - ${task.title}" 을(를) 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`}
+        message={taskDeleteMessage(task, {
+          prefix: `"${displayId} - ${task.title}" 을(를) 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`,
+        })}
         confirmLabel="Delete"
         variant="danger"
       />
