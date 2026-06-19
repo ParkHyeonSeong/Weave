@@ -121,13 +121,12 @@ export default function BranchHome() {
   }, []);
 
   useEffect(() => {
+    // task:updated만 구독(기존 BoardView/TaskList/MyTasks 컨벤션). 삭제도 taskMenu가
+    // task:updated를 함께 발행하므로 여기서 잡힌다. task:deleted는 패널 닫기 전용이라
+    // 같이 듣지 않는다 — 삭제 1회에 새로고침이 중복 실행되는 것 방지.
     const refresh = () => { fetchStats(); fetchBranches(); fetchRecentTasks(); };
     window.addEventListener('task:updated', refresh);
-    window.addEventListener('task:deleted', refresh);
-    return () => {
-      window.removeEventListener('task:updated', refresh);
-      window.removeEventListener('task:deleted', refresh);
-    };
+    return () => window.removeEventListener('task:updated', refresh);
   }, []);
 
   const onTileClick = (bucket) => setActiveBucket((cur) => (cur === bucket ? null : bucket));
@@ -139,7 +138,7 @@ export default function BranchHome() {
   };
   const openSprintFromDrill = ({ branchId }) => {
     setActiveBucket(null);
-    router.push(`/branch/${branchId}`);
+    router.push(`/branch/${branchId}?tab=board`);  // 스프린트 드릴인 → 보드 탭(스프린트가 보이는 컨텍스트)
   };
 
   const openCardMenu = (e, b) => {
