@@ -269,6 +269,7 @@ export default function TaskListSprint({
             )}
             {tasks.map((task) => {
               const subtasks = task.subtasks || [];
+              const visibleSubtasks = task.visibleSubtasks ?? subtasks; // 렌더용(무필터 시 전체)
               const hasSubtasks = subtasks.length > 0;
               const expanded = isParentExpanded(expandedParents, task.task_id);
               return (
@@ -290,7 +291,7 @@ export default function TaskListSprint({
                   />
                   {expanded && (
                     <>
-                      {subtasks.map((sub) => (
+                      {visibleSubtasks.map((sub) => (
                         <TaskListRow
                           key={sub.task_id}
                           task={sub}

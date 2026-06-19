@@ -7,6 +7,7 @@ import useTaskContextMenu from '@/components/Branch/Tasks/taskMenu';
 import ContextMenu from '@/components/common/ContextMenu';
 import ConfirmModal from '@/components/modal/ConfirmModal';
 import ParentPickerPopup from '@/components/Branch/Tasks/ParentPickerPopup';
+import { matchesFilters } from '@/library/taskFilters';
 
 export default function BoardView({ branchId, branchKey, taskTypes, workflowStatuses, onSelectTask }) {
   const taskMenu = useTaskContextMenu({ branchId, onSelectTask });
@@ -127,23 +128,10 @@ export default function BoardView({ branchId, branchKey, taskTypes, workflowStat
   };
 
   // 클라이언트 사이드 필터링
-  const filterTasks = (tasks) => tasks.filter((t) => {
-    if (searchQuery && !t.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    if (selectedUserIds.size > 0) {
-      const taskUserIds = (t.assignees || []).map((a) => a.user_id);
-      if (selectedUserIds.has(0) && taskUserIds.length === 0) return true;
-      if (!taskUserIds.some((uid) => selectedUserIds.has(uid))) return false;
-    }
-    if (filters.priorities.size > 0 && !filters.priorities.has(t.priority)) return false;
-    if (filters.labelIds.size > 0) {
-      const taskLabelIds = (t.labels || []).map((l) => l.label_id);
-      if (!taskLabelIds.some((id) => filters.labelIds.has(id))) return false;
-    }
-    if (filters.epicIds.size > 0 && !filters.epicIds.has(t.epic_id)) return false;
-    if (filters.typeKeys.size > 0 && !filters.typeKeys.has(t.task_type)) return false;
-    if (filters.statusKeys.size > 0 && !filters.statusKeys.has(t.status)) return false;
-    return true;
-  });
+  const filterTasks = (tasks) => {
+    const filterCtx = { searchQuery, selectedUserIds, filters };
+    return tasks.filter((t) => matchesFilters(t, filterCtx));
+  };
 
   if (loading) return <div className="BoardView" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200, color: '#6B7280', fontSize: 14 }}>Loading...</div>;
 

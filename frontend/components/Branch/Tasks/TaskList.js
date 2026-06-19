@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { axios } from '@/library/_axios';
 import { Plus } from 'lucide-react';
 import {
@@ -17,6 +17,7 @@ import CompleteSprintModal from '@/components/modal/CompleteSprintModal';
 import TaskFilterBar from '../TaskFilterBar';
 import TaskListRow from './TaskListRow';
 import useTaskContextMenu from './taskMenu';
+import { matchesFilters } from '@/library/taskFilters';
 import ContextMenu from '@/components/common/ContextMenu';
 import ConfirmModal from '@/components/modal/ConfirmModal';
 import ParentPickerPopup from './ParentPickerPopup';
@@ -254,23 +255,23 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
     });
   };
 
-  const filterTasks = (tasks) => tasks.filter((t) => {
-    if (searchQuery && !t.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    if (selectedUserIds.size > 0) {
-      const taskUserIds = (t.assignees || []).map((a) => a.user_id);
-      if (selectedUserIds.has(0) && taskUserIds.length === 0) return true;
-      if (!taskUserIds.some((uid) => selectedUserIds.has(uid))) return false;
-    }
-    if (filters.priorities.size > 0 && !filters.priorities.has(t.priority)) return false;
-    if (filters.labelIds.size > 0) {
-      const taskLabelIds = (t.labels || []).map((l) => l.label_id);
-      if (!taskLabelIds.some((id) => filters.labelIds.has(id))) return false;
-    }
-    if (filters.epicIds.size > 0 && !filters.epicIds.has(t.epic_id)) return false;
-    if (filters.typeKeys.size > 0 && !filters.typeKeys.has(t.task_type)) return false;
-    if (filters.statusKeys.size > 0 && !filters.statusKeys.has(t.status)) return false;
-    return true;
-  });
+  const isFilterActive =
+    searchQuery.length > 0 || selectedUserIds.size > 0 ||
+    filters.priorities.size > 0 || filters.labelIds.size > 0 ||
+    filters.epicIds.size > 0 || filters.typeKeys.size > 0 || filters.statusKeys.size > 0;
+
+  const filterCtx = { searchQuery, selectedUserIds, filters };
+
+  const filterTasks = (tasks) => {
+    if (!isFilterActive) return tasks;
+    return tasks.reduce((acc, task) => {
+      const parentMatch = matchesFilters(task, filterCtx);
+      const matchedSubs = (task.subtasks || []).filter((sub) => matchesFilters(sub, filterCtx));
+      if (!parentMatch && matchedSubs.length === 0) return acc;       // 행 전체 숨김
+      acc.push({ ...task, visibleSubtasks: matchedSubs });            // 원본 subtasks 보존
+      return acc;
+    }, []);
+  };
 
   // 정렬
   const sortTasks = useCallback((tasks) => {
@@ -309,8 +310,26 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
     });
   }, [sortConfig, workflowStatuses]);
 
-  // 필터 + 정렬 적용
+  // 필터 + 정렬 적용 (순수: visibleSubtasks 붙이고 정렬만)
   const applyFilterAndSort = (tasks) => sortTasks(filterTasks(tasks));
+
+  // 필터 active 동안 "부모는 불일치, 하위만 일치"인 부모 id 집합
+  const autoExpandedParents = useMemo(() => {
+    if (!isFilterActive) return new Set();
+    const all = [...sprints.flatMap((s) => s.tasks || []), ...backlogTasks];
+    const ids = new Set();
+    all.forEach((t) => {
+      if (matchesFilters(t, filterCtx)) return;               // 부모 직접 매칭 → 자동펼침 불필요
+      if ((t.subtasks || []).some((sub) => matchesFilters(sub, filterCtx))) ids.add(t.task_id);
+    });
+    return ids;
+  }, [isFilterActive, sprints, backlogTasks, searchQuery, selectedUserIds, filters]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 렌더용 = 수동 ∪ 자동 (필터 끄면 자동=빈 set → 원래 수동 펼침 상태 복원)
+  const effectiveExpandedParents = useMemo(
+    () => new Set([...expandedSubtaskParents, ...autoExpandedParents]),
+    [expandedSubtaskParents, autoExpandedParents],
+  );
 
   // 정렬 변경 핸들러 (null=해제, 3-state: null -> asc -> desc -> null)
   const handleSortChange = (field) => {
@@ -651,7 +670,7 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
               sortActive={sortActive}
               collapsed={collapsedSprints.has(sprint.sprint_id)}
               onToggleCollapse={() => handleToggleCollapse(sprint.sprint_id)}
-              expandedParents={expandedSubtaskParents}
+              expandedParents={effectiveExpandedParents}
               onToggleSubtasks={handleToggleSubtasks}
             />
           ))}
