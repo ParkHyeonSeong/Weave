@@ -208,6 +208,47 @@ async def home_stat_items(user_id: int, bucket: str, limit: int, db: AsyncSessio
     active_sprint 버킷은 Task 2 에서 추가.
     반환: {'total_count': int, 'items': [...]}  (COUNT(*) OVER() 로 cap 전 총계).
     """
+    if bucket == 'active_sprint':
+        result = await db.execute(text("""
+            WITH my_branches AS (
+                SELECT b.branch_id, b.branch_name
+                FROM branch b
+                INNER JOIN branch_member bm ON b.branch_id = bm.branch_id
+                WHERE bm.user_id = :user_id AND b.is_archived = FALSE
+            )
+            SELECT s.sprint_id, s.sprint_name, s.branch_id, mb.branch_name,
+                   s.start_date, s.end_date,
+                   COUNT(t.task_id) FILTER (
+                       WHERE COALESCE(ws.category, 'done') IN ('done', 'cancelled')
+                   ) AS done_count,
+                   COUNT(t.task_id) AS total_count_tasks,
+                   COUNT(*) OVER() AS total_count
+            FROM sprint s
+            INNER JOIN my_branches mb ON mb.branch_id = s.branch_id
+            LEFT JOIN task t
+                ON t.sprint_id = s.sprint_id AND t.parent_task_id IS NULL
+            LEFT JOIN workflow_status ws
+                ON ws.branch_id = t.branch_id AND ws.key = t.status
+            WHERE s.status = 'active'
+            GROUP BY s.sprint_id, s.sprint_name, s.branch_id, mb.branch_name,
+                     s.start_date, s.end_date
+            ORDER BY s.end_date ASC NULLS LAST, s.sprint_id
+            LIMIT :limit
+        """), {'user_id': user_id, 'limit': limit})
+        rows = result.fetchall()
+        items = [{
+            'sprint_id': r._mapping['sprint_id'],
+            'sprint_name': r._mapping['sprint_name'],
+            'branch_id': r._mapping['branch_id'],
+            'branch_name': r._mapping['branch_name'],
+            'start_date': r._mapping['start_date'].isoformat() if r._mapping['start_date'] else None,
+            'end_date': r._mapping['end_date'].isoformat() if r._mapping['end_date'] else None,
+            'done_count': r._mapping['done_count'],
+            'total_count_tasks': r._mapping['total_count_tasks'],
+        } for r in rows]
+        total = rows[0]._mapping['total_count'] if rows else 0
+        return {'total_count': total, 'items': items}
+
     where = _TASK_BUCKET_WHERE[bucket]
     result = await db.execute(text(f"""
         WITH my_branches AS (

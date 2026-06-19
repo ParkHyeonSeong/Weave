@@ -270,7 +270,7 @@ async def test_home_stats_requires_auth(client):
 
 
 # ---------------------------------------------------------------------------
-# Task 2 — GET /api/branches/home-stats/items (드릴인 엔드포인트)
+# 드릴인 엔드포인트 — GET /api/branches/home-stats/items (태스크·스프린트 버킷)
 # ---------------------------------------------------------------------------
 
 async def test_home_stats_items_due_this_week(db_session, client):
@@ -348,3 +348,28 @@ async def test_home_stats_items_invalid_bucket(db_session, client):
     res = await client.get("/api/branches/home-stats/items?bucket=nope", headers=headers)
     assert res.json()["status"] is False
     assert res.json()["message"] == "INVALID_BUCKET"
+
+
+async def test_home_stats_items_active_sprint(db_session, client):
+    db = db_session
+    uid = await _make_user(db, "items5@test.com", "items5")
+    bid = await _make_branch(db, uid, "백엔드", "BE2", "#16A34A")
+    await _add_member(db, bid, uid, "owner")
+    sid = await _make_sprint(db, bid, uid, name="6월 3주차", status="active")
+    await _make_sprint(db, bid, uid, name="다음주", status="future")  # active 아님 → 제외
+    # 스프린트 진행률: done 1 / 전체 2
+    await _make_task(db, bid, uid, status="done", sprint_id=sid)
+    await _make_task(db, bid, uid, status="todo", sprint_id=sid)
+    raw = await _make_token(db, uid, "tok_items_sprint_eeeeeeeeeeeeeeeeeeee")
+    headers = {"Authorization": f"Bearer {raw}"}
+
+    count_res = await client.get("/api/branches/home-stats", headers=headers)
+    res = await client.get("/api/branches/home-stats/items?bucket=active_sprint", headers=headers)
+    body = res.json()
+    assert body["status"] is True
+    assert body["total_count"] == count_res.json()["active_sprint_count"] == 1
+    item = body["items"][0]
+    assert item["sprint_name"] == "6월 3주차"
+    assert item["branch_name"] == "백엔드"
+    assert item["done_count"] == 1
+    assert item["total_count_tasks"] == 2

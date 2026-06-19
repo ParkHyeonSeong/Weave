@@ -76,7 +76,7 @@ async def get_home_stats(request: Request, db: AsyncSession):
 
 # Task 1 시점엔 task 3종만 유효. active_sprint 는 Task 2(모델 분기 추가)에서 set 에 추가한다.
 # (먼저 넣으면 모델에 분기가 없어 active_sprint 호출이 KeyError/500 → Task 1 커밋 상태가 깨짐.)
-_VALID_BUCKETS = {'open', 'in_progress', 'due_this_week'}
+_VALID_BUCKETS = {'open', 'in_progress', 'due_this_week', 'active_sprint'}
 
 
 async def get_home_stats_items(request: Request, bucket: str, limit: int, db: AsyncSession):
