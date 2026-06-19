@@ -146,3 +146,42 @@ async def test_find_subtasks_includes_labels(db_session):
     assert row["branch_id"] == branch
     assert [l["label_name"] for l in row["labels"]] == ["infra"]
     assert row["assignees"] == []
+
+
+async def _make_epic(db, branch_id, user_id, name="Epic A"):
+    row = await db.execute(text("""
+        INSERT INTO epic (branch_id, epic_name, color, created_by)
+        VALUES (:b, :n, '#5E6AD2', :u) RETURNING epic_id
+    """), {"b": branch_id, "n": name, "u": user_id})
+    return row.scalar_one()
+
+
+async def test_attach_subtasks_carries_type_epic_due_issue(db_session):
+    alice = await _make_user(db_session, "a_meta@sub.test", "a_meta")
+    branch = await _make_branch(db_session, alice, "SMETA")
+    epic_id = await _make_epic(db_session, branch, alice)
+
+    parent = await _create_task(db_session, branch, alice, "Parent")
+    sub = await _create_task(db_session, branch, alice, "S-meta",
+                             parent_task_id=parent)
+    # task_type is a plain string col (no FK) — set directly; also set
+    # epic_id + due_date directly on the subtask row.
+    await db_session.execute(text("""
+        UPDATE task SET task_type = 'bug', epic_id = :e, due_date = '2026-07-01'
+        WHERE task_id = :t
+    """), {"e": epic_id, "t": sub})
+    # one linked issue → issue_count must be 1
+    await db_session.execute(text("""
+        INSERT INTO task_issue (task_id, title, status, created_by)
+        VALUES (:t, 'iss', 'open', :u)
+    """), {"t": sub, "u": alice})
+
+    # call the model directly; attach_subtasks mutates the parent dict in place
+    parent_dict = {'task_id': parent}
+    await task_model.attach_subtasks([parent_dict], db_session)
+
+    s = next(x for x in parent_dict['subtasks'] if x['task_id'] == sub)
+    assert s['task_type'] == 'bug'
+    assert s['epic_id'] == epic_id
+    assert str(s['due_date']) == '2026-07-01'
+    assert s['issue_count'] == 1

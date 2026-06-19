@@ -312,9 +312,11 @@ async def attach_subtasks(tasks: list, db: AsyncSession):
     parent_ids = [t['task_id'] for t in tasks]
     result = await db.execute(text("""
         SELECT t.task_id, t.branch_id, t.parent_task_id, t.display_number,
-               t.title, t.status, t.priority, t.sort_order, t.created_at,
+               t.title, t.task_type, t.status, t.priority,
+               t.epic_id, t.due_date, t.sort_order, t.created_at,
                b.key AS branch_key,
-               ws.category AS status_category
+               ws.category AS status_category,
+               (SELECT COUNT(*) FROM task_issue ti WHERE ti.task_id = t.task_id) AS issue_count
         FROM task t
         INNER JOIN branch b ON t.branch_id = b.branch_id
         LEFT JOIN workflow_status ws ON ws.branch_id = t.branch_id AND ws.key = t.status
