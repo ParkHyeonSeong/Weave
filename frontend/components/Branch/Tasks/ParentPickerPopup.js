@@ -9,9 +9,11 @@ export default function ParentPickerPopup({ branchId, sourceTask, onPick, onClos
   } = useRefSearchPopup({
     url: '/chat/task-search',
     params: { mode: 'all' },
-    // 같은 브랜치 + 자기 자신 제외 (1단계 불변식은 서버 검증)
+    // 같은 브랜치 + 자기 자신 + 이미 하위인 태스크 제외 (1단계 불변식은 서버 검증)
     pickItems: (data) => (data.tasks || []).filter(
-      (t) => t.branch_id === branchId && t.task_id !== sourceTask?.task_id,
+      (t) => t.branch_id === branchId
+        && t.task_id !== sourceTask?.task_id
+        && t.parent_task_id === null,
     ),
     onSelect: onPick,
     onClose,

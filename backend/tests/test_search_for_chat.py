@@ -274,3 +274,32 @@ async def test_doc_search_strips_html_tags(db_session):
 
     assert await hit("roadmap")
     assert not await hit("li")       # <li> 태그명
+
+
+# --------------------------------------------------------------------------
+# parent_task_id 필드 포함 여부 (Task 7)
+# --------------------------------------------------------------------------
+
+async def _make_subtask(db, branch_id, created_by, parent_task_id, title="sub"):
+    """parent_task_id가 채워진 하위 task 1건. (task_id, display_number) 반환."""
+    row = await db.execute(text(
+        "SELECT COALESCE(MAX(display_number), 0) + 1 FROM task WHERE branch_id = :b"),
+        {"b": branch_id})
+    dn = row.scalar_one()
+    res = await db.execute(text("""
+        INSERT INTO task (branch_id, display_number, title, status, created_by, parent_task_id)
+        VALUES (:b, :dn, :t, 'todo', :u, :p) RETURNING task_id
+    """), {"b": branch_id, "dn": dn, "t": title, "u": created_by, "p": parent_task_id})
+    return res.scalar_one(), dn
+
+
+async def test_task_search_rows_carry_parent_task_id(db_session):
+    """search_for_chat 결과 행은 parent_task_id를 포함한다 — 상위는 None, 하위는 부모 id."""
+    uid, bid = await _seed_branch_with_member(db_session, "tparent@ref.test", "RFP")
+    parent_id, _ = await _make_task(db_session, bid, uid, title="parentpick top")
+    sub_id, _ = await _make_subtask(db_session, bid, uid, parent_id, title="parentpick child")
+    res = await task_model.search_for_chat(uid, "parentpick", False, db_session)
+    by_id = {t["task_id"]: t for t in res}
+    assert "parent_task_id" in by_id[parent_id]
+    assert by_id[parent_id]["parent_task_id"] is None
+    assert by_id[sub_id]["parent_task_id"] == parent_id

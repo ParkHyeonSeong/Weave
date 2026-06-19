@@ -721,7 +721,7 @@ async def search_for_chat(user_id: int, keyword: str, my_only: bool, db: AsyncSe
     # description의 regexp_replace 태그 제거 식은 마이그레이션 054의 함수형 trgm
     # 인덱스(idx_task_desc_trgm)와 글자 그대로 같아야 플래너가 인덱스를 쓴다.
     result = await db.execute(text(f"""
-        SELECT DISTINCT t.task_id, t.branch_id, t.display_number, t.title, t.status, t.priority,
+        SELECT DISTINCT t.task_id, t.branch_id, t.parent_task_id, t.display_number, t.title, t.status, t.priority,
                b.key AS branch_key,
                t.updated_at, t.created_at,
                ws.label AS status_label, ws.color AS status_color, ws.category AS status_category,

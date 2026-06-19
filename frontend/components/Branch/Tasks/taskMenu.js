@@ -15,6 +15,11 @@ import { taskDeleteMessage } from '@/library/taskDeleteMessage';
  *   렌더: <ContextMenu {...menu.menuProps} /> + ConfirmModal(menu.confirmTask 기반)
  *         + ParentPickerPopup(menu.parentPicker 기반)
  */
+const PARENT_REJECT_MSG = {
+  PARENT_NOT_TOP_LEVEL: '하위 태스크는 부모가 될 수 없습니다.',
+  TARGET_HAS_SUBTASKS: '하위를 가진 태스크는 다른 태스크의 하위가 될 수 없습니다.',
+};
+
 export default function useTaskContextMenu({ branchId, onSelectTask }) {
   const router = useRouter();
   const ctx = useContextMenu();
@@ -32,7 +37,7 @@ export default function useTaskContextMenu({ branchId, onSelectTask }) {
         window.dispatchEvent(new Event('task:updated'));
         showToast(parentTaskId === null ? '상위 태스크로 승격했습니다' : '하위 태스크로 이동했습니다');
       } else {
-        showToast(res.data?.detail || res.data?.message || '이동하지 못했습니다.', 'error');
+        showToast(PARENT_REJECT_MSG[res.data?.message] || '이동하지 못했습니다.', 'error');
       }
     } catch {
       showToast('이동하지 못했습니다. 잠시 후 다시 시도해 주세요.', 'error');
