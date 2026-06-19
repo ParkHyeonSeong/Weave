@@ -1,3 +1,5 @@
+import warnings
+
 from fastmcp import Client
 
 from weave_mcp import _app
@@ -204,9 +206,6 @@ async def test_update_task_omits_parent_when_untouched(fake_client):
     sent = fake_client.call_json.await_args.kwargs["json"]
     assert "parent_task_id" not in sent
     assert sent == {"status": "done"}
-
-
-import warnings
 
 
 async def test_update_task_schema_optional_no_warning():

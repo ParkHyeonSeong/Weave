@@ -4,7 +4,7 @@
  * 나머지 필터를 우회했다. 이제 userMatch 불리언으로 잡고 나머지 검사를 계속한다.
  */
 export function matchesFilters(task, { searchQuery, selectedUserIds, filters }) {
-  if (searchQuery && !task.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+  if (searchQuery && !(task.title || '').toLowerCase().includes(searchQuery.toLowerCase())) return false;
 
   if (selectedUserIds.size > 0) {
     const taskUserIds = (task.assignees || []).map((a) => a.user_id);
