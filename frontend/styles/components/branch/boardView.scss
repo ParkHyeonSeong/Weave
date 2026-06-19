@@ -323,7 +323,7 @@
     background: rgba(17, 24, 39, 0.28);
   }
 
-  width: 360px;
+  width: min(360px, calc(100vw - 24px));
   background: #FFFFFF;
   border: 1px solid #E5E7EB;
   border-radius: 10px;
