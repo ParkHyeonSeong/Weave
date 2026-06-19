@@ -105,6 +105,8 @@ async def update_task(
     assignee_sub: list[int] | None = None,
     label_ids: list[int] | None = None,
     custom_fields: dict | None = None,
+    parent_task_id: int | None = None,
+    promote_to_top: bool = False,
 ) -> Any:
     """Update fields of an existing task. All parameters are optional; only the ones
     you pass change.
@@ -116,7 +118,18 @@ async def update_task(
     since providing only one clears the other. label_ids and custom_fields are likewise
     REPLACE, not merge: pass the complete desired list/object (e.g. label_ids=[] clears all
     labels), not just the ones to add.
+    To re-parent (make this a subtask of another task) pass parent_task_id with that
+    task's id. To promote it to a top-level task, pass promote_to_top=True (this sends
+    parent_task_id=null). Leaving both out keeps the current parent unchanged.
+    promote_to_top takes precedence: if both promote_to_top=True and a parent_task_id
+    are given, the task is promoted (parent_task_id=null is sent).
     """
+    if promote_to_top:
+        parent_value = None  # explicit null → backend promotes (model_fields_set includes it)
+    elif parent_task_id is not None:
+        parent_value = parent_task_id
+    else:
+        parent_value = "__omit__"  # sentinel: leave unchanged
     body = {k: v for k, v in {
         "title": title,
         "description": description,
@@ -130,6 +143,8 @@ async def update_task(
         "label_ids": label_ids,
         "custom_fields": custom_fields,
     }.items() if v is not None}
+    if parent_value != "__omit__":
+        body["parent_task_id"] = parent_value
     assignees = {
         k: v for k, v in {"main": assignee_main, "sub": assignee_sub}.items()
         if v is not None
