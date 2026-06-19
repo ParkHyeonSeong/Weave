@@ -50,7 +50,7 @@ export default function TaskSubtaskSection({
         setTitle('');
         setAdding(false);
         setSubtaskError('');
-        window.dispatchEvent(new Event('subtask:changed'));
+        window.dispatchEvent(new Event('task:updated'));
         onChanged?.();
       } else {
         // 컨트롤러 검증 실패는 200 + {status:false} (silent-200 계약). 호출부에서 확인.

@@ -39,7 +39,7 @@ export default function BoardView({ branchId, branchKey, taskTypes, workflowStat
     const handleRefresh = () => fetchActiveSprints();
     window.addEventListener('task:updated', handleRefresh);
     return () => window.removeEventListener('task:updated', handleRefresh);
-  }, [branchId]);
+  }, [branchId, selectedSprintId]); // ← selectedSprintId 추가 (stale closure 방지)
 
   const fetchActiveSprints = async () => {
     try {
