@@ -7,11 +7,10 @@ import {
   closestCorners,
   MouseSensor,
   TouchSensor,
-  KeyboardSensor,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy, arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
+import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import TaskListSprint from './TaskListSprint';
 import SprintModal from '@/components/modal/SprintModal';
 import CompleteSprintModal from '@/components/modal/CompleteSprintModal';
@@ -92,10 +91,11 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
   // 행 전체가 드래그 핸들이므로 입력별로 센서를 분리한다.
   // - 마우스: 5px 이동해야 드래그 시작 → 단순 클릭(태스크 열기)과 구분
   // - 터치: 길게 눌러야 드래그 → 빠른 스와이프는 리스트 스크롤로 보존
+  // 키보드 센서는 두지 않는다: 행이 포커스 가능한 activator(tabIndex)를 갖지 않아
+  // (행 내부 버튼/셀렉트와의 a11y 충돌을 피하려 attributes 미적용) 키보드 DnD를 시작할 수 없다.
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
   // localStorage에서 필터/정렬/접힘 상태 복원 (branchId 변경 시)
