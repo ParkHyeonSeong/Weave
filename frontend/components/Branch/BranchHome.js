@@ -4,6 +4,8 @@ import { Inbox, Clock, AlarmClock, Activity, GitBranch } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import HomeHero from '@/components/Home/shared/HomeHero';
 import StatTiles from '@/components/Home/shared/StatTiles';
+import StatDrilldownPopover from '@/components/Home/shared/StatDrilldownPopover';
+import RefPanelHost, { useRefPreview } from '@/components/shared/RefPanelHost';
 import ContinueStrip from '@/components/Home/shared/ContinueStrip';
 import HomeToolbar from '@/components/Home/shared/HomeToolbar';
 import HomeSkeleton from '@/components/Home/shared/HomeSkeleton';
@@ -80,6 +82,8 @@ export default function BranchHome() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [me, setMe] = useState('');
+  const [activeBucket, setActiveBucket] = useState(null);
+  const [previewRef, setPreviewRef] = useRefPreview();
 
   const fetchBranches = async () => {
     try {
@@ -115,6 +119,28 @@ export default function BranchHome() {
     window.addEventListener('branch:created', handleRefresh);
     return () => window.removeEventListener('branch:created', handleRefresh);
   }, []);
+
+  useEffect(() => {
+    const refresh = () => { fetchStats(); fetchBranches(); fetchRecentTasks(); };
+    window.addEventListener('task:updated', refresh);
+    window.addEventListener('task:deleted', refresh);
+    return () => {
+      window.removeEventListener('task:updated', refresh);
+      window.removeEventListener('task:deleted', refresh);
+    };
+  }, []);
+
+  const onTileClick = (bucket) => setActiveBucket((cur) => (cur === bucket ? null : bucket));
+  const openTaskFromDrill = ({ branchId, taskId }) => {
+    setActiveBucket(null);
+    window.dispatchEvent(new CustomEvent('canvas:ref_click', {
+      detail: { type: 'task', data: { branchId, taskId } },
+    }));
+  };
+  const openSprintFromDrill = ({ branchId }) => {
+    setActiveBucket(null);
+    router.push(`/branch/${branchId}`);
+  };
 
   const openCardMenu = (e, b) => {
     const id = b.branch_id;
@@ -181,11 +207,21 @@ export default function BranchHome() {
 
       <StatTiles
         loading={!stats}
+        activeBucket={activeBucket}
+        onTileClick={onTileClick}
+        renderPopover={(bucket) => (
+          <StatDrilldownPopover
+            bucket={bucket}
+            onClose={() => setActiveBucket(null)}
+            onOpenTask={openTaskFromDrill}
+            onOpenSprint={openSprintFromDrill}
+          />
+        )}
         tiles={stats ? [
-          { icon: <Inbox size={16} />, label: '열린 태스크', value: stats.open_count, tone: 'primary' },
-          { icon: <Clock size={16} />, label: '진행 중', value: stats.in_progress_count, tone: 'inprog' },
-          { icon: <AlarmClock size={16} />, label: '이번 주 마감', value: stats.due_this_week_count, tone: 'error' },
-          { icon: <Activity size={16} />, label: '활성 스프린트', value: stats.active_sprint_count, tone: 'success' },
+          { icon: <Inbox size={16} />, label: '열린 태스크', value: stats.open_count, tone: 'primary', bucket: 'open' },
+          { icon: <Clock size={16} />, label: '진행 중', value: stats.in_progress_count, tone: 'inprog', bucket: 'in_progress' },
+          { icon: <AlarmClock size={16} />, label: '이번 주 마감', value: stats.due_this_week_count, tone: 'error', bucket: 'due_this_week' },
+          { icon: <Activity size={16} />, label: '활성 스프린트', value: stats.active_sprint_count, tone: 'success', bucket: 'active_sprint' },
         ] : []}
       />
 
@@ -257,6 +293,15 @@ export default function BranchHome() {
     </div>
 
       <ContextMenu {...ctx.props} />
+      {previewRef && (
+        <div className="BranchHome__RefPanel">
+          <RefPanelHost
+            previewRef={previewRef}
+            onClose={() => { setPreviewRef(null); fetchRecentTasks(); }}
+            onChangeRef={setPreviewRef}
+          />
+        </div>
+      )}
       <ConfirmModal
         isOpen={!!leaveTarget}
         onClose={() => setLeaveTarget(null)}

@@ -928,3 +928,16 @@
 .StatDrill__Error { padding: 18px 15px; text-align: center; color: $color-text-secondary; font-size: $font-size-sm;
   button { margin-left: 8px; color: $color-primary; background: none; border: none; cursor: pointer; font-weight: 600; }
 }
+
+// ============================================================
+// BranchHome__RefPanel — right-side fixed drawer for TaskDetailPanel
+// ============================================================
+.BranchHome__RefPanel {
+  display: flex;
+  position: fixed;
+  top: 48px;
+  right: 0;
+  bottom: 0;
+  z-index: 310;
+  box-shadow: $shadow-lg;
+}
