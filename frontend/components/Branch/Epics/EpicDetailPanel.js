@@ -17,6 +17,10 @@ export default function EpicDetailPanel({ branchId, workflowStatuses = [], epicS
   const [epic, setEpic] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
+  // 호스트가 현재 브랜치 status를 못 넘기는 경우(브랜치 이동 후 잔존한 cross-branch 패널)
+  // 이 에픽의 브랜치 status를 직접 받아 쓴다. prop이 있으면 prop 우선(TaskDetailPanel과 동일).
+  const [selfStatuses, setSelfStatuses] = useState([]);
+  const statuses = (workflowStatuses && workflowStatuses.length > 0) ? workflowStatuses : selfStatuses;
 
   // 제목 편집
   const [editingTitle, setEditingTitle] = useState(false);
@@ -37,15 +41,20 @@ export default function EpicDetailPanel({ branchId, workflowStatuses = [], epicS
   const fetchEpic = async () => {
     setLoading(true);
     try {
-      const [epicRes, taskRes] = await Promise.all([
+      // 이 에픽의 브랜치 status를 항상 함께 조회한다. prop은 동일 브랜치일 때만 들어오고
+      // 브랜치 이동 후 잔존하면 사라지므로(마운트 후엔 refetch 안 됨), selfStatuses를 늘 채워
+      // statuses 폴백이 비지 않게 한다. prop이 있으면 statuses에서 prop 우선.
+      const [epicRes, taskRes, wsRes] = await Promise.all([
         axios.get(`/branches/${branchId}/epics`),
         axios.get(`/branches/${branchId}/epics/${epicSummary.epic_id}/tasks`),
+        axios.get(`/branches/${branchId}/workflow-statuses`),
       ]);
       if (epicRes.data.status) {
         const found = epicRes.data.epics.find((e) => e.epic_id === epicSummary.epic_id);
         if (found) setEpic(found);
       }
       if (taskRes.data.status) setTasks(taskRes.data.tasks);
+      if (wsRes.data.status) setSelfStatuses(wsRes.data.statuses);
     } catch {}
     setLoading(false);
   };
@@ -107,7 +116,7 @@ export default function EpicDetailPanel({ branchId, workflowStatuses = [], epicS
 
   // 워크플로우 상태 정보 매핑
   const getStatusInfo = (statusKey) => {
-    const ws = workflowStatuses.find((w) => w.key === statusKey);
+    const ws = statuses.find((w) => w.key === statusKey);
     if (ws) return { label: ws.label, color: ws.color };
     return { label: statusKey, color: STATUS_COLORS[statusKey] || '#9CA3AF' };
   };
@@ -156,8 +165,8 @@ export default function EpicDetailPanel({ branchId, workflowStatuses = [], epicS
         <div className="TaskDetailPanel__StatusWrap">
           <CustomSelect
             value={epic.status}
-            options={workflowStatuses.length > 0
-              ? workflowStatuses.map((ws) => ({ value: ws.key, label: ws.label, color: ws.color }))
+            options={statuses.length > 0
+              ? statuses.map((ws) => ({ value: ws.key, label: ws.label, color: ws.color }))
               : [
                 { value: 'todo', label: 'To Do', color: '#9CA3AF' },
                 { value: 'in_progress', label: 'In Progress', color: '#2563EB' },
