@@ -44,17 +44,19 @@ export default function EpicDetailPanel({ branchId, workflowStatuses = [], epicS
       // 이 에픽의 브랜치 status를 항상 함께 조회한다. prop은 동일 브랜치일 때만 들어오고
       // 브랜치 이동 후 잔존하면 사라지므로(마운트 후엔 refetch 안 됨), selfStatuses를 늘 채워
       // statuses 폴백이 비지 않게 한다. prop이 있으면 statuses에서 prop 우선.
-      const [epicRes, taskRes, wsRes] = await Promise.all([
+      // status는 보조 메타데이터(폴백용)라 실패해도 epic/tasks 렌더는 살린다.
+      // Promise.all이면 wsRes 한 건의 reject로 epic/tasks까지 catch로 빠지므로 allSettled로 분리.
+      const [epicRes, taskRes, wsRes] = await Promise.allSettled([
         axios.get(`/branches/${branchId}/epics`),
         axios.get(`/branches/${branchId}/epics/${epicSummary.epic_id}/tasks`),
         axios.get(`/branches/${branchId}/workflow-statuses`),
       ]);
-      if (epicRes.data.status) {
-        const found = epicRes.data.epics.find((e) => e.epic_id === epicSummary.epic_id);
+      if (epicRes.status === 'fulfilled' && epicRes.value.data.status) {
+        const found = epicRes.value.data.epics.find((e) => e.epic_id === epicSummary.epic_id);
         if (found) setEpic(found);
       }
-      if (taskRes.data.status) setTasks(taskRes.data.tasks);
-      if (wsRes.data.status) setSelfStatuses(wsRes.data.statuses);
+      if (taskRes.status === 'fulfilled' && taskRes.value.data.status) setTasks(taskRes.value.data.tasks);
+      if (wsRes.status === 'fulfilled' && wsRes.value.data.status) setSelfStatuses(wsRes.value.data.statuses);
     } catch {}
     setLoading(false);
   };
