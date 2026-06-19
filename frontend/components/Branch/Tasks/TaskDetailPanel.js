@@ -435,6 +435,8 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
           subtasks={task.subtasks || []}
           progress={task.subtask_progress}
           workflowStatuses={workflowStatuses}
+          taskTypes={taskTypes}
+          defaultTaskType={task.task_type}
           onSelectTask={onSelectTask}
           onChanged={() => fetchTask({ silent: true })}
         />

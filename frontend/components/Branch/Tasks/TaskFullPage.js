@@ -254,6 +254,8 @@ export default function TaskFullPage() {
             subtasks={task.subtasks || []}
             progress={task.subtask_progress}
             workflowStatuses={workflowStatuses}
+            taskTypes={taskTypes}
+            defaultTaskType={task.task_type}
             onSelectTask={(st) => router.push(`/branch/${branchId}/task/${st.task_id}`)}
             onChanged={() => fetchTask({ silent: true })}
           />

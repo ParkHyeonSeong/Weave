@@ -19,7 +19,7 @@ function progressFromRows(subtasks, workflowStatuses) {
 }
 
 export default function TaskSubtaskSection({
-  branchId, taskId, subtasks = [], progress, workflowStatuses = [], onSelectTask, onChanged,
+  branchId, taskId, subtasks = [], progress, workflowStatuses = [], taskTypes = [], defaultTaskType, onSelectTask, onChanged,
 }) {
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState('');
@@ -45,6 +45,8 @@ export default function TaskSubtaskSection({
       const res = await axios.post(`/branches/${branchId}/tasks`, {
         title: t,
         parent_task_id: taskId,
+        // taskTypes 로딩 전(빈 배열)엔 undefined로 빠지므로, 부모 태스크의 task_type(항상 유효)로 fallback
+        task_type: taskTypes?.[0]?.type_key ?? defaultTaskType,
       });
       if (res.data.status) {
         setTitle('');
@@ -54,7 +56,10 @@ export default function TaskSubtaskSection({
         onChanged?.();
       } else {
         // 컨트롤러 검증 실패는 200 + {status:false} (silent-200 계약). 호출부에서 확인.
-        setSubtaskError(res.data.message || res.data.detail || '하위태스크를 만들지 못했어요.');
+        const messages = {
+          INVALID_TASK_TYPE: '이 브랜치에 없는 작업 유형이에요. 유형을 다시 선택해 주세요.',
+        };
+        setSubtaskError(messages[res.data.message] || res.data.message || res.data.detail || '하위태스크를 만들지 못했어요.');
       }
     } catch {
       setSubtaskError('하위태스크를 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
