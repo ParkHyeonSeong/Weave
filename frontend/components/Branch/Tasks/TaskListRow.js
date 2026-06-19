@@ -23,7 +23,7 @@ const DEFAULT_STATUS_OPTIONS = [
   { value: 'cancelled', label: 'Cancelled', color: '#DC2626' },
 ];
 
-export default function TaskListRow({ task, branchId, taskTypes, workflowStatuses, epics, members, onClick, onContextMenu, isSelected, isOverlay, indent, expandable, expanded, onToggleExpand, progress }) {
+export default function TaskListRow({ task, branchId, taskTypes, workflowStatuses, epics, members, onClick, onContextMenu, isSelected, isOverlay, indent, expandable, expanded, onToggleExpand, progress, contextOnly }) {
   const statusOptions = (workflowStatuses && workflowStatuses.length > 0)
     ? workflowStatuses.map((ws) => ({ value: ws.key, label: ws.label, color: ws.color }))
     : DEFAULT_STATUS_OPTIONS;
@@ -51,10 +51,12 @@ export default function TaskListRow({ task, branchId, taskTypes, workflowStatuse
   // mousedown/touchstart 전파를 막는다. (MouseSensor/TouchSensor는 click보다 이른 이벤트에서 활성화)
   const stopDrag = (e) => e.stopPropagation();
 
+  // 평상시 opacity 는 클래스(TaskListRow--context / --dragging)가 결정하도록 inline 에서 제거.
+  // 드래그 중에는 dnd-kit 동작 일관성을 위해 inline 0.3 을 우선 적용한다.
   const style = isOverlay ? {} : {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.3 : 1,
+    ...(isDragging ? { opacity: 0.3 } : {}),
   };
 
   const formatDate = (dateStr) => {
@@ -96,7 +98,7 @@ export default function TaskListRow({ task, branchId, taskTypes, workflowStatuse
 
   return (
     <div
-      className={`TaskListRow ${isSelected ? 'TaskListRow--selected' : ''} ${isDragging ? 'TaskListRow--dragging' : ''} ${indent ? 'TaskListRow--subtask' : ''}`}
+      className={`TaskListRow ${isSelected ? 'TaskListRow--selected' : ''} ${isDragging ? 'TaskListRow--dragging' : ''} ${indent ? 'TaskListRow--subtask' : ''} ${contextOnly ? 'TaskListRow--context' : ''}`}
       ref={setNodeRef}
       style={style}
       onClick={onClick}
@@ -136,6 +138,14 @@ export default function TaskListRow({ task, branchId, taskTypes, workflowStatuse
       {/* 제목 + 이슈 카운트 */}
       <div className="TaskListRow__TitleWrap">
         <span className="TaskListRow__Title">{task.title}</span>
+        {contextOnly && (
+          <span
+            className="TaskListRow__ContextTag"
+            title="필터에 일치하는 하위태스크가 있어 맥락용으로 표시됩니다"
+          >
+            상위
+          </span>
+        )}
         {progress && progress.total > 0 && (
           <span className="TaskListRow__Badge" title="완료/전체 하위태스크">
             {progressLabel(progress)}

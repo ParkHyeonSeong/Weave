@@ -18,7 +18,7 @@ import CompleteSprintModal from '@/components/modal/CompleteSprintModal';
 import TaskFilterBar from '../TaskFilterBar';
 import TaskListRow from './TaskListRow';
 import useTaskContextMenu from './taskMenu';
-import { matchesFilters } from '@/library/taskFilters';
+import { matchesFilters, filterTaskTree } from '@/library/taskFilters';
 import ContextMenu from '@/components/common/ContextMenu';
 import ConfirmModal from '@/components/modal/ConfirmModal';
 import ParentPickerPopup from './ParentPickerPopup';
@@ -269,13 +269,7 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
 
   const filterTasks = (tasks) => {
     if (!isFilterActive) return tasks;
-    return tasks.reduce((acc, task) => {
-      const parentMatch = matchesFilters(task, filterCtx);
-      const matchedSubs = (task.subtasks || []).filter((sub) => matchesFilters(sub, filterCtx));
-      if (!parentMatch && matchedSubs.length === 0) return acc;       // 행 전체 숨김
-      acc.push({ ...task, visibleSubtasks: matchedSubs });            // 원본 subtasks 보존
-      return acc;
-    }, []);
+    return filterTaskTree(tasks, filterCtx);
   };
 
   // 정렬
@@ -317,6 +311,9 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
 
   // 필터 + 정렬 적용 (순수: visibleSubtasks 붙이고 정렬만)
   const applyFilterAndSort = (tasks) => sortTasks(filterTasks(tasks));
+
+  // 주의: countMatchedTasks(@/library/taskFilters)는 "컨텍스트 부모만 자동 펼침"을 전제로 배지 수를 센다.
+  // 아래 로직(직접 매칭 부모는 펼치지 않음)을 바꾸면 배지와 화면 행 수가 desync 되므로 함께 수정할 것.
 
   // 필터 active 동안 "부모는 불일치, 하위만 일치"인 부모 id 집합
   const autoExpandedParents = useMemo(() => {

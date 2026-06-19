@@ -9,6 +9,7 @@ import TaskListRow from './TaskListRow';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import ConfirmModal from '@/components/modal/ConfirmModal';
 import { isParentExpanded } from '@/library/subtaskProgress';
+import { countMatchedTasks } from '@/library/taskFilters';
 
 function formatSprintDate(start, end) {
   const fmt = (d) => {
@@ -38,6 +39,9 @@ export default function TaskListSprint({
   const typeDropdownRef = useRef(null);
   const inlineFormRef = useRef(null);
   const tasks = sprint.tasks || [];
+  // 배지 = "자동으로 화면에 드러나는 매칭 항목 수": 직접 매칭 부모 1(하위 접힘 미카운트)
+  // + 컨텍스트 부모의 펼쳐진 매칭 하위 수. 필터 비활성 시엔 플래그가 없어 tasks.length 와 동일.
+  const matchCount = countMatchedTasks(tasks);
 
   const containerId = isBacklog ? 'backlog' : `sprint-${sprint.sprint_id}`;
   const isDragOver = dragOverContainerId === containerId;
@@ -231,7 +235,7 @@ export default function TaskListSprint({
                   {formatSprintDate(sprint.start_date, sprint.end_date)}
                 </span>
               )}
-              <span className="TaskList__SprintCount">{tasks.length}</span>
+              <span className="TaskList__SprintCount">{matchCount}</span>
               {startError && <span className="TaskList__SprintError">{startError}</span>}
             </div>
             {!isBacklog && sprint.goal && (
@@ -288,6 +292,7 @@ export default function TaskListSprint({
                     expanded={expanded}
                     onToggleExpand={() => onToggleSubtasks?.(task.task_id)}
                     progress={hasSubtasks ? task.subtask_progress : null}
+                    contextOnly={task.isContextOnly}
                   />
                   {expanded && (
                     <>
