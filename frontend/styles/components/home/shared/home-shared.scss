@@ -839,3 +839,92 @@
 
   .HCard { width: 100%; }
 }
+
+// ============================================================
+// StatTile 클릭 가능 상태 + 드릴인 팝오버
+// ============================================================
+.StatTile__Anchor { position: relative; }
+
+.StatTile--clickable {           // <button> — UA 크롬/폰트/정렬 리셋(.StatTile 배경·테두리는 기존 규칙이 유지)
+  appearance: none;
+  width: 100%;                   // grid 셀(.StatTile__Anchor)을 채움
+  font: inherit; color: inherit; text-align: left;
+  cursor: pointer;
+  &:focus-visible { outline: 2px solid $color-primary; outline-offset: 2px; }
+}
+.StatTile.is-active {
+  border-color: $color-primary;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .08);
+}
+.StatTile__Chev {
+  position: absolute; right: 12px; bottom: 10px;
+  font-size: 11px; color: $color-text-tertiary;
+  transition: transform .15s;
+}
+.StatTile.is-active .StatTile__Chev { transform: rotate(180deg); color: $color-primary; }
+
+/* 드릴인 팝오버 */
+.StatDrill {
+  position: absolute; top: calc(100% + 8px); left: 0; z-index: 30;
+  width: 330px; max-width: 92vw;
+  background: $color-bg; border: 1px solid $color-border;
+  border-radius: 14px; box-shadow: 0 12px 34px rgba(0, 0, 0, .14);
+  overflow: hidden;
+  &--right { left: auto; right: 0; }   /* 우측 끝 카드 오버플로 방지 */
+}
+.StatDrill__Head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 15px 8px;
+  font-size: $font-size-sm; font-weight: 650; color: $color-text;
+  .StatDrill__HeadMeta { font-size: $font-size-xs; color: $color-text-tertiary; font-weight: 500; }
+}
+.StatDrill__Scroll { max-height: 300px; overflow-y: auto; }
+.StatDrill__Row {
+  display: flex; align-items: center; gap: 11px;
+  padding: 9px 15px; cursor: pointer;
+  border-top: 1px solid $color-border;
+  &:hover { background: $color-surface-hover; }
+  &:focus-visible { outline: 2px solid $color-primary; outline-offset: -2px; } // role=button 키보드 포커스
+}
+.StatDrill__Dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; background: $color-primary; }
+.StatDrill__Main { flex: 1; min-width: 0; }
+.StatDrill__Title {
+  font-size: $font-size-sm; font-weight: 550; color: $color-text;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.StatDrill__Sub { font-size: $font-size-xs; color: $color-text-tertiary; margin-top: 2px; }
+.StatDrill__Branch { font-weight: 550; color: $color-text-secondary; }
+.StatDrill__Dday {
+  flex: 0 0 auto; font-size: 11.5px; font-weight: 700; padding: 3px 8px; border-radius: 7px;
+  &--over { background: #FEF2F2; color: #DC2626; }
+  &--soon { background: #FFF7ED; color: #EA580C; }
+  &--calm { background: $color-surface; color: $color-text-secondary; }
+  &--none { background: transparent; color: $color-text-tertiary; padding-left: 0; }
+}
+.StatDrill__Foot {                       // <button> — 키보드 접근 가능. 버튼 기본 스타일 리셋.
+  display: block; width: 100%; border: none; background: none;
+  padding: 10px 15px; border-top: 1px solid $color-border;
+  font: inherit; font-size: $font-size-sm; font-weight: 600;
+  text-align: left; cursor: pointer;
+  &:focus-visible { outline: 2px solid $color-primary; outline-offset: -2px; }
+  &--more { color: $color-primary; &:hover { background: $color-primary-subtle; } }
+  &--collapse { color: $color-text-tertiary; text-align: center; }
+}
+.StatDrill__Note {                       // 비상호작용 안내(외 N개…) — 버튼 아님
+  padding: 9px 15px; border-top: 1px solid $color-border;
+  font-size: $font-size-xs; color: $color-text-tertiary; text-align: center;
+}
+/* 스프린트 행 */
+.StatDrill__SprintTop { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.StatDrill__Pct { font-size: $font-size-xs; font-weight: 700; color: $color-success; flex: 0 0 auto; }
+.StatDrill__Bar { height: 5px; background: $color-surface; border-radius: 4px; overflow: hidden; margin-top: 8px;
+  > i { display: block; height: 100%; background: $color-success; border-radius: 4px; }
+}
+/* 상태 */
+.StatDrill__Sk { padding: 12px 15px; display: flex; gap: 11px; align-items: center; border-top: 1px solid $color-border;
+  .sk { background: $color-surface; border-radius: 5px; height: 11px; flex: 1; }
+}
+.StatDrill__Empty { padding: 30px 18px; text-align: center; color: $color-text-secondary; font-size: $font-size-sm; }
+.StatDrill__Error { padding: 18px 15px; text-align: center; color: $color-text-secondary; font-size: $font-size-sm;
+  button { margin-left: 8px; color: $color-primary; background: none; border: none; cursor: pointer; font-weight: 600; }
+}
