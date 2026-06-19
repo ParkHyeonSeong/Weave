@@ -5,12 +5,13 @@ import {
   DndContext,
   DragOverlay,
   closestCorners,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   KeyboardSensor,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
+import { SortableContext, verticalListSortingStrategy, arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import TaskListSprint from './TaskListSprint';
 import SprintModal from '@/components/modal/SprintModal';
 import CompleteSprintModal from '@/components/modal/CompleteSprintModal';
@@ -88,9 +89,13 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
 
   const taskMenu = useTaskContextMenu({ branchId, onSelectTask });
 
+  // 행 전체가 드래그 핸들이므로 입력별로 센서를 분리한다.
+  // - 마우스: 5px 이동해야 드래그 시작 → 단순 클릭(태스크 열기)과 구분
+  // - 터치: 길게 눌러야 드래그 → 빠른 스와이프는 리스트 스크롤로 보존
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor),
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
   // localStorage에서 필터/정렬/접힘 상태 복원 (branchId 변경 시)
@@ -486,9 +491,13 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
         // over가 태스크
         const overTaskId = Number(overId);
         const overContainer = getContainerId(overTaskId);
+        // 컨테이너를 못 찾는 태스크(예: 하위태스크) 위 드롭은 무시한다.
+        // 현재 하위태스크는 non-droppable이라 도달 불가하지만, 향후 하위 드래그를 켤 때
+        // overContainer=null이 백로그 최상단으로 잘못 이동하는 것을 막는 방어 가드.
+        if (!overContainer) return;
         if (overContainer === 'backlog') {
           targetSprintId = null;
-        } else if (overContainer) {
+        } else {
           targetSprintId = Number(overContainer.replace('sprint-', ''));
         }
         afterTaskId = overTaskId;

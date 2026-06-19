@@ -346,6 +346,12 @@
     border-radius: $radius-md;
     box-shadow: $shadow-lg;
     opacity: 0.95;
+
+    // 오버레이는 자체 보더가 있으므로 내부 행의 구분선은 제거.
+    // (행마다 항상 border-bottom을 그리게 바뀐 뒤, 전역 :last-child 규칙을 대체하는 스코프 규칙)
+    .TaskListRow {
+      border-bottom: none;
+    }
   }
 
   &__DragBadge {
@@ -707,10 +713,6 @@
     padding: $space-2 $space-3;
   }
 
-  &:last-child {
-    border-bottom: none;
-  }
-
   &:hover {
     background: $color-surface;
   }
@@ -725,39 +727,6 @@
 
   &--dragging {
     opacity: 0.3;
-  }
-
-  &__DragHandle {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: $color-text-tertiary;
-    cursor: grab;
-    opacity: 0;
-    transition: opacity $transition-fast;
-    flex-shrink: 0;
-
-    &:hover {
-      color: $color-text-secondary;
-    }
-
-    &:active {
-      cursor: grabbing;
-    }
-
-    @include mobile {
-      display: none;
-    }
-  }
-
-  &:hover &__DragHandle {
-    opacity: 1;
-  }
-
-  &__DragHandleSpacer {
-    display: inline-block;
-    width: 14px; // GripVertical size=14 과 동일 너비
-    flex-shrink: 0;
   }
 
   &__TypeIcon {

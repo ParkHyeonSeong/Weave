@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { User, GripVertical, MessageCircle, ChevronRight, ChevronDown } from 'lucide-react';
+import { User, MessageCircle, ChevronRight, ChevronDown } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import { selectableEpics } from '@/library/epics';
 import { useSortable } from '@dnd-kit/sortable';
@@ -31,8 +31,12 @@ export default function TaskListRow({ task, branchId, taskTypes, workflowStatuse
   const [assigneeOpen, setAssigneeOpen] = useState(false);
   const assigneeRef = useRef(null);
 
+  // 행 전체를 드래그 핸들로 사용. 하위태스크(indent)·오버레이는 드래그 비활성(v1 정책).
+  const draggable = !isOverlay && !indent;
+
+  // attributes(role=button·tabIndex)는 행 내부 버튼/셀렉트와 중첩되면 a11y를 해쳐 적용하지 않고,
+  // 포인터 listeners만 행에 붙여 "행 전체 드래그"를 구현한다.
   const {
-    attributes,
     listeners,
     setNodeRef,
     transform,
@@ -40,8 +44,12 @@ export default function TaskListRow({ task, branchId, taskTypes, workflowStatuse
     isDragging,
   } = useSortable({
     id: String(task.task_id),
-    disabled: isOverlay,
+    disabled: !draggable,
   });
+
+  // 행 내부 인터랙티브 컨트롤(셰브론·셀렉트·담당자) 위에서 누르면 드래그가 시작되지 않도록
+  // mousedown/touchstart 전파를 막는다. (MouseSensor/TouchSensor는 click보다 이른 이벤트에서 활성화)
+  const stopDrag = (e) => e.stopPropagation();
 
   const style = isOverlay ? {} : {
     transform: CSS.Transform.toString(transform),
@@ -93,21 +101,8 @@ export default function TaskListRow({ task, branchId, taskTypes, workflowStatuse
       style={style}
       onClick={onClick}
       onContextMenu={onContextMenu}
+      {...(draggable ? listeners : {})}
     >
-      {/* 드래그 핸들 — 하위태스크(indent)에서는 숨기고 너비 동일 스페이서 렌더 */}
-      {indent ? (
-        <span className="TaskListRow__DragHandleSpacer" aria-hidden="true" />
-      ) : (
-        <span
-          className="TaskListRow__DragHandle"
-          {...attributes}
-          {...listeners}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <GripVertical size={14} />
-        </span>
-      )}
-
       {/* 하위태스크 펼침 셰브론 (없으면 자리만 차지) */}
       {indent ? (
         <span className="TaskListRow__ChevronSpacer" />
@@ -115,6 +110,8 @@ export default function TaskListRow({ task, branchId, taskTypes, workflowStatuse
         <button
           type="button"
           className="TaskListRow__Chevron"
+          onMouseDown={stopDrag}
+          onTouchStart={stopDrag}
           onClick={(e) => { e.stopPropagation(); onToggleExpand?.(); }}
           title={expanded ? '하위태스크 접기' : '하위태스크 펼치기'}
         >
@@ -174,7 +171,7 @@ export default function TaskListRow({ task, branchId, taskTypes, workflowStatuse
       </div>
 
       {/* 에픽 */}
-      <div className={`TaskListRow__Cell TaskListRow__Cell--epic ${hasEpic ? '' : 'TaskListRow__Cell--hoverOnly'}`} onClick={(e) => e.stopPropagation()}>
+      <div className={`TaskListRow__Cell TaskListRow__Cell--epic ${hasEpic ? '' : 'TaskListRow__Cell--hoverOnly'}`} onClick={stopDrag} onMouseDown={stopDrag} onTouchStart={stopDrag}>
         <CustomSelect
           value={hasEpic ? String(task.epic_id) : ''}
           options={epicOptions}
@@ -187,7 +184,7 @@ export default function TaskListRow({ task, branchId, taskTypes, workflowStatuse
       </div>
 
       {/* 상태 */}
-      <div className="TaskListRow__Cell TaskListRow__Cell--status" onClick={(e) => e.stopPropagation()}>
+      <div className="TaskListRow__Cell TaskListRow__Cell--status" onClick={stopDrag} onMouseDown={stopDrag} onTouchStart={stopDrag}>
         <CustomSelect
           value={task.status}
           options={statusOptions}
@@ -206,7 +203,7 @@ export default function TaskListRow({ task, branchId, taskTypes, workflowStatuse
       </span>
 
       {/* 우선순위 */}
-      <div className="TaskListRow__Cell TaskListRow__Cell--priority" onClick={(e) => e.stopPropagation()}>
+      <div className="TaskListRow__Cell TaskListRow__Cell--priority" onClick={stopDrag} onMouseDown={stopDrag} onTouchStart={stopDrag}>
         <CustomSelect
           value={task.priority || 'low'}
           options={priorityOptions}
@@ -221,7 +218,9 @@ export default function TaskListRow({ task, branchId, taskTypes, workflowStatuse
       <div
         className="TaskListRow__AssigneeWrap"
         ref={assigneeRef}
-        onClick={(e) => e.stopPropagation()}
+        onClick={stopDrag}
+        onMouseDown={stopDrag}
+        onTouchStart={stopDrag}
       >
         {(() => {
           const mainAssignee = (task.assignees || []).find((a) => a.role === 'main');
