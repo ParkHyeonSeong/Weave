@@ -84,7 +84,7 @@ export default function StatDrilldownPopover({ bucket, onClose, onOpenTask, onOp
       )}
 
       {state.status === 'error' && (
-        <div className="StatDrill__Error">불러오기 실패<button onClick={load}>다시 시도</button></div>
+        <div className="StatDrill__Error">불러오기 실패<button type="button" onClick={load}>다시 시도</button></div>
       )}
 
       {state.status === 'ready' && state.items.length === 0 && (

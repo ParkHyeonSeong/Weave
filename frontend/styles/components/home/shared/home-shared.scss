@@ -858,7 +858,7 @@
 }
 .StatTile__Chev {
   position: absolute; right: 12px; bottom: 10px;
-  font-size: 11px; color: $color-text-tertiary;
+  color: $color-text-tertiary;
   transition: transform .15s;
 }
 .StatTile.is-active .StatTile__Chev { transform: rotate(180deg); color: $color-primary; }
