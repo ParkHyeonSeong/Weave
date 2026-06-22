@@ -30,6 +30,7 @@ import { createMarkdownPastePlugin } from './extensions/MarkdownPastePlugin';
 import MermaidExtension from './extensions/MermaidExtension';
 import CanvasEditorToolbar from './CanvasEditorToolbar';
 import TableBubbleMenu from './TableBubbleMenu';
+import LinkHoverPopover from '@/components/shared/LinkHoverPopover';
 import { getBaseURL } from '@/library/_axios';
 import { buildAvatarDOM } from '@/library/userAvatar';
 import { useEditorRefHydration } from '@/library/refHydration';
@@ -174,6 +175,7 @@ function CollabEditorInner({
     <div className="CanvasEditor">
       <CanvasEditorToolbar editor={editor} />
       <TableBubbleMenu editor={editor} />
+      <LinkHoverPopover editor={editor} />
       <EditorContent editor={editor} className="CanvasEditor__Content" />
       <div className={`CanvasEditor__Counter ${isOverLimit ? 'CanvasEditor__Counter--over' : ''}`}>
         {charCount.toLocaleString()} / {MAX_PLAIN_TEXT_LENGTH.toLocaleString()}

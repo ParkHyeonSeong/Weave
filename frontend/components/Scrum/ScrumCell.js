@@ -10,6 +10,7 @@ import { BookmarkPasteExtension } from '@/components/Canvas/extensions/BookmarkP
 import DocRefNode from '@/components/Canvas/extensions/DocRefExtension';
 import MentionNode from '@/components/Canvas/extensions/MentionExtension';
 import ScrumCellToolbar from './ScrumCellToolbar';
+import LinkHoverPopover from '@/components/shared/LinkHoverPopover';
 import SlashCommandsExtension from '@/components/Canvas/extensions/SlashCommandsExtension';
 import { useEditorRefHydration } from '@/library/refHydration';
 
@@ -53,6 +54,7 @@ function ScrumCellInner({ ydoc, fragmentKey, placeholder, members }) {
     <>
       <EditorContent editor={editor} className="ScrumCell" />
       <ScrumCellToolbar editor={editor} />
+      <LinkHoverPopover editor={editor} />
     </>
   );
 }

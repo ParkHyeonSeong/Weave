@@ -101,6 +101,7 @@ import "@/styles/components/track/tracksIndex.scss";
 import "@/styles/components/track/trackSettings.scss";
 import "@/styles/components/scrum/scrum.scss";
 import "@/styles/components/shared/refPanelPageLayout.scss";
+import "@/styles/components/shared/linkHoverPopover.scss";
 import "@/styles/components/common/lightbox.scss";
 
 // 공개 경로는 authRedirect.PUBLIC_PATHS를 단일 소스로 쓰고, /admin은 레이아웃 없이만 렌더한다.
