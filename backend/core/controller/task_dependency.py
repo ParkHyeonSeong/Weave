@@ -1,6 +1,7 @@
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.errors import error_response, ErrorCode
 from core.guard.branch_scope import find_resource_in_branch
 from core.model import task_dependency as dep_model
 from core.model import branch_member as member_model
@@ -16,34 +17,34 @@ async def create(body, branch_id: int, request: Request, db: AsyncSession):
     """
     user_id = request.state.payload.get('user_id')
     if not await member_model.is_member(branch_id, user_id, db):
-        return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+        return error_response(ErrorCode.NOT_BRANCH_MEMBER)
 
     # 자기 참조 방지
     if body.source_task_id == body.target_task_id:
-        return {'status': False, 'message': 'SELF_DEPENDENCY'}
+        return error_response(ErrorCode.SELF_DEPENDENCY)
 
     # 유효한 dep_type 확인
     if body.dep_type not in ('finish_to_start', 'relates_to'):
-        return {'status': False, 'message': 'INVALID_DEP_TYPE'}
+        return error_response(ErrorCode.INVALID_DEP_TYPE)
 
     # IDOR 방어: 두 task를 unscoped로 조회해 각자의 branch_id를 얻는다.
     # (find_resource_in_branch(.., None, ..)은 branch 필터 없이 행+branch_id 반환)
     source_task = await find_resource_in_branch(body.source_task_id, None, 'task', db)
     if not source_task:
-        return {'status': False, 'message': 'TASK_NOT_FOUND'}
+        return error_response(ErrorCode.TASK_NOT_FOUND)
     target_task = await find_resource_in_branch(body.target_task_id, None, 'task', db)
     if not target_task:
-        return {'status': False, 'message': 'TASK_NOT_FOUND'}
+        return error_response(ErrorCode.TASK_NOT_FOUND)
 
     # IDOR 방어: 호출자가 두 task가 속한 branch 모두의 멤버여야 한다.
     # cross-branch(branch가 다름)여도 양쪽 다 멤버이면 정상 허용 — 기능 보존.
     source_branch_id = source_task['branch_id']
     target_branch_id = target_task['branch_id']
     if not await member_model.is_member(source_branch_id, user_id, db):
-        return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+        return error_response(ErrorCode.NOT_BRANCH_MEMBER)
     if source_branch_id != target_branch_id and \
             not await member_model.is_member(target_branch_id, user_id, db):
-        return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+        return error_response(ErrorCode.NOT_BRANCH_MEMBER)
 
     # 동일 branch면 그 branch_id로 scope, cross-branch면 NULL (045 migration).
     # track.py._try_materialize_flow_dep 와 동일한 규칙.
@@ -55,7 +56,7 @@ async def create(body, branch_id: int, request: Request, db: AsyncSession):
             body.source_task_id, body.target_task_id, dep_branch_id, db
         )
         if is_circular:
-            return {'status': False, 'message': 'CIRCULAR_DEPENDENCY'}
+            return error_response(ErrorCode.CIRCULAR_DEPENDENCY)
 
     try:
         dep_id = await dep_model.create(
@@ -68,14 +69,14 @@ async def create(body, branch_id: int, request: Request, db: AsyncSession):
         )
         return {'status': True, 'dependency_id': dep_id}
     except Exception:
-        return {'status': False, 'message': 'DUPLICATE_DEPENDENCY'}
+        return error_response(ErrorCode.DUPLICATE_DEPENDENCY)
 
 
 async def get_by_epic(epic_id: int, branch_id: int, request: Request, db: AsyncSession):
     """에픽의 의존관계 목록"""
     user_id = request.state.payload.get('user_id')
     if not await member_model.is_member(branch_id, user_id, db):
-        return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+        return error_response(ErrorCode.NOT_BRANCH_MEMBER)
 
     deps = await dep_model.find_by_epic(epic_id, branch_id, db)
     return {'status': True, 'dependencies': deps}
@@ -85,7 +86,7 @@ async def get_by_task(task_id: int, branch_id: int, request: Request, db: AsyncS
     """태스크의 의존관계 목록"""
     user_id = request.state.payload.get('user_id')
     if not await member_model.is_member(branch_id, user_id, db):
-        return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+        return error_response(ErrorCode.NOT_BRANCH_MEMBER)
 
     deps = await dep_model.find_by_task(task_id, branch_id, db)
     return {'status': True, 'dependencies': deps}
@@ -95,7 +96,7 @@ async def delete(dependency_id: int, branch_id: int, request: Request, db: Async
     """의존관계 삭제"""
     user_id = request.state.payload.get('user_id')
     if not await member_model.is_member(branch_id, user_id, db):
-        return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+        return error_response(ErrorCode.NOT_BRANCH_MEMBER)
 
     await dep_model.delete(dependency_id, branch_id, db)
     return {'status': True}
