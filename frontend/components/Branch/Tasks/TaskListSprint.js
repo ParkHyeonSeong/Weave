@@ -10,16 +10,7 @@ import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import ConfirmModal from '@/components/modal/ConfirmModal';
 import { isParentExpanded } from '@/library/subtaskProgress';
 import { countMatchedTasks } from '@/library/taskFilters';
-
-function formatSprintDate(start, end) {
-  const fmt = (d) => {
-    if (!d) return '';
-    return new Date(d).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
-  };
-  if (start && end) return `${fmt(start)} – ${fmt(end)}`;
-  if (start) return `${fmt(start)} –`;
-  return `– ${fmt(end)}`;
-}
+import { formatSprintRange } from '@/library/formatTime';
 
 export default function TaskListSprint({
   sprint, branchKey, branchId, taskTypes, workflowStatuses, epics, members, sprints,
@@ -232,7 +223,7 @@ export default function TaskListSprint({
               )}
               {!isBacklog && (sprint.start_date || sprint.end_date) && (
                 <span className="TaskList__SprintDate">
-                  {formatSprintDate(sprint.start_date, sprint.end_date)}
+                  {formatSprintRange(sprint.start_date, sprint.end_date)}
                 </span>
               )}
               <span className="TaskList__SprintCount">{matchCount}</span>

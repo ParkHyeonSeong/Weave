@@ -73,3 +73,22 @@ export function formatRelative(iso) {
   if (diff < 31536000) return `${Math.floor(diff / 2592000)}mo ago`;     // <1y
   return t.toLocaleDateString();
 }
+
+/**
+ * 스프린트 등 날짜 범위 표시 — YYYY.MM.DD – YYYY.MM.DD (연도 포함, 0패딩).
+ * 입력 'YYYY-MM-DD'(또는 시간 포함 ISO)의 앞 날짜부분만 파싱 → 타임존 영향 없음.
+ * 구분자는 en-dash '–'. 한쪽만/둘 다 없는 경우도 처리.
+ */
+export function formatSprintRange(start, end) {
+  const fmt = (s) => {
+    if (!s) return '';
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s));
+    return m ? `${m[1]}.${m[2]}.${m[3]}` : '';
+  };
+  const fs = fmt(start);
+  const fe = fmt(end);
+  if (fs && fe) return `${fs} – ${fe}`;
+  if (fs) return `${fs} –`;
+  if (fe) return `– ${fe}`;
+  return '';
+}

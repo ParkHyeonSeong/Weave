@@ -6,12 +6,9 @@ import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-ki
 import EpicBar from './EpicBar';
 import EpicModal from '@/components/modal/EpicModal';
 
-const STATUS_LABELS = { future: 'Future', active: 'Active', closed: 'Closed' };
+import { formatSprintRange } from '@/library/formatTime';
 
-function formatDateRange(start, end) {
-  const fmt = (d) => d ? new Date(d).toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }) : '';
-  return `${fmt(start)} – ${fmt(end)}`;
-}
+const STATUS_LABELS = { future: 'Future', active: 'Active', closed: 'Closed' };
 
 // 겹치는 스프린트를 별도 lane에 배치
 function assignLanes(sprintBars) {
@@ -324,7 +321,7 @@ export default function EpicTimeline({ branchId, onSelectEpic }) {
                           <span className="EpicTimeline__SprintTooltip">
                             {s.sprint_name}
                             <br />
-                            {formatDateRange(s.start_date, s.end_date)}
+                            {formatSprintRange(s.start_date, s.end_date)}
                           </span>
                           {isOpen && (
                             <div className="EpicTimeline__SprintPopover" ref={popoverRef} onClick={(e) => e.stopPropagation()}>
@@ -334,7 +331,7 @@ export default function EpicTimeline({ branchId, onSelectEpic }) {
                                   {STATUS_LABELS[s.status] || s.status}
                                 </span>
                                 <span className="EpicTimeline__SprintPopoverDate">
-                                  {formatDateRange(s.start_date, s.end_date)}
+                                  {formatSprintRange(s.start_date, s.end_date)}
                                 </span>
                               </div>
                               {s.goal && (

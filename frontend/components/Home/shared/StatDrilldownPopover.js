@@ -2,6 +2,7 @@ import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { axios } from '@/library/_axios';
 import { ddayBadge, fmtDate } from '@/library/dueBadge';
 import { progressPercent } from '@/library/subtaskProgress';
+import { formatSprintRange } from '@/library/formatTime';
 
 const BUCKET_TITLE = {
   open: '열린 태스크', in_progress: '진행 중',
@@ -106,7 +107,7 @@ export default function StatDrilldownPopover({ bucket, onClose, onOpenTask, onOp
                   </div>
                   <div className="StatDrill__Sub">
                     <span className="StatDrill__Branch">#{it.branch_name}</span>
-                    {it.start_date && it.end_date ? ` · ${fmtDate(it.start_date)} – ${fmtDate(it.end_date)}` : ''}
+                    {it.start_date && it.end_date ? ` · ${formatSprintRange(it.start_date, it.end_date)}` : ''}
                   </div>
                   <div className="StatDrill__Bar"><i style={{ width: `${progressPercent({ done: it.done_count, total: it.total_count_tasks })}%` }} /></div>
                 </div>
