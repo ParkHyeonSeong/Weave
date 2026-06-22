@@ -253,15 +253,17 @@ async def query(branch_ids, spec, sort, group_by, limit, offset, ctx, db):
     # rows/COUNT/groups가 공유하는 스코프 술어(드리프트 방지 — 한 곳에서 정의)
     scope = f"t.branch_id = ANY(:branch_ids) AND t.parent_task_id IS NULL AND ({where_sql})"
     rows = (await db.execute(text(f"""
-        SELECT t.task_id, t.display_number, t.title, t.task_type, t.status, t.priority,
+        SELECT t.task_id, t.branch_id, t.display_number, t.title, t.task_type, t.status, t.priority,
                t.epic_id, t.sprint_id, t.parent_task_id, t.start_date, t.due_date,
                t.sort_order, t.created_at, t.updated_at, t.custom_fields,
-               b.key AS branch_key, b.branch_name,
+               b.key AS branch_key, b.branch_name, b.color AS branch_color, b.icon AS branch_icon,
                e.epic_name, e.color AS epic_color,
+               ws.label AS status_label, ws.color AS status_color, ws.category AS status_category,
                (SELECT COUNT(*) FROM task_issue ti WHERE ti.task_id = t.task_id) AS issue_count
         FROM task t
         INNER JOIN branch b ON t.branch_id = b.branch_id
         LEFT JOIN epic e ON t.epic_id = e.epic_id
+        LEFT JOIN workflow_status ws ON ws.branch_id = t.branch_id AND ws.key = t.status
         WHERE {scope}
         ORDER BY {order_sql}
         LIMIT :limit OFFSET :offset

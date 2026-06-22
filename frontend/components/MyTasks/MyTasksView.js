@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { CheckSquare, Inbox } from 'lucide-react';
+import { CheckSquare, Inbox, SlidersHorizontal, X } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import CustomSelect from '@/components/common/CustomSelect';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import EntityIcon from '@/components/common/EntityIcon';
 import NavLink from '@/components/common/NavLink';
+import FilterBuilder from '@/components/Branch/FilterBuilder';
+import { emptyGroup, isEmptySpec } from '@/library/filterBuilderState';
 
 const STATUS_CATEGORY_OPTIONS = [
   { value: 'todo', label: 'To Do' },
@@ -27,6 +29,26 @@ const sortOptions = [
   { value: 'due_date', label: 'Due Date' },
 ];
 
+// 고급 빌더가 제공하는 필드 — 크로스브랜치 안전한 글로벌 필드만.
+// (status/label/epic/sprint/task_type/created_by/assignee/cf:* 는 브랜치 스코프라 제외)
+const ADVANCED_FIELDS = [
+  'priority', 'status_category', 'due_date', 'start_date',
+  'created_at', 'updated_at', 'text', 'has_subtasks', 'is_top_level',
+];
+
+// 빈 옵션 목록(고급 필드는 브랜치 옵션 목록이 필요 없음)
+const EMPTY_OPTS = [];
+
+// 기본 sort_by 값 → 쿼리 엔드포인트의 [{field, dir}] 매핑.
+// _ORDERABLE(filter_builder.py)와 일치: updated→updated_at, created→created_at.
+// 시간 정렬은 최신순(desc), priority/due_date는 오름차순(가장 급한/임박한 것 먼저).
+const SORT_TO_QUERY = {
+  updated: [{ field: 'updated_at', dir: 'desc' }],
+  created: [{ field: 'created_at', dir: 'desc' }],
+  priority: [{ field: 'priority', dir: 'asc' }],
+  due_date: [{ field: 'due_date', dir: 'asc' }],
+};
+
 export default function MyTasksView() {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -34,7 +56,51 @@ export default function MyTasksView() {
     status: '', priority: '', branch_id: '', sort_by: 'updated',
   });
 
+  // 고급 필터 빌더 + 크로스브랜치 스코프 (서버 폴백)
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [filterSpec, setFilterSpec] = useState(emptyGroup());
+  const [scope, setScope] = useState('my'); // 'my' = 나에게 배정된 태스크 / 'all' = 내 멤버 브랜치 전체
+  const [serverTotal, setServerTotal] = useState(null); // 서버 모드일 때 total
+  const [filterError, setFilterError] = useState(null); // 서버 모드 spec 거부 시 인라인 메시지
+
+  // 고급 spec이 비어있지 않거나 scope='all'이면 서버 쿼리 모드.
+  const advancedActive = !isEmptySpec(filterSpec);
+  const serverMode = advancedActive || scope === 'all';
+
   const fetchTasks = useCallback(async () => {
+    // 서버 쿼리 모드: 고급 spec 또는 크로스브랜치 scope → /tasks/query
+    if (serverMode) {
+      setServerTotal(null); // 기본 모드와 대칭 — 실패/빈 응답이 stale count를 못 보이게
+      try {
+        const res = await axios.post('/tasks/query', {
+          filter: advancedActive ? filterSpec : null,
+          scope,
+          sort: SORT_TO_QUERY[filters.sort_by] || [],
+          limit: 200,
+          offset: 0,
+        });
+        if (res.data.status) {
+          setTasks(res.data.items || []);
+          setServerTotal(res.data.total ?? (res.data.items || []).length);
+          setFilterError(null);
+        } else {
+          // 백엔드가 spec을 거부({status:False, message:'INVALID_FILTER'}) — 침묵 금지
+          setTasks([]);
+          setServerTotal(0);
+          setFilterError('필터를 적용할 수 없습니다 (조건을 확인하세요)');
+        }
+      } catch {
+        setTasks([]);
+        setServerTotal(0);
+        setFilterError('필터를 적용할 수 없습니다 (조건을 확인하세요)');
+      }
+      setLoading(false);
+      return;
+    }
+
+    // 기본 모드: 기존 /my-tasks 경로 (변경 없음)
+    setServerTotal(null);
+    setFilterError(null);
     const params = { sort_by: filters.sort_by };
     if (filters.status) params.status_category = filters.status;
     if (filters.priority) params.priority = filters.priority;
@@ -45,7 +111,7 @@ export default function MyTasksView() {
       if (res.data.status) setTasks(res.data.tasks);
     } catch {}
     setLoading(false);
-  }, [filters]);
+  }, [filters, serverMode, advancedActive, filterSpec, scope]);
 
   useEffect(() => {
     setLoading(true);
@@ -58,9 +124,11 @@ export default function MyTasksView() {
     return () => window.removeEventListener('task:updated', handler);
   }, [fetchTasks]);
 
-  // 응답 데이터에서 브랜치 목록 추출
+  // 응답 데이터에서 브랜치 목록 추출 (branch_id 있는 항목만 — 쿼리 items는 branch_id 미포함)
   const branches = [...new Map(
-    tasks.map((t) => [t.branch_id, { branch_id: t.branch_id, branch_name: t.branch_name, branch_key: t.branch_key }])
+    tasks
+      .filter((t) => t.branch_id != null)
+      .map((t) => [t.branch_id, { branch_id: t.branch_id, branch_name: t.branch_name, branch_key: t.branch_key }])
   ).values()];
 
   const updateFilter = (key, value) => {
@@ -72,7 +140,11 @@ export default function MyTasksView() {
       <div className="MyTasks__Header">
         <CheckSquare size={20} className="MyTasks__HeaderIcon" />
         <h2 className="MyTasks__Title">My Tasks</h2>
-        {!loading && <span className="MyTasks__Count">{tasks.length}</span>}
+        {!loading && (
+          <span className="MyTasks__Count">
+            {serverMode && serverTotal != null ? serverTotal : tasks.length}
+          </span>
+        )}
       </div>
 
       {/* 필터 바 */}
@@ -119,7 +191,67 @@ export default function MyTasksView() {
             <option key={o.value} value={o.value}>Sort: {o.label}</option>
           ))}
         </select>
+
+        {/* 고급 필터 토글 */}
+        <button
+          type="button"
+          className={`MyTasks__AdvancedBtn ${advancedActive ? 'MyTasks__AdvancedBtn--active' : ''}`}
+          onClick={() => setAdvancedOpen((prev) => !prev)}
+        >
+          <SlidersHorizontal size={13} />
+          고급 필터
+        </button>
       </div>
+
+      {/* 고급 필터 패널 (크로스브랜치 서버 폴백) */}
+      {advancedOpen && (
+        <div className="MyTasks__AdvancedPanel">
+          <div className="MyTasks__AdvancedHeader">
+            <span className="MyTasks__AdvancedTitle">고급 필터</span>
+
+            {/* 스코프 토글: 내 태스크 vs 전체 브랜치 */}
+            <div className="MyTasks__ScopeToggle">
+              <button
+                type="button"
+                className={`MyTasks__ScopeBtn ${scope === 'my' ? 'MyTasks__ScopeBtn--active' : ''}`}
+                onClick={() => setScope('my')}
+              >내 태스크</button>
+              <button
+                type="button"
+                className={`MyTasks__ScopeBtn ${scope === 'all' ? 'MyTasks__ScopeBtn--active' : ''}`}
+                onClick={() => setScope('all')}
+              >전체 브랜치</button>
+            </div>
+
+            {advancedActive && (
+              <button
+                type="button"
+                className="MyTasks__AdvancedClear"
+                onClick={() => setFilterSpec(emptyGroup())}
+              >
+                <X size={12} />
+                초기화
+              </button>
+            )}
+          </div>
+
+          <FilterBuilder
+            spec={filterSpec}
+            onChange={setFilterSpec}
+            members={EMPTY_OPTS}
+            labels={EMPTY_OPTS}
+            epics={EMPTY_OPTS}
+            taskTypes={EMPTY_OPTS}
+            workflowStatuses={EMPTY_OPTS}
+            customFields={EMPTY_OPTS}
+            availableFields={ADVANCED_FIELDS}
+          />
+
+          {filterError && (
+            <div className="MyTasks__FilterError" role="alert">{filterError}</div>
+          )}
+        </div>
+      )}
 
       {/* 테이블 */}
       <div className="MyTasks__Table">
@@ -153,8 +285,13 @@ export default function MyTasksView() {
 
 // -- Row --
 function MyTasksRow({ task, onRefresh }) {
+  // /tasks/query items는 branch_id를 돌려주지 않는다(branch_key/branch_name만).
+  // branch_id 없으면 상세/브랜치 링크·인라인 PATCH가 /branch/undefined로 깨지므로
+  // 해당 인터랙션만 비활성화하고 행 자체는 그대로 렌더(non-crashing).
+  const hasBranch = task.branch_id != null;
 
   const handleFieldChange = async (field, value) => {
+    if (!hasBranch) return;
     try {
       await axios.patch(`/branches/${task.branch_id}/tasks/${task.task_id}`, { [field]: value });
       window.dispatchEvent(new Event('task:updated'));
@@ -173,11 +310,13 @@ function MyTasksRow({ task, onRefresh }) {
     <div className="MyTasksRow">
       {/* 행 전체를 덮는 오버레이 링크(stretched link): 가운데/ctrl/우클릭 새 탭 지원.
           내부 인터랙티브(브랜치 링크·셀렉트)는 z-index로 이 위에 떠서 각자 동작한다. */}
-      <NavLink
-        className="MyTasksRow__Overlay"
-        href={`/branch/${task.branch_id}/task/${task.task_id}`}
-        aria-label={task.title}
-      />
+      {hasBranch && (
+        <NavLink
+          className="MyTasksRow__Overlay"
+          href={`/branch/${task.branch_id}/task/${task.task_id}`}
+          aria-label={task.title}
+        />
+      )}
 
       {/* 타입 아이콘 */}
       <span className="MyTasksRow__TypeIcon">
@@ -203,20 +342,32 @@ function MyTasksRow({ task, onRefresh }) {
         ))}
       </div>
 
-      {/* 브랜치 (오버레이 위 별도 링크) */}
-      <NavLink
-        className="MyTasksRow__Branch"
-        href={`/branch/${task.branch_id}`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <EntityIcon
-          icon={task.branch_icon}
-          color={task.branch_color}
-          size={14}
-          entityType="branch"
-        />
-        {task.branch_key}
-      </NavLink>
+      {/* 브랜치 (오버레이 위 별도 링크) — branch_id 없으면(쿼리 items) 비링크 표시 */}
+      {hasBranch ? (
+        <NavLink
+          className="MyTasksRow__Branch"
+          href={`/branch/${task.branch_id}`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <EntityIcon
+            icon={task.branch_icon}
+            color={task.branch_color}
+            size={14}
+            entityType="branch"
+          />
+          {task.branch_key}
+        </NavLink>
+      ) : (
+        <span className="MyTasksRow__Branch">
+          <EntityIcon
+            icon={task.branch_icon}
+            color={task.branch_color}
+            size={14}
+            entityType="branch"
+          />
+          {task.branch_key}
+        </span>
+      )}
 
       {/* 상태 */}
       <div className="MyTasksRow__Cell" onClick={(e) => e.stopPropagation()}>
