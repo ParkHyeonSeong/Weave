@@ -91,6 +91,31 @@ async def test_search_track_sources(fake_client):
     )
 
 
+async def test_search_track_sources_filters(fake_client):
+    fake_client.call_json.return_value = []
+    async with Client(_app.mcp) as client:
+        await client.call_tool(
+            "search_track_sources",
+            {
+                "track_id": 7,
+                "q": "api",
+                "branch_id": 3,
+                "status_category": "in_progress",
+                "assignee_user_id": 5,
+            },
+        )
+    fake_client.call_json.assert_awaited_once_with(
+        "GET",
+        "/api/tracks/7/sources",
+        params={
+            "q": "api",
+            "branch_id": 3,
+            "status_category": "in_progress",
+            "assignee_user_id": 5,
+        },
+    )
+
+
 async def test_add_track_item(fake_client):
     fake_client.call_json.return_value = {"status": True}
     async with Client(_app.mcp) as client:

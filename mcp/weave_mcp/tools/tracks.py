@@ -143,12 +143,21 @@ async def search_track_sources(
     status: str | None = None,
     priority: str | None = None,
     exclude_done: bool | None = None,
+    assignee_user_id: int | None = None,
+    label_id: int | None = None,
+    status_category: str | None = None,
+    include_non_participating: bool | None = None,
+    parent_only: bool | None = None,
     limit: int | None = None,
 ) -> Any:
     """Search candidate tasks (in the track's participating branches) to add as items.
 
     Returns source_task_id values for add_track_item / add_track_items_bulk. Filters
     are optional; results are capped (limit defaults to 50, max 200).
+    assignee_user_id / label_id narrow to a specific assignee or label.
+    status_category groups statuses ("todo"/"in_progress"/"done"). parent_only=true
+    excludes subtasks. include_non_participating=true also searches branches not yet
+    attached to the track.
     """
     params = {k: v for k, v in {
         "q": q,
@@ -158,6 +167,11 @@ async def search_track_sources(
         "status": status,
         "priority": priority,
         "exclude_done": exclude_done,
+        "assignee_user_id": assignee_user_id,
+        "label_id": label_id,
+        "status_category": status_category,
+        "include_non_participating": include_non_participating,
+        "parent_only": parent_only,
         "limit": limit,
     }.items() if v is not None}
     return await get_client().call_json(

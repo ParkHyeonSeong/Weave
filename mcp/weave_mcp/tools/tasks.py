@@ -276,3 +276,44 @@ async def unlink_task_page(branch_id: int, task_id: int, link_id: int) -> Any:
     return await get_client().call_json(
         "DELETE", f"/api/branches/{branch_id}/tasks/{task_id}/pages/{link_id}"
     )
+
+
+@mcp.tool
+async def query_tasks(
+    filter: dict | None = None,
+    branch_id: int | None = None,
+    scope: str = "my",
+    group_by: str | None = None,
+    sort: list | None = None,
+    limit: int | None = None,
+    offset: int | None = None,
+) -> Any:
+    """Query tasks with a structured FilterSpec (boolean tree).
+
+    FilterSpec shape:
+      group: {"type":"group","op":"AND"|"OR","negate":false,"children":[...]}
+      cond:  {"type":"cond","field":"<key>","op":"<op>","value":<v>,"negate":false}
+    fields: status, status_category, priority, task_type, label, epic, sprint,
+      assignee ("$me"; for unassigned use op "is_empty"), created_by, due_date, start_date, created_at,
+      updated_at, text, has_subtasks, is_top_level, cf:<custom_field_id>.
+    ops: eq, in, is_empty, lt/lte/gt/gte, between, contains. Use negate for NOT.
+    date tokens: "$today", "$today+7d". sort: [{"field","dir":"asc|desc"}].
+    group_by (server-aggregated 'groups'): status/priority/task_type/epic/sprint only;
+    other values return groups=null (assignee/label grouping is UI-side).
+    With branch_id → that branch only (custom fields allowed). Without branch_id →
+    cross-branch over your member branches; scope "my" (assigned to you) or "all".
+    """
+    # 서버가 limit/offset을 직접 받는다(page 산술 없음 → offset 배수 제약·이중 페이지네이션 문제 없음).
+    # 결과는 서버 응답을 그대로 반환한다(paginate() 재절단 금지).
+    body: dict = {
+        "filter": filter,
+        "group_by": group_by,
+        "sort": sort or [],
+        "limit": min(limit, 200) if limit else 50,
+        "offset": offset or 0,
+    }
+    if branch_id is not None:
+        return await get_client().call_json(
+            "POST", f"/api/branches/{branch_id}/tasks/query", json=body)
+    body["scope"] = scope
+    return await get_client().call_json("POST", "/api/tasks/query", json=body)

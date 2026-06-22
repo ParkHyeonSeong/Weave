@@ -238,3 +238,63 @@ async def test_update_task_promote_precedence_over_parent_id(fake_client):
     fake_client.call_json.assert_awaited_once_with(
         "PATCH", "/api/branches/3/tasks/5", json={"parent_task_id": None}
     )
+
+
+async def test_query_tasks_with_branch_id_no_scope(fake_client):
+    """branch_id given → POST branch query endpoint, no scope in body."""
+    fake_client.call_json.return_value = {"status": True, "items": [], "total": 0}
+    flt = {"type": "cond", "field": "priority", "op": "in", "value": ["high", "urgent"]}
+    async with Client(_app.mcp) as client:
+        await client.call_tool(
+            "query_tasks", {"branch_id": 3, "filter": flt, "group_by": "status"}
+        )
+    fake_client.call_json.assert_awaited_once_with(
+        "POST",
+        "/api/branches/3/tasks/query",
+        json={
+            "filter": flt,
+            "group_by": "status",
+            "sort": [],
+            "limit": 50,
+            "offset": 0,
+        },
+    )
+
+
+async def test_query_tasks_without_branch_id_adds_scope(fake_client):
+    """No branch_id → cross-branch POST /api/tasks/query with scope in body."""
+    fake_client.call_json.return_value = {"status": True, "items": [], "total": 0}
+    flt = {"type": "cond", "field": "due_date", "op": "lt", "value": "$today+7d"}
+    async with Client(_app.mcp) as client:
+        await client.call_tool("query_tasks", {"filter": flt, "group_by": "status"})
+    fake_client.call_json.assert_awaited_once_with(
+        "POST",
+        "/api/tasks/query",
+        json={
+            "filter": flt,
+            "group_by": "status",
+            "sort": [],
+            "limit": 50,
+            "offset": 0,
+            "scope": "my",
+        },
+    )
+
+
+async def test_query_tasks_explicit_limit_offset(fake_client):
+    """Explicit limit/offset land in body unchanged (no page arithmetic)."""
+    fake_client.call_json.return_value = {"status": True, "items": [], "total": 0}
+    async with Client(_app.mcp) as client:
+        await client.call_tool("query_tasks", {"limit": 10, "offset": 20})
+    fake_client.call_json.assert_awaited_once_with(
+        "POST",
+        "/api/tasks/query",
+        json={
+            "filter": None,
+            "group_by": None,
+            "sort": [],
+            "limit": 10,
+            "offset": 20,
+            "scope": "my",
+        },
+    )
