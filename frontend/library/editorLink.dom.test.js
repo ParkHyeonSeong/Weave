@@ -2,7 +2,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
-import { applyLinkValue, isEditingLink } from './editorLink.js';
+import { applyLinkValue, isEditingLink, editingLinkMark } from './editorLink.js';
 
 // Canvas의 최악 케이스(autolink:true → Link.inclusive:true)로 에디터를 만들어
 // "삽입 직후 다음 입력이 링크로 이어짐"까지 잡는다. Scrum(autolink:false)은 더 안전한 부분집합.
@@ -122,10 +122,95 @@ describe('applyLinkValue', () => {
     expect(editor.getHTML()).not.toContain('<a');
   });
 
+  it('editingLinkMark는 인접 경계에서 오른쪽(nodeAfter) 링크 href를 반환한다', () => {
+    editor = makeEditor('<p><a href="https://a.com">one</a><a href="https://b.com">two</a></p>');
+    editor.commands.setTextSelection(4); // one(1-4)|two 경계
+    expect(editingLinkMark(editor)?.attrs.href).toBe('https://b.com');
+  });
+
+  it('인접한 다른 링크 경계에서 편집은 오른쪽 링크만 바꾸고 병합하지 않는다', () => {
+    editor = makeEditor('<p><a href="https://a.com">one</a><a href="https://b.com">two</a></p>');
+    editor.commands.setTextSelection(4);
+    applyLinkValue(editor, 'c.com');
+    const html = editor.getHTML();
+    expect(html).toContain('href="https://a.com"');     // 왼쪽 링크 유지
+    expect(html).toContain('href="https://c.com"');      // 오른쪽만 변경
+    expect(html).not.toContain('href="https://b.com"');  // b → c
+    expect(html).not.toMatch(/onetwo/);                  // 병합 안 됨
+  });
+
+  it('인접한 다른 링크 경계에서 빈 입력은 오른쪽 링크만 해제한다', () => {
+    editor = makeEditor('<p><a href="https://a.com">one</a><a href="https://b.com">two</a></p>');
+    editor.commands.setTextSelection(4);
+    applyLinkValue(editor, '');
+    const html = editor.getHTML();
+    expect(html).toContain('href="https://a.com"');      // 왼쪽 유지
+    expect(html).not.toContain('href="https://b.com"');  // 오른쪽만 해제
+  });
+
   it('빈 입력이면 선택된 링크를 해제한다', () => {
     editor = makeEditor('<p><a href="https://x.com">hi</a></p>');
     editor.commands.setTextSelection({ from: 1, to: 3 });
     applyLinkValue(editor, '');
     expect(editor.getHTML()).not.toContain('<a');
+  });
+});
+
+describe('Edge cases - same href adjacent links', () => {
+  // ProseMirror는 동일 attrs(같은 href) 인접 텍스트 노드를 하나로 coalesce한다.
+  // 따라서 '같은 href 인접 링크 2개'는 모델에 존재할 수 없고 항상 단일 링크('leftright')다.
+  // → 경계에서 편집하면 합쳐진 링크 전체가 갱신되는 게 올바른 동작.
+  it('같은 href 인접 링크는 모델상 1개로 합쳐져 편집 시 전체가 갱신된다', () => {
+    editor = makeEditor('<p><a href="https://same.com">left</a><a href="https://same.com">right</a></p>');
+    editor.commands.setTextSelection(5); // 합쳐진 단일 링크 내부
+    const mark = editingLinkMark(editor);
+    expect(mark?.attrs.href).toBe('https://same.com');
+    applyLinkValue(editor, 'new.com');
+    const html = editor.getHTML();
+    expect(html).toContain('href="https://new.com"');
+    expect(html).not.toContain('href="https://same.com"'); // 합쳐진 링크 전체 갱신
+    expect((html.match(/<a /g) || []).length).toBe(1);      // 모델상 1개 링크
+    expect(html).toContain('>leftright</a>');
+  });
+});
+
+describe('Edge cases - left boundary', () => {
+  it('왼쪽 경계: 링크 시작점에 커서', () => {
+    editor = makeEditor('<p><a href="https://a.com">one</a>two</p>');
+    editor.commands.setTextSelection(1); // <p>|<a>one
+    const mark = editingLinkMark(editor);
+    expect(mark?.attrs.href).toBe('https://a.com');
+    applyLinkValue(editor, 'new.com');
+    const html = editor.getHTML();
+    expect(html).toContain('href="https://new.com"');
+    expect(html).not.toContain('href="https://a.com"');
+  });
+});
+
+describe('Edge cases - Canvas autolink inclusive', () => {
+  it('Canvas autolink: 오른쪽 경계에서 isActive(link) true여도 editingLinkMark는 null', () => {
+    editor = makeEditor('<p><a href="https://a.com">one</a></p>');
+    editor.commands.setTextSelection(4); // 오른쪽 경계
+    // isActive는 inclusive 때문에 true일 수 있으나 nodeAfter 검사는 null → 편집 아님
+    expect(editor.isActive('link')).toBe(true);
+    expect(editingLinkMark(editor)).toBe(null);
+    // 빈 입력이어도 unsetLink 실행 안 됨(이전 링크 보존)
+    applyLinkValue(editor, '');
+    expect(editor.getHTML()).toContain('href="https://a.com"');
+  });
+});
+
+describe('Edge cases - scoping with multiple attrs', () => {
+  it('target/rel 포함 링크: href 스코핑으로 정확한 링크 선택', () => {
+    editor = makeEditor('<p><a href="https://a.com" target="_blank">one</a><a href="https://b.com" rel="noopener">two</a></p>');
+    editor.commands.setTextSelection(4); // 경계
+    const mark = editingLinkMark(editor);
+    expect(mark?.attrs.href).toBe('https://b.com');
+    // extendMarkRange({href}) 호출: findMarkInSet가 href만 확인
+    applyLinkValue(editor, 'c.com');
+    const html = editor.getHTML();
+    expect(html).toContain('href="https://a.com"');
+    expect(html).toContain('href="https://c.com"');
+    expect(html).not.toContain('href="https://b.com"');
   });
 });
