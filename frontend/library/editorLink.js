@@ -38,20 +38,37 @@ export function normalizeLinkHref(raw) {
 //  - 위험 href → no-op (setLink의 기존 무음-false 동작과 일치)
 //  - 빈 선택 & 기존 링크 아님 → URL을 클릭 가능한 텍스트로 삽입(+ stored mark 제거로 연속 입력 차단)
 //  - 그 외(선택 있음/기존 링크 위) → 링크 mark 적용·갱신
+// 커서/선택이 '기존 링크를 편집하는' 대상인지 판단(오른쪽 inclusive 경계 제외).
+//  - 선택 있음 → isActive('link')
+//  - 빈 선택 → 커서 오른쪽(nodeAfter)에 link mark가 있을 때만(내부·왼쪽 경계·단일문자 링크).
+//    오른쪽 경계(nodeAfter가 비링크/null)는 편집 아님 → 새 링크 삽입/무시.
+// 분기·프롬프트 prefill·빈 입력 해제가 모두 이 판단을 공유해 오른쪽 경계에서 이전 링크를
+// 잘못 잡는 불일치(prefill에 이전 href, 빈 입력 시 이전 링크 삭제)를 막는다.
+export function isEditingLink(editor) {
+  if (!editor) return false;
+  const linkType = editor.schema.marks.link;
+  if (!linkType) return false;
+  const sel = editor.state.selection;
+  if (!sel.empty) return editor.isActive('link');
+  return !!(sel.$from.nodeAfter && linkType.isInSet(sel.$from.nodeAfter.marks));
+}
+
+// prompt/팝오버 등에서 받은 입력을 에디터에 적용한다.
+//  - 빈 입력 → 편집 대상 링크만 해제(오른쪽 경계의 이전 링크는 건드리지 않음)
+//  - 위험 href → no-op
+//  - 편집 대상 아님(빈 선택) → URL을 클릭 가능한 텍스트로 삽입(+ stored mark 제거로 연속 입력 차단)
+//  - 그 외(편집 대상/선택 있음) → 링크 mark 적용·갱신
 export function applyLinkValue(editor, raw) {
   if (!editor) return;
   const v = (raw || '').trim();
-  if (v === '') { editor.chain().focus().extendMarkRange('link').unsetLink().run(); return; }
+  const editing = isEditingLink(editor);
+  if (v === '') {
+    if (editing) editor.chain().focus().extendMarkRange('link').unsetLink().run();
+    return;
+  }
   const href = normalizeLinkHref(v);
   if (!isSafeLinkHref(href)) return;
-  const sel = editor.state.selection;
-  const linkType = editor.schema.marks.link;
-  // 커서 오른쪽(nodeAfter)에 link mark가 있으면 그 링크 위/안(내부·왼쪽 경계·단일문자 링크)으로 보고 편집.
-  // 없으면(비링크 위치 or inclusive 오른쪽 경계) 새 링크를 삽입 → autolink:true에서 경계의 기존 링크
-  // 덮어쓰기를 막으면서, 왼쪽 경계·단일문자 링크는 prefill대로 편집되게 한다.
-  const onLink = sel.empty && !!linkType
-    && !!sel.$from.nodeAfter && linkType.isInSet(sel.$from.nodeAfter.marks);
-  if (sel.empty && !onLink) {
+  if (editor.state.selection.empty && !editing) {
     editor.chain().focus()
       .insertContent({ type: 'text', text: v, marks: [{ type: 'link', attrs: { href } }] })
       .unsetMark('link')   // collapsed 커서의 link mark 제거 → inclusive(autolink) 설정과 무관하게 연속 입력 차단
@@ -61,10 +78,10 @@ export function applyLinkValue(editor, raw) {
   }
 }
 
-// 링크 버튼/팝오버 편집용 prompt 래퍼.
+// 링크 버튼/팝오버 편집용 prompt 래퍼. 편집 대상일 때만 기존 href를 prefill.
 export function promptSetLink(editor) {
   if (!editor) return;
-  const prev = editor.getAttributes('link').href || '';
+  const prev = isEditingLink(editor) ? (editor.getAttributes('link').href || '') : '';
   const url = window.prompt('링크 URL', prev);
   if (url === null) return;   // 취소
   applyLinkValue(editor, url);

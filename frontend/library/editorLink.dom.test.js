@@ -2,7 +2,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
-import { applyLinkValue } from './editorLink.js';
+import { applyLinkValue, isEditingLink } from './editorLink.js';
 
 // Canvas의 최악 케이스(autolink:true → Link.inclusive:true)로 에디터를 만들어
 // "삽입 직후 다음 입력이 링크로 이어짐"까지 잡는다. Scrum(autolink:false)은 더 안전한 부분집합.
@@ -89,6 +89,37 @@ describe('applyLinkValue', () => {
     const html = editor.getHTML();
     expect(html).toContain('href="https://three.com"');
     expect((html.match(/<a /g) || []).length).toBe(1);
+  });
+
+  it('isEditingLink: 오른쪽 경계는 false, 내부·왼쪽 경계는 true', () => {
+    editor = makeEditor('<p><a href="https://a.com">one</a>two</p>');
+    editor.commands.setTextSelection(4); expect(isEditingLink(editor)).toBe(false); // 오른쪽 경계
+    editor.commands.setTextSelection(2); expect(isEditingLink(editor)).toBe(true);  // 내부
+    editor.commands.setTextSelection(1); expect(isEditingLink(editor)).toBe(true);  // 왼쪽 경계
+  });
+
+  it('오른쪽 경계(뒤에 비링크 텍스트)에서 새 입력은 기존 링크를 덮지 않고 새 링크를 만든다', () => {
+    editor = makeEditor('<p><a href="https://a.com">one</a>two</p>');
+    editor.commands.setTextSelection(4); // 'one' 뒤, nodeAfter='two'(비링크)
+    applyLinkValue(editor, 'new.com');
+    const html = editor.getHTML();
+    expect(html).toContain('href="https://a.com"');    // 기존 유지
+    expect(html).toContain('href="https://new.com"');   // 새 링크
+    expect(html).toContain('>one</a>');                 // 'one' 텍스트 유지
+  });
+
+  it('오른쪽 경계에서 빈 입력은 기존(이전) 링크를 지우지 않는다', () => {
+    editor = makeEditor('<p><a href="https://a.com">one</a>two</p>');
+    editor.commands.setTextSelection(4); // 오른쪽 경계
+    applyLinkValue(editor, '');
+    expect(editor.getHTML()).toContain('href="https://a.com"'); // 그대로 유지
+  });
+
+  it('링크 내부에서 빈 입력은 그 링크를 해제한다', () => {
+    editor = makeEditor('<p><a href="https://a.com">one</a></p>');
+    editor.commands.setTextSelection(2); // 내부
+    applyLinkValue(editor, '');
+    expect(editor.getHTML()).not.toContain('<a');
   });
 
   it('빈 입력이면 선택된 링크를 해제한다', () => {
