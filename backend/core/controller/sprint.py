@@ -7,6 +7,7 @@ from core.guard.branch_scope import find_resource_in_branch
 from core.model import sprint as sprint_model
 from core.model import branch_member as member_model
 from core.model import task as task_model
+from library.date_validator import is_valid_date_order
 
 
 async def create(body, branch_id: int, request: Request, db: AsyncSession):
@@ -14,6 +15,9 @@ async def create(body, branch_id: int, request: Request, db: AsyncSession):
     user_id = request.state.payload.get('user_id')
     if not await member_model.is_member(branch_id, user_id, db):
         return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+
+    if not is_valid_date_order(body.start_date, body.end_date):
+        return {'status': False, 'message': 'INVALID_DATE_RANGE'}
 
     sprint_id = await sprint_model.create(
         branch_id=branch_id,
@@ -48,6 +52,14 @@ async def update(sprint_id: int, body, branch_id: int, request: Request, db: Asy
         return {'status': False, 'message': 'SPRINT_NOT_FOUND'}
 
     fields = body.model_dump(exclude_none=True)
+    # 명시적 null로 보낸 날짜만 clear 허용 (NOT NULL 컬럼의 null은 위에서 드롭됨)
+    for f in ('start_date', 'end_date'):
+        if f in body.model_fields_set and getattr(body, f) is None:
+            fields[f] = None
+    new_start = fields.get('start_date', sprint['start_date'])
+    new_end = fields.get('end_date', sprint['end_date'])
+    if not is_valid_date_order(new_start, new_end):
+        return {'status': False, 'message': 'INVALID_DATE_RANGE'}
 
     await sprint_model.update(sprint_id, fields, db)
     return {'status': True}

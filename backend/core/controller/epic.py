@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.model import epic as epic_model
 from core.model import task as task_model
 from core.model import branch_member as member_model
+from library.date_validator import is_valid_date_order
 
 
 async def create(body, branch_id: int, request: Request, db: AsyncSession):
@@ -11,6 +12,9 @@ async def create(body, branch_id: int, request: Request, db: AsyncSession):
     user_id = request.state.payload.get('user_id')
     if not await member_model.is_member(branch_id, user_id, db):
         return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+
+    if not is_valid_date_order(body.start_date, body.due_date):
+        return {'status': False, 'message': 'INVALID_DATE_RANGE'}
 
     epic_id = await epic_model.create(
         branch_id=branch_id,
@@ -60,6 +64,14 @@ async def update(epic_id: int, body, branch_id: int, request: Request, db: Async
         return {'status': False, 'message': 'EPIC_NOT_FOUND'}
 
     fields = body.model_dump(exclude_none=True)
+    # 명시적 null로 보낸 날짜만 clear 허용 (epic_name/color/status 등 NOT NULL의 null은 드롭됨)
+    for f in ('start_date', 'due_date'):
+        if f in body.model_fields_set and getattr(body, f) is None:
+            fields[f] = None
+    new_start = fields.get('start_date', epic['start_date'])
+    new_due = fields.get('due_date', epic['due_date'])
+    if not is_valid_date_order(new_start, new_due):
+        return {'status': False, 'message': 'INVALID_DATE_RANGE'}
     await epic_model.update(epic_id, fields, db)
     return {'status': True}
 

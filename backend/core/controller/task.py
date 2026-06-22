@@ -10,6 +10,7 @@ from core.guard.branch_scope import find_resource_in_branch
 from library import notification_service
 from library import activity_service
 from library.mention_parser import extract_mention_user_ids
+from library.date_validator import is_valid_date_order
 
 
 def _collect_assignee_ids(assignees) -> set[int]:
@@ -72,6 +73,10 @@ async def create(body, branch_id: int, request: Request, db: AsyncSession):
     valid_status = await ws_model.find_by_key(branch_id, body.status, db)
     if not valid_status:
         return {'status': False, 'message': 'INVALID_STATUS'}
+
+    # 날짜 순서 검증 (시작일 <= 마감일)
+    if not is_valid_date_order(body.start_date, body.due_date):
+        return {'status': False, 'message': 'INVALID_DATE_RANGE'}
 
     # 담당자 소속 검증 (모든 담당자가 branch 멤버여야 함)
     if body.assignees and not await _assignees_valid_for_branch(body.assignees, branch_id, db):
@@ -227,6 +232,12 @@ async def update(task_id: int, body, branch_id: int, request: Request, db: Async
         valid_status = await ws_model.find_by_key(branch_id, fields['status'], db)
         if not valid_status:
             return {'status': False, 'message': 'INVALID_STATUS'}
+
+    # 날짜 순서 검증 (부분 PATCH는 기존 값과 병합)
+    new_start = fields.get('start_date', task['start_date'])
+    new_due = fields.get('due_date', task['due_date'])
+    if not is_valid_date_order(new_start, new_due):
+        return {'status': False, 'message': 'INVALID_DATE_RANGE'}
 
     if fields:
         await task_model.update(task_id, fields, db)
