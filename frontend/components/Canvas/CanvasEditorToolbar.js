@@ -11,6 +11,7 @@ import {
   Type, PaintBucket,
   AlignStartVertical, AlignCenterVertical, AlignEndVertical,
 } from 'lucide-react';
+import { promptSetLink } from '@/library/editorLink';
 
 // 프리셋 컬러 팔레트
 const TEXT_COLORS = [
@@ -73,12 +74,7 @@ export default function CanvasEditorToolbar({ editor }) {
     return 'Text';
   };
 
-  const addLink = () => {
-    const url = window.prompt('URL:');
-    if (url) {
-      editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
-    }
-  };
+  const addLink = () => promptSetLink(editor);
 
   const addImage = () => {
     const url = window.prompt('Image URL:');

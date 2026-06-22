@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Bold, Italic, Strikethrough, ListChecks, List, Link as LinkIcon } from 'lucide-react';
+import { promptSetLink } from '@/library/editorLink';
 
 const TBtn = ({ active, onClick, title, children }) => (
   <button
@@ -62,13 +63,7 @@ export default function ScrumCellToolbar({ editor }) {
       <TBtn
         title="링크"
         active={editor.isActive('link')}
-        onClick={() => {
-          const prev = editor.getAttributes('link').href || '';
-          const url = window.prompt('링크 URL', prev);
-          if (url === null) return;
-          if (url === '') { editor.chain().focus().unsetLink().run(); return; }
-          editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
-        }}
+        onClick={() => promptSetLink(editor)}
       ><LinkIcon size={14} /></TBtn>
     </div>
   );

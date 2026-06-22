@@ -9,7 +9,6 @@ import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import { Table } from '@tiptap/extension-table';
 import { TableRow } from '@tiptap/extension-table-row';
 import { TableCellWithBgColor, TableHeaderWithBgColor } from './extensions/TableCellExtension';
-import Underline from '@tiptap/extension-underline';
 import TextAlign from '@tiptap/extension-text-align';
 import Highlight from '@tiptap/extension-highlight';
 import Color from '@tiptap/extension-color';
@@ -104,6 +103,7 @@ function CollabEditorInner({
       StarterKit.configure({
         codeBlock: false,
         history: false,
+        link: false, // 별도 Link.configure로 등록 → StarterKit 번들 Link와 중복 방지
       }),
       Link.configure({
         openOnClick: false,
@@ -118,7 +118,6 @@ function CollabEditorInner({
       TableRow,
       TableCellWithBgColor,
       TableHeaderWithBgColor,
-      Underline,
       TextAlign.configure({
         types: ['heading', 'paragraph', 'image'],
       }),
