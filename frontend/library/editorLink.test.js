@@ -37,6 +37,11 @@ describe('normalizeLinkHref', () => {
     expect(normalizeLinkHref('user@example.com:8080')).toBe('https://user@example.com:8080');
   });
 
+  it('host:port URL은 스킴이 아니라 bare URL로 https를 붙인다', () => {
+    expect(normalizeLinkHref('example.com:8080/path')).toBe('https://example.com:8080/path');
+    expect(normalizeLinkHref('localhost:3000/x')).toBe('https://localhost:3000/x');
+  });
+
   it('앞뒤 공백을 제거한다', () => {
     expect(normalizeLinkHref('  example.com  ')).toBe('https://example.com');
   });

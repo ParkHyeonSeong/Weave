@@ -11,6 +11,7 @@ export default function LinkHoverPopover({ editor }) {
   const [anchor, setAnchor] = useState(null);   // 현재 hover 중인 <a>
   const [rect, setRect] = useState(null);
   const closeTimer = useRef(null);
+  const popoverRef = useRef(null);
 
   const cancelClose = useCallback(() => {
     if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; }
@@ -26,13 +27,25 @@ export default function LinkHoverPopover({ editor }) {
   useEffect(() => {
     if (!editor) return undefined;
     const dom = editor.view.dom;
+    const linkType = editor.schema.marks.link;
+    // bookmark 등 atom/node-view 앵커 제외: posAtDOM 위치에 실제 link mark가 있을 때만 캡처
+    const isLinkMarkAnchor = (a) => {
+      if (!linkType) return false;
+      try {
+        const $pos = editor.state.doc.resolve(editor.view.posAtDOM(a, 0));
+        return linkType.isInSet($pos.marks())
+          || (!!$pos.nodeBefore && linkType.isInSet($pos.nodeBefore.marks))
+          || (!!$pos.nodeAfter && linkType.isInSet($pos.nodeAfter.marks));
+      } catch { return false; }
+    };
     const onOver = (e) => {
       const a = e.target?.closest?.('a');
-      if (a && dom.contains(a)) { cancelClose(); setAnchor(a); setRect(a.getBoundingClientRect()); }
+      if (a && dom.contains(a) && isLinkMarkAnchor(a)) { cancelClose(); setAnchor(a); setRect(a.getBoundingClientRect()); }
     };
     const onOut = (e) => {
       const to = e.relatedTarget;
-      if (to?.closest?.('a') || to?.closest?.('.LinkHoverPopover')) return; // 링크/팝오버 내부 이동은 유지
+      if (to && dom.contains(to) && to.closest('a')) return;   // 이 에디터 내부 링크로 이동은 유지
+      if (to && popoverRef.current?.contains(to)) return;      // 이 팝오버로 이동은 유지
       scheduleClose();
     };
     dom.addEventListener('pointerover', onOver);
@@ -83,6 +96,7 @@ export default function LinkHoverPopover({ editor }) {
 
   return (
     <div
+      ref={popoverRef}
       className="LinkHoverPopover"
       style={{ position: 'fixed', left: `${rect.left}px`, top: `${top}px`, zIndex: 650 }}
       onPointerEnter={cancelClose}

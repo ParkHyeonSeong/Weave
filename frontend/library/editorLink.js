@@ -13,12 +13,21 @@ export function isSafeLinkHref(href) {
   return !!href && !!isAllowedUri(href);
 }
 
-// 입력을 클릭 가능한 href로 정규화(스킴/경로 보존, bare domain만 https).
+// '//' 없이 쓰는 알려진 스킴(mailto:foo 형태). http/https/ftp 등 authority 스킴은 '://'로 따로 처리.
+const COLON_SCHEMES = ['mailto', 'tel', 'callto', 'sms', 'cid', 'xmpp'];
+
+// 입력을 클릭 가능한 href로 정규화(스킴/경로 보존, bare domain·host:port만 https).
 // 안전성(javascript: 차단 등)은 여기서 판단하지 않고 isSafeLinkHref가 담당한다.
 export function normalizeLinkHref(raw) {
   const v = (raw || '').trim();
   if (!v) return '';
-  if (/^[a-z][a-z0-9+.-]*:/i.test(v)) return v;            // 스킴 존재(http: ftp: mailto: tel: sms: callto: …)
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(v)) return v;        // scheme://authority… (http/https/ftp…)
+  const m = v.match(/^([a-z][a-z0-9+.-]*):(.*)$/i);        // scheme:rest 후보
+  if (m) {
+    if (COLON_SCHEMES.includes(m[1].toLowerCase())) return v;  // mailto:/tel:/sms: 등 알려진 스킴 보존
+    if (/^\d/.test(m[2])) return `https://${v}`;               // host:port[/path] → bare URL(example.com:8080)
+    return v;                                                  // 기타 스킴형은 보존(javascript: 등은 isSafeLinkHref가 차단)
+  }
   if (/^(\/\/|\/|\.\/|\.\.\/|#|\?)/.test(v)) return v;     // 프로토콜상대·루트/상대경로·앵커·쿼리 보존
   if (/^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/.test(v)) return `mailto:${v}`;  // 이메일(TLD는 문자, host:port 오분류 방지)
   return `https://${v}`;                                   // bare domain → https
@@ -35,8 +44,14 @@ export function applyLinkValue(editor, raw) {
   if (v === '') { editor.chain().focus().extendMarkRange('link').unsetLink().run(); return; }
   const href = normalizeLinkHref(v);
   if (!isSafeLinkHref(href)) return;
-  const { empty } = editor.state.selection;
-  if (empty && !editor.isActive('link')) {
+  const sel = editor.state.selection;
+  const linkType = editor.schema.marks.link;
+  // 커서가 링크 "내부"인지(inclusive 오른쪽 경계 제외): 앞·뒤 노드 모두 link mark일 때만 편집으로 취급.
+  // autolink:true(Canvas)면 경계에서도 isActive('link')가 true라 기존 링크를 덮어쓰던 버그를 막는다.
+  const insideLink = sel.empty && !!linkType
+    && !!sel.$from.nodeBefore && linkType.isInSet(sel.$from.nodeBefore.marks)
+    && !!sel.$from.nodeAfter && linkType.isInSet(sel.$from.nodeAfter.marks);
+  if (sel.empty && !insideLink) {
     editor.chain().focus()
       .insertContent({ type: 'text', text: v, marks: [{ type: 'link', attrs: { href } }] })
       .unsetMark('link')   // collapsed 커서의 link mark 제거 → inclusive(autolink) 설정과 무관하게 연속 입력 차단

@@ -53,6 +53,25 @@ describe('applyLinkValue', () => {
     expect(editor.getHTML()).not.toContain('javascript');
   });
 
+  it('inclusive 링크 오른쪽 경계에서는 기존 링크를 덮어쓰지 않고 새 링크를 삽입한다', () => {
+    editor = makeEditor('<p><a href="https://a.com">one</a></p>');
+    editor.commands.setTextSelection(4); // 'one' 뒤(autolink:true → inclusive 경계, isActive('link')===true)
+    applyLinkValue(editor, 'two.com');
+    const html = editor.getHTML();
+    expect(html).toContain('href="https://a.com"');    // 기존 링크 유지
+    expect(html).toContain('href="https://two.com"');   // 새 링크 추가
+  });
+
+  it('링크 내부 커서에서는 기존 href를 갱신한다(텍스트 유지)', () => {
+    editor = makeEditor('<p><a href="https://a.com">one</a></p>');
+    editor.commands.setTextSelection(2); // 'o|ne' 링크 내부
+    applyLinkValue(editor, 'two.com');
+    const html = editor.getHTML();
+    expect(html).toContain('href="https://two.com"');
+    expect(html).not.toContain('href="https://a.com"'); // 덮어씀
+    expect(html).toContain('>one</a>');                  // 텍스트 유지
+  });
+
   it('빈 입력이면 선택된 링크를 해제한다', () => {
     editor = makeEditor('<p><a href="https://x.com">hi</a></p>');
     editor.commands.setTextSelection({ from: 1, to: 3 });
