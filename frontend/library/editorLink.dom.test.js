@@ -201,16 +201,54 @@ describe('Edge cases - Canvas autolink inclusive', () => {
 });
 
 describe('Edge cases - scoping with multiple attrs', () => {
-  it('target/rel 포함 링크: href 스코핑으로 정확한 링크 선택', () => {
+  it('target/rel 포함 링크: 경계 편집은 대상 링크만 선택', () => {
     editor = makeEditor('<p><a href="https://a.com" target="_blank">one</a><a href="https://b.com" rel="noopener">two</a></p>');
     editor.commands.setTextSelection(4); // 경계
     const mark = editingLinkMark(editor);
     expect(mark?.attrs.href).toBe('https://b.com');
-    // extendMarkRange({href}) 호출: findMarkInSet가 href만 확인
     applyLinkValue(editor, 'c.com');
     const html = editor.getHTML();
     expect(html).toContain('href="https://a.com"');
     expect(html).toContain('href="https://c.com"');
     expect(html).not.toContain('href="https://b.com"');
+  });
+});
+
+describe('Edge cases - 선택 범위는 확장하지 않음(인접 링크)', () => {
+  it('오른쪽 링크 텍스트만 선택해 편집하면 그 링크만 바뀐다(왼쪽 안 번짐)', () => {
+    editor = makeEditor('<p><a href="https://a.com">one</a><a href="https://b.com">two</a></p>');
+    editor.commands.setTextSelection({ from: 4, to: 7 }); // 'two'(4-7)만 선택
+    applyLinkValue(editor, 'c.com');
+    const html = editor.getHTML();
+    expect(html).toContain('href="https://a.com"');     // one 유지
+    expect(html).toContain('href="https://c.com"');      // two만 변경
+    expect(html).not.toContain('href="https://b.com"');
+    expect(html).not.toMatch(/onetwo/);                  // 병합 안 됨
+  });
+
+  it('오른쪽 링크 텍스트만 선택 후 빈 입력은 그 링크만 해제한다', () => {
+    editor = makeEditor('<p><a href="https://a.com">one</a><a href="https://b.com">two</a></p>');
+    editor.commands.setTextSelection({ from: 4, to: 7 });
+    applyLinkValue(editor, '');
+    const html = editor.getHTML();
+    expect(html).toContain('href="https://a.com"');      // one 유지
+    expect(html).not.toContain('href="https://b.com"');  // two만 해제
+  });
+});
+
+describe('Edge cases - 같은 href·다른 attrs 인접 링크(전체 attrs 스코프)', () => {
+  it('href는 같고 title이 다른 인접 링크 경계 편집은 한쪽만 바꾼다', () => {
+    editor = makeEditor('<p></p>');
+    // title이 달라 coalesce되지 않는 별도 mark 2개를 명시적으로 삽입
+    editor.chain().focus().insertContent([
+      { type: 'text', text: 'left', marks: [{ type: 'link', attrs: { href: 'https://same.com', title: 'L' } }] },
+      { type: 'text', text: 'right', marks: [{ type: 'link', attrs: { href: 'https://same.com', title: 'R' } }] },
+    ]).run();
+    editor.commands.setTextSelection(5); // left(1-5)|right 경계
+    applyLinkValue(editor, 'new.com');
+    const html = editor.getHTML();
+    expect(html).toContain('href="https://new.com"');                          // 오른쪽만 변경
+    expect((html.match(/href="https:\/\/same\.com"/g) || []).length).toBe(1);  // 왼쪽 유지
+    expect((html.match(/<a /g) || []).length).toBe(2);                          // 병합 안 됨
   });
 });

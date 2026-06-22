@@ -54,31 +54,36 @@ export function isEditingLink(editor) {
 }
 
 // prompt/팝오버 등에서 받은 입력을 에디터에 적용한다.
-//  - 빈 입력 → 편집 대상 링크만 해제(오른쪽 경계의 이전 링크·인접한 다른 링크는 안 건드림)
+//  - 빈 입력 → 편집 대상 링크만 해제(인접한 다른 링크는 안 건드림)
 //  - 위험 href → no-op
-//  - 편집 대상 아님(빈 선택) → URL을 클릭 가능한 텍스트로 삽입(+ stored mark 제거로 연속 입력 차단)
-//  - 편집 대상 → 그 링크 href 범위에만 스코프해 적용·갱신
+//  - 빈 선택 & 비링크 → URL을 클릭 가능한 텍스트로 삽입(+ stored mark 제거로 연속 입력 차단)
+//  - 빈 선택 & 링크 → 그 링크의 '전체 attrs'로 스코프해 갱신(href만 같고 target/title 등이 다른 인접 링크와 구분)
+//  - 선택 있음 → 사용자가 고른 범위에만 적용(확장하지 않음 → 인접 링크로 안 번짐)
 export function applyLinkValue(editor, raw) {
   if (!editor) return;
   const v = (raw || '').trim();
   const sel = editor.state.selection;
   const mark = editingLinkMark(editor);   // 빈 선택일 때의 특정 링크(없으면 null)
-  // 빈 선택 편집은 그 링크 href로만 스코프 → extendMarkRange가 인접한 다른 링크까지 번지지 않게.
-  // 선택이 있으면 그 범위가 명시적이라 attrs 없이 확장한다(기존 동작 유지).
-  const scoped = (chain) => (mark ? chain.extendMarkRange('link', { href: mark.attrs.href }) : chain.extendMarkRange('link'));
   if (v === '') {
-    if (isEditingLink(editor)) scoped(editor.chain().focus()).unsetLink().run();
+    if (mark) editor.chain().focus().extendMarkRange('link', mark.attrs).unsetLink().run();
+    else if (!sel.empty && editor.isActive('link')) editor.chain().focus().unsetLink().run();
     return;
   }
   const href = normalizeLinkHref(v);
   if (!isSafeLinkHref(href)) return;
-  if (sel.empty && !mark) {
-    editor.chain().focus()
-      .insertContent({ type: 'text', text: v, marks: [{ type: 'link', attrs: { href } }] })
-      .unsetMark('link')   // collapsed 커서의 link mark 제거 → inclusive(autolink) 설정과 무관하게 연속 입력 차단
-      .run();
+  if (sel.empty) {
+    if (mark) {
+      // 대상 링크의 전체 attrs로 스코프 → ProseMirror가 동일 attrs 인접 mark만 하나로 coalesce하므로
+      // 이 범위는 정확히 그 링크다(href만 같고 다른 attrs가 다른 인접 링크는 제외).
+      editor.chain().focus().extendMarkRange('link', mark.attrs).setLink({ href }).run();
+    } else {
+      editor.chain().focus()
+        .insertContent({ type: 'text', text: v, marks: [{ type: 'link', attrs: { href } }] })
+        .unsetMark('link')   // collapsed 커서의 link mark 제거 → inclusive(autolink) 설정과 무관하게 연속 입력 차단
+        .run();
+    }
   } else {
-    scoped(editor.chain().focus()).setLink({ href }).run();
+    editor.chain().focus().setLink({ href }).run();   // 선택 범위에만 적용(확장 X)
   }
 }
 
