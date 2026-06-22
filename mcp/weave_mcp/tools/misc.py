@@ -228,7 +228,8 @@ async def list_my_tasks(
 
     Optional filters: status, priority (low/medium/high/urgent), branch_id,
     status_category (todo/in_progress/done). sort_by is "updated" (default), "created",
-    "priority", or "due_date".
+    "priority", or "due_date". For complex filtering beyond these (AND/OR/NOT trees,
+    operators, date ranges, custom fields) use query_tasks(scope="my").
 
     Paginated client-side: returns the first `limit` tasks (default 50) from `offset`,
     plus a "pagination" summary (total/returned/has_more). Page with offset to see the

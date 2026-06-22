@@ -78,6 +78,10 @@ async def list_branch_tasks(
 ) -> Any:
     """List all tasks in a branch, optionally filtered by sprint.
 
+    This tool only narrows by sprint. For complex filtering (by status / assignee /
+    label / priority / dates / custom fields, AND/OR/NOT trees, sorting, or grouping)
+    use query_tasks(branch_id=...) instead.
+
     Paginated client-side: returns the first `limit` tasks (default 50) from `offset`,
     plus a "pagination" summary (total/returned/has_more). Page with offset for the rest.
     """
