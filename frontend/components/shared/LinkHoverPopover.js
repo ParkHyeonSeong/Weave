@@ -44,7 +44,8 @@ export default function LinkHoverPopover({ editor }) {
     };
     const onOut = (e) => {
       const to = e.relatedTarget;
-      if (to && dom.contains(to) && to.closest('a')) return;   // 이 에디터 내부 링크로 이동은 유지
+      const nextA = to && dom.contains(to) ? to.closest('a') : null;
+      if (nextA && isLinkMarkAnchor(nextA)) return;            // 이 에디터의 '진짜 링크'로 이동만 유지(bookmark 등 atom 제외)
       if (to && popoverRef.current?.contains(to)) return;      // 이 팝오버로 이동은 유지
       scheduleClose();
     };

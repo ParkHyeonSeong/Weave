@@ -46,12 +46,12 @@ export function applyLinkValue(editor, raw) {
   if (!isSafeLinkHref(href)) return;
   const sel = editor.state.selection;
   const linkType = editor.schema.marks.link;
-  // 커서가 링크 "내부"인지(inclusive 오른쪽 경계 제외): 앞·뒤 노드 모두 link mark일 때만 편집으로 취급.
-  // autolink:true(Canvas)면 경계에서도 isActive('link')가 true라 기존 링크를 덮어쓰던 버그를 막는다.
-  const insideLink = sel.empty && !!linkType
-    && !!sel.$from.nodeBefore && linkType.isInSet(sel.$from.nodeBefore.marks)
+  // 커서 오른쪽(nodeAfter)에 link mark가 있으면 그 링크 위/안(내부·왼쪽 경계·단일문자 링크)으로 보고 편집.
+  // 없으면(비링크 위치 or inclusive 오른쪽 경계) 새 링크를 삽입 → autolink:true에서 경계의 기존 링크
+  // 덮어쓰기를 막으면서, 왼쪽 경계·단일문자 링크는 prefill대로 편집되게 한다.
+  const onLink = sel.empty && !!linkType
     && !!sel.$from.nodeAfter && linkType.isInSet(sel.$from.nodeAfter.marks);
-  if (sel.empty && !insideLink) {
+  if (sel.empty && !onLink) {
     editor.chain().focus()
       .insertContent({ type: 'text', text: v, marks: [{ type: 'link', attrs: { href } }] })
       .unsetMark('link')   // collapsed 커서의 link mark 제거 → inclusive(autolink) 설정과 무관하게 연속 입력 차단

@@ -72,6 +72,25 @@ describe('applyLinkValue', () => {
     expect(html).toContain('>one</a>');                  // 텍스트 유지
   });
 
+  it('링크 왼쪽 경계에서는 새 링크 삽입이 아니라 기존 href를 갱신한다', () => {
+    editor = makeEditor('<p><a href="https://a.com">one</a>two</p>');
+    editor.commands.setTextSelection(1); // 'one' 앞(왼쪽 경계)
+    applyLinkValue(editor, 'three.com');
+    const html = editor.getHTML();
+    expect(html).toContain('href="https://three.com"');
+    expect(html).not.toContain('href="https://a.com"');
+    expect((html.match(/<a /g) || []).length).toBe(1); // 링크 1개(앞에 새 링크 안 생김)
+  });
+
+  it('단일 문자 링크도 왼쪽 경계에서 편집된다', () => {
+    editor = makeEditor('<p><a href="https://a.com">x</a>y</p>');
+    editor.commands.setTextSelection(1); // 'x' 앞
+    applyLinkValue(editor, 'three.com');
+    const html = editor.getHTML();
+    expect(html).toContain('href="https://three.com"');
+    expect((html.match(/<a /g) || []).length).toBe(1);
+  });
+
   it('빈 입력이면 선택된 링크를 해제한다', () => {
     editor = makeEditor('<p><a href="https://x.com">hi</a></p>');
     editor.commands.setTextSelection({ from: 1, to: 3 });
