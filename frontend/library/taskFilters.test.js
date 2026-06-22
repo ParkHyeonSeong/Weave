@@ -12,6 +12,10 @@ describe('matchesFilters', () => {
     expect(matchesFilters(baseTask, { searchQuery: 'hello', selectedUserIds: new Set(), filters: emptyFilters })).toBe(true);
     expect(matchesFilters(baseTask, { searchQuery: 'xyz', selectedUserIds: new Set(), filters: emptyFilters })).toBe(false);
   });
+  it('[의도적 확장] 검색이 본문(description)까지 매칭', () => {
+    const task = { ...baseTask, title: 'Hello world', description: '<p>Foobar payload</p>' };
+    expect(matchesFilters(task, { searchQuery: 'payload', selectedUserIds: new Set(), filters: emptyFilters })).toBe(true);
+  });
   it('unassigned: 담당자 없음 통과 / 있음 거부', () => {
     expect(matchesFilters(baseTask, { searchQuery: '', selectedUserIds: new Set([0]), filters: emptyFilters })).toBe(true);
     expect(matchesFilters({ ...baseTask, assignees: [{ user_id: 5 }] }, { searchQuery: '', selectedUserIds: new Set([0]), filters: emptyFilters })).toBe(false);
