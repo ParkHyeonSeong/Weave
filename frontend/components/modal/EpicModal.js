@@ -158,6 +158,7 @@ export default function EpicModal({ branchId, epic, onClose }) {
               <DatePicker
                 value={startDate || null}
                 onChange={(val) => setStartDate(val || '')}
+                max={dueDate || null}
               />
             </div>
             <div className="EpicModal__Field EpicModal__Field--half">
@@ -165,6 +166,7 @@ export default function EpicModal({ branchId, epic, onClose }) {
               <DatePicker
                 value={dueDate || null}
                 onChange={(val) => setDueDate(val || '')}
+                min={startDate || null}
               />
             </div>
           </div>

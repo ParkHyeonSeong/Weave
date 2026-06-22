@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Calendar, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { isOutOfRange } from '@/library/dateRange';
 
 const POPOVER_WIDTH = 256;
 const POPOVER_HEIGHT = 320;
@@ -59,6 +60,8 @@ export default function DatePicker({
   className = '',
   disabled = false,
   trigger = null,
+  min = null,
+  max = null,
 }) {
   const [open, setOpen] = useState(false);
   const [view, setView] = useState('days');
@@ -237,17 +240,20 @@ export default function DatePicker({
             {cells.map((cell, idx) => {
               const selected = sameYMD(cell, parsed);
               const isToday = sameYMD(cell, today);
+              const outOfRange = isOutOfRange(fmtDateStr(cell.y, cell.m, cell.d), min, max);
               const cls = [
                 'DatePicker__Day',
                 cell.inMonth ? '' : 'DatePicker__Day--out',
                 selected ? 'DatePicker__Day--selected' : '',
                 isToday ? 'DatePicker__Day--today' : '',
+                outOfRange ? 'DatePicker__Day--disabled' : '',
               ].filter(Boolean).join(' ');
               return (
                 <button
                   key={idx}
                   type="button"
                   className={cls}
+                  disabled={outOfRange}
                   onClick={() => handleDayClick(cell)}
                 >
                   {cell.d}

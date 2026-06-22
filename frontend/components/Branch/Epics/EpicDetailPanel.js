@@ -236,6 +236,7 @@ export default function EpicDetailPanel({ branchId, workflowStatuses = [], epicS
                   size="sm"
                   value={epic.start_date || null}
                   onChange={(val) => updateField('start_date', val)}
+                  max={epic.due_date || null}
                 />
               </div>
             </div>
@@ -248,6 +249,7 @@ export default function EpicDetailPanel({ branchId, workflowStatuses = [], epicS
                   size="sm"
                   value={epic.due_date || null}
                   onChange={(val) => updateField('due_date', val)}
+                  min={epic.start_date || null}
                 />
               </div>
             </div>

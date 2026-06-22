@@ -231,6 +231,16 @@
         background: $color-primary-hover;
       }
     }
+
+    &--disabled {
+      color: $color-text-tertiary;
+      opacity: 0.35;
+      cursor: not-allowed;
+
+      &:hover {
+        background: transparent;
+      }
+    }
   }
 
   &__YearGrid {

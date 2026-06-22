@@ -365,6 +365,7 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
                 size="sm"
                 value={task.start_date || null}
                 onChange={(val) => updateField('start_date', val)}
+                max={task.due_date || null}
               />
             </DetailRow>
 
@@ -374,6 +375,7 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
                 size="sm"
                 value={task.due_date || null}
                 onChange={(val) => updateField('due_date', val)}
+                min={task.start_date || null}
               />
             </DetailRow>
 

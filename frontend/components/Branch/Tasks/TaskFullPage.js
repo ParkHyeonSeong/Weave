@@ -407,6 +407,7 @@ export default function TaskFullPage() {
                 size="sm"
                 value={task.start_date || null}
                 onChange={(val) => updateField('start_date', val)}
+                max={task.due_date || null}
               />
             </FieldRow>
 
@@ -415,6 +416,7 @@ export default function TaskFullPage() {
                 size="sm"
                 value={task.due_date || null}
                 onChange={(val) => updateField('due_date', val)}
+                min={task.start_date || null}
               />
             </FieldRow>
 

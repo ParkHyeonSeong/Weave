@@ -104,6 +104,7 @@ export default function SprintModal({ branchId, sprint, onClose }) {
               <DatePicker
                 value={startDate || null}
                 onChange={(val) => setStartDate(val || '')}
+                max={endDate || null}
               />
             </div>
             <div className="SprintModal__Field SprintModal__Field--half">
@@ -111,6 +112,7 @@ export default function SprintModal({ branchId, sprint, onClose }) {
               <DatePicker
                 value={endDate || null}
                 onChange={(val) => setEndDate(val || '')}
+                min={startDate || null}
               />
             </div>
           </div>
