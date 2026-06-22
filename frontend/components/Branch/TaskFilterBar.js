@@ -48,7 +48,13 @@ export default function TaskFilterBar({
   sort = [], onMultiSortChange,
   customFields = [],
   availableFields,
+  groupByOptions,
 }) {
+  // 호출자가 group-by 옵션을 제한할 수 있다(예: Board는 payload가 epic_id/sprint_id 미포함).
+  // 미지정 시 전체 GROUP_BY_OPTIONS. 'none'은 항상 유지(그룹핑 해제 보장).
+  const groupOptions = groupByOptions
+    ? GROUP_BY_OPTIONS.filter((o) => o.value === 'none' || groupByOptions.includes(o.value))
+    : GROUP_BY_OPTIONS;
   const [sortOpen, setSortOpen] = useState(false);
   const sortRef = useRef(null);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -265,7 +271,7 @@ export default function TaskFilterBar({
             onChange={(e) => onGroupByChange(e.target.value)}
             title="Group tasks by"
           >
-            {GROUP_BY_OPTIONS.map((o) => (
+            {groupOptions.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.value === 'none' ? o.label : `Group: ${o.label}`}
               </option>
