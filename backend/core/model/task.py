@@ -157,6 +157,7 @@ async def find_by_branch(branch_id: int, sprint_id, db: AsyncSession):
                t.task_type, t.status, t.priority,
                t.epic_id, t.sprint_id, t.parent_task_id,
                t.start_date, t.due_date, t.sort_order, t.created_at,
+               t.custom_fields,
                b.key AS branch_key,
                e.epic_name, e.color AS epic_color,
                (SELECT COUNT(*) FROM task_issue ti WHERE ti.task_id = t.task_id) AS issue_count

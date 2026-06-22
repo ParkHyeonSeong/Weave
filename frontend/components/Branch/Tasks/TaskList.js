@@ -18,6 +18,9 @@ import TaskFilterBar from '../TaskFilterBar';
 import TaskListRow from './TaskListRow';
 import useTaskContextMenu from './taskMenu';
 import { matchesFilters, filterTaskTree } from '@/library/taskFilters';
+import { buildEffectiveSpec } from '@/library/filterSpecAdapter';
+import { groupTasks, applySort } from '@/library/taskViewState';
+import { emptyGroup, isEmptySpec } from '@/library/filterBuilderState';
 import ContextMenu from '@/components/common/ContextMenu';
 import ConfirmModal from '@/components/modal/ConfirmModal';
 import ParentPickerPopup from './ParentPickerPopup';
@@ -43,6 +46,17 @@ function loadJSON(key, fallback) {
 // 우선순위 정렬용 가중치
 const PRIORITY_WEIGHT = { urgent: 0, high: 1, medium: 2, low: 3 };
 
+// 현재 사용자 id — 코드베이스 공통 패턴(TaskDetailPanel.js 등): sessionStorage 'profile'.
+// FilterSpec 평가기의 $me 의미 해석(assignee=$me 등)에 쓰인다.
+function currentUserId() {
+  if (typeof window === 'undefined') return null;
+  try {
+    return JSON.parse(sessionStorage.getItem('profile') || '{}').user_id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export default function TaskList({ branchId, branchKey, taskTypes, workflowStatuses, onSelectTask }) {
   const [sprints, setSprints] = useState([]);
   const [backlogTasks, setBacklogTasks] = useState([]);
@@ -64,6 +78,14 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
 
   // 정렬 상태 (localStorage에서 복원)
   const [sortConfig, setSortConfig] = useState({ field: null, direction: 'asc' });
+
+  // 고급 빌더 spec / 그룹핑 / 다중정렬 (localStorage에서 복원) — Task 4.4
+  const [filterSpec, setFilterSpec] = useState(emptyGroup());
+  const [groupBy, setGroupBy] = useState('none');
+  const [multiSort, setMultiSort] = useState([]);
+
+  // task type별 custom field 메타 (고급 빌더 cf 조건용)
+  const [customFields, setCustomFields] = useState([]);
 
   // 스프린트 접힘 상태 (localStorage에서 복원)
   const [collapsedSprints, setCollapsedSprints] = useState(new Set());
@@ -100,7 +122,7 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
 
   // localStorage에서 필터/정렬/접힘 상태 복원 (branchId 변경 시)
   useEffect(() => {
-    // 필터 복원
+    // 필터 복원 (고급 빌더 spec·그룹핑·다중정렬은 동일 'filters' 네임스페이스에 함께 보관)
     const saved = loadJSON(storageKey(branchId, 'filters'), null);
     if (saved) {
       setSearchQuery(saved.searchQuery || '');
@@ -112,6 +134,9 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
         typeKeys: arrayToSet(saved.filters?.typeKeys),
         statusKeys: arrayToSet(saved.filters?.statusKeys),
       });
+      setFilterSpec(saved.filterSpec && saved.filterSpec.type === 'group' ? saved.filterSpec : emptyGroup());
+      setGroupBy(saved.groupBy || 'none');
+      setMultiSort(Array.isArray(saved.sort) ? saved.sort : []);
     } else {
       setSearchQuery('');
       setSelectedUserIds(new Set());
@@ -119,6 +144,9 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
         priorities: new Set(), labelIds: new Set(),
         epicIds: new Set(), typeKeys: new Set(), statusKeys: new Set(),
       });
+      setFilterSpec(emptyGroup());
+      setGroupBy('none');
+      setMultiSort([]);
     }
 
     // 정렬 복원
@@ -136,7 +164,7 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
     setInitialized(true);
   }, [branchId]);
 
-  // 필터 변경 시 localStorage 저장
+  // 필터 변경 시 localStorage 저장 (고급 빌더 spec·그룹핑·다중정렬 포함)
   useEffect(() => {
     if (!initialized) return;
     const data = {
@@ -149,9 +177,12 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
         typeKeys: setToArray(filters.typeKeys),
         statusKeys: setToArray(filters.statusKeys),
       },
+      filterSpec,
+      groupBy,
+      sort: multiSort,
     };
     localStorage.setItem(storageKey(branchId, 'filters'), JSON.stringify(data));
-  }, [branchId, searchQuery, selectedUserIds, filters, initialized]);
+  }, [branchId, searchQuery, selectedUserIds, filters, filterSpec, groupBy, multiSort, initialized]);
 
   // 정렬 변경 시 localStorage 저장
   useEffect(() => {
@@ -184,6 +215,53 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
     window.addEventListener('task:updated', handleRefresh);
     return () => window.removeEventListener('task:updated', handleRefresh);
   }, [branchId]);
+
+  // 커스텀 필드 메타 fetch — cf는 task type별 엔드포인트라 type을 순회해 병합한다.
+  // branchId/taskTypes 변경 시에만 재요청(typeIds 시그니처 캐시). 실패 시 [] 폴백(차단 없음).
+  const cfCacheKey = useRef(null);
+  useEffect(() => {
+    const typeIds = (taskTypes || []).map((t) => t.type_id).filter((id) => id != null);
+    const sig = `${branchId}:${typeIds.join(',')}`;
+    if (cfCacheKey.current === sig) return; // 동일 시그니처면 재요청 생략
+    cfCacheKey.current = sig;
+
+    if (typeIds.length === 0) { setCustomFields([]); return; }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const results = await Promise.all(
+          typeIds.map((typeId) =>
+            axios
+              .get(`/branches/${branchId}/task-types/${typeId}/custom-fields`)
+              .then((res) => (res.data?.status ? (res.data.fields || []) : []))
+              .catch((err) => {
+                console.warn(`custom-fields fetch 실패 (type ${typeId})`, err);
+                return [];
+              })),
+        );
+        if (cancelled) return;
+        // custom_field_id로 dedupe 병합
+        const byId = new Map();
+        results.flat().forEach((cf) => {
+          if (cf && cf.custom_field_id != null && !byId.has(cf.custom_field_id)) {
+            byId.set(cf.custom_field_id, {
+              custom_field_id: cf.custom_field_id,
+              field_name: cf.field_name,
+              field_type: cf.field_type,
+              field_options: cf.field_options,
+            });
+          }
+        });
+        setCustomFields([...byId.values()]);
+      } catch (err) {
+        if (cancelled) return;
+        console.warn('custom-fields 병합 실패 — cf 옵션 비활성화', err);
+        setCustomFields([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [branchId, taskTypes]);
 
   const fetchOptions = async () => {
     try {
@@ -260,12 +338,26 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
     });
   };
 
+  const advancedActive = !isEmptySpec(filterSpec);
+
   const isFilterActive =
     searchQuery.length > 0 || selectedUserIds.size > 0 ||
     filters.priorities.size > 0 || filters.labelIds.size > 0 ||
-    filters.epicIds.size > 0 || filters.typeKeys.size > 0 || filters.statusKeys.size > 0;
+    filters.epicIds.size > 0 || filters.typeKeys.size > 0 || filters.statusKeys.size > 0 ||
+    advancedActive;
 
-  const filterCtx = { searchQuery, selectedUserIds, filters };
+  // 레거시 quick-chip + 고급 빌더 spec 합성 → 단일 effectiveSpec.
+  // filterCtx.spec 분기(taskFilters.js)로 평가하므로 filters.priorities 직접 접근 없음.
+  const userId = useMemo(() => currentUserId(), []);
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const effectiveSpec = useMemo(
+    () => buildEffectiveSpec({ legacyCtx: { searchQuery, selectedUserIds, filters }, filterSpec }),
+    [searchQuery, selectedUserIds, filters, filterSpec],
+  );
+  const filterCtx = useMemo(
+    () => ({ spec: effectiveSpec, userId, today }),
+    [effectiveSpec, userId, today],
+  );
 
   const filterTasks = (tasks) => {
     if (!isFilterActive) return tasks;
@@ -325,7 +417,7 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
       if ((t.subtasks || []).some((sub) => matchesFilters(sub, filterCtx))) ids.add(t.task_id);
     });
     return ids;
-  }, [isFilterActive, sprints, backlogTasks, searchQuery, selectedUserIds, filters]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isFilterActive, sprints, backlogTasks, filterCtx]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 렌더용 = 수동 ∪ 자동 (필터 끄면 자동=빈 set → 원래 수동 펼침 상태 복원)
   const effectiveExpandedParents = useMemo(
@@ -617,6 +709,52 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
   const activeTask = activeId && activeType === 'task' ? findTask(Number(activeId)) : null;
   const dragCount = activeType === 'task' ? Math.max(selectedTaskIds.size, 1) : 0;
 
+  // ── 그룹핑 모드 (groupBy !== 'none') ──────────────────────────────
+  // 스프린트 섹션·DnD를 숨기고, 모든 태스크(부모+하위)를 평탄화→필터→다중정렬→버킷화한다.
+  const grouping = groupBy !== 'none';
+
+  // 버킷 키 → 사람이 읽는 라벨 (메타 lookup)
+  const groupLabelFor = useCallback((key) => {
+    // sprint 그룹의 null 버킷 = 백로그(sprint_id 없음)
+    if ((key === null || key === undefined) && groupBy === 'sprint') return 'Backlog';
+    if (key === null || key === undefined) return '(없음)';
+    switch (groupBy) {
+      case 'status':
+        return (workflowStatuses || []).find((w) => w.key === key)?.label || String(key);
+      case 'priority':
+        return { urgent: 'Urgent', high: 'High', medium: 'Medium', low: 'Low' }[key] || String(key);
+      case 'assignee': {
+        const m = (members || []).find((x) => x.user_id === key);
+        return m ? (m.username || m.email) : `User ${key}`;
+      }
+      case 'epic':
+        return (epics || []).find((e) => e.epic_id === key)?.epic_name || `Epic ${key}`;
+      case 'sprint': {
+        const sp = sprints.find((s) => s.sprint_id === key);
+        return sp ? sp.sprint_name : 'Backlog';
+      }
+      case 'label': {
+        const lb = (labels || []).find((l) => l.label_id === key);
+        return lb ? lb.label_name : `Label ${key}`;
+      }
+      default:
+        return String(key);
+    }
+  }, [groupBy, workflowStatuses, members, epics, sprints, labels]);
+
+  const groupedBuckets = useMemo(() => {
+    if (!grouping) return [];
+    // 부모 + 하위 모두 포함해 평탄화 (그룹핑은 트리 무시한 평면 뷰)
+    const flat = [];
+    [...sprints.flatMap((s) => s.tasks || []), ...backlogTasks].forEach((t) => {
+      flat.push(t);
+      (t.subtasks || []).forEach((sub) => flat.push(sub));
+    });
+    const visible = isFilterActive ? flat.filter((t) => matchesFilters(t, filterCtx)) : flat;
+    const sorted = applySort(visible, multiSort);
+    return groupTasks(sorted, groupBy).map((b) => ({ ...b, label: groupLabelFor(b.key) }));
+  }, [grouping, sprints, backlogTasks, isFilterActive, filterCtx, multiSort, groupBy, groupLabelFor]);
+
   if (loading) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200, color: '#6B7280', fontSize: 14 }}>Loading...</div>;
 
   const sprintIds = sprints.map((s) => `sprint-${s.sprint_id}`);
@@ -640,6 +778,18 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
           onClearFilters={handleClearFilters}
           sortConfig={sortConfig}
           onSortChange={handleSortChange}
+          filterSpec={filterSpec}
+          onFilterSpecChange={setFilterSpec}
+          groupBy={groupBy}
+          onGroupByChange={setGroupBy}
+          sort={multiSort}
+          onMultiSortChange={setMultiSort}
+          customFields={customFields}
+          availableFields={[
+            'status', 'priority', 'task_type', 'label', 'epic', 'sprint',
+            'assignee', 'due_date', 'start_date', 'created_at', 'text',
+            'has_subtasks', 'is_top_level',
+          ]}
         />
         <button className="TaskList__SprintBtn" onClick={() => setSprintModal({ open: true, sprint: null })}>
           <Plus size={14} />
@@ -647,6 +797,39 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
         </button>
       </div>
 
+      {grouping ? (
+        /* 그룹핑 모드: 스프린트 섹션·DnD 숨김, 플랫 버킷 렌더 */
+        <div className="TaskList__Groups">
+          {groupedBuckets.every((b) => b.tasks.length === 0) && (
+            <div className="TaskList__Empty">No tasks</div>
+          )}
+          {groupedBuckets.map((bucket) => (
+            <div className="TaskList__Group" key={String(bucket.key)}>
+              <div className="TaskList__GroupHeader">
+                <span className="TaskList__GroupLabel">{bucket.label}</span>
+                <span className="TaskList__SprintCount">{bucket.tasks.length}</span>
+              </div>
+              <div className="TaskList__GroupBody">
+                {bucket.tasks.map((task) => (
+                  <TaskListRow
+                    key={task.task_id}
+                    task={task}
+                    branchId={branchId}
+                    taskTypes={taskTypes}
+                    workflowStatuses={workflowStatuses}
+                    epics={epics}
+                    members={members}
+                    onClick={(e) => handleTaskClick(task, e)}
+                    onContextMenu={(e) => taskMenu.openMenu?.(e, task)}
+                    isSelected={selectedTaskIds.has(task.task_id)}
+                    isOverlay
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
       <DndContext
         sensors={sortActive ? [] : sensors}
         collisionDetection={closestCorners}
@@ -723,6 +906,7 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
           )}
         </DragOverlay>
       </DndContext>
+      )}
 
       {/* Sprint 모달 */}
       {sprintModal.open && (

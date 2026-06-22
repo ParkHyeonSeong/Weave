@@ -696,6 +696,352 @@
       opacity: 1;
     }
   }
+
+  // -- Group by 드롭다운 --
+  &__GroupBy {
+    position: relative;
+  }
+
+  &__GroupBySelect {
+    padding: 5px 10px;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    color: $color-text-secondary;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    cursor: pointer;
+    transition: all $transition-fast;
+
+    &:hover { border-color: $color-text-tertiary; }
+
+    &--active {
+      color: $color-primary;
+      border-color: $color-primary;
+      background: rgba($color-primary, 0.05);
+    }
+  }
+
+  // -- 고급 필터 빌더 --
+  &__Advanced {
+    position: relative;
+  }
+
+  &__AdvancedBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 10px;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    color: $color-text-secondary;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all $transition-fast;
+
+    &:hover { border-color: $color-text-tertiary; }
+
+    &--active {
+      color: $color-primary;
+      border-color: $color-primary;
+      background: rgba($color-primary, 0.05);
+    }
+  }
+
+  &__AdvancedPanel {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 60;
+    width: 460px;
+    max-width: 90vw;
+    max-height: 70vh;
+    overflow-y: auto;
+    padding: $space-3;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: 10px;
+    box-shadow: $shadow-lg;
+
+    @include mobile { width: 92vw; }
+  }
+
+  &__AdvancedHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: $space-2;
+  }
+
+  &__AdvancedTitle {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-bold;
+    color: $color-text;
+  }
+
+  &__AdvancedClear {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    color: $color-text-tertiary;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: $radius-sm;
+    transition: all $transition-fast;
+
+    &:hover {
+      color: $color-error;
+      background: $color-error-bg;
+    }
+  }
+
+  // -- 다중키 정렬 --
+  &__MultiSort {
+    margin-top: $space-3;
+    padding-top: $space-3;
+    border-top: 1px solid $color-border;
+  }
+
+  &__MultiSortTitle {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-bold;
+    color: $color-text-secondary;
+    margin-bottom: $space-2;
+  }
+
+  &__MultiSortRow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+
+  &__MultiSortField {
+    flex: 1;
+    padding: 4px 8px;
+    font-size: $font-size-xs;
+    color: $color-text;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-sm;
+    cursor: pointer;
+  }
+
+  &__MultiSortDir,
+  &__MultiSortRemove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    color: $color-text-tertiary;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-sm;
+    cursor: pointer;
+    transition: all $transition-fast;
+
+    &:hover { border-color: $color-text-tertiary; color: $color-text; }
+  }
+
+  &__MultiSortRemove:hover {
+    color: $color-error;
+    border-color: $color-error;
+    background: $color-error-bg;
+  }
+
+  &__MultiSortAdd {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 2px;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    color: $color-primary;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px 2px;
+
+    &:hover { text-decoration: underline; }
+  }
+}
+
+// -- 고급 필터 빌더 (중첩 AND/OR 트리) --
+.FilterBuilder {
+  font-size: $font-size-xs;
+
+  &__Group {
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    padding: $space-2;
+    background: $color-surface;
+
+    &--root {
+      border: none;
+      padding: 0;
+      background: none;
+    }
+  }
+
+  &__GroupHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: $space-2;
+  }
+
+  &__OpToggle {
+    display: inline-flex;
+    border: 1px solid $color-border;
+    border-radius: $radius-sm;
+    overflow: hidden;
+  }
+
+  &__OpToggleBtn {
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: $font-weight-bold;
+    color: $color-text-tertiary;
+    background: $color-bg;
+    border: none;
+    cursor: pointer;
+    transition: all $transition-fast;
+
+    & + & { border-left: 1px solid $color-border; }
+
+    &--active {
+      color: $color-text-inverse;
+      background: $color-primary;
+    }
+  }
+
+  &__Children {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  &__Cond {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  &__Select,
+  &__TextInput,
+  &__DateInput {
+    padding: 4px 8px;
+    font-size: $font-size-xs;
+    color: $color-text;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-sm;
+    outline: none;
+    transition: border-color $transition-fast;
+
+    &:focus { border-color: $color-primary; }
+  }
+
+  &__FieldSelect { min-width: 110px; }
+  &__OpSelect { min-width: 90px; }
+
+  &__Value { display: inline-flex; align-items: center; }
+
+  &__DateRange {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  &__DateSep { color: $color-text-tertiary; }
+
+  &__NoValue { color: $color-text-tertiary; }
+
+  &__Empty {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+    padding: 4px 2px;
+  }
+
+  &__RemoveBtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    color: $color-text-tertiary;
+    background: none;
+    border: none;
+    border-radius: $radius-sm;
+    cursor: pointer;
+    transition: all $transition-fast;
+
+    &:hover { color: $color-error; background: $color-error-bg; }
+  }
+
+  &__GroupActions {
+    display: flex;
+    gap: 6px;
+    margin-top: $space-2;
+  }
+
+  &__AddBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px 8px;
+    font-size: 11px;
+    font-weight: $font-weight-medium;
+    color: $color-primary;
+    background: rgba($color-primary, 0.07);
+    border: 1px solid transparent;
+    border-radius: $radius-sm;
+    cursor: pointer;
+    transition: all $transition-fast;
+
+    &:hover { background: rgba($color-primary, 0.14); }
+  }
+}
+
+// -- 그룹핑 모드 버킷 --
+.TaskList {
+  &__Groups {
+    display: flex;
+    flex-direction: column;
+    gap: $space-3;
+  }
+
+  &__Group {
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    overflow: hidden;
+  }
+
+  &__GroupHeader {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: $space-2 $space-4;
+    background: $color-surface;
+    border-bottom: 1px solid $color-border;
+  }
+
+  &__GroupLabel {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-semibold;
+    color: $color-text;
+  }
 }
 
 // -- Task Row --

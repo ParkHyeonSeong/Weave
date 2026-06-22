@@ -1,8 +1,10 @@
 import { useMemo, useState, useRef, useEffect } from 'react';
-import { Search, User, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Search, User, X, ArrowUpDown, ArrowUp, ArrowDown, SlidersHorizontal, Plus } from 'lucide-react';
 import MultiSelect from '@/components/common/MultiSelect';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import Avatar from '@/components/common/Avatar';
+import { isEmptySpec, emptyGroup } from '@/library/filterBuilderState';
+import FilterBuilder from './FilterBuilder';
 
 const MAX_VISIBLE = 5;
 
@@ -12,6 +14,21 @@ const SORT_OPTIONS = [
   { value: 'status', label: 'Status' },
   { value: 'created', label: 'Created' },
 ];
+
+// 그룹핑 키 (taskViewState.groupTasks의 KEY와 의미 일치)
+const GROUP_BY_OPTIONS = [
+  { value: 'none', label: 'No grouping' },
+  { value: 'status', label: 'Status' },
+  { value: 'assignee', label: 'Assignee' },
+  { value: 'epic', label: 'Epic' },
+  { value: 'sprint', label: 'Sprint' },
+  { value: 'label', label: 'Label' },
+  { value: 'priority', label: 'Priority' },
+];
+
+// 다중정렬 키 = SORT_OPTIONS와 동일(드리프트 방지). 클라이언트 payload가 뒷받침하지 않는
+// updated_at은 SORT_OPTIONS에 없으므로 자동 제외 → 모든 정렬 키가 실제로 동작한다.
+const MULTI_SORT_FIELDS = SORT_OPTIONS;
 
 const PRIORITY_OPTIONS = [
   { value: 'urgent', label: 'Urgent', color: '#DC2626' },
@@ -25,11 +42,31 @@ export default function TaskFilterBar({
   labels = [], epics = [], taskTypes = [], workflowStatuses = [],
   filters = {}, onToggleFilter, onClearFilters,
   sortConfig, onSortChange,
+  // 고급 빌더 + 그룹핑 + 다중정렬 (Task 4.4)
+  filterSpec, onFilterSpecChange,
+  groupBy = 'none', onGroupByChange,
+  sort = [], onMultiSortChange,
+  customFields = [],
+  availableFields,
 }) {
   const [sortOpen, setSortOpen] = useState(false);
   const sortRef = useRef(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const moreRef = useRef(null);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const advancedRef = useRef(null);
+
+  // 고급 패널 외부 클릭 닫기
+  useEffect(() => {
+    if (!advancedOpen) return;
+    const handleClick = (e) => {
+      if (advancedRef.current && !advancedRef.current.contains(e.target)) setAdvancedOpen(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [advancedOpen]);
+
+  const advancedActive = !isEmptySpec(filterSpec);
 
   // 외부 클릭 닫기
   useEffect(() => {
@@ -214,6 +251,120 @@ export default function TaskFilterBar({
                   )}
                 </button>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Group by 드롭다운 */}
+      {onGroupByChange && (
+        <div className="TaskFilterBar__GroupBy">
+          <select
+            className={`TaskFilterBar__GroupBySelect ${groupBy !== 'none' ? 'TaskFilterBar__GroupBySelect--active' : ''}`}
+            value={groupBy}
+            onChange={(e) => onGroupByChange(e.target.value)}
+            title="Group tasks by"
+          >
+            {GROUP_BY_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.value === 'none' ? o.label : `Group: ${o.label}`}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* 고급 필터 빌더 토글 + 패널 */}
+      {onFilterSpecChange && (
+        <div className="TaskFilterBar__Advanced" ref={advancedRef}>
+          <button
+            type="button"
+            className={`TaskFilterBar__AdvancedBtn ${advancedActive ? 'TaskFilterBar__AdvancedBtn--active' : ''}`}
+            onClick={() => setAdvancedOpen((prev) => !prev)}
+          >
+            <SlidersHorizontal size={13} />
+            고급 필터
+          </button>
+          {advancedOpen && (
+            <div className="TaskFilterBar__AdvancedPanel">
+              <div className="TaskFilterBar__AdvancedHeader">
+                <span className="TaskFilterBar__AdvancedTitle">고급 필터</span>
+                {advancedActive && (
+                  <button
+                    type="button"
+                    className="TaskFilterBar__AdvancedClear"
+                    onClick={() => onFilterSpecChange(emptyGroup())}
+                  >
+                    <X size={12} />
+                    초기화
+                  </button>
+                )}
+              </div>
+              <FilterBuilder
+                spec={filterSpec}
+                onChange={onFilterSpecChange}
+                members={members}
+                labels={labels}
+                epics={epics}
+                taskTypes={taskTypes}
+                workflowStatuses={workflowStatuses}
+                customFields={customFields}
+                availableFields={availableFields}
+              />
+
+              {/* 다중키 정렬 (그룹핑/플랫 정렬용) */}
+              {onMultiSortChange && (
+                <div className="TaskFilterBar__MultiSort">
+                  <div className="TaskFilterBar__MultiSortTitle">정렬 (다중키)</div>
+                  {sort.map((s, i) => (
+                    <div key={i} className="TaskFilterBar__MultiSortRow">
+                      <select
+                        className="TaskFilterBar__MultiSortField"
+                        value={s.field}
+                        onChange={(e) => {
+                          const next = sort.map((x, j) => (j === i ? { ...x, field: e.target.value } : x));
+                          onMultiSortChange(next);
+                        }}
+                      >
+                        {MULTI_SORT_FIELDS.map((f) => (
+                          <option key={f.value} value={f.value}>{f.label}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="TaskFilterBar__MultiSortDir"
+                        onClick={() => {
+                          const next = sort.map((x, j) => (j === i ? { ...x, dir: x.dir === 'desc' ? 'asc' : 'desc' } : x));
+                          onMultiSortChange(next);
+                        }}
+                        title={s.dir === 'desc' ? 'Descending' : 'Ascending'}
+                      >
+                        {s.dir === 'desc' ? <ArrowDown size={12} /> : <ArrowUp size={12} />}
+                      </button>
+                      <button
+                        type="button"
+                        className="TaskFilterBar__MultiSortRemove"
+                        onClick={() => onMultiSortChange(sort.filter((_, j) => j !== i))}
+                        title="Remove sort key"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="TaskFilterBar__MultiSortAdd"
+                    onClick={() => {
+                      const used = new Set(sort.map((s) => s.field));
+                      const nextField = (MULTI_SORT_FIELDS.find((f) => !used.has(f.value)) || MULTI_SORT_FIELDS[0]).value;
+                      onMultiSortChange([...sort, { field: nextField, dir: 'asc' }]);
+                    }}
+                  >
+                    <Plus size={12} />
+                    정렬 키 추가
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

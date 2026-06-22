@@ -343,12 +343,12 @@ function GroupNode({ node, path, onChange, fieldOptions, isRoot, ...rest }) {
  * spec/onChange는 controlled. onChange(updater)는 (prevSpec) => nextSpec 함수를 받는다.
  * 필드/op/값 목록은 FIELD_SPECS(backend) 계약과 일치.
  */
-export default function FilterBuilder({ spec, onChange, members, labels, epics, taskTypes, workflowStatuses, customFields }) {
+export default function FilterBuilder({ spec, onChange, members, labels, epics, taskTypes, workflowStatuses, customFields, availableFields }) {
   const root = spec && spec.type === 'group' ? spec : emptyGroup();
 
   // 선택 가능한 필드 목록(브랜치 메타에 맞춰 동적 구성)
   const fieldOptions = useMemo(() => {
-    const base = [
+    let base = [
       { value: 'status', label: 'Status' },
       { value: 'status_category', label: 'Status Category' },
       { value: 'priority', label: 'Priority' },
@@ -366,11 +366,17 @@ export default function FilterBuilder({ spec, onChange, members, labels, epics, 
       { value: 'has_subtasks', label: 'Has Subtasks' },
       { value: 'is_top_level', label: 'Top-level' },
     ];
+    // availableFields 제공 시 클라이언트 payload가 뒷받침하는 필드만 남긴다.
+    // (cf:* 커스텀 필드는 customFields에서 파생되므로 항상 유지)
+    if (Array.isArray(availableFields)) {
+      const allow = new Set(availableFields);
+      base = base.filter((f) => allow.has(f.value));
+    }
     const cf = (customFields || []).map((f) => ({
       value: `cf:${f.custom_field_id}`, label: f.field_name,
     }));
     return [...base, ...cf];
-  }, [customFields]);
+  }, [customFields, availableFields]);
 
   // onChange를 updater 함수로 래핑(루트 기준 불변 갱신)
   const apply = (updater) => onChange(updater(root));
