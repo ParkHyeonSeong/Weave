@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 
 from config import MAX_REQUEST_BODY_BYTES
+from core.errors import error_response, ErrorCode
 from library import validator
 from library.origins import cors_allow_origins, ALLOWED_ORIGIN_REGEX
 from library.rate_limiter import limiter
@@ -177,7 +178,7 @@ async def limit_body_size(request: Request, call_next):
                 if int(content_length) > MAX_REQUEST_BODY_BYTES:
                     return JSONResponse(
                         status_code=413,
-                        content={"status": False, "message": "REQUEST_TOO_LARGE"},
+                        content=error_response(ErrorCode.REQUEST_TOO_LARGE),
                     )
             except ValueError:
                 pass
@@ -251,15 +252,17 @@ def api_health():
 async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
     return JSONResponse(
         status_code=429,
-        content={"status": False, "message": "RATE_LIMIT_EXCEEDED"},
+        content=error_response(ErrorCode.RATE_LIMIT_EXCEEDED),
     )
 
 
 @app.exception_handler(validator.UnAuthorizedException)
 async def unauthorized_handler(request: Request, exc: validator.UnAuthorizedException):
+    # exc.message is a registered code (NEED_LOGIN / ADMIN_REQUIRED); error_response
+    # resolves its category. Unknown messages degrade to category=business.
     return JSONResponse(
         status_code=401,
-        content={"status": exc.status, "message": exc.message},
+        content=error_response(exc.message),
     )
 
 
@@ -268,5 +271,5 @@ async def global_exception_handler(request: Request, exc: Exception):
     logger.error("Unhandled exception at %s: %s", request.url.path, exc, exc_info=True)
     return JSONResponse(
         status_code=500,
-        content={"status": False, "message": "INTERNAL_SERVER_ERROR"},
+        content=error_response(ErrorCode.INTERNAL_SERVER_ERROR),
     )
