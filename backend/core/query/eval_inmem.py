@@ -65,7 +65,7 @@ def _cond(task, node, ctx):
         return top if value else not top
     if field == "text":
         hay = f"{task.get('title') or ''} {_strip(task.get('description'))}".lower()
-        return hay.strip() == str(value).lower() if op == "eq" else str(value).lower() in hay
+        return str(value).lower() in hay  # text는 contains만
     if field.startswith("cf:"):
         raw = _cf_text((task.get("custom_fields") or {}).get(field[3:]))
         if op == "is_empty":

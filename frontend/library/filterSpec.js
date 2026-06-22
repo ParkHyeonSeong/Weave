@@ -61,7 +61,7 @@ function evalCond(task, node, ctx) {
   }
   if (field === 'text') {
     const hay = `${task.title || ''} ${strip(task.description)}`.toLowerCase();
-    return op === 'eq' ? hay.trim() === String(value).toLowerCase() : hay.includes(String(value).toLowerCase());
+    return hay.includes(String(value).toLowerCase());  // text는 contains만
   }
   if (field.startsWith('cf:')) {
     const raw = cfText((task.custom_fields || {})[field.slice(3)]);

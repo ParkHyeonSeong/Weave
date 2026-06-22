@@ -1,6 +1,8 @@
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.query.filter_builder import build_where, build_order
+
 
 async def next_display_number(branch_id: int, db: AsyncSession) -> int:
     """Branch별 task 번호 원자적 증가.
@@ -172,52 +174,118 @@ async def find_by_branch(branch_id: int, sprint_id, db: AsyncSession):
         task['display_id'] = f"{task['branch_key']}-{task['display_number']}"
         tasks.append(task)
 
-    if tasks:
-        task_ids = [t['task_id'] for t in tasks]
-
-        # 라벨 일괄 조회
-        labels_result = await db.execute(text("""
-            SELECT tl.task_id, l.label_id, l.label_name, l.color
-            FROM task_label tl
-            INNER JOIN label l ON tl.label_id = l.label_id
-            WHERE tl.task_id = ANY(:task_ids)
-            ORDER BY l.label_name
-        """), {'task_ids': task_ids})
-        label_map = {}
-        for lr in labels_result.fetchall():
-            ld = dict(lr._mapping)
-            label_map.setdefault(ld['task_id'], []).append({
-                'label_id': ld['label_id'],
-                'label_name': ld['label_name'],
-                'color': ld['color'],
-            })
-
-        # 담당자 일괄 조회
-        assignees_result = await db.execute(text("""
-            SELECT ta.task_id, ta.user_id, u.username, u.avatar_url, u.avatar_color, ta.role
-            FROM task_assignee ta
-            INNER JOIN "user" u ON ta.user_id = u.user_id
-            WHERE ta.task_id = ANY(:task_ids)
-              AND u.deleted_at IS NULL
-            ORDER BY ta.role, u.username
-        """), {'task_ids': task_ids})
-        assignee_map = {}
-        for ar in assignees_result.fetchall():
-            ad = dict(ar._mapping)
-            assignee_map.setdefault(ad['task_id'], []).append({
-                'user_id': ad['user_id'],
-                'username': ad['username'],
-                'avatar_url': ad.get('avatar_url'),
-                'avatar_color': ad.get('avatar_color'),
-                'role': ad['role'],
-            })
-
-        for task in tasks:
-            task['labels'] = label_map.get(task['task_id'], [])
-            task['assignees'] = assignee_map.get(task['task_id'], [])
+    await _hydrate_labels_assignees(tasks, db)
 
     await attach_subtasks(tasks, db)
     return tasks
+
+
+async def _hydrate_labels_assignees(items: list, db: AsyncSession):
+    """item 목록에 labels[]/assignees[]를 배치 부착(N+1 금지).
+
+    find_by_branch에서 추출한 공유 헬퍼 — task.query()도 동일 라벨/담당자 형태를 재사용한다.
+    items가 비면 no-op.
+    """
+    if not items:
+        return
+
+    task_ids = [t['task_id'] for t in items]
+
+    # 라벨 일괄 조회
+    labels_result = await db.execute(text("""
+        SELECT tl.task_id, l.label_id, l.label_name, l.color
+        FROM task_label tl
+        INNER JOIN label l ON tl.label_id = l.label_id
+        WHERE tl.task_id = ANY(:task_ids)
+        ORDER BY l.label_name
+    """), {'task_ids': task_ids})
+    label_map = {}
+    for lr in labels_result.fetchall():
+        ld = dict(lr._mapping)
+        label_map.setdefault(ld['task_id'], []).append({
+            'label_id': ld['label_id'],
+            'label_name': ld['label_name'],
+            'color': ld['color'],
+        })
+
+    # 담당자 일괄 조회
+    assignees_result = await db.execute(text("""
+        SELECT ta.task_id, ta.user_id, u.username, u.avatar_url, u.avatar_color, ta.role
+        FROM task_assignee ta
+        INNER JOIN "user" u ON ta.user_id = u.user_id
+        WHERE ta.task_id = ANY(:task_ids)
+          AND u.deleted_at IS NULL
+        ORDER BY ta.role, u.username
+    """), {'task_ids': task_ids})
+    assignee_map = {}
+    for ar in assignees_result.fetchall():
+        ad = dict(ar._mapping)
+        assignee_map.setdefault(ad['task_id'], []).append({
+            'user_id': ad['user_id'],
+            'username': ad['username'],
+            'avatar_url': ad.get('avatar_url'),
+            'avatar_color': ad.get('avatar_color'),
+            'role': ad['role'],
+        })
+
+    for task in items:
+        task['labels'] = label_map.get(task['task_id'], [])
+        task['assignees'] = assignee_map.get(task['task_id'], [])
+
+
+_GROUPABLE = {"status": "t.status", "priority": "t.priority", "task_type": "t.task_type",
+              "epic": "t.epic_id", "sprint": "t.sprint_id"}
+
+
+async def query(branch_ids, spec, sort, group_by, limit, offset, ctx, db):
+    """FilterSpec 기반 순수 task 쿼리(MCP·크로스브랜치·Saved View·Reporting용).
+
+    - 스코프: top-level(parent_task_id IS NULL) + branch_ids IN + FilterSpec WHERE.
+    - find_by_branch의 "active sprint면 done 포함" 뷰 규칙은 재현하지 않는다(순수 필터).
+    - items 형태: find_by_branch superset(− subtasks) + branch_name/updated_at/custom_fields.
+    - total: 같은 WHERE의 별도 COUNT(페이지 무관).
+    - groups: 전체 매칭 집계(스칼라 5개만; 그 외 None).
+    """
+    where_sql, params = build_where(spec, ctx)
+    order_sql = build_order(sort)
+    params.update({"branch_ids": list(branch_ids), "limit": limit, "offset": offset})
+    # rows/COUNT/groups가 공유하는 스코프 술어(드리프트 방지 — 한 곳에서 정의)
+    scope = f"t.branch_id = ANY(:branch_ids) AND t.parent_task_id IS NULL AND ({where_sql})"
+    rows = (await db.execute(text(f"""
+        SELECT t.task_id, t.display_number, t.title, t.task_type, t.status, t.priority,
+               t.epic_id, t.sprint_id, t.parent_task_id, t.start_date, t.due_date,
+               t.sort_order, t.created_at, t.updated_at, t.custom_fields,
+               b.key AS branch_key, b.branch_name,
+               e.epic_name, e.color AS epic_color,
+               (SELECT COUNT(*) FROM task_issue ti WHERE ti.task_id = t.task_id) AS issue_count
+        FROM task t
+        INNER JOIN branch b ON t.branch_id = b.branch_id
+        LEFT JOIN epic e ON t.epic_id = e.epic_id
+        WHERE {scope}
+        ORDER BY {order_sql}
+        LIMIT :limit OFFSET :offset
+    """), params)).fetchall()
+    items = [dict(r._mapping) for r in rows]
+    for it in items:
+        it["display_id"] = f"{it['branch_key']}-{it['display_number']}"
+    await _hydrate_labels_assignees(items, db)
+
+    count_params = {k: v for k, v in params.items() if k not in ("limit", "offset")}
+    total = (await db.execute(text(f"""
+        SELECT COUNT(*) FROM task t WHERE {scope}
+    """), count_params)).scalar_one()
+
+    groups = None
+    if group_by in _GROUPABLE:
+        gcol = _GROUPABLE[group_by]
+        grows = (await db.execute(text(f"""
+            SELECT {gcol} AS key, COUNT(*) AS count FROM task t
+            WHERE {scope}
+            GROUP BY {gcol}
+        """), count_params)).fetchall()
+        groups = [{"key": r._mapping["key"], "count": r._mapping["count"]} for r in grows]
+
+    return {"items": items, "total": total, "groups": groups}
 
 
 async def find_for_board(branch_id: int, sprint_id, db: AsyncSession):
@@ -713,7 +781,8 @@ async def count_by_sprint_status(sprint_id: int, db: AsyncSession):
     return {'done_count': row[0], 'incomplete_count': row[1]}
 
 
-async def search_for_chat(user_id: int, keyword: str, my_only: bool, db: AsyncSession):
+async def search_for_chat(user_id: int, keyword: str, my_only: bool, db: AsyncSession,
+                          limit: int = 50, offset: int = 0):
     """채팅용 Task 검색 (접근 가능한 Branch의 Task만)"""
     keyword_like = f'%{keyword}%' if keyword else '%'
     assignee_filter = "AND t.task_id IN (SELECT task_id FROM task_assignee WHERE user_id = :user_id)" if my_only else ""
@@ -745,8 +814,9 @@ async def search_for_chat(user_id: int, keyword: str, my_only: bool, db: AsyncSe
               AND b.is_archived = FALSE
               {assignee_filter}
         ORDER BY _rank, t.updated_at DESC NULLS LAST, t.created_at DESC
-        LIMIT 10
-    """), {'user_id': user_id, 'keyword_like': keyword_like})
+        LIMIT :limit OFFSET :offset
+    """), {'user_id': user_id, 'keyword_like': keyword_like,
+           'limit': max(1, min(limit, 200)), 'offset': max(0, offset)})
     rows = result.fetchall()
     tasks = []
     for row in rows:

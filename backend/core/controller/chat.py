@@ -99,11 +99,12 @@ async def rename_room(room_id: int, body, request: Request, db: AsyncSession):
     return {'status': True, 'room_name': body.room_name}
 
 
-async def search_tasks(keyword: str, mode: str, request: Request, db: AsyncSession):
+async def search_tasks(keyword: str, mode: str, request: Request, db: AsyncSession,
+                       limit: int = 50, offset: int = 0):
     """채팅용 Task 검색"""
     user_id = request.state.payload.get('user_id')
     my_only = mode == 'my'
-    tasks = await task_model.search_for_chat(user_id, keyword, my_only, db)
+    tasks = await task_model.search_for_chat(user_id, keyword, my_only, db, limit=limit, offset=offset)
     return {'status': True, 'tasks': tasks}
 
 

@@ -8,6 +8,26 @@ class AssigneeInput(BaseModel):
     sub: Optional[List[int]] = None
 
 
+class FilterSortItem(BaseModel):
+    field: str
+    dir: str = "asc"
+
+
+class TaskQuery(BaseModel):
+    filter: Optional[dict] = None
+    sort: List[FilterSortItem] = []
+    group_by: Optional[str] = None
+    page: int = 1
+    page_size: int = 50
+    # limit/offset 직접 지정 시 page/page_size보다 우선(MCP offset 페이지네이션용 — 배수 제약 없음)
+    limit: Optional[int] = None
+    offset: Optional[int] = None
+
+
+class TaskQueryCross(TaskQuery):
+    scope: str = "my"
+
+
 class TaskCreate(BaseModel):
     title: str
     description: Optional[str] = None

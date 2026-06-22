@@ -1,3 +1,5 @@
+import datetime
+
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -7,6 +9,8 @@ from core.model import task_type_config as type_model
 from core.model import workflow_status as ws_model
 from core.model import recent_view
 from core.guard.branch_scope import find_resource_in_branch
+from core.query.filter_spec import validate_filter, FilterError
+from core.query.filter_db import validate_custom_fields
 from library import notification_service
 from library import activity_service
 from library.mention_parser import extract_mention_user_ids
@@ -351,3 +355,69 @@ async def delete(task_id: int, branch_id: int, request: Request, db: AsyncSessio
     await activity_service.log_task_deleted(task_id, branch_id, user_id, db)
     await task_model.delete(task_id, db)
     return {'status': True}
+
+
+# ---------------------------------------------------------------------------
+# FilterSpec 기반 복합 쿼리 (MCP·크로스브랜치·Saved View·Reporting)
+# ---------------------------------------------------------------------------
+
+def _paging(body):
+    # limit/offset 직접 지정이 우선(offset 의미 보존). 아니면 page/page_size에서 산출.
+    if getattr(body, "limit", None) is not None:
+        limit = max(1, min(body.limit, 200))
+        return limit, max(0, getattr(body, "offset", 0) or 0)
+    limit = max(1, min(body.page_size, 200))
+    return limit, max(0, (body.page - 1) * limit)
+
+
+def _dump_sort(sort):
+    """sort item이 pydantic 모델이든 dict든 dict 리스트로 정규화(컨트롤러-direct 테스트는 dict를 넘길 수 있음)."""
+    return [(s.model_dump() if hasattr(s, "model_dump") else dict(s)) for s in (sort or [])]
+
+
+def _and(existing, extra):
+    if not existing:
+        return {"type": "group", "op": "AND", "negate": False, "children": [extra]}
+    return {"type": "group", "op": "AND", "negate": False, "children": [existing, extra]}
+
+
+async def query_branch(branch_id, body, request, db):
+    user_id = request.state.payload.get('user_id')
+    if not await member_model.is_member(branch_id, user_id, db):
+        return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+    try:
+        validate_filter(body.filter)
+        await validate_custom_fields(body.filter, branch_id, db)
+    except FilterError as e:
+        return {'status': False, 'message': 'INVALID_FILTER', 'detail': str(e)}
+    ctx = {'user_id': user_id, 'today': datetime.date.today()}
+    limit, offset = _paging(body)
+    result = await task_model.query([branch_id], body.filter,
+                                    _dump_sort(body.sort),
+                                    body.group_by, limit, offset, ctx, db)
+    return {'status': True, **result}
+
+
+async def query_cross_branch(body, request, db):
+    user_id = request.state.payload.get('user_id')
+    if body.scope not in ("my", "all"):
+        # 기본값 my인 API에서 오타가 더 넓은 결과를 주지 않도록 명시 거부
+        return {'status': False, 'message': 'INVALID_SCOPE'}
+    try:
+        validate_filter(body.filter)
+        await validate_custom_fields(body.filter, None, db)
+    except FilterError as e:
+        return {'status': False, 'message': 'INVALID_FILTER', 'detail': str(e)}
+    # 멤버인 branch만 — assignee 할당이 남아있어도 비멤버 branch는 제외(IDOR)
+    member_ids = await member_model.member_branch_ids(user_id, db)
+    if not member_ids:
+        return {'status': True, 'items': [], 'total': 0, 'groups': None}
+    spec = body.filter
+    if body.scope == "my":
+        spec = _and(spec, {"type": "cond", "field": "assignee", "op": "eq", "value": "$me", "negate": False})
+    ctx = {'user_id': user_id, 'today': datetime.date.today()}
+    limit, offset = _paging(body)
+    result = await task_model.query(list(member_ids), spec,
+                                    _dump_sort(body.sort),
+                                    body.group_by, limit, offset, ctx, db)
+    return {'status': True, **result}

@@ -33,8 +33,10 @@ async def upload_file(request: Request, room_id: int = Query(...), file: UploadF
 async def search_tasks(request: Request,
                        q: str = Query('', max_length=100),
                        mode: str = Query('my'),
+                       limit: int = Query(50, ge=1, le=200),
+                       offset: int = Query(0, ge=0),
                        session: AsyncSession = Depends(db.session)):
-    return await chat_controller.search_tasks(q, mode, request, session)
+    return await chat_controller.search_tasks(q, mode, request, session, limit, offset)
 
 
 @router.get("/doc-search", summary="채팅용 문서 검색",

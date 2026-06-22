@@ -35,6 +35,16 @@ async def filter_member_branch_ids(user_id: int, branch_ids,
     return {r[0] for r in result.fetchall()}
 
 
+async def member_branch_ids(user_id: int, db: AsyncSession) -> set:
+    """사용자가 멤버인 (비아카이브) branch_id 집합."""
+    result = await db.execute(text("""
+        SELECT bm.branch_id FROM branch_member bm
+        INNER JOIN branch b ON b.branch_id = bm.branch_id
+        WHERE bm.user_id = :user_id AND b.is_archived = FALSE
+    """), {'user_id': user_id})
+    return {r[0] for r in result.fetchall()}
+
+
 async def find_by_branch(branch_id: int, db: AsyncSession):
     """Branch 멤버 목록"""
     result = await db.execute(text("""

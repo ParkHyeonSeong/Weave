@@ -26,6 +26,7 @@ from routers import sprint as sprint_router
 from routers import label as label_router
 from routers import epic as epic_router
 from routers import task as task_router
+from routers import task_query as task_query_router
 from routers import profile as profile_router
 from routers import task_type_config as task_type_config_router
 from routers import canvas as canvas_router
@@ -199,6 +200,7 @@ app.include_router(sprint_router.router, prefix="/api/branches/{branch_id}/sprin
 app.include_router(label_router.router, prefix="/api/branches/{branch_id}/labels", tags=["labels"])
 app.include_router(epic_router.router, prefix="/api/branches/{branch_id}/epics", tags=["epics"])
 app.include_router(task_router.router, prefix="/api/branches/{branch_id}/tasks", tags=["tasks"])
+app.include_router(task_query_router.router, prefix="/api/tasks", tags=["task-query"])
 app.include_router(task_type_config_router.router, prefix="/api/branches/{branch_id}/task-types", tags=["task-types"])
 app.include_router(profile_router.router, prefix="/api/profile", tags=["profile"])
 app.include_router(pat_router.router, prefix="/api/profile/tokens", tags=["tokens"])

@@ -19,7 +19,7 @@ FIELD_SPECS = {
     "start_date": {"type": "date", "ops": {"eq", "lt", "lte", "gt", "gte", "between", "is_empty"}},
     "created_at": {"type": "datetime", "ops": {"lt", "lte", "gt", "gte", "between"}},
     "updated_at": {"type": "datetime", "ops": {"lt", "lte", "gt", "gte", "between"}},
-    "text": {"type": "text", "ops": {"contains", "eq"}},
+    "text": {"type": "text", "ops": {"contains"}},  # eq 제외: SQL(독립 ILIKE) vs in-mem(연결 blob) 의미 불일치 + 실제 불필요
     "has_subtasks": {"type": "bool", "ops": {"eq"}},
     "is_top_level": {"type": "bool", "ops": {"eq"}},
 }
