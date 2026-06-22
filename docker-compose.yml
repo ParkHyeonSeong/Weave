@@ -47,6 +47,9 @@ services:
       - ./frontend:/app
       - /app/node_modules
       - /app/.next
+      # 단일 소스 parity 픽스처(backend/tests/fixtures)를 프론트 vitest가 컨테이너 안에서
+      # 읽을 수 있게 read-only 마운트. JS parity 테스트가 ../../backend/... 경로로 로드.
+      - ./backend/tests/fixtures:/backend/tests/fixtures:ro
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:${BACKEND_PORT:-8000}
       - WATCHPACK_POLLING=true

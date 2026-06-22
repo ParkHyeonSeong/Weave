@@ -1,0 +1,32 @@
+[
+  {"name": "eq_match", "ctx": {"userId": 7, "today": "2026-06-22"},
+   "task": {"priority": "high", "assignees": [{"user_id": 7}], "labels": [], "custom_fields": {}},
+   "spec": {"type": "group", "op": "AND", "negate": false, "children": [
+     {"type": "cond", "field": "priority", "op": "eq", "value": "high", "negate": false}]}, "expected": true},
+  {"name": "or_negate", "ctx": {"userId": 7, "today": "2026-06-22"},
+   "task": {"priority": "low", "status": "todo", "assignees": [], "labels": [], "custom_fields": {}},
+   "spec": {"type": "group", "op": "OR", "negate": true, "children": [
+     {"type": "cond", "field": "priority", "op": "eq", "value": "high", "negate": false},
+     {"type": "cond", "field": "status", "op": "eq", "value": "done", "negate": false}]}, "expected": true},
+  {"name": "due_relative", "ctx": {"userId": 7, "today": "2026-06-22"},
+   "task": {"due_date": "2026-06-25", "assignees": [], "labels": [], "custom_fields": {}},
+   "spec": {"type": "group", "op": "AND", "negate": false, "children": [
+     {"type": "cond", "field": "due_date", "op": "lt", "value": "$today+7d", "negate": false}]}, "expected": true},
+  {"name": "label_and_assignee_me", "ctx": {"userId": 7, "today": "2026-06-22"},
+   "task": {"assignees": [{"user_id": 7}], "labels": [{"label_id": 3}], "custom_fields": {}},
+   "spec": {"type": "group", "op": "AND", "negate": false, "children": [
+     {"type": "cond", "field": "label", "op": "in", "value": [3], "negate": false},
+     {"type": "cond", "field": "assignee", "op": "eq", "value": "$me", "negate": false}]}, "expected": true},
+  {"name": "cf_contains", "ctx": {"userId": 7, "today": "2026-06-22"},
+   "task": {"assignees": [], "labels": [], "custom_fields": {"12": "Critical Path"}},
+   "spec": {"type": "group", "op": "AND", "negate": false, "children": [
+     {"type": "cond", "field": "cf:12", "op": "contains", "value": "critical", "negate": false}]}, "expected": true},
+  {"name": "cf_bool_eq", "ctx": {"userId": 7, "today": "2026-06-22"},
+   "task": {"assignees": [], "labels": [], "custom_fields": {"5": true}},
+   "spec": {"type": "group", "op": "AND", "negate": false, "children": [
+     {"type": "cond", "field": "cf:5", "op": "eq", "value": "true", "negate": false}]}, "expected": true},
+  {"name": "cf_missing_in", "ctx": {"userId": 7, "today": "2026-06-22"},
+   "task": {"assignees": [], "labels": [], "custom_fields": {}},
+   "spec": {"type": "group", "op": "AND", "negate": false, "children": [
+     {"type": "cond", "field": "cf:9", "op": "in", "value": ["a", "b"], "negate": false}]}, "expected": false}
+]
