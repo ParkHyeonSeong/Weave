@@ -25,6 +25,13 @@ def _key(counter):
     k = f"p{counter['n']}"; counter["n"] += 1; return k
 
 
+def _like_escape(value):
+    """LIKE 메타문자(\\ % _)를 백슬래시로 이스케이프 → contains를 리터럴 부분문자열로.
+    (in-mem 평가기와 패리티: 사용자 입력 %/_가 와일드카드로 새지 않도록)
+    백슬래시를 먼저 이스케이프해야 새로 추가한 백슬래시를 이중처리하지 않음."""
+    return str(value).replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def _resolve(value, ctx, is_date):
     if value == "$me":
         return ctx["user_id"]
@@ -109,10 +116,10 @@ def _exists_category(op, value, params, counter):
 
 
 def _text(op, value, params, counter):
-    k = _key(counter); params[k] = f"%{value}%"  # text는 contains만(eq 제외)
+    k = _key(counter); params[k] = f"%{_like_escape(value)}%"  # text는 contains만(eq 제외), 리터럴 부분문자열
     # 054 인덱스 식과 글자 그대로 동일해야 함
-    return (f"(t.title ILIKE :{k} "
-            f"OR regexp_replace(t.description, '<[^>]+>', ' ', 'g') ILIKE :{k})")
+    return (f"(t.title ILIKE :{k} ESCAPE '\\' "
+            f"OR regexp_replace(t.description, '<[^>]+>', ' ', 'g') ILIKE :{k} ESCAPE '\\')")
 
 
 def _custom(field, op, value, params, counter):
@@ -121,7 +128,7 @@ def _custom(field, op, value, params, counter):
     if op == "is_empty":
         return f"{expr} IS NULL"
     if op == "contains":
-        k = _key(counter); params[k] = f"%{value}%"; return f"{expr} ILIKE :{k}"
+        k = _key(counter); params[k] = f"%{_like_escape(value)}%"; return f"{expr} ILIKE :{k} ESCAPE '\\'"
     if op == "in":
         keys = []
         for v in value:
@@ -135,7 +142,7 @@ def _custom(field, op, value, params, counter):
 _PRIORITY_CASE = ("CASE t.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 "
                   "WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END")
 _ORDERABLE = {"priority": _PRIORITY_CASE, "due_date": "t.due_date", "start_date": "t.start_date",
-              "status": "t.sort_order", "created": "t.created_at", "created_at": "t.created_at",
+              "created": "t.created_at", "created_at": "t.created_at",
               "updated_at": "t.updated_at", "title": "t.title"}
 
 

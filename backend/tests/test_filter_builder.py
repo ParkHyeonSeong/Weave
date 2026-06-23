@@ -49,6 +49,22 @@ def test_custom_field_jsonb():
     sql, _ = build_where(_g(_c("cf:12", "eq", "v")), CTX)
     assert "custom_fields ->> '12'" in sql
 
+def test_text_contains_escapes_like_wildcards():
+    # 사용자 입력의 %/_ 는 SQL 와일드카드가 아니라 리터럴로 매칭돼야 함
+    sql, p = build_where(_g(_c("text", "contains", "a%b_c")), CTX)
+    assert p == {"p0": "%a\\%b\\_c%"}
+    assert "ESCAPE" in sql
+
+def test_text_contains_escapes_backslash_first():
+    # 백슬래시를 먼저 이스케이프해야 새로 추가한 백슬래시를 이중처리하지 않음
+    _, p = build_where(_g(_c("text", "contains", "a\\b")), CTX)
+    assert p == {"p0": "%a\\\\b%"}
+
+def test_custom_contains_escapes_like_wildcards():
+    sql, p = build_where(_g(_c("cf:12", "contains", "x_y%z")), CTX)
+    assert p == {"p0": "%x\\_y\\%z%"}
+    assert "ESCAPE" in sql
+
 
 from core.query.filter_builder import build_order
 

@@ -776,14 +776,16 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
           filters={filters}
           onToggleFilter={handleToggleFilter}
           onClearFilters={handleClearFilters}
-          sortConfig={sortConfig}
-          onSortChange={handleSortChange}
+          // 두 정렬 컨트롤을 모드 배타적으로: 기본 뷰(groupBy==='none')는 적용되는 레거시 단일키 Sort만,
+          // 그룹핑 뷰는 적용되는 다중키 Sort만 노출한다(핸들러 prop 부재 시 TaskFilterBar가 컨트롤 미렌더).
+          sortConfig={grouping ? undefined : sortConfig}
+          onSortChange={grouping ? undefined : handleSortChange}
           filterSpec={filterSpec}
           onFilterSpecChange={setFilterSpec}
           groupBy={groupBy}
           onGroupByChange={setGroupBy}
           sort={multiSort}
-          onMultiSortChange={setMultiSort}
+          onMultiSortChange={grouping ? setMultiSort : undefined}
           customFields={customFields}
           availableFields={[
             'status', 'priority', 'task_type', 'label', 'epic', 'sprint',

@@ -149,38 +149,45 @@ export default function MyTasksView() {
 
       {/* 필터 바 */}
       <div className="MyTasks__FilterBar">
-        <select
-          className="MyTasks__Filter"
-          value={filters.status}
-          onChange={(e) => updateFilter('status', e.target.value)}
-        >
-          <option value="">All Status</option>
-          {STATUS_CATEGORY_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
+        {/* 서버 모드(고급 spec 또는 scope='all')에서는 /tasks/query가 기본 status/priority/branch_id를
+            적용하지 않으므로, 적용도 안 되면서 활성처럼 보이는 기본 드롭다운을 숨긴다.
+            Sort는 SORT_TO_QUERY로 서버 모드에서도 적용되므로 항상 노출한다. */}
+        {!serverMode && (
+          <>
+            <select
+              className="MyTasks__Filter"
+              value={filters.status}
+              onChange={(e) => updateFilter('status', e.target.value)}
+            >
+              <option value="">All Status</option>
+              {STATUS_CATEGORY_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
 
-        <select
-          className="MyTasks__Filter"
-          value={filters.priority}
-          onChange={(e) => updateFilter('priority', e.target.value)}
-        >
-          <option value="">All Priority</option>
-          {priorityOptions.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
+            <select
+              className="MyTasks__Filter"
+              value={filters.priority}
+              onChange={(e) => updateFilter('priority', e.target.value)}
+            >
+              <option value="">All Priority</option>
+              {priorityOptions.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
 
-        <select
-          className="MyTasks__Filter"
-          value={filters.branch_id}
-          onChange={(e) => updateFilter('branch_id', e.target.value)}
-        >
-          <option value="">All Branches</option>
-          {branches.map((b) => (
-            <option key={b.branch_id} value={b.branch_id}>{b.branch_name}</option>
-          ))}
-        </select>
+            <select
+              className="MyTasks__Filter"
+              value={filters.branch_id}
+              onChange={(e) => updateFilter('branch_id', e.target.value)}
+            >
+              <option value="">All Branches</option>
+              {branches.map((b) => (
+                <option key={b.branch_id} value={b.branch_id}>{b.branch_name}</option>
+              ))}
+            </select>
+          </>
+        )}
 
         <select
           className="MyTasks__Filter MyTasks__Filter--sort"

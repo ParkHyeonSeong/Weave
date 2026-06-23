@@ -26,9 +26,10 @@ const GROUP_BY_OPTIONS = [
   { value: 'priority', label: 'Priority' },
 ];
 
-// 다중정렬 키 = SORT_OPTIONS와 동일(드리프트 방지). 클라이언트 payload가 뒷받침하지 않는
-// updated_at은 SORT_OPTIONS에 없으므로 자동 제외 → 모든 정렬 키가 실제로 동작한다.
-const MULTI_SORT_FIELDS = SORT_OPTIONS;
+// 다중정렬 키 = SORT_OPTIONS에서 'status' 제외. 다중정렬은 taskViewState.applySort로 평가되는데
+// 'status'는 워크플로 순서(sort_order)가 클라이언트 페이로드에 없어 의미 있게 정렬되지 않는다.
+// (레거시 단일키 Sort 버튼은 SORT_OPTIONS를 그대로 써 status=워크플로 순서로 올바르게 정렬한다.)
+const MULTI_SORT_FIELDS = SORT_OPTIONS.filter((o) => o.value !== 'status');
 
 const PRIORITY_OPTIONS = [
   { value: 'urgent', label: 'Urgent', color: '#DC2626' },
