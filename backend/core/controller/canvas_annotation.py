@@ -1,6 +1,7 @@
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.errors import error_response, ErrorCode
 from core.model import canvas_annotation as annotation_model
 from core.model import canvas_member as member_model
 from core.model import canvas_page as page_model
@@ -28,7 +29,7 @@ async def _check_member(canvas_id: int, request: Request, db: AsyncSession):
     """Canvas 멤버 확인"""
     user_id = request.state.payload.get('user_id')
     if not await member_model.is_member(canvas_id, user_id, db):
-        return None, {'status': False, 'message': 'NOT_CANVAS_MEMBER'}
+        return None, error_response(ErrorCode.NOT_CANVAS_MEMBER)
     return user_id, None
 
 
@@ -36,7 +37,7 @@ async def _check_page(page_id: int, canvas_id: int, db: AsyncSession):
     """페이지 존재 및 소속 확인"""
     page = await page_model.find_by_id(page_id, db)
     if not page or page['canvas_id'] != canvas_id:
-        return None, {'status': False, 'message': 'PAGE_NOT_FOUND'}
+        return None, error_response(ErrorCode.PAGE_NOT_FOUND)
     return page, None
 
 
@@ -123,7 +124,7 @@ async def update_annotation(body, canvas_id: int, page_id: int, annotation_id: i
 
     annotation = await annotation_model.find_by_id(annotation_id, db)
     if not annotation or annotation['page_id'] != page_id:
-        return {'status': False, 'message': 'ANNOTATION_NOT_FOUND'}
+        return error_response(ErrorCode.ANNOTATION_NOT_FOUND)
 
     resolved_by = user_id if body.status == 'resolved' else None
     await annotation_model.update_status(annotation_id, body.status, resolved_by, db)
@@ -151,10 +152,10 @@ async def delete_annotation(canvas_id: int, page_id: int, annotation_id: int,
 
     annotation = await annotation_model.find_by_id(annotation_id, db)
     if not annotation or annotation['page_id'] != page_id:
-        return {'status': False, 'message': 'ANNOTATION_NOT_FOUND'}
+        return error_response(ErrorCode.ANNOTATION_NOT_FOUND)
 
     if annotation['created_by'] != user_id:
-        return {'status': False, 'message': 'NOT_ANNOTATION_AUTHOR'}
+        return error_response(ErrorCode.NOT_ANNOTATION_AUTHOR)
 
     await annotation_model.delete_annotation(annotation_id, db)
     await _broadcast_annotation_event(canvas_id, page_id, 'deleted', user_id, db)
@@ -172,7 +173,7 @@ async def create_reply(body, canvas_id: int, page_id: int, annotation_id: int,
 
     annotation = await annotation_model.find_by_id(annotation_id, db)
     if not annotation or annotation['page_id'] != page_id:
-        return {'status': False, 'message': 'ANNOTATION_NOT_FOUND'}
+        return error_response(ErrorCode.ANNOTATION_NOT_FOUND)
 
     reply_id = await annotation_model.create_reply(annotation_id, user_id, body.content, db)
 
@@ -216,10 +217,10 @@ async def update_reply(body, canvas_id: int, page_id: int, annotation_id: int,
 
     reply = await annotation_model.find_reply_by_id(reply_id, db)
     if not reply or reply['annotation_id'] != annotation_id:
-        return {'status': False, 'message': 'REPLY_NOT_FOUND'}
+        return error_response(ErrorCode.REPLY_NOT_FOUND)
 
     if reply['author_id'] != user_id:
-        return {'status': False, 'message': 'NOT_REPLY_AUTHOR'}
+        return error_response(ErrorCode.NOT_REPLY_AUTHOR)
 
     await annotation_model.update_reply(reply_id, body.content, db)
     return {'status': True}
@@ -234,10 +235,10 @@ async def delete_reply(canvas_id: int, page_id: int, annotation_id: int,
 
     reply = await annotation_model.find_reply_by_id(reply_id, db)
     if not reply or reply['annotation_id'] != annotation_id:
-        return {'status': False, 'message': 'REPLY_NOT_FOUND'}
+        return error_response(ErrorCode.REPLY_NOT_FOUND)
 
     if reply['author_id'] != user_id:
-        return {'status': False, 'message': 'NOT_REPLY_AUTHOR'}
+        return error_response(ErrorCode.NOT_REPLY_AUTHOR)
 
     await annotation_model.delete_reply(reply_id, db)
     return {'status': True}

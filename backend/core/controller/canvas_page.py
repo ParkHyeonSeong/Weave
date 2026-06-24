@@ -1,6 +1,7 @@
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.errors import error_response, ErrorCode
 from core.model import canvas_page as page_model
 from core.model import canvas_member as member_model
 from core.model import recent_view
@@ -19,7 +20,7 @@ async def _verify_parent_in_canvas(parent_page_id, canvas_id: int, db: AsyncSess
         return None
     parent_page = await page_model.find_by_id(parent_page_id, db)
     if not parent_page or parent_page['canvas_id'] != canvas_id:
-        return {'status': False, 'message': 'PARENT_PAGE_NOT_FOUND'}
+        return error_response(ErrorCode.PARENT_PAGE_NOT_FOUND)
     return None
 
 
@@ -28,7 +29,7 @@ async def create(canvas_id: int, body, request: Request, db: AsyncSession):
     user_id = request.state.payload.get('user_id')
 
     if not await member_model.is_member(canvas_id, user_id, db):
-        return {'status': False, 'message': 'NOT_CANVAS_MEMBER'}
+        return error_response(ErrorCode.NOT_CANVAS_MEMBER)
 
     # parent_page_id가 같은 canvas 소속인지 검증 (cross-canvas 트리 손상 차단)
     err = await _verify_parent_in_canvas(body.parent_page_id, canvas_id, db)
@@ -58,7 +59,7 @@ async def get_tree(canvas_id: int, request: Request, db: AsyncSession):
     """Canvas 내 페이지 트리"""
     user_id = request.state.payload.get('user_id')
     if not await member_model.is_member(canvas_id, user_id, db):
-        return {'status': False, 'message': 'NOT_CANVAS_MEMBER'}
+        return error_response(ErrorCode.NOT_CANVAS_MEMBER)
 
     pages = await page_model.find_tree(canvas_id, db)
     return {'status': True, 'pages': pages}
@@ -68,11 +69,11 @@ async def get_detail(canvas_id: int, page_id: int, request: Request, db: AsyncSe
     """페이지 상세 (content 포함)"""
     user_id = request.state.payload.get('user_id')
     if not await member_model.is_member(canvas_id, user_id, db):
-        return {'status': False, 'message': 'NOT_CANVAS_MEMBER'}
+        return error_response(ErrorCode.NOT_CANVAS_MEMBER)
 
     page = await page_model.find_by_id(page_id, db)
     if not page or page['canvas_id'] != canvas_id:
-        return {'status': False, 'message': 'PAGE_NOT_FOUND'}
+        return error_response(ErrorCode.PAGE_NOT_FOUND)
 
     # 조회 기록
     await recent_view.upsert(user_id, 'doc', page_id, db)
@@ -84,11 +85,11 @@ async def update(canvas_id: int, page_id: int, body, request: Request, db: Async
     """페이지 수정"""
     user_id = request.state.payload.get('user_id')
     if not await member_model.is_member(canvas_id, user_id, db):
-        return {'status': False, 'message': 'NOT_CANVAS_MEMBER'}
+        return error_response(ErrorCode.NOT_CANVAS_MEMBER)
 
     page = await page_model.find_by_id(page_id, db)
     if not page or page['canvas_id'] != canvas_id:
-        return {'status': False, 'message': 'PAGE_NOT_FOUND'}
+        return error_response(ErrorCode.PAGE_NOT_FOUND)
 
     fields = body.model_dump(exclude_unset=True)
     if not fields:
@@ -125,15 +126,15 @@ async def move(canvas_id: int, page_id: int, body, request: Request, db: AsyncSe
     """페이지/폴더 이동 (DnD용)"""
     user_id = request.state.payload.get('user_id')
     if not await member_model.is_member(canvas_id, user_id, db):
-        return {'status': False, 'message': 'NOT_CANVAS_MEMBER'}
+        return error_response(ErrorCode.NOT_CANVAS_MEMBER)
 
     page = await page_model.find_by_id(page_id, db)
     if not page or page['canvas_id'] != canvas_id:
-        return {'status': False, 'message': 'PAGE_NOT_FOUND'}
+        return error_response(ErrorCode.PAGE_NOT_FOUND)
 
     # overview 페이지는 이동 불가
     if page['type'] == 'overview':
-        return {'status': False, 'message': 'CANNOT_MOVE_OVERVIEW'}
+        return error_response(ErrorCode.CANNOT_MOVE_OVERVIEW)
 
     # parent_page_id가 같은 canvas 소속인지 검증 (cross-canvas 이동 차단)
     err = await _verify_parent_in_canvas(body.parent_page_id, canvas_id, db)
@@ -143,7 +144,7 @@ async def move(canvas_id: int, page_id: int, body, request: Request, db: AsyncSe
     # 트리 사이클 차단 (self-parent / descendant-parent) — CP-001
     if body.parent_page_id is not None and \
             await page_model.is_circular_parent(page_id, body.parent_page_id, db):
-        return {'status': False, 'message': 'PARENT_CYCLE'}
+        return error_response(ErrorCode.PARENT_CYCLE)
 
     await page_model.move_page(
         page_id, canvas_id, body.parent_page_id, body.position, user_id, db
@@ -159,14 +160,14 @@ async def copy(canvas_id: int, page_id: int, body, request: Request, db: AsyncSe
     """페이지 복제 (단일 문서만, 폴더 불가)"""
     user_id = request.state.payload.get('user_id')
     if not await member_model.is_member(canvas_id, user_id, db):
-        return {'status': False, 'message': 'NOT_CANVAS_MEMBER'}
+        return error_response(ErrorCode.NOT_CANVAS_MEMBER)
 
     page = await page_model.find_by_id(page_id, db)
     if not page or page['canvas_id'] != canvas_id:
-        return {'status': False, 'message': 'PAGE_NOT_FOUND'}
+        return error_response(ErrorCode.PAGE_NOT_FOUND)
 
     if page['type'] in ('overview', 'folder'):
-        return {'status': False, 'message': 'CANNOT_COPY_THIS_TYPE'}
+        return error_response(ErrorCode.CANNOT_COPY_THIS_TYPE)
 
     # parent_page_id가 같은 canvas 소속인지 검증 (cross-canvas 복제 차단)
     err = await _verify_parent_in_canvas(body.parent_page_id, canvas_id, db)
@@ -183,15 +184,15 @@ async def delete(canvas_id: int, page_id: int, request: Request, db: AsyncSessio
     """페이지 아카이브 (하위 페이지 포함)"""
     user_id = request.state.payload.get('user_id')
     if not await member_model.is_member(canvas_id, user_id, db):
-        return {'status': False, 'message': 'NOT_CANVAS_MEMBER'}
+        return error_response(ErrorCode.NOT_CANVAS_MEMBER)
 
     page = await page_model.find_by_id(page_id, db)
     if not page or page['canvas_id'] != canvas_id:
-        return {'status': False, 'message': 'PAGE_NOT_FOUND'}
+        return error_response(ErrorCode.PAGE_NOT_FOUND)
 
     # overview 페이지는 삭제 불가
     if page['type'] == 'overview':
-        return {'status': False, 'message': 'CANNOT_DELETE_OVERVIEW'}
+        return error_response(ErrorCode.CANNOT_DELETE_OVERVIEW)
 
     # 활동 로그 (삭제 전 기록)
     await activity_service.log_canvas_page_deleted(page_id, canvas_id, user_id, page.get('title', ''), db)

@@ -4,6 +4,7 @@ import uuid
 from fastapi import Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.errors import error_response, ErrorCode
 from core.model import branch_member as branch_member_model
 from core.model import canvas as canvas_model
 from core.model import canvas_member as member_model
@@ -29,11 +30,11 @@ async def create(body, request: Request, db: AsyncSession):
     # branch_id는 nullable(독립 canvas 허용)이므로 None이면 검증 건너뜀.
     if body.branch_id is not None:
         if not await branch_member_model.is_member(body.branch_id, user_id, db):
-            return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+            return error_response(ErrorCode.NOT_BRANCH_MEMBER)
 
     # key 중복 체크
     if await canvas_model.find_by_key(body.key, db):
-        return {'status': False, 'message': 'KEY_ALREADY_EXISTS'}
+        return error_response(ErrorCode.KEY_ALREADY_EXISTS)
 
     canvas_id = await canvas_model.create(
         canvas_name=body.canvas_name,
@@ -85,14 +86,14 @@ async def get_detail(canvas_id: int, request: Request, db: AsyncSession):
     """Canvas 상세 (현재 사용자의 role 포함)"""
     canvas = await canvas_model.find_by_id(canvas_id, db)
     if not canvas:
-        return {'status': False, 'message': 'CANVAS_NOT_FOUND'}
+        return error_response(ErrorCode.CANVAS_NOT_FOUND)
 
     user_id = request.state.payload.get('user_id')
     my_role = await member_model.get_role(canvas_id, user_id, db)
 
     # private canvas는 멤버만 조회 가능
     if canvas['visibility'] == 'private' and not my_role:
-        return {'status': False, 'message': 'ACCESS_DENIED'}
+        return error_response(ErrorCode.ACCESS_DENIED)
 
     canvas['my_role'] = my_role
 
@@ -107,12 +108,12 @@ async def get_members(canvas_id: int, request: Request, db: AsyncSession):
     """
     canvas = await canvas_model.find_by_id(canvas_id, db)
     if not canvas:
-        return {'status': False, 'message': 'CANVAS_NOT_FOUND'}
+        return error_response(ErrorCode.CANVAS_NOT_FOUND)
 
     user_id = request.state.payload.get('user_id')
     is_member = await member_model.is_member(canvas_id, user_id, db)
     if canvas['visibility'] == 'private' and not is_member:
-        return {'status': False, 'message': 'ACCESS_DENIED'}
+        return error_response(ErrorCode.ACCESS_DENIED)
 
     members = await member_model.find_by_canvas(canvas_id, db)
     if not is_member:
@@ -126,27 +127,27 @@ async def upload_icon(canvas_id: int, file: UploadFile, request: Request, db: As
 
     canvas = await canvas_model.find_by_id(canvas_id, db)
     if not canvas:
-        return {'status': False, 'message': 'CANVAS_NOT_FOUND'}
+        return error_response(ErrorCode.CANVAS_NOT_FOUND)
 
     role = await member_model.get_role(canvas_id, user_id, db)
     if role != 'admin':
-        return {'status': False, 'message': 'ADMIN_ONLY'}
+        return error_response(ErrorCode.ADMIN_ONLY)
 
     if not file or not file.filename:
-        return {'status': False, 'message': 'NO_FILE'}
+        return error_response(ErrorCode.NO_FILE)
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in ICON_ALLOWED_EXT:
-        return {'status': False, 'message': 'INVALID_FILE_TYPE'}
+        return error_response(ErrorCode.INVALID_FILE_TYPE)
     content = await file.read()
     if len(content) > ICON_MAX_SIZE:
-        return {'status': False, 'message': 'FILE_TOO_LARGE'}
+        return error_response(ErrorCode.FILE_TOO_LARGE)
     if not validate_image_magic_bytes(content, ext):
-        return {'status': False, 'message': 'INVALID_FILE_CONTENT'}
+        return error_response(ErrorCode.INVALID_FILE_CONTENT)
 
     if ext == '.svg':
         sanitized = sanitize_svg(content)
         if sanitized is None:
-            return {'status': False, 'message': 'INVALID_FILE_CONTENT'}
+            return error_response(ErrorCode.INVALID_FILE_CONTENT)
         content = sanitized
 
     os.makedirs(ICON_UPLOAD_DIR, exist_ok=True)
@@ -167,7 +168,7 @@ async def update(canvas_id: int, body, request: Request, db: AsyncSession):
     user_id = request.state.payload.get('user_id')
     role = await member_model.get_role(canvas_id, user_id, db)
     if role != 'admin':
-        return {'status': False, 'message': 'ADMIN_ONLY'}
+        return error_response(ErrorCode.ADMIN_ONLY)
 
     fields = body.model_dump(exclude_unset=True)
     if not fields:
@@ -179,7 +180,7 @@ async def update(canvas_id: int, body, request: Request, db: AsyncSession):
 
     if 'key' in fields and current and current['key'] != fields['key']:
         if await canvas_model.find_by_key(fields['key'], db):
-            return {'status': False, 'message': 'KEY_ALREADY_EXISTS'}
+            return error_response(ErrorCode.KEY_ALREADY_EXISTS)
 
     if 'icon' in fields and current:
         old_icon = current.get('icon') or ''
@@ -204,12 +205,12 @@ async def join(canvas_id: int, request: Request, db: AsyncSession):
 
     canvas = await canvas_model.find_by_id(canvas_id, db)
     if not canvas:
-        return {'status': False, 'message': 'CANVAS_NOT_FOUND'}
+        return error_response(ErrorCode.CANVAS_NOT_FOUND)
     if canvas['visibility'] != 'public':
-        return {'status': False, 'message': 'CANVAS_NOT_PUBLIC'}
+        return error_response(ErrorCode.CANVAS_NOT_PUBLIC)
 
     if await member_model.is_member(canvas_id, user_id, db):
-        return {'status': False, 'message': 'ALREADY_MEMBER'}
+        return error_response(ErrorCode.ALREADY_MEMBER)
 
     await member_model.add(canvas_id, user_id, 'member', db)
     return {'status': True}
@@ -220,10 +221,10 @@ async def add_member(canvas_id: int, body, request: Request, db: AsyncSession):
     user_id = request.state.payload.get('user_id')
     role = await member_model.get_role(canvas_id, user_id, db)
     if role != 'admin':
-        return {'status': False, 'message': 'ADMIN_ONLY'}
+        return error_response(ErrorCode.ADMIN_ONLY)
 
     if await member_model.is_member(canvas_id, body.user_id, db):
-        return {'status': False, 'message': 'ALREADY_MEMBER'}
+        return error_response(ErrorCode.ALREADY_MEMBER)
 
     await member_model.add(canvas_id, body.user_id, body.role, db)
     return {'status': True}
@@ -234,16 +235,16 @@ async def update_member_role(canvas_id: int, target_user_id: int, body, request:
     user_id = request.state.payload.get('user_id')
     role = await member_model.get_role(canvas_id, user_id, db)
     if role != 'admin':
-        return {'status': False, 'message': 'ADMIN_ONLY'}
+        return error_response(ErrorCode.ADMIN_ONLY)
 
     if not await member_model.is_member(canvas_id, target_user_id, db):
-        return {'status': False, 'message': 'NOT_CANVAS_MEMBER'}
+        return error_response(ErrorCode.NOT_CANVAS_MEMBER)
 
     current_role = await member_model.get_role(canvas_id, target_user_id, db)
     if current_role == 'admin' and body.role != 'admin':
         admin_count = await member_model.count_admins(canvas_id, db)
         if admin_count <= 1:
-            return {'status': False, 'message': 'CANNOT_REMOVE_LAST_ADMIN'}
+            return error_response(ErrorCode.CANNOT_REMOVE_LAST_ADMIN)
 
     await member_model.update_role(canvas_id, target_user_id, body.role, db)
     return {'status': True}
@@ -254,16 +255,16 @@ async def remove_member(canvas_id: int, target_user_id: int, request: Request, d
     user_id = request.state.payload.get('user_id')
     role = await member_model.get_role(canvas_id, user_id, db)
     if role != 'admin':
-        return {'status': False, 'message': 'ADMIN_ONLY'}
+        return error_response(ErrorCode.ADMIN_ONLY)
 
     target_role = await member_model.get_role(canvas_id, target_user_id, db)
     if not target_role:
-        return {'status': False, 'message': 'NOT_CANVAS_MEMBER'}
+        return error_response(ErrorCode.NOT_CANVAS_MEMBER)
 
     if target_role == 'admin':
         admin_count = await member_model.count_admins(canvas_id, db)
         if admin_count <= 1:
-            return {'status': False, 'message': 'CANNOT_REMOVE_LAST_ADMIN'}
+            return error_response(ErrorCode.CANNOT_REMOVE_LAST_ADMIN)
 
     await member_model.remove(canvas_id, target_user_id, db)
     return {'status': True}
@@ -274,12 +275,12 @@ async def leave(canvas_id: int, request: Request, db: AsyncSession):
     user_id = request.state.payload.get('user_id')
     role = await member_model.get_role(canvas_id, user_id, db)
     if not role:
-        return {'status': False, 'message': 'NOT_CANVAS_MEMBER'}
+        return error_response(ErrorCode.NOT_CANVAS_MEMBER)
 
     if role == 'admin':
         admin_count = await member_model.count_admins(canvas_id, db)
         if admin_count <= 1:
-            return {'status': False, 'message': 'CANNOT_LEAVE_LAST_ADMIN'}
+            return error_response(ErrorCode.CANNOT_LEAVE_LAST_ADMIN)
 
     await member_model.remove(canvas_id, user_id, db)
     return {'status': True}
@@ -290,11 +291,11 @@ async def delete(canvas_id: int, request: Request, db: AsyncSession):
     user_id = request.state.payload.get('user_id')
     role = await member_model.get_role(canvas_id, user_id, db)
     if role != 'admin':
-        return {'status': False, 'message': 'ADMIN_ONLY'}
+        return error_response(ErrorCode.ADMIN_ONLY)
 
     canvas = await canvas_model.find_by_id(canvas_id, db)
     if not canvas:
-        return {'status': False, 'message': 'CANVAS_NOT_FOUND'}
+        return error_response(ErrorCode.CANVAS_NOT_FOUND)
 
     await canvas_model.archive(canvas_id, db)
     return {'status': True}
@@ -312,7 +313,7 @@ async def restore(canvas_id: int, request: Request, db: AsyncSession):
     user_id = request.state.payload.get('user_id')
     role = await member_model.get_role(canvas_id, user_id, db)
     if role != 'admin':
-        return {'status': False, 'message': 'ADMIN_ONLY'}
+        return error_response(ErrorCode.ADMIN_ONLY)
     await canvas_model.restore(canvas_id, db)
     return {'status': True}
 
@@ -322,7 +323,7 @@ async def permanent_delete(canvas_id: int, request: Request, db: AsyncSession):
     user_id = request.state.payload.get('user_id')
     role = await member_model.get_role(canvas_id, user_id, db)
     if role != 'admin':
-        return {'status': False, 'message': 'ADMIN_ONLY'}
+        return error_response(ErrorCode.ADMIN_ONLY)
     await canvas_model.hard_delete(canvas_id, db)
     return {'status': True}
 
@@ -332,7 +333,7 @@ async def search_non_members(canvas_id: int, query: str, request: Request, db: A
     user_id = request.state.payload.get('user_id')
     role = await member_model.get_role(canvas_id, user_id, db)
     if role != 'admin':
-        return {'status': False, 'message': 'ADMIN_ONLY'}
+        return error_response(ErrorCode.ADMIN_ONLY)
 
     users = await member_model.search_non_members(canvas_id, query, db)
     return {'status': True, 'users': users}
