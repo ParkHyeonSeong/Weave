@@ -1,6 +1,7 @@
-import { useCallback } from 'react';
+import { useCallback, useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import { X } from 'lucide-react';
+import { axios } from '@/library/_axios';
 import { getAppContext } from '@/library/appContext';
 import { useUiPrefs } from '@/library/UiPrefsContext';
 import SidebarBranches from './SidebarBranches';
@@ -19,6 +20,28 @@ export default function Sidebar({ isMobile, width, onResizeStart, onCreateBranch
   const handleOrderChange = useCallback((key, ids) => {
     setNamespace('sidebar_order', { ...(prefs.sidebar_order || {}), [key]: ids });
   }, [prefs.sidebar_order, setNamespace]);
+
+  // 현재 브랜치의 고정한 뷰 (per-user 핀 + 서버 뷰 목록 매핑, 삭제된 뷰는 제외)
+  const branchId = activeApp === 'branch' ? router.query.id : null;
+  const [branchViews, setBranchViews] = useState([]);
+  const loadBranchViews = useCallback(() => {
+    if (!branchId) { setBranchViews([]); return Promise.resolve(); }
+    return axios.get('/saved-views', { params: { scope_branch_id: branchId } })
+      .then((res) => setBranchViews(res.data?.status ? (res.data.views || []) : []))
+      .catch(() => setBranchViews([]));
+  }, [branchId]);
+  useEffect(() => { loadBranchViews(); }, [loadBranchViews]);
+  // 뷰 저장/삭제 시 핀 목록 동기화(TaskList가 발행)
+  useEffect(() => {
+    const h = () => loadBranchViews();
+    window.addEventListener('saved-views:changed', h);
+    return () => window.removeEventListener('saved-views:changed', h);
+  }, [loadBranchViews]);
+  const pinnedViews = useMemo(() => {
+    const ids = (branchId && prefs.saved_view_pins?.[String(branchId)]) || [];
+    const map = new Map(branchViews.map((v) => [v.view_id, v]));
+    return ids.map((vid) => map.get(vid)).filter(Boolean);
+  }, [branchId, prefs.saved_view_pins, branchViews]);
 
   return (
     <aside
@@ -45,6 +68,8 @@ export default function Sidebar({ isMobile, width, onResizeStart, onCreateBranch
             hidden={hidden.branches}
             onHide={(id) => hide('branches', id)}
             onUnhide={(id) => unhide('branches', id)}
+            pinnedViews={pinnedViews}
+            currentBranchId={branchId}
           />
         )}
         {activeApp === 'canvas' && (

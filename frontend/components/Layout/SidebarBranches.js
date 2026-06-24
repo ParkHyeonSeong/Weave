@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/router';
-import { Plus, ChevronRight, ChevronDown } from 'lucide-react';
+import { Plus, ChevronRight, ChevronDown, Bookmark } from 'lucide-react';
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
   DragOverlay,
@@ -71,7 +71,7 @@ function SortableBranchItem({ branch, isActive, onMenu, rename }) {
   );
 }
 
-export default function SidebarBranches({ onCreateBranch, savedOrder, onOrderChange, hidden = [], onHide, onUnhide }) {
+export default function SidebarBranches({ onCreateBranch, savedOrder, onOrderChange, hidden = [], onHide, onUnhide, pinnedViews = [], currentBranchId }) {
   const router = useRouter();
   const [branches, setBranches] = useState([]);
   const [activeItem, setActiveItem] = useState(null);
@@ -257,6 +257,25 @@ export default function SidebarBranches({ onCreateBranch, savedOrder, onOrderCha
           </>
         )}
       </div>
+
+      {/* 현재 브랜치의 고정한 뷰 (클릭 → ?view= 딥링크로 적용) */}
+      {pinnedViews.length > 0 && (
+        <div className="Sidebar__PinnedViews">
+          <div className="Sidebar__SubSectionLabel">고정한 뷰</div>
+          {pinnedViews.map((v) => (
+            <button
+              key={v.view_id}
+              type="button"
+              className="Sidebar__PinnedView"
+              onClick={() => router.push(`/branch/${currentBranchId}?tab=tasks&view=${v.view_id}`)}
+              title={v.name}
+            >
+              <Bookmark size={12} />
+              <span className="Sidebar__BranchName">{v.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       <ContextMenu {...ctx.props} />
       <ConfirmModal

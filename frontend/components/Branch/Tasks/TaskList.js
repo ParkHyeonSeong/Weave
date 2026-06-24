@@ -22,6 +22,7 @@ import { buildEffectiveSpec } from '@/library/filterSpecAdapter';
 import { groupTasks, applySort } from '@/library/taskViewState';
 import { emptyGroup, isEmptySpec } from '@/library/filterBuilderState';
 import { toSavedPayload, applySavedView } from '@/library/savedViewState';
+import { useUiPrefs } from '@/library/UiPrefsContext';
 import ContextMenu from '@/components/common/ContextMenu';
 import ConfirmModal from '@/components/modal/ConfirmModal';
 import ParentPickerPopup from './ParentPickerPopup';
@@ -67,7 +68,8 @@ function currentUserId() {
   }
 }
 
-export default function TaskList({ branchId, branchKey, taskTypes, workflowStatuses, onSelectTask }) {
+export default function TaskList({ branchId, branchKey, taskTypes, workflowStatuses, onSelectTask, applyViewId = null, onViewApplied }) {
+  const { prefs, setPinnedViews } = useUiPrefs();
   const [sprints, setSprints] = useState([]);
   const [backlogTasks, setBacklogTasks] = useState([]);
   const [epics, setEpics] = useState([]);
@@ -377,6 +379,7 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
         await loadSavedViews();
         setActiveViewId(res.data.view_id);
         setViewError(null);
+        window.dispatchEvent(new Event('saved-views:changed'));  // 사이드바 핀 목록 갱신
       } else {
         setViewError(VIEW_SAVE_ERR);
       }
@@ -402,6 +405,7 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
         await loadSavedViews();
         if (activeViewId === viewId) setActiveViewId(null);
         setViewError(null);
+        window.dispatchEvent(new Event('saved-views:changed'));  // 사이드바 핀 목록 갱신
       } else {
         setViewError(VIEW_DELETE_ERR);
       }
@@ -409,6 +413,28 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
       setViewError(VIEW_DELETE_ERR);
     }
   };
+
+  // 사이드바 핀 (per-user, 브랜치별 네임스페이스)
+  const pinKey = String(branchId);
+  const pinnedViewIds = prefs.saved_view_pins?.[pinKey] || [];
+  const handleTogglePin = (viewId) => {
+    const next = pinnedViewIds.includes(viewId)
+      ? pinnedViewIds.filter((x) => x !== viewId)
+      : [...pinnedViewIds, viewId];
+    setPinnedViews(pinKey, next);
+  };
+
+  // ?view= 딥링크: savedViews 로드 완료 후 1회만 적용한 뒤 onViewApplied로 부모가 applyViewId를 비운다.
+  // (탭 전환 시 TaskList가 언마운트/재마운트되는데, 부모가 안 비우면 재마운트마다 뷰가 사용자 필터를 덮어씀)
+  const appliedViewRef = useRef(null);
+  useEffect(() => {
+    if (!applyViewId) { appliedViewRef.current = null; return; } // 부모가 비우면 같은 핀 재클릭 위해 리셋
+    if (appliedViewRef.current === applyViewId) return;          // savedViews 갱신으로 effect 재실행돼도 1회만
+    if (!savedViews.some((v) => v.view_id === applyViewId)) return; // 아직 로드 전 → savedViews 갱신 시 재시도
+    appliedViewRef.current = applyViewId;
+    handleApplyView(applyViewId);
+    onViewApplied?.();
+  }, [applyViewId, savedViews]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const advancedActive = !isEmptySpec(filterSpec);
 
@@ -870,6 +896,8 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
           onSaveView={handleSaveView}
           onUpdateView={handleUpdateView}
           onDeleteView={handleDeleteView}
+          pinnedViewIds={pinnedViewIds}
+          onTogglePin={handleTogglePin}
         />
         <button className="TaskList__SprintBtn" onClick={() => setSprintModal({ open: true, sprint: null })}>
           <Plus size={14} />

@@ -1,5 +1,5 @@
 import { useMemo, useState, useRef, useEffect } from 'react';
-import { Search, User, X, ArrowUpDown, ArrowUp, ArrowDown, SlidersHorizontal, Plus, Bookmark, ChevronDown, Pencil, Trash2 } from 'lucide-react';
+import { Search, User, X, ArrowUpDown, ArrowUp, ArrowDown, SlidersHorizontal, Plus, Bookmark, ChevronDown, Pencil, Trash2, Pin } from 'lucide-react';
 import MultiSelect from '@/components/common/MultiSelect';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import Avatar from '@/components/common/Avatar';
@@ -52,6 +52,7 @@ export default function TaskFilterBar({
   groupByOptions,
   // 저장된 뷰 스위처 (Phase 2 — onApplyView 있을 때만 렌더; Board 등 미사용 호출자엔 미노출)
   savedViews = [], activeViewId = null, onApplyView, onSaveView, onUpdateView, onDeleteView,
+  pinnedViewIds = [], onTogglePin,
 }) {
   // 호출자가 group-by 옵션을 제한할 수 있다(예: Board는 payload가 epic_id/sprint_id 미포함).
   // 미지정 시 전체 GROUP_BY_OPTIONS. 'none'은 항상 유지(그룹핑 해제 보장).
@@ -199,6 +200,16 @@ export default function TaskFilterBar({
                       {v.name}
                       {!v.is_owner && <span className="TaskFilterBar__ViewShared">공유</span>}
                     </button>
+                    {onTogglePin && (
+                      <button
+                        type="button"
+                        className={`TaskFilterBar__ViewPin ${pinnedViewIds.includes(v.view_id) ? 'TaskFilterBar__ViewPin--on' : ''}`}
+                        onClick={() => onTogglePin(v.view_id)}
+                        title={pinnedViewIds.includes(v.view_id) ? '사이드바 고정 해제' : '사이드바에 고정'}
+                      >
+                        <Pin size={12} />
+                      </button>
+                    )}
                     {v.is_owner && (
                       <>
                         <button

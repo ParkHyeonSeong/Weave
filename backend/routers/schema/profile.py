@@ -63,3 +63,4 @@ class UpdateUiPrefs(BaseModel):
     launchpad_order: Optional[List[str]] = None
     widget_layout: Optional[List[str]] = None
     home_controls: Optional[dict] = None
+    saved_view_pins: Optional[dict] = None  # { "<branchId>|global": [view_id, ...] } per-user 핀 순서

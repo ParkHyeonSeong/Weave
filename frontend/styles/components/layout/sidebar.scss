@@ -251,6 +251,37 @@
     text-overflow: ellipsis;
   }
 
+  // -- 고정한 뷰 (Phase 2) --
+  &__PinnedViews {
+    margin-top: $space-3;
+    padding-top: $space-2;
+    border-top: 1px solid $color-border;
+  }
+
+  &__SubSectionLabel {
+    padding: 0 $space-2 $space-1;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-semibold;
+    color: $color-text-tertiary;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  &__PinnedView {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    width: 100%;
+    padding: 5px $space-2;
+    font-size: $font-size-sm;
+    color: $color-text-secondary;
+    border-radius: $radius-sm;
+    cursor: pointer;
+    transition: all $transition-fast;
+
+    &:hover { background: $color-surface-hover; color: $color-text; }
+  }
+
   &__RenameInput {
     flex: 1;
     min-width: 0;

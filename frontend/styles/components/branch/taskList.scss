@@ -543,6 +543,7 @@
     padding: 0 4px;
   }
 
+  &__ViewPin,
   &__ViewEdit,
   &__ViewDelete {
     display: inline-flex;
@@ -557,6 +558,8 @@
 
     &:hover { color: $color-text; background: $color-surface-hover; }
   }
+
+  &__ViewPin--on { color: $color-primary; }
 
   &__ViewDelete:hover { color: $color-error; background: $color-error-bg; }
 

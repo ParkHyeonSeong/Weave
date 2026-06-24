@@ -44,6 +44,9 @@ export default function BranchDetail() {
   const [selectedTask, setSelectedTask] = useState(null);
   const [selectedEpic, setSelectedEpic] = useState(null);
 
+  // ?view= 딥링크로 저장된 뷰 1회 적용 (사이드바 핀 클릭 등)
+  const [applyViewId, setApplyViewId] = useState(null);
+
   // 에디터(설명·댓글) 안 칩 클릭 → 작업 패널 왼쪽에 참조 패널
   const [previewRef, setPreviewRef] = useRefPreview();
 
@@ -116,6 +119,16 @@ export default function BranchDetail() {
       router.replace(`/branch/${id}?tab=tasks`, undefined, { shallow: true });
     }
   }, [router.query.task, branch]);
+
+  // 쿼리 파라미터로 저장된 뷰 적용 (사이드바 핀 클릭). 즉시 쿼리 제거하고 applyViewId state로 TaskList에 전달.
+  useEffect(() => {
+    const viewId = router.query.view;
+    if (viewId && branch) {
+      handleTabChange('tasks');
+      setApplyViewId(Number(viewId));
+      router.replace(`/branch/${id}?tab=tasks`, undefined, { shallow: true });
+    }
+  }, [router.query.view, branch]);
 
   // 탭 전환 시 패널 닫기 (참조 패널도 함께 — 칩 발원지가 닫히는데 고아로 남기지 않음)
   useEffect(() => {
@@ -244,6 +257,8 @@ export default function BranchDetail() {
               taskTypes={taskTypes}
               workflowStatuses={workflowStatuses}
               onSelectTask={handleSelectTask}
+              applyViewId={applyViewId}
+              onViewApplied={() => setApplyViewId(null)}
             />
           )}
           {activeTab === 'epics' && (

@@ -33,3 +33,19 @@ def test_update_ui_prefs_schema_allows_home_controls():
     body = UpdateUiPrefs(home_controls={"branch": {"sort": "progress", "view": "list"}})
     patch = body.model_dump(exclude_none=True)
     assert patch == {"home_controls": {"branch": {"sort": "progress", "view": "list"}}}
+
+
+def test_update_ui_prefs_schema_allows_saved_view_pins():
+    from routers.schema.profile import UpdateUiPrefs
+    body = UpdateUiPrefs(saved_view_pins={"7": [1, 2], "global": [5]})
+    patch = body.model_dump(exclude_none=True)
+    assert patch == {"saved_view_pins": {"7": [1, 2], "global": [5]}}
+
+
+async def test_ui_prefs_saved_view_pins_merge(db_session):
+    uid = await _make_user(db_session, "uiprefs_pins@test.local")
+    await user_model.update_ui_prefs(uid, {"sidebar_order": {"branches": [1]}}, db_session)
+    await user_model.update_ui_prefs(uid, {"saved_view_pins": {"7": [1, 2]}}, db_session)
+    got = await user_model.get_ui_prefs(uid, db_session)
+    assert got["saved_view_pins"]["7"] == [1, 2]
+    assert got["sidebar_order"]["branches"] == [1]  # 기존 네임스페이스 보존

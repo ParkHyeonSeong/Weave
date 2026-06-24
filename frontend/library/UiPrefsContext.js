@@ -73,8 +73,14 @@ export function UiPrefsProvider({ children }) {
     setNamespace('home_controls', { ...cur, [appKey]: { ...(cur[appKey] || {}), ...patch } });
   }, [setNamespace]);
 
+  // 저장된 뷰 핀 per-user 저장 (scopeKey = String(branchId) 또는 'global')
+  const setPinnedViews = useCallback((scopeKey, viewIds) => {
+    const cur = prefsRef.current.saved_view_pins || {};
+    setNamespace('saved_view_pins', { ...cur, [scopeKey]: viewIds });
+  }, [setNamespace]);
+
   return (
-    <UiPrefsContext.Provider value={{ prefs, loaded, setNamespace, hide, unhide, isHidden, setHomeCtl }}>
+    <UiPrefsContext.Provider value={{ prefs, loaded, setNamespace, hide, unhide, isHidden, setHomeCtl, setPinnedViews }}>
       {children}
     </UiPrefsContext.Provider>
   );
@@ -84,7 +90,7 @@ export function UiPrefsProvider({ children }) {
 const EMPTY = {
   prefs: {}, loaded: false,
   setNamespace: () => {}, hide: () => {}, unhide: () => {}, isHidden: () => false,
-  setHomeCtl: () => {},
+  setHomeCtl: () => {}, setPinnedViews: () => {},
 };
 export function useUiPrefs() {
   return useContext(UiPrefsContext) || EMPTY;
