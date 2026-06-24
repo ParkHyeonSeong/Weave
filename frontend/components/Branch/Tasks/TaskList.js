@@ -21,6 +21,7 @@ import { matchesFilters, filterTaskTree } from '@/library/taskFilters';
 import { buildEffectiveSpec } from '@/library/filterSpecAdapter';
 import { groupTasks, applySort } from '@/library/taskViewState';
 import { emptyGroup, isEmptySpec } from '@/library/filterBuilderState';
+import { toSavedPayload, applySavedView } from '@/library/savedViewState';
 import ContextMenu from '@/components/common/ContextMenu';
 import ConfirmModal from '@/components/modal/ConfirmModal';
 import ParentPickerPopup from './ParentPickerPopup';
@@ -46,6 +47,15 @@ function loadJSON(key, fallback) {
 // 우선순위 정렬용 가중치
 const PRIORITY_WEIGHT = { urgent: 0, high: 1, medium: 2, low: 3 };
 
+// 레거시 quick-chip 필터의 빈 상태(매 호출 새 Set). 초기화/복원/뷰적용에서 공유해 카테고리 추가 시 단일 수정.
+const emptyFilters = () => ({
+  priorities: new Set(), labelIds: new Set(), epicIds: new Set(),
+  typeKeys: new Set(), statusKeys: new Set(),
+});
+const VIEW_SAVE_ERR = '뷰를 저장할 수 없습니다 (조건을 확인하세요)';
+const VIEW_UPDATE_ERR = '뷰를 수정할 수 없습니다';
+const VIEW_DELETE_ERR = '뷰를 삭제할 수 없습니다';
+
 // 현재 사용자 id — 코드베이스 공통 패턴(TaskDetailPanel.js 등): sessionStorage 'profile'.
 // FilterSpec 평가기의 $me 의미 해석(assignee=$me 등)에 쓰인다.
 function currentUserId() {
@@ -68,13 +78,7 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
   // 필터 상태 (localStorage에서 복원)
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedUserIds, setSelectedUserIds] = useState(new Set());
-  const [filters, setFilters] = useState({
-    priorities: new Set(),
-    labelIds: new Set(),
-    epicIds: new Set(),
-    typeKeys: new Set(),
-    statusKeys: new Set(),
-  });
+  const [filters, setFilters] = useState(emptyFilters());
 
   // 정렬 상태 (localStorage에서 복원)
   const [sortConfig, setSortConfig] = useState({ field: null, direction: 'asc' });
@@ -83,6 +87,11 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
   const [filterSpec, setFilterSpec] = useState(emptyGroup());
   const [groupBy, setGroupBy] = useState('none');
   const [multiSort, setMultiSort] = useState([]);
+
+  // 저장된 뷰 (Phase 2)
+  const [savedViews, setSavedViews] = useState([]);
+  const [activeViewId, setActiveViewId] = useState(null);
+  const [viewError, setViewError] = useState(null);
 
   // task type별 custom field 메타 (고급 빌더 cf 조건용)
   const [customFields, setCustomFields] = useState([]);
@@ -140,10 +149,7 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
     } else {
       setSearchQuery('');
       setSelectedUserIds(new Set());
-      setFilters({
-        priorities: new Set(), labelIds: new Set(),
-        epicIds: new Set(), typeKeys: new Set(), statusKeys: new Set(),
-      });
+      setFilters(emptyFilters());
       setFilterSpec(emptyGroup());
       setGroupBy('none');
       setMultiSort([]);
@@ -329,13 +335,79 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
   };
 
   const handleClearFilters = () => {
-    setFilters({
-      priorities: new Set(),
-      labelIds: new Set(),
-      epicIds: new Set(),
-      typeKeys: new Set(),
-      statusKeys: new Set(),
-    });
+    setFilters(emptyFilters());
+  };
+
+  // ── 저장된 뷰 (Phase 2) ───────────────────────────────────────────────
+  const loadSavedViews = useCallback(async () => {
+    try {
+      const res = await axios.get('/saved-views', { params: { scope_branch_id: branchId } });
+      setSavedViews(res.data?.status ? (res.data.views || []) : []);
+    } catch {
+      setSavedViews([]);
+    }
+  }, [branchId]);
+
+  useEffect(() => { loadSavedViews(); }, [loadSavedViews]);
+
+  const handleApplyView = (viewId) => {
+    const view = savedViews.find((v) => v.view_id === viewId);
+    if (!view) return;
+    const r = applySavedView(view);
+    setFilterSpec(r.filterSpec);
+    setGroupBy(r.groupBy);
+    setMultiSort(r.multiSort);
+    setSortConfig(r.sortConfig);
+    // 뷰는 합성된 단일 spec으로 완전 표현 → 레거시 quick-chip 초기화(이중 필터 방지)
+    setSearchQuery('');
+    setSelectedUserIds(new Set());
+    setFilters(emptyFilters());
+    setActiveViewId(viewId);
+    setViewError(null);
+  };
+
+  // 저장/수정 payload: 현재 레거시 quick-chip + 고급 spec을 단일 filter_spec으로 합성
+  const buildViewPayload = () =>
+    toSavedPayload({ legacyCtx: { searchQuery, selectedUserIds, filters }, filterSpec, groupBy, multiSort });
+
+  const handleSaveView = async (name) => {
+    try {
+      const res = await axios.post('/saved-views', { name, scope_branch_id: branchId, ...buildViewPayload(), visibility: 'private' });
+      if (res.data?.status) {
+        await loadSavedViews();
+        setActiveViewId(res.data.view_id);
+        setViewError(null);
+      } else {
+        setViewError(VIEW_SAVE_ERR);
+      }
+    } catch {
+      setViewError(VIEW_SAVE_ERR);
+    }
+  };
+
+  const handleUpdateView = async (viewId) => {
+    try {
+      const res = await axios.patch(`/saved-views/${viewId}`, buildViewPayload());
+      if (res.data?.status) { await loadSavedViews(); setViewError(null); }
+      else setViewError(VIEW_UPDATE_ERR);
+    } catch {
+      setViewError(VIEW_UPDATE_ERR);
+    }
+  };
+
+  const handleDeleteView = async (viewId) => {
+    try {
+      const res = await axios.delete(`/saved-views/${viewId}`);
+      if (res.data?.status) {
+        await loadSavedViews();
+        if (activeViewId === viewId) setActiveViewId(null);
+        setViewError(null);
+      } else {
+        setViewError(VIEW_DELETE_ERR);
+      }
+    } catch {
+      setViewError(VIEW_DELETE_ERR);
+    }
   };
 
   const advancedActive = !isEmptySpec(filterSpec);
@@ -792,12 +864,21 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
             'assignee', 'due_date', 'start_date', 'created_at', 'text',
             'has_subtasks', 'is_top_level',
           ]}
+          savedViews={savedViews}
+          activeViewId={activeViewId}
+          onApplyView={handleApplyView}
+          onSaveView={handleSaveView}
+          onUpdateView={handleUpdateView}
+          onDeleteView={handleDeleteView}
         />
         <button className="TaskList__SprintBtn" onClick={() => setSprintModal({ open: true, sprint: null })}>
           <Plus size={14} />
           Create Sprint
         </button>
       </div>
+      {viewError && (
+        <div className="TaskList__ViewError" role="alert">{viewError}</div>
+      )}
 
       {grouping ? (
         /* 그룹핑 모드: 스프린트 섹션·DnD 숨김, 플랫 버킷 렌더 */

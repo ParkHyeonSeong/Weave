@@ -1,5 +1,5 @@
 import { useMemo, useState, useRef, useEffect } from 'react';
-import { Search, User, X, ArrowUpDown, ArrowUp, ArrowDown, SlidersHorizontal, Plus } from 'lucide-react';
+import { Search, User, X, ArrowUpDown, ArrowUp, ArrowDown, SlidersHorizontal, Plus, Bookmark, ChevronDown, Pencil, Trash2 } from 'lucide-react';
 import MultiSelect from '@/components/common/MultiSelect';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import Avatar from '@/components/common/Avatar';
@@ -50,6 +50,8 @@ export default function TaskFilterBar({
   customFields = [],
   availableFields,
   groupByOptions,
+  // 저장된 뷰 스위처 (Phase 2 — onApplyView 있을 때만 렌더; Board 등 미사용 호출자엔 미노출)
+  savedViews = [], activeViewId = null, onApplyView, onSaveView, onUpdateView, onDeleteView,
 }) {
   // 호출자가 group-by 옵션을 제한할 수 있다(예: Board는 payload가 epic_id/sprint_id 미포함).
   // 미지정 시 전체 GROUP_BY_OPTIONS. 'none'은 항상 유지(그룹핑 해제 보장).
@@ -62,6 +64,11 @@ export default function TaskFilterBar({
   const moreRef = useRef(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const advancedRef = useRef(null);
+  const [viewsOpen, setViewsOpen] = useState(false);
+  const viewsRef = useRef(null);
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [saveName, setSaveName] = useState('');
+  const saveRef = useRef(null);
 
   // 고급 패널 외부 클릭 닫기
   useEffect(() => {
@@ -72,6 +79,33 @@ export default function TaskFilterBar({
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, [advancedOpen]);
+
+  // 뷰 메뉴 / 저장 팝오버 외부 클릭 닫기
+  useEffect(() => {
+    if (!viewsOpen) return;
+    const handleClick = (e) => {
+      if (viewsRef.current && !viewsRef.current.contains(e.target)) setViewsOpen(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [viewsOpen]);
+  useEffect(() => {
+    if (!saveOpen) return;
+    const handleClick = (e) => {
+      if (saveRef.current && !saveRef.current.contains(e.target)) setSaveOpen(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [saveOpen]);
+
+  const activeView = savedViews.find((v) => v.view_id === activeViewId) || null;
+  const submitSave = () => {
+    const n = saveName.trim();
+    if (!n) return;
+    onSaveView(n);
+    setSaveName('');
+    setSaveOpen(false);
+  };
 
   const advancedActive = !isEmptySpec(filterSpec);
 
@@ -134,6 +168,96 @@ export default function TaskFilterBar({
 
   return (
     <div className="TaskFilterBar">
+      {/* 저장된 뷰 스위처 + 저장 (onApplyView 제공 시에만) */}
+      {onApplyView && (
+        <div className="TaskFilterBar__Views" ref={viewsRef}>
+          <button
+            type="button"
+            className={`TaskFilterBar__ViewsBtn ${activeViewId ? 'TaskFilterBar__ViewsBtn--active' : ''}`}
+            onClick={() => setViewsOpen((p) => !p)}
+            title="저장된 뷰"
+          >
+            <Bookmark size={13} />
+            {activeView ? activeView.name : '뷰'}
+            <ChevronDown size={11} />
+          </button>
+          {viewsOpen && (
+            <div className="TaskFilterBar__ViewsMenu">
+              {savedViews.length === 0 ? (
+                <div className="TaskFilterBar__ViewsEmpty">저장된 뷰가 없습니다</div>
+              ) : (
+                savedViews.map((v) => (
+                  <div
+                    key={v.view_id}
+                    className={`TaskFilterBar__ViewRow ${v.view_id === activeViewId ? 'TaskFilterBar__ViewRow--active' : ''}`}
+                  >
+                    <button
+                      type="button"
+                      className="TaskFilterBar__ViewApply"
+                      onClick={() => { onApplyView(v.view_id); setViewsOpen(false); }}
+                    >
+                      {v.name}
+                      {!v.is_owner && <span className="TaskFilterBar__ViewShared">공유</span>}
+                    </button>
+                    {v.is_owner && (
+                      <>
+                        <button
+                          type="button"
+                          className="TaskFilterBar__ViewEdit"
+                          onClick={() => onUpdateView(v.view_id)}
+                          title="현재 필터로 덮어쓰기"
+                        >
+                          <Pencil size={12} />
+                        </button>
+                        <button
+                          type="button"
+                          className="TaskFilterBar__ViewDelete"
+                          onClick={() => onDeleteView(v.view_id)}
+                          title="삭제"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+          <div className="TaskFilterBar__ViewSave" ref={saveRef}>
+            <button
+              type="button"
+              className="TaskFilterBar__ViewSaveBtn"
+              onClick={() => setSaveOpen((p) => !p)}
+              title="현재 필터를 뷰로 저장"
+            >
+              <Plus size={12} />
+              저장
+            </button>
+            {saveOpen && (
+              <div className="TaskFilterBar__ViewSavePopover">
+                <input
+                  className="TaskFilterBar__ViewSaveInput"
+                  placeholder="뷰 이름"
+                  value={saveName}
+                  autoFocus
+                  onChange={(e) => setSaveName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') submitSave(); }}
+                />
+                <button
+                  type="button"
+                  className="TaskFilterBar__ViewSaveConfirm"
+                  disabled={!saveName.trim()}
+                  onClick={submitSave}
+                >
+                  저장
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* 검색 */}
       <div className="TaskFilterBar__Search">
         <Search size={14} className="TaskFilterBar__SearchIcon" />
