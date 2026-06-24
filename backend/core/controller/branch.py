@@ -5,6 +5,7 @@ from fastapi import Request, UploadFile
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.errors import error_response, ErrorCode
 from core.model import branch as branch_model
 from core.model import branch_member as member_model
 from core.model import task_type_config as type_model
@@ -28,7 +29,7 @@ async def create(body, request: Request, db: AsyncSession):
 
     # key 중복 체크
     if await branch_model.find_by_key(body.key, db):
-        return {'status': False, 'message': 'KEY_ALREADY_EXISTS'}
+        return error_response(ErrorCode.KEY_ALREADY_EXISTS)
 
     branch_id = await branch_model.create(
         branch_name=body.branch_name,
@@ -82,7 +83,7 @@ _VALID_BUCKETS = {'open', 'in_progress', 'due_this_week', 'active_sprint'}
 async def get_home_stats_items(request: Request, bucket: str, limit: int, db: AsyncSession):
     """홈 KPI 카드 드릴인 — bucket 별 실제 행 목록."""
     if bucket not in _VALID_BUCKETS:
-        return {'status': False, 'message': 'INVALID_BUCKET'}
+        return error_response(ErrorCode.INVALID_BUCKET)
     user_id = request.state.payload.get('user_id')
     data = await branch_model.home_stat_items(user_id, bucket, limit, db)
     return {'status': True, 'bucket': bucket, **data}
@@ -92,14 +93,14 @@ async def get_detail(branch_id: int, request: Request, db: AsyncSession):
     """Branch 상세 (현재 사용자의 role 포함)"""
     branch = await branch_model.find_by_id(branch_id, db)
     if not branch:
-        return {'status': False, 'message': 'BRANCH_NOT_FOUND'}
+        return error_response(ErrorCode.BRANCH_NOT_FOUND)
 
     user_id = request.state.payload.get('user_id')
     my_role = await member_model.get_role(branch_id, user_id, db)
 
     # private branch는 멤버만 조회 가능
     if branch['visibility'] == 'private' and not my_role:
-        return {'status': False, 'message': 'ACCESS_DENIED'}
+        return error_response(ErrorCode.ACCESS_DENIED)
 
     branch['my_role'] = my_role
 
@@ -114,12 +115,12 @@ async def get_members(branch_id: int, request: Request, db: AsyncSession):
     """
     branch = await branch_model.find_by_id(branch_id, db)
     if not branch:
-        return {'status': False, 'message': 'BRANCH_NOT_FOUND'}
+        return error_response(ErrorCode.BRANCH_NOT_FOUND)
 
     user_id = request.state.payload.get('user_id')
     is_member = await member_model.is_member(branch_id, user_id, db)
     if branch['visibility'] == 'private' and not is_member:
-        return {'status': False, 'message': 'ACCESS_DENIED'}
+        return error_response(ErrorCode.ACCESS_DENIED)
 
     members = await member_model.find_by_branch(branch_id, db)
     if not is_member:
@@ -133,28 +134,28 @@ async def upload_icon(branch_id: int, file: UploadFile, request: Request, db: As
 
     branch = await branch_model.find_by_id(branch_id, db)
     if not branch:
-        return {'status': False, 'message': 'BRANCH_NOT_FOUND'}
+        return error_response(ErrorCode.BRANCH_NOT_FOUND)
 
     role = await member_model.get_role(branch_id, user_id, db)
     if role != 'admin':
-        return {'status': False, 'message': 'ADMIN_ONLY'}
+        return error_response(ErrorCode.ADMIN_ONLY)
 
     if not file or not file.filename:
-        return {'status': False, 'message': 'NO_FILE'}
+        return error_response(ErrorCode.NO_FILE)
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in ICON_ALLOWED_EXT:
-        return {'status': False, 'message': 'INVALID_FILE_TYPE'}
+        return error_response(ErrorCode.INVALID_FILE_TYPE)
     content = await file.read()
     if len(content) > ICON_MAX_SIZE:
-        return {'status': False, 'message': 'FILE_TOO_LARGE'}
+        return error_response(ErrorCode.FILE_TOO_LARGE)
     if not validate_image_magic_bytes(content, ext):
-        return {'status': False, 'message': 'INVALID_FILE_CONTENT'}
+        return error_response(ErrorCode.INVALID_FILE_CONTENT)
 
     # SVG는 별도 sanitize로 스크립트/이벤트핸들러/외부 참조 제거
     if ext == '.svg':
         sanitized = sanitize_svg(content)
         if sanitized is None:
-            return {'status': False, 'message': 'INVALID_FILE_CONTENT'}
+            return error_response(ErrorCode.INVALID_FILE_CONTENT)
         content = sanitized
 
     os.makedirs(ICON_UPLOAD_DIR, exist_ok=True)
@@ -177,7 +178,7 @@ async def update(branch_id: int, body, request: Request, db: AsyncSession):
     user_id = request.state.payload.get('user_id')
     role = await member_model.get_role(branch_id, user_id, db)
     if role != 'admin':
-        return {'status': False, 'message': 'ADMIN_ONLY'}
+        return error_response(ErrorCode.ADMIN_ONLY)
 
     fields = body.model_dump(exclude_unset=True)
     if not fields:
@@ -189,7 +190,7 @@ async def update(branch_id: int, body, request: Request, db: AsyncSession):
 
     if 'key' in fields and current and current['key'] != fields['key']:
         if await branch_model.find_by_key(fields['key'], db):
-            return {'status': False, 'message': 'KEY_ALREADY_EXISTS'}
+            return error_response(ErrorCode.KEY_ALREADY_EXISTS)
 
     if 'icon' in fields and current:
         old_icon = current.get('icon') or ''
@@ -214,13 +215,13 @@ async def join(branch_id: int, request: Request, db: AsyncSession):
 
     branch = await branch_model.find_by_id(branch_id, db)
     if not branch:
-        return {'status': False, 'message': 'BRANCH_NOT_FOUND'}
+        return error_response(ErrorCode.BRANCH_NOT_FOUND)
     if branch['visibility'] != 'public':
-        return {'status': False, 'message': 'BRANCH_NOT_PUBLIC'}
+        return error_response(ErrorCode.BRANCH_NOT_PUBLIC)
 
     # 이미 멤버인지 확인
     if await member_model.is_member(branch_id, user_id, db):
-        return {'status': False, 'message': 'ALREADY_MEMBER'}
+        return error_response(ErrorCode.ALREADY_MEMBER)
 
     await member_model.add(branch_id, user_id, 'member', db)
     return {'status': True}
@@ -231,11 +232,11 @@ async def add_member(branch_id: int, body, request: Request, db: AsyncSession):
     user_id = request.state.payload.get('user_id')
     role = await member_model.get_role(branch_id, user_id, db)
     if role != 'admin':
-        return {'status': False, 'message': 'ADMIN_ONLY'}
+        return error_response(ErrorCode.ADMIN_ONLY)
 
     # 이미 멤버인지 확인
     if await member_model.is_member(branch_id, body.user_id, db):
-        return {'status': False, 'message': 'ALREADY_MEMBER'}
+        return error_response(ErrorCode.ALREADY_MEMBER)
 
     await member_model.add(branch_id, body.user_id, body.role, db)
     return {'status': True}
@@ -246,18 +247,18 @@ async def update_member_role(branch_id: int, target_user_id: int, body, request:
     user_id = request.state.payload.get('user_id')
     role = await member_model.get_role(branch_id, user_id, db)
     if role != 'admin':
-        return {'status': False, 'message': 'ADMIN_ONLY'}
+        return error_response(ErrorCode.ADMIN_ONLY)
 
     # 대상이 멤버인지 확인
     if not await member_model.is_member(branch_id, target_user_id, db):
-        return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+        return error_response(ErrorCode.NOT_BRANCH_MEMBER)
 
     # admin → member 변경 시 마지막 admin인지 확인
     current_role = await member_model.get_role(branch_id, target_user_id, db)
     if current_role == 'admin' and body.role != 'admin':
         admin_count = await member_model.count_admins(branch_id, db)
         if admin_count <= 1:
-            return {'status': False, 'message': 'CANNOT_REMOVE_LAST_ADMIN'}
+            return error_response(ErrorCode.CANNOT_REMOVE_LAST_ADMIN)
 
     await member_model.update_role(branch_id, target_user_id, body.role, db)
     return {'status': True}
@@ -268,17 +269,17 @@ async def remove_member(branch_id: int, target_user_id: int, request: Request, d
     user_id = request.state.payload.get('user_id')
     role = await member_model.get_role(branch_id, user_id, db)
     if role != 'admin':
-        return {'status': False, 'message': 'ADMIN_ONLY'}
+        return error_response(ErrorCode.ADMIN_ONLY)
 
     # 마지막 admin 제거 방지
     target_role = await member_model.get_role(branch_id, target_user_id, db)
     if not target_role:
-        return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+        return error_response(ErrorCode.NOT_BRANCH_MEMBER)
 
     if target_role == 'admin':
         admin_count = await member_model.count_admins(branch_id, db)
         if admin_count <= 1:
-            return {'status': False, 'message': 'CANNOT_REMOVE_LAST_ADMIN'}
+            return error_response(ErrorCode.CANNOT_REMOVE_LAST_ADMIN)
 
     await member_model.remove(branch_id, target_user_id, db)
     return {'status': True}
@@ -289,13 +290,13 @@ async def leave(branch_id: int, request: Request, db: AsyncSession):
     user_id = request.state.payload.get('user_id')
     role = await member_model.get_role(branch_id, user_id, db)
     if not role:
-        return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+        return error_response(ErrorCode.NOT_BRANCH_MEMBER)
 
     # 마지막 admin이면 나갈 수 없음
     if role == 'admin':
         admin_count = await member_model.count_admins(branch_id, db)
         if admin_count <= 1:
-            return {'status': False, 'message': 'CANNOT_LEAVE_LAST_ADMIN'}
+            return error_response(ErrorCode.CANNOT_LEAVE_LAST_ADMIN)
 
     await member_model.remove(branch_id, user_id, db)
     return {'status': True}
@@ -306,11 +307,11 @@ async def delete(branch_id: int, request: Request, db: AsyncSession):
     user_id = request.state.payload.get('user_id')
     role = await member_model.get_role(branch_id, user_id, db)
     if role != 'admin':
-        return {'status': False, 'message': 'ADMIN_ONLY'}
+        return error_response(ErrorCode.ADMIN_ONLY)
 
     branch = await branch_model.find_by_id(branch_id, db)
     if not branch:
-        return {'status': False, 'message': 'BRANCH_NOT_FOUND'}
+        return error_response(ErrorCode.BRANCH_NOT_FOUND)
 
     await branch_model.archive(branch_id, db)
     return {'status': True}
@@ -328,7 +329,7 @@ async def restore(branch_id: int, request: Request, db: AsyncSession):
     user_id = request.state.payload.get('user_id')
     role = await member_model.get_role(branch_id, user_id, db)
     if role != 'admin':
-        return {'status': False, 'message': 'ADMIN_ONLY'}
+        return error_response(ErrorCode.ADMIN_ONLY)
     await branch_model.restore(branch_id, db)
     return {'status': True}
 
@@ -338,7 +339,7 @@ async def permanent_delete(branch_id: int, request: Request, db: AsyncSession):
     user_id = request.state.payload.get('user_id')
     role = await member_model.get_role(branch_id, user_id, db)
     if role != 'admin':
-        return {'status': False, 'message': 'ADMIN_ONLY'}
+        return error_response(ErrorCode.ADMIN_ONLY)
     await branch_model.hard_delete(branch_id, db)
     return {'status': True}
 
@@ -348,7 +349,7 @@ async def search_non_members(branch_id: int, query: str, request: Request, db: A
     user_id = request.state.payload.get('user_id')
     role = await member_model.get_role(branch_id, user_id, db)
     if role != 'admin':
-        return {'status': False, 'message': 'ADMIN_ONLY'}
+        return error_response(ErrorCode.ADMIN_ONLY)
 
     users = await member_model.search_non_members(branch_id, query, db)
     return {'status': True, 'users': users}
