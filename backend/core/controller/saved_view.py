@@ -1,6 +1,7 @@
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.errors import error_response, ErrorCode
 from core.model import saved_view as sv_model
 from core.model import branch_member as member_model
 from core.query.filter_spec import validate_filter, FilterError
@@ -30,18 +31,18 @@ async def _validate_spec(filter_spec, scope_branch_id, db):
         validate_filter(spec)
         await validate_custom_fields(spec, scope_branch_id, db)
     except FilterError as e:
-        return None, {'status': False, 'message': 'INVALID_FILTER', 'detail': str(e)}
+        return None, error_response(ErrorCode.INVALID_FILTER, detail=str(e))
     return spec, None
 
 
 async def create(body, request: Request, db: AsyncSession):
     user_id = request.state.payload.get('user_id')
     if body.scope_branch_id is not None and not await member_model.is_member(body.scope_branch_id, user_id, db):
-        return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+        return error_response(ErrorCode.NOT_BRANCH_MEMBER)
     if body.visibility not in ('private', 'shared'):
-        return {'status': False, 'message': 'INVALID_VISIBILITY'}
+        return error_response(ErrorCode.INVALID_VISIBILITY)
     if body.visibility == 'shared' and body.scope_branch_id is None:
-        return {'status': False, 'message': 'VIEW_SCOPE_MISMATCH'}  # 개인(scope NULL) 뷰는 공유 불가
+        return error_response(ErrorCode.VIEW_SCOPE_MISMATCH)  # 개인(scope NULL) 뷰는 공유 불가
     spec, err = await _validate_spec(body.filter_spec, body.scope_branch_id, db)
     if err:
         return err
@@ -53,7 +54,7 @@ async def create(body, request: Request, db: AsyncSession):
 async def get_list(scope_branch_id, request: Request, db: AsyncSession):
     user_id = request.state.payload.get('user_id')
     if scope_branch_id is not None and not await member_model.is_member(scope_branch_id, user_id, db):
-        return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+        return error_response(ErrorCode.NOT_BRANCH_MEMBER)
     views = await sv_model.find_accessible(user_id, scope_branch_id, db)
     return {'status': True, 'views': views}
 
@@ -62,9 +63,9 @@ async def get_detail(view_id: int, request: Request, db: AsyncSession):
     user_id = request.state.payload.get('user_id')
     view = await sv_model.find_by_id(view_id, db)
     if not view:
-        return {'status': False, 'message': 'VIEW_NOT_FOUND'}
+        return error_response(ErrorCode.VIEW_NOT_FOUND)
     if not await _accessible(view, user_id, db):
-        return {'status': False, 'message': 'NOT_VIEW_VISIBLE'}
+        return error_response(ErrorCode.NOT_VIEW_VISIBLE)
     return {'status': True, 'view': view}
 
 
@@ -72,11 +73,11 @@ async def _owner_and_member(view_id, user_id, db):
     """소유자 AND (브랜치 뷰면 현재 멤버). OK면 (view, None), 아니면 (None, error dict)."""
     view = await sv_model.find_by_id(view_id, db)
     if not view:
-        return None, {'status': False, 'message': 'VIEW_NOT_FOUND'}
+        return None, error_response(ErrorCode.VIEW_NOT_FOUND)
     if view['owner_user_id'] != user_id:
-        return None, {'status': False, 'message': 'NOT_VIEW_OWNER'}
+        return None, error_response(ErrorCode.NOT_VIEW_OWNER)
     if view['scope_branch_id'] is not None and not await member_model.is_member(view['scope_branch_id'], user_id, db):
-        return None, {'status': False, 'message': 'NOT_BRANCH_MEMBER'}  # 탈퇴한 owner의 변경 차단
+        return None, error_response(ErrorCode.NOT_BRANCH_MEMBER)  # 탈퇴한 owner의 변경 차단
     return view, None
 
 
@@ -94,9 +95,9 @@ async def update(view_id: int, body, request: Request, db: AsyncSession):
         if nn in fields and fields[nn] is None:
             del fields[nn]
     if 'visibility' in fields and fields['visibility'] not in ('private', 'shared'):
-        return {'status': False, 'message': 'INVALID_VISIBILITY'}  # create()와 대칭(잘못된 enum 거부)
+        return error_response(ErrorCode.INVALID_VISIBILITY)  # create()와 대칭(잘못된 enum 거부)
     if fields.get('visibility') == 'shared' and view['scope_branch_id'] is None:
-        return {'status': False, 'message': 'VIEW_SCOPE_MISMATCH'}
+        return error_response(ErrorCode.VIEW_SCOPE_MISMATCH)
     if 'filter_spec' in fields:  # 저장 시점 재검증 + 정규화
         spec, verr = await _validate_spec(fields['filter_spec'], view['scope_branch_id'], db)
         if verr:
