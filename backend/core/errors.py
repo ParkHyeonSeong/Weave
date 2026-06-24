@@ -67,6 +67,8 @@ class ErrorCode(str, Enum):
     NOT_BOARD_MEMBER = ("NOT_BOARD_MEMBER", Category.FORBIDDEN)
     NOT_TRACK_MEMBER = ("NOT_TRACK_MEMBER", Category.FORBIDDEN)
     NOT_SCOPE_BRANCH_MEMBER = ("NOT_SCOPE_BRANCH_MEMBER", Category.FORBIDDEN)
+    NOT_VIEW_OWNER = ("NOT_VIEW_OWNER", Category.FORBIDDEN)
+    NOT_VIEW_VISIBLE = ("NOT_VIEW_VISIBLE", Category.FORBIDDEN)
     SCOPE_BRANCH_NOT_PARTICIPATING = ("SCOPE_BRANCH_NOT_PARTICIPATING", Category.FORBIDDEN)
     NOT_PUBLIC = ("NOT_PUBLIC", Category.FORBIDDEN)  # canonical of not_public (new)
     BRANCH_NOT_PUBLIC = ("BRANCH_NOT_PUBLIC", Category.FORBIDDEN)
@@ -101,6 +103,7 @@ class ErrorCode(str, Enum):
     TRACK_NOT_FOUND = ("TRACK_NOT_FOUND", Category.NOT_FOUND)
     TYPE_NOT_FOUND = ("TYPE_NOT_FOUND", Category.NOT_FOUND)
     USER_NOT_FOUND = ("USER_NOT_FOUND", Category.NOT_FOUND)
+    VIEW_NOT_FOUND = ("VIEW_NOT_FOUND", Category.NOT_FOUND)
 
     # --- validation ---------------------------------------------------------
     CSV_FILE_REQUIRED = ("CSV_FILE_REQUIRED", Category.VALIDATION)
@@ -125,6 +128,7 @@ class ErrorCode(str, Enum):
     INVALID_SCOPE = ("INVALID_SCOPE", Category.VALIDATION)
     INVALID_STATUS = ("INVALID_STATUS", Category.VALIDATION)
     INVALID_TASK_TYPE = ("INVALID_TASK_TYPE", Category.VALIDATION)
+    INVALID_VISIBILITY = ("INVALID_VISIBILITY", Category.VALIDATION)     # 잘못된 visibility 값
     NO_FILE = ("NO_FILE", Category.VALIDATION)
     PARENT_SELF = ("PARENT_SELF", Category.VALIDATION)
     PASSWORD_MISMATCH = ("PASSWORD_MISMATCH", Category.VALIDATION)
@@ -134,6 +138,7 @@ class ErrorCode(str, Enum):
     SELF_DEPENDENCY = ("SELF_DEPENDENCY", Category.VALIDATION)
     SELF_LINK = ("SELF_LINK", Category.VALIDATION)
     SMTP_PASSWORD_REQUIRED = ("SMTP_PASSWORD_REQUIRED", Category.VALIDATION)
+    VIEW_SCOPE_MISMATCH = ("VIEW_SCOPE_MISMATCH", Category.VALIDATION)   # 쿼리 시 뷰 스코프 불일치
 
     # --- conflict -----------------------------------------------------------
     ALREADY_INITIALIZED = ("ALREADY_INITIALIZED", Category.CONFLICT)
