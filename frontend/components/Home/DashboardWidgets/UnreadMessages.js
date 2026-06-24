@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { axios } from '@/library/_axios';
 import { MessageSquare } from 'lucide-react';
+import useResyncOnVisible from '@/hooks/useResyncOnVisible';
+import { sumChatUnread } from '@/library/chatUnread';
 
 export default function UnreadMessages() {
   const [rooms, setRooms] = useState([]);
@@ -24,11 +26,15 @@ export default function UnreadMessages() {
     }
   };
 
+  // 새 메시지(chat:new_message)·방 읽음(chat:unread_changed)·탭 복귀 시 재조회.
+  // 마운트-only였던 stale 문제 해소(헤더 뱃지와 같은 패턴, 공용 훅 재사용).
+  useResyncOnVisible(fetchChat, ['chat:new_message', 'chat:unread_changed']);
+
   const openRoom = (roomId) => {
     window.dispatchEvent(new CustomEvent('chat:open_room', { detail: roomId }));
   };
 
-  const totalUnread = rooms.reduce((sum, r) => sum + r.unread_count, 0);
+  const totalUnread = sumChatUnread(rooms);
 
   if (loading) {
     return (

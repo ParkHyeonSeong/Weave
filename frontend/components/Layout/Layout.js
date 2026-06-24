@@ -15,6 +15,7 @@ import { requestNotificationPermission, showNotification, playNotificationSound 
 import { subscribeToPush } from '@/library/pushSubscription';
 import { getWsBaseURL, refreshAccessToken } from '@/library/_axios';
 import { sumChatUnread } from '@/library/chatUnread';
+import useResyncOnVisible from '@/hooks/useResyncOnVisible';
 import { showToast } from './Toast';
 import useMobile from '@/hooks/useMobile';
 import usePictureInPicture from '@/hooks/usePictureInPicture';
@@ -366,13 +367,7 @@ export default function Layout({ children }) {
   }, [refreshCounts]);
 
   // 탭 복귀 시 카운트 재동기화 (백그라운드에서 freeze/discard된 동안 놓친 알림 보정)
-  useEffect(() => {
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') refreshCounts();
-    };
-    document.addEventListener('visibilitychange', handleVisibility);
-    return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [refreshCounts]);
+  useResyncOnVisible(refreshCounts);
 
   // 모바일에서 사이드바/메신저 열릴 때 backdrop 클릭으로 닫기
   const handleBackdropClick = useCallback(() => {
