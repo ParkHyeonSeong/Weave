@@ -291,6 +291,7 @@ async def query_tasks(
     sort: list | None = None,
     limit: int | None = None,
     offset: int | None = None,
+    saved_view_id: int | None = None,
 ) -> Any:
     """Query tasks with a structured FilterSpec (boolean tree).
 
@@ -303,7 +304,11 @@ async def query_tasks(
     ops: eq, in, is_empty, lt/lte/gt/gte, between, contains. Use negate for NOT.
     date tokens: "$today", "$today+7d". sort: [{"field","dir":"asc|desc"}].
     group_by (server-aggregated 'groups'): status/priority/task_type/epic/sprint only;
-    other values return groups=null (assignee/label grouping is UI-side).
+    other values return groups=null (assignee/label grouping is UI-side). This also
+    applies when a saved view's group_by is assignee/label: items come back, groups=null.
+    saved_view_id: load a saved view's filter/group_by/sort on the server (filter/group_by/
+      sort args are ignored). Get ids from list_saved_views. A branch-scoped view requires a
+      matching branch_id; a personal (global) view works only cross-branch (no branch_id).
     With branch_id → that branch only (custom fields allowed). Without branch_id →
     cross-branch over your member branches; scope "my" (assigned to you) or "all".
     """
@@ -316,8 +321,19 @@ async def query_tasks(
         "limit": min(limit, 200) if limit else 50,
         "offset": offset or 0,
     }
+    if saved_view_id is not None:
+        body["saved_view_id"] = saved_view_id
     if branch_id is not None:
         return await get_client().call_json(
             "POST", f"/api/branches/{branch_id}/tasks/query", json=body)
     body["scope"] = scope
     return await get_client().call_json("POST", "/api/tasks/query", json=body)
+
+
+@mcp.tool
+async def list_saved_views(scope_branch_id: int | None = None) -> Any:
+    """List saved task views accessible to you. Without scope_branch_id → your personal
+    (global) views; with it → that branch's views you can see (yours + branch-shared).
+    Each view's view_id can be passed to query_tasks(saved_view_id=...)."""
+    params = {"scope_branch_id": scope_branch_id} if scope_branch_id is not None else {}
+    return await get_client().call_json("GET", "/api/saved-views", params=params)
