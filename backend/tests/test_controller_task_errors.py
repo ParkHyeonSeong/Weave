@@ -10,12 +10,15 @@ types.SimpleNamespace, seed rows with raw sqlalchemy text() INSERTs cribbed from
 test_idor_task_assignee.py (branch/user/member/task helpers) and
 test_idor_task_reorder.py (sprint helper).
 """
+from datetime import date
 from types import SimpleNamespace
 
 from sqlalchemy import text
 
+from core.controller import saved_view as _sv_ctrl
 from core.controller import task as ctrl
 from routers.schema import task as schema
+from routers.schema.saved_view import SavedViewCreate as _SVCreate
 
 
 def _req(user_id: int):
@@ -146,8 +149,6 @@ async def test_get_detail_task_not_found_returns_not_found_envelope(db_session):
 # ---------------------------------------------------------------------------
 
 async def test_create_invalid_date_range_returns_validation_envelope(db_session):
-    from datetime import date
-
     alice = await _make_user(db_session, "alice_dr@cte.test", "alice_dr")
 
     branch = await _make_branch(db_session, alice, name="B-DR", key="CTEDR")
@@ -253,9 +254,6 @@ async def test_query_cross_branch_invalid_filter_preserves_detail(db_session):
 # saved-view envelopes — assert the unified shape on those paths too.
 # Mirrors backend/tests/test_saved_view_query.py.
 # ---------------------------------------------------------------------------
-from core.controller import saved_view as _sv_ctrl
-from routers.schema.saved_view import SavedViewCreate as _SVCreate
-
 
 def _q_view(saved_view_id, scope=None):
     ns = SimpleNamespace(filter=None, sort=[], group_by=None, page=1, page_size=50,
