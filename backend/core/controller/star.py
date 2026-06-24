@@ -6,8 +6,8 @@ add/remove their own star, verify the target resource exists AND the caller is
 a member of its owning branch/canvas. Without this an arbitrary item_id could
 be starred/unstarred (IDOR + existence/membership enumeration).
 
-Follows the dict-return convention ({'status': bool, 'message': CODE}) and uses
-the shared branch_scope guard for the unscoped fetch + the membership models.
+Uses error_response(ErrorCode.X) for all failure paths and the shared
+branch_scope guard for the unscoped fetch + the membership models.
 """
 from sqlalchemy.ext.asyncio import AsyncSession
 

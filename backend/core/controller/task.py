@@ -35,8 +35,9 @@ async def _validate_parent_target(task_id, parent_task_id: int, branch_id: int,
                                   db: AsyncSession):
     """하위로 이동/생성 시 1단계 불변식 검증.
 
-    위반 시 {'status': False, 'message': ...} 반환(라우터 4xx 금지, 호출부에서 status 확인).
-    통과 시 None. parent_task_id is None(승격)인 경우 호출하지 않는다.
+    위반 시 error_response(ErrorCode.X)(status:False + code/category/retryable) 반환
+    (라우터 4xx 금지, 호출부에서 status 확인). 통과 시 None.
+    parent_task_id is None(승격)인 경우 호출하지 않는다.
     """
     if task_id is not None and parent_task_id == task_id:
         return error_response(ErrorCode.PARENT_SELF)
