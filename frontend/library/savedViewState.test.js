@@ -18,6 +18,16 @@ describe('savedViewState', () => {
     const p = toSavedPayload({ legacyCtx: { searchQuery: '', selectedUserIds: new Set(), filters: empty }, filterSpec: null, groupBy: 'none', multiSort: [] });
     expect(p.group_by).toBe(null); expect(p.sort).toEqual([]);
   });
+  it('toSavedPayload saves flat-view sortConfig as sort (groupBy none → 단일정렬 보존)', () => {
+    // 평면 뷰에서 Due Date 정렬을 저장하면 sort에 담겨야 한다(리뷰 P1 — sortConfig 유실 방지).
+    const p = toSavedPayload({ legacyCtx: { searchQuery: '', selectedUserIds: new Set(), filters: empty }, filterSpec: null, groupBy: 'none', multiSort: [], sortConfig: { field: 'due_date', direction: 'asc' } });
+    expect(p.group_by).toBe(null);
+    expect(p.sort).toEqual([{ field: 'due_date', dir: 'asc' }]);
+  });
+  it('toSavedPayload uses multiSort for grouping view and ignores sortConfig', () => {
+    const p = toSavedPayload({ legacyCtx: { searchQuery: '', selectedUserIds: new Set(), filters: empty }, filterSpec: null, groupBy: 'status', multiSort: [{ field: 'priority', dir: 'desc' }], sortConfig: { field: 'due_date', direction: 'asc' } });
+    expect(p.sort).toEqual([{ field: 'priority', dir: 'desc' }]);
+  });
   it('applySavedView returns spec/groupBy/multiSort + sortConfig(평면 뷰 정렬)', () => {
     const v = { filter_spec: { type: 'group', op: 'AND', negate: false, children: [] }, group_by: 'assignee', sort: [{ field: 'priority', dir: 'desc' }] };
     const r = applySavedView(v);

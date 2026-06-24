@@ -77,3 +77,14 @@ async def test_cond_root_spec_preserved(db_session):
     vid = (await ctrl.create(SavedViewCreate(name='hi', scope_branch_id=bid, filter_spec=cond), _req(uid), db_session))['view_id']
     got = await ctrl.get_detail(vid, _req(uid), db_session)
     assert got['view']['filter_spec'] == cond  # 빈 그룹으로 안 바뀜
+
+async def test_update_clears_group_by_with_explicit_null(db_session):
+    # group_by=None(그룹핑 해제) 업데이트가 살아야 한다(exclude_unset — 리뷰 P1). name 등은 보존.
+    uid = await _user(db_session, 'gc@sv.test', 'gc'); bid = await _branch(db_session, uid, 'SVGC')
+    vid = (await ctrl.create(SavedViewCreate(name='grouped', scope_branch_id=bid, filter_spec=_SPEC, group_by='status'), _req(uid), db_session))['view_id']
+    assert (await ctrl.get_detail(vid, _req(uid), db_session))['view']['group_by'] == 'status'
+    res = await ctrl.update(vid, SavedViewUpdate(filter_spec=_SPEC, group_by=None, sort=[]), _req(uid), db_session)
+    assert res['status'] is True
+    got = (await ctrl.get_detail(vid, _req(uid), db_session))['view']
+    assert got['group_by'] is None   # 그룹핑 해제됨
+    assert got['name'] == 'grouped'  # 안 보낸 필드는 보존

@@ -368,9 +368,10 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
     setViewError(null);
   };
 
-  // 저장/수정 payload: 현재 레거시 quick-chip + 고급 spec을 단일 filter_spec으로 합성
+  // 저장/수정 payload: 현재 레거시 quick-chip + 고급 spec을 단일 filter_spec으로 합성.
+  // sortConfig(평면 단일정렬)도 전달 → 평면 뷰의 정렬이 저장된다(리뷰 P1).
   const buildViewPayload = () =>
-    toSavedPayload({ legacyCtx: { searchQuery, selectedUserIds, filters }, filterSpec, groupBy, multiSort });
+    toSavedPayload({ legacyCtx: { searchQuery, selectedUserIds, filters }, filterSpec, groupBy, multiSort, sortConfig });
 
   const handleSaveView = async (name) => {
     try {

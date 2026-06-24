@@ -85,7 +85,14 @@ async def update(view_id: int, body, request: Request, db: AsyncSession):
     view, err = await _owner_and_member(view_id, user_id, db)
     if err:
         return err
-    fields = body.model_dump(exclude_none=True)
+    # exclude_unset: 명시적으로 보낸 필드만(explicit null 보존). group_by=None을 살려 '그룹핑 해제'가
+    # 동작하게 한다(exclude_none은 null을 버려 기존 group_by가 남는 버그 — 리뷰 P1).
+    fields = body.model_dump(exclude_unset=True)
+    # NOT NULL 컬럼(name/filter_spec/visibility)의 explicit null은 무시(DB 제약 위반·의미 없음).
+    # nullable인 group_by/sort/columns만 null 클리어를 허용.
+    for nn in ('name', 'filter_spec', 'visibility'):
+        if nn in fields and fields[nn] is None:
+            del fields[nn]
     if 'visibility' in fields and fields['visibility'] not in ('private', 'shared'):
         return {'status': False, 'message': 'INVALID_VISIBILITY'}  # create()와 대칭(잘못된 enum 거부)
     if fields.get('visibility') == 'shared' and view['scope_branch_id'] is None:

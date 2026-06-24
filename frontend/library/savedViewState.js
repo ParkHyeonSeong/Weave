@@ -3,11 +3,21 @@ import { buildEffectiveSpec } from './filterSpecAdapter';
 import { emptyGroup } from './filterBuilderState';
 
 // 저장: 레거시 quick-chip + 고급 spec을 단일 filter_spec으로 합성.
-export function toSavedPayload({ legacyCtx, filterSpec, groupBy, multiSort }) {
+// 정렬은 모드별로 실제 활성 상태를 담는다: 평면 뷰(groupBy='none')는 단일정렬 sortConfig가 실제
+// 정렬이므로 sort로 저장하고(안 그러면 'Due Date 정렬→저장→적용' 시 정렬이 사라짐 — 리뷰 P1),
+// 그룹핑 뷰는 multiSort를 담는다. applySavedView가 sort[0]→sortConfig로 되돌려 평면 정렬을 복원.
+export function toSavedPayload({ legacyCtx, filterSpec, groupBy, multiSort, sortConfig }) {
+  const grouping = groupBy && groupBy !== 'none';
+  let sort = [];
+  if (grouping) {
+    if (multiSort && multiSort.length) sort = multiSort;
+  } else if (sortConfig && sortConfig.field) {
+    sort = [{ field: sortConfig.field, dir: sortConfig.direction === 'desc' ? 'desc' : 'asc' }];
+  }
   return {
     filter_spec: buildEffectiveSpec({ legacyCtx, filterSpec }),
-    group_by: groupBy && groupBy !== 'none' ? groupBy : null,
-    sort: multiSort && multiSort.length ? multiSort : [],
+    group_by: grouping ? groupBy : null,
+    sort,
   };
 }
 
