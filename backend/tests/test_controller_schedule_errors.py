@@ -98,6 +98,8 @@ async def test_non_member_create_event_gets_forbidden(db_session):
     assert res["category"] == "forbidden"
     assert res["retryable"] is False
     assert res["message"] == res["code"]   # dual-emit
+
+
 async def test_event_not_found_gets_not_found(db_session):
     """EVENT_NOT_FOUND → category=not_found (schedule_event.update with unknown event)."""
     alice = await _make_user(db_session, "sce_nf@s.test", "sce_nf")
