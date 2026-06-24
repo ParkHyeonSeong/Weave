@@ -14,6 +14,7 @@ import CommandPalette from '@/components/modal/CommandPalette';
 import { requestNotificationPermission, showNotification, playNotificationSound } from '@/library/notification';
 import { subscribeToPush } from '@/library/pushSubscription';
 import { getWsBaseURL, refreshAccessToken } from '@/library/_axios';
+import { sumChatUnread } from '@/library/chatUnread';
 import { showToast } from './Toast';
 import useMobile from '@/hooks/useMobile';
 import usePictureInPicture from '@/hooks/usePictureInPicture';
@@ -61,7 +62,34 @@ export default function Layout({ children }) {
   const isResizingRef = useRef(false);
   const wsRef = useRef(null);
   const activeRoomRef = useRef(null);
+  const refreshingRef = useRef(false);
+  const rerunRef = useRef(false);
   const { isSupported: isPipSupported, isPipActive, portalContainer: pipContainer, openPip, closePip } = usePictureInPicture();
+
+  // 알림/채팅 unread 카운트를 서버 권위 스냅샷으로 재동기화 (마운트·재연결·탭복귀 공용).
+  // - allSettled: 한 요청이 실패해도 나머지 카운트는 반영(재동기화 목적상 부분 성공 허용).
+  // - refreshingRef + rerunRef(루프): 동시 1건만 실행하고, 페치 도중 들어온 트리거는
+  //   루프로 1회 더 드레인(onopen+visibility 동시 발화 등 유실 방지 → 최신 상태로 수렴).
+  const refreshCounts = useCallback(async () => {
+    if (refreshingRef.current) { rerunRef.current = true; return; }
+    refreshingRef.current = true;
+    try {
+      const { axios } = await import('@/library/_axios');
+      const ok = (res) => res.status === 'fulfilled' && res.value.data.status;
+      do {
+        rerunRef.current = false;
+        const [listRes, countRes, chatRes] = await Promise.allSettled([
+          axios.get('/notifications?limit=30'),
+          axios.get('/notifications/unread-count'),
+          axios.get('/chat'),
+        ]);
+        if (ok(listRes)) setNotifications(listRes.value.data.notifications);
+        if (ok(countRes)) setUnreadCount(countRes.value.data.count);
+        if (ok(chatRes)) setChatUnreadCount(sumChatUnread(chatRes.value.data.rooms));
+      } while (rerunRef.current);  // 페치 동안 새 트리거가 왔으면 한 번 더
+    } catch {}
+    finally { refreshingRef.current = false; }
+  }, []);
 
   // 모바일 진입 시 사이드바/메신저 자동 닫기
   useEffect(() => {
@@ -212,40 +240,21 @@ export default function Layout({ children }) {
     return () => window.removeEventListener('layout:open-search', handleOpen);
   }, []);
 
-  // 영구 알림 + 채팅 unread 로드
+  // 마운트 시 1회 로드 + 채팅 unread 갱신 이벤트 구독
   useEffect(() => {
-    const fetchNotifications = async () => {
-      try {
-        const { axios } = await import('@/library/_axios');
-        const [listRes, countRes, chatRes] = await Promise.all([
-          axios.get('/notifications?limit=30'),
-          axios.get('/notifications/unread-count'),
-          axios.get('/chat'),
-        ]);
-        if (listRes.data.status) setNotifications(listRes.data.notifications);
-        if (countRes.data.status) setUnreadCount(countRes.data.count);
-        if (chatRes.data.status) {
-          const total = (chatRes.data.rooms || []).reduce((sum, r) => sum + (r.unread_count || 0), 0);
-          setChatUnreadCount(total);
-        }
-      } catch {}
-    };
-    fetchNotifications();
+    refreshCounts();
 
-    // 채팅 unread count 갱신 이벤트
+    // 채팅 unread만 가볍게 재조회 (방 열람/메시지 시 발화 — 빈도가 높아 풀 조회는 피함)
     const handleChatUnread = () => {
       import('@/library/_axios').then(({ axios }) => {
         axios.get('/chat').then((res) => {
-          if (res.data.status) {
-            const total = (res.data.rooms || []).reduce((sum, r) => sum + (r.unread_count || 0), 0);
-            setChatUnreadCount(total);
-          }
+          if (res.data.status) setChatUnreadCount(sumChatUnread(res.data.rooms));
         }).catch(() => {});
       });
     };
     window.addEventListener('chat:unread_changed', handleChatUnread);
     return () => window.removeEventListener('chat:unread_changed', handleChatUnread);
-  }, []);
+  }, [refreshCounts]);
 
   // WebSocket 연결 관리
   useEffect(() => {
@@ -261,7 +270,6 @@ export default function Layout({ children }) {
     const wsUrl = `${getWsBaseURL()}/api/ws/chat`;
 
     let reconnectTimer = null;
-    let reconnectAttempts = 0;
     let alive = true;
 
     const connect = () => {
@@ -275,7 +283,9 @@ export default function Layout({ children }) {
 
       const ws = new WebSocket(wsUrl);
 
-      ws.onopen = () => { reconnectAttempts = 0; };
+      // 최초 연결/재연결 모두에서 카운트를 서버값으로 재동기화한다.
+      // 끊겨 있던 동안 Web Push로만 도착해 누락된 뱃지 증가분을 여기서 보정.
+      ws.onopen = () => { refreshCounts(); };
 
       ws.onmessage = (event) => {
         try {
@@ -331,16 +341,13 @@ export default function Layout({ children }) {
 
       ws.onclose = () => {
         if (!alive) return;
-        reconnectAttempts += 1;
-        // 연속 실패(2회+)는 단기 access 토큰 만료(SEC-29)일 가능성이 크므로 재연결 전에
-        // 토큰을 선제 갱신한다(쿨다운 공유). 일시적 끊김은 첫 재시도로 곧 복구된다.
-        if (reconnectAttempts >= 2) {
-          refreshAccessToken()
-            .catch(() => {})
-            .finally(() => { if (alive) reconnectTimer = setTimeout(connect, 3000); });
-        } else {
-          reconnectTimer = setTimeout(connect, 3000);
-        }
+        // 끊김 원인이 access 토큰 만료(SEC-29)인 경우가 많으므로 첫 끊김부터 토큰 갱신을
+        // 트리거한다. 단 갱신 완료를 재연결의 전제로 삼지 않는다: refreshAccessToken이
+        // 호출하는 /auth/refresh는 timeout이 없어(_axios) 멈추면 재연결까지 막힐 수 있다.
+        // → 갱신은 fire-and-forget(쿨다운/in-flight 통합이 폭주를 막음), 재연결 타이머는
+        //   항상 독립적으로 3초 뒤에 건다. 갱신은 보통 3초 내 끝나 다음 connect가 새 쿠키를 쓴다.
+        refreshAccessToken().catch(() => {});
+        reconnectTimer = setTimeout(connect, 3000);
       };
 
       wsRef.current = ws;
@@ -356,7 +363,16 @@ export default function Layout({ children }) {
         wsRef.current.close();
       }
     };
-  }, []);
+  }, [refreshCounts]);
+
+  // 탭 복귀 시 카운트 재동기화 (백그라운드에서 freeze/discard된 동안 놓친 알림 보정)
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') refreshCounts();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [refreshCounts]);
 
   // 모바일에서 사이드바/메신저 열릴 때 backdrop 클릭으로 닫기
   const handleBackdropClick = useCallback(() => {
