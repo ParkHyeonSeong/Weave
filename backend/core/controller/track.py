@@ -4,6 +4,7 @@ import uuid
 from fastapi import Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.errors import error_response, ErrorCode
 from core.model import track as track_model
 from core.model import track_member as member_model
 from core.model import track_branch as track_branch_model
@@ -38,11 +39,11 @@ async def _require_role(track_id: int, request: Request, required: str,
     required: 'viewer' | 'editor' | 'owner'
     """
     if not await track_model.find_by_id(track_id, db):
-        return {'status': False, 'message': 'TRACK_NOT_FOUND'}
+        return error_response(ErrorCode.TRACK_NOT_FOUND)
     user_id = request.state.payload.get('user_id')
     role = await member_model.get_role(track_id, user_id, db)
     if not member_model.has_at_least(role, required):
-        return {'status': False, 'message': 'PERMISSION_DENIED'}
+        return error_response(ErrorCode.PERMISSION_DENIED)
     return None
 
 
@@ -97,14 +98,14 @@ async def get_detail(track_id: int, request: Request, db: AsyncSession):
     """Track 상세 + 내 role + 참여 branches"""
     track = await track_model.find_by_id(track_id, db)
     if not track:
-        return {'status': False, 'message': 'TRACK_NOT_FOUND'}
+        return error_response(ErrorCode.TRACK_NOT_FOUND)
 
     user_id = request.state.payload.get('user_id')
     my_role = await member_model.get_role(track_id, user_id, db)
 
     # private: 멤버만 / public: 누구나 조회 가능
     if track['visibility'] == 'private' and not my_role:
-        return {'status': False, 'message': 'ACCESS_DENIED'}
+        return error_response(ErrorCode.ACCESS_DENIED)
 
     track['my_role'] = my_role
     track['participating_branches'] = await track_branch_model.find_by_track(track_id, db)
@@ -140,23 +141,23 @@ async def upload_icon(track_id: int, file: UploadFile, request: Request, db: Asy
 
     track = await track_model.find_by_id(track_id, db)
     if not track:
-        return {'status': False, 'message': 'TRACK_NOT_FOUND'}
+        return error_response(ErrorCode.TRACK_NOT_FOUND)
 
     if not file or not file.filename:
-        return {'status': False, 'message': 'NO_FILE'}
+        return error_response(ErrorCode.NO_FILE)
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in ICON_ALLOWED_EXT:
-        return {'status': False, 'message': 'INVALID_FILE_TYPE'}
+        return error_response(ErrorCode.INVALID_FILE_TYPE)
     content = await file.read()
     if len(content) > ICON_MAX_SIZE:
-        return {'status': False, 'message': 'FILE_TOO_LARGE'}
+        return error_response(ErrorCode.FILE_TOO_LARGE)
     if not validate_image_magic_bytes(content, ext):
-        return {'status': False, 'message': 'INVALID_FILE_CONTENT'}
+        return error_response(ErrorCode.INVALID_FILE_CONTENT)
 
     if ext == '.svg':
         sanitized = sanitize_svg(content)
         if sanitized is None:
-            return {'status': False, 'message': 'INVALID_FILE_CONTENT'}
+            return error_response(ErrorCode.INVALID_FILE_CONTENT)
         content = sanitized
 
     os.makedirs(ICON_UPLOAD_DIR, exist_ok=True)
@@ -193,7 +194,7 @@ async def restore(track_id: int, request: Request, db: AsyncSession):
     user_id = request.state.payload.get('user_id')
     role = await member_model.get_role(track_id, user_id, db)
     if not member_model.has_at_least(role, 'owner'):
-        return {'status': False, 'message': 'PERMISSION_DENIED'}
+        return error_response(ErrorCode.PERMISSION_DENIED)
     await track_model.restore(track_id, db)
     return {'status': True}
 
@@ -203,7 +204,7 @@ async def permanent_delete(track_id: int, request: Request, db: AsyncSession):
     user_id = request.state.payload.get('user_id')
     role = await member_model.get_role(track_id, user_id, db)
     if not member_model.has_at_least(role, 'owner'):
-        return {'status': False, 'message': 'PERMISSION_DENIED'}
+        return error_response(ErrorCode.PERMISSION_DENIED)
     dep_ids = await track_model.find_materialized_dep_ids(track_id, db)
     await dep_model.delete_by_ids(dep_ids, db)
     await track_model.delete(track_id, db)
@@ -218,12 +219,12 @@ async def get_members(track_id: int, request: Request, db: AsyncSession):
     """Track 멤버 목록 — 본인 멤버이거나 public Track. 이메일은 멤버에게만 노출(SEC-21 동류)."""
     track = await track_model.find_by_id(track_id, db)
     if not track:
-        return {'status': False, 'message': 'TRACK_NOT_FOUND'}
+        return error_response(ErrorCode.TRACK_NOT_FOUND)
 
     user_id = request.state.payload.get('user_id')
     is_member = await member_model.is_member(track_id, user_id, db)
     if track['visibility'] == 'private' and not is_member:
-        return {'status': False, 'message': 'ACCESS_DENIED'}
+        return error_response(ErrorCode.ACCESS_DENIED)
 
     members = await member_model.find_by_track(track_id, db)
     if not is_member:
@@ -249,13 +250,13 @@ async def update_member_role(track_id: int, target_user_id: int, body,
 
     target_role = await member_model.get_role(track_id, target_user_id, db)
     if not target_role:
-        return {'status': False, 'message': 'MEMBER_NOT_FOUND'}
+        return error_response(ErrorCode.MEMBER_NOT_FOUND)
 
     new_role = body.role  # schema에서 validated
     if target_role == 'owner' and new_role != 'owner':
         owner_count = await member_model.count_owners(track_id, db)
         if owner_count <= 1:
-            return {'status': False, 'message': 'LAST_OWNER'}
+            return error_response(ErrorCode.LAST_OWNER)
 
     await member_model.update_role(track_id, target_user_id, new_role, db)
     return {'status': True}
@@ -276,10 +277,10 @@ async def leave(track_id: int, request: Request, db: AsyncSession):
     user_id = request.state.payload.get('user_id')
     role = await member_model.get_role(track_id, user_id, db)
     if not role:
-        return {'status': False, 'message': 'NOT_TRACK_MEMBER'}
+        return error_response(ErrorCode.NOT_TRACK_MEMBER)
     # 마지막 owner면 나갈 수 없음 (소유자 없는 트랙 방지)
     if role == 'owner' and await member_model.count_owners(track_id, db) <= 1:
-        return {'status': False, 'message': 'CANNOT_LEAVE_LAST_OWNER'}
+        return error_response(ErrorCode.CANNOT_LEAVE_LAST_OWNER)
     await member_model.remove(track_id, user_id, db)
     return {'status': True}
 
@@ -288,14 +289,14 @@ async def remove_member(track_id: int, target_user_id: int, request: Request,
                         db: AsyncSession):
     """멤버 제거 — owner이거나 본인(leave)"""
     if not await track_model.find_by_id(track_id, db):
-        return {'status': False, 'message': 'TRACK_NOT_FOUND'}
+        return error_response(ErrorCode.TRACK_NOT_FOUND)
 
     user_id = request.state.payload.get('user_id')
     is_self = (target_user_id == user_id)
     if not is_self:
         role = await member_model.get_role(track_id, user_id, db)
         if role != 'owner':
-            return {'status': False, 'message': 'PERMISSION_DENIED'}
+            return error_response(ErrorCode.PERMISSION_DENIED)
 
     target_role = await member_model.get_role(track_id, target_user_id, db)
     if not target_role:
@@ -304,7 +305,7 @@ async def remove_member(track_id: int, target_user_id: int, request: Request,
     if target_role == 'owner':
         owner_count = await member_model.count_owners(track_id, db)
         if owner_count <= 1:
-            return {'status': False, 'message': 'LAST_OWNER'}
+            return error_response(ErrorCode.LAST_OWNER)
 
     await member_model.remove(track_id, target_user_id, db)
     return {'status': True}
@@ -318,7 +319,7 @@ async def get_branches(track_id: int, request: Request, db: AsyncSession):
     """Track의 참여 branch 목록 — 멤버만"""
     user_id = request.state.payload.get('user_id')
     if not await _can_view(track_id, user_id, db):
-        return {'status': False, 'message': 'ACCESS_DENIED'}
+        return error_response(ErrorCode.ACCESS_DENIED)
     branches = await track_branch_model.find_by_track(track_id, db)
     return {'status': True, 'branches': branches}
 
@@ -331,9 +332,9 @@ async def add_branch(track_id: int, body, request: Request, db: AsyncSession):
 
     user_id = request.state.payload.get('user_id')
     if not await branch_member_model.is_member(body.branch_id, user_id, db):
-        return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+        return error_response(ErrorCode.NOT_BRANCH_MEMBER)
     if not await branch_model.find_by_id(body.branch_id, db):
-        return {'status': False, 'message': 'BRANCH_NOT_FOUND'}
+        return error_response(ErrorCode.BRANCH_NOT_FOUND)
 
     await track_branch_model.add(track_id, body.branch_id, db)
     return {'status': True}
@@ -394,7 +395,7 @@ async def get_items(track_id: int, request: Request, db: AsyncSession):
     """Track의 모든 item — viewer 이상 (private은 멤버만, public은 모두)"""
     user_id = request.state.payload.get('user_id')
     if not await _can_view(track_id, user_id, db):
-        return {'status': False, 'message': 'ACCESS_DENIED'}
+        return error_response(ErrorCode.ACCESS_DENIED)
     items = await track_item_model.find_by_track(track_id, user_id, db)
     return {'status': True, 'items': items}
 
@@ -440,13 +441,13 @@ async def add_items_bulk(track_id: int, body, request: Request, db: AsyncSession
         owner_branch_id = await track_scope_model.resolve_scope_branch(
             body.scope_mode, body.scope_id, db)
         if not owner_branch_id:
-            return {'status': False, 'message': 'SCOPE_NOT_FOUND'}
+            return error_response(ErrorCode.SCOPE_NOT_FOUND)
         # IDOR 방어: scope의 owner branch가 track의 participating branch에 속해야 함
         if not await track_branch_model.is_participating(track_id, owner_branch_id, db):
-            return {'status': False, 'message': 'SCOPE_BRANCH_NOT_PARTICIPATING'}
+            return error_response(ErrorCode.SCOPE_BRANCH_NOT_PARTICIPATING)
         # 사용자가 scope branch의 멤버여야 함 (task 멤버 검증과 동일 규칙)
         if not await branch_member_model.is_member(owner_branch_id, user_id, db):
-            return {'status': False, 'message': 'NOT_SCOPE_BRANCH_MEMBER'}
+            return error_response(ErrorCode.NOT_SCOPE_BRANCH_MEMBER)
         await track_scope_model.add(
             track_id, owner_branch_id, body.scope_mode, body.scope_id, db)
     else:
@@ -474,10 +475,10 @@ async def add_item(track_id: int, body, request: Request, db: AsyncSession):
     # source task 존재 + 사용자가 그 branch 멤버인지
     task = await task_model.find_by_id(body.source_task_id, db)
     if not task:
-        return {'status': False, 'message': 'TASK_NOT_FOUND'}
+        return error_response(ErrorCode.TASK_NOT_FOUND)
 
     if not await branch_member_model.is_member(task['branch_id'], user_id, db):
-        return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+        return error_response(ErrorCode.NOT_BRANCH_MEMBER)
 
     # task의 branch가 Track의 participating에 없으면 자동 추가
     if not await track_branch_model.is_participating(track_id, task['branch_id'], db):
@@ -522,7 +523,7 @@ async def search_sources(track_id: int, request: Request, db: AsyncSession):
     """
     user_id = request.state.payload.get('user_id')
     if not await _can_view(track_id, user_id, db):
-        return {'status': False, 'message': 'ACCESS_DENIED'}
+        return error_response(ErrorCode.ACCESS_DENIED)
 
     qp = request.query_params
     q = qp.get('q', '')
@@ -570,7 +571,7 @@ async def sidebar_tree(track_id: int, request: Request, db: AsyncSession):
     """Sidebar tree — branch → sprint/epic scope → tasks. viewer 이상."""
     user_id = request.state.payload.get('user_id')
     if not await _can_view(track_id, user_id, db):
-        return {'status': False, 'message': 'ACCESS_DENIED'}
+        return error_response(ErrorCode.ACCESS_DENIED)
     tree = await track_scope_model.find_tree(track_id, user_id, db)
     return {'status': True, 'tree': tree}
 
@@ -583,7 +584,7 @@ async def get_links(track_id: int, request: Request, db: AsyncSession):
     """Track의 모든 link — viewer 이상"""
     user_id = request.state.payload.get('user_id')
     if not await _can_view(track_id, user_id, db):
-        return {'status': False, 'message': 'ACCESS_DENIED'}
+        return error_response(ErrorCode.ACCESS_DENIED)
     links = await track_link_model.find_by_track(track_id, db)
     return {'status': True, 'links': links}
 
@@ -623,13 +624,13 @@ async def add_link(track_id: int, body, request: Request, db: AsyncSession):
         return err
 
     if body.source_item_id == body.target_item_id:
-        return {'status': False, 'message': 'SELF_LINK'}
+        return error_response(ErrorCode.SELF_LINK)
 
     user_id = request.state.payload.get('user_id')
     items_info = await track_link_model.find_source_target_tasks(
         body.source_item_id, body.target_item_id, track_id, db)
     if not items_info:
-        return {'status': False, 'message': 'ITEM_NOT_FOUND'}
+        return error_response(ErrorCode.ITEM_NOT_FOUND)
 
     # link 먼저 만들기 — 충돌이면 materialize 시도 자체를 skip해서 wasted INSERT 방지
     link_id, created = await track_link_model.create(
