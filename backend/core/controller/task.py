@@ -3,6 +3,7 @@ import datetime
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.errors import error_response, ErrorCode
 from core.model import task as task_model
 from core.model import branch_member as member_model
 from core.model import saved_view as sv_model
@@ -38,15 +39,15 @@ async def _validate_parent_target(task_id, parent_task_id: int, branch_id: int,
     통과 시 None. parent_task_id is None(승격)인 경우 호출하지 않는다.
     """
     if task_id is not None and parent_task_id == task_id:
-        return {'status': False, 'message': 'PARENT_SELF'}
+        return error_response(ErrorCode.PARENT_SELF)
     parent = await task_model.find_by_id(parent_task_id, db)
     if not parent or parent['branch_id'] != branch_id:
-        return {'status': False, 'message': 'PARENT_NOT_FOUND'}
+        return error_response(ErrorCode.PARENT_NOT_FOUND)
     if parent['parent_task_id'] is not None:
-        return {'status': False, 'message': 'PARENT_NOT_TOP_LEVEL'}
+        return error_response(ErrorCode.PARENT_NOT_TOP_LEVEL)
     # 대상 태스크가 자기 하위를 가지면 하위가 될 수 없음(2단계 방지). 생성 시엔 task_id=None.
     if task_id is not None and await task_model.count_subtasks(task_id, db) > 0:
-        return {'status': False, 'message': 'TARGET_HAS_SUBTASKS'}
+        return error_response(ErrorCode.TARGET_HAS_SUBTASKS)
     return None
 
 
@@ -67,25 +68,25 @@ async def create(body, branch_id: int, request: Request, db: AsyncSession):
     """Task 생성"""
     user_id = request.state.payload.get('user_id')
     if not await member_model.is_member(branch_id, user_id, db):
-        return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+        return error_response(ErrorCode.NOT_BRANCH_MEMBER)
 
     # task_type 동적 검증
     valid_type = await type_model.find_by_key(branch_id, body.task_type, db)
     if not valid_type:
-        return {'status': False, 'message': 'INVALID_TASK_TYPE'}
+        return error_response(ErrorCode.INVALID_TASK_TYPE)
 
     # status 동적 검증 (workflow_status)
     valid_status = await ws_model.find_by_key(branch_id, body.status, db)
     if not valid_status:
-        return {'status': False, 'message': 'INVALID_STATUS'}
+        return error_response(ErrorCode.INVALID_STATUS)
 
     # 날짜 순서 검증 (시작일 <= 마감일)
     if not is_valid_date_order(body.start_date, body.due_date):
-        return {'status': False, 'message': 'INVALID_DATE_RANGE'}
+        return error_response(ErrorCode.INVALID_DATE_RANGE)
 
     # 담당자 소속 검증 (모든 담당자가 branch 멤버여야 함)
     if body.assignees and not await _assignees_valid_for_branch(body.assignees, branch_id, db):
-        return {'status': False, 'message': 'INVALID_ASSIGNEE'}
+        return error_response(ErrorCode.INVALID_ASSIGNEE)
 
     # 하위 생성: 부모가 top-level·동일 branch인지 검증 (1단계 불변식). sprint/epic은 복사 X(§4).
     if body.parent_task_id is not None:
@@ -144,11 +145,11 @@ async def get_detail(task_id: int, branch_id: int, request: Request, db: AsyncSe
     """Task 상세"""
     user_id = request.state.payload.get('user_id')
     if not await member_model.is_member(branch_id, user_id, db):
-        return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+        return error_response(ErrorCode.NOT_BRANCH_MEMBER)
 
     task = await task_model.find_by_id(task_id, db)
     if not task or task['branch_id'] != branch_id:
-        return {'status': False, 'message': 'TASK_NOT_FOUND'}
+        return error_response(ErrorCode.TASK_NOT_FOUND)
 
     # subtask 목록
     subtasks = await task_model.find_subtasks(task_id, db)
@@ -170,7 +171,7 @@ async def get_list(branch_id: int, sprint_id, request: Request, db: AsyncSession
     """Task 목록 (sprint_id 필터)"""
     user_id = request.state.payload.get('user_id')
     if not await member_model.is_member(branch_id, user_id, db):
-        return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+        return error_response(ErrorCode.NOT_BRANCH_MEMBER)
 
     tasks = await task_model.find_by_branch(branch_id, sprint_id, db)
     return {'status': True, 'tasks': tasks}
@@ -180,7 +181,7 @@ async def get_board(branch_id: int, sprint_id, request: Request, db: AsyncSessio
     """Board 탭용 Task 목록"""
     user_id = request.state.payload.get('user_id')
     if not await member_model.is_member(branch_id, user_id, db):
-        return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+        return error_response(ErrorCode.NOT_BRANCH_MEMBER)
 
     tasks = await task_model.find_for_board(branch_id, sprint_id, db)
 
@@ -203,7 +204,7 @@ async def get_archive(branch_id: int, request: Request, db: AsyncSession):
     """완료된 Task 목록 (Archive 탭)"""
     user_id = request.state.payload.get('user_id')
     if not await member_model.is_member(branch_id, user_id, db):
-        return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+        return error_response(ErrorCode.NOT_BRANCH_MEMBER)
 
     tasks = await task_model.find_archived(branch_id, db)
     return {'status': True, 'tasks': tasks}
@@ -213,15 +214,15 @@ async def update(task_id: int, body, branch_id: int, request: Request, db: Async
     """Task 수정"""
     user_id = request.state.payload.get('user_id')
     if not await member_model.is_member(branch_id, user_id, db):
-        return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+        return error_response(ErrorCode.NOT_BRANCH_MEMBER)
 
     task = await task_model.find_by_id(task_id, db)
     if not task or task['branch_id'] != branch_id:
-        return {'status': False, 'message': 'TASK_NOT_FOUND'}
+        return error_response(ErrorCode.TASK_NOT_FOUND)
 
     # 담당자 소속 검증 (모델 변경 전, all-or-nothing)
     if body.assignees is not None and not await _assignees_valid_for_branch(body.assignees, branch_id, db):
-        return {'status': False, 'message': 'INVALID_ASSIGNEE'}
+        return error_response(ErrorCode.INVALID_ASSIGNEE)
 
     # parent_task_id 전환 검증: 명시적으로 보낸 경우만(생략은 무시 — exclude_unset과 동일 시맨틱).
     # 명시적 null = 승격(검증 불필요, NULL set). 값 지정 = 하위로 이동(1단계 불변식 검증).
@@ -236,13 +237,13 @@ async def update(task_id: int, body, branch_id: int, request: Request, db: Async
     if 'status' in fields and fields['status'] is not None:
         valid_status = await ws_model.find_by_key(branch_id, fields['status'], db)
         if not valid_status:
-            return {'status': False, 'message': 'INVALID_STATUS'}
+            return error_response(ErrorCode.INVALID_STATUS)
 
     # 날짜 순서 검증 (부분 PATCH는 기존 값과 병합)
     new_start = fields.get('start_date', task['start_date'])
     new_due = fields.get('due_date', task['due_date'])
     if not is_valid_date_order(new_start, new_due):
-        return {'status': False, 'message': 'INVALID_DATE_RANGE'}
+        return error_response(ErrorCode.INVALID_DATE_RANGE)
 
     if fields:
         await task_model.update(task_id, fields, db)
@@ -317,18 +318,18 @@ async def reorder(body, branch_id: int, request: Request, db: AsyncSession):
     """Task 이동 + 순서 변경"""
     user_id = request.state.payload.get('user_id')
     if not await member_model.is_member(branch_id, user_id, db):
-        return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+        return error_response(ErrorCode.NOT_BRANCH_MEMBER)
 
     # cross-branch IDOR 차단: 대상 sprint가 이 branch 소속인지 검증.
     # sprint_id=None은 백로그 이동(정상 케이스)이므로 검증 생략.
     if body.sprint_id is not None:
         if not await find_resource_in_branch(body.sprint_id, branch_id, 'sprint', db):
-            return {'status': False, 'message': 'SPRINT_NOT_FOUND'}
+            return error_response(ErrorCode.SPRINT_NOT_FOUND)
 
     # 참조 anchor(after_task_id)도 같은 branch task인지 검증 (있을 경우만).
     if body.after_task_id is not None:
         if not await find_resource_in_branch(body.after_task_id, branch_id, 'task', db):
-            return {'status': False, 'message': 'AFTER_TASK_NOT_FOUND'}
+            return error_response(ErrorCode.AFTER_TASK_NOT_FOUND)
 
     # cross-branch IDOR 차단: 재정렬 대상 task_ids가 모두 이 branch 소속인지
     # 단일 쿼리 set-membership으로 검증 (all-or-nothing). 하나라도 외부/존재하지
@@ -337,7 +338,7 @@ async def reorder(body, branch_id: int, request: Request, db: AsyncSession):
     if unique_ids:
         in_branch = await task_model.count_ids_in_branch(branch_id, unique_ids, db)
         if in_branch != len(unique_ids):
-            return {'status': False, 'message': 'TASK_NOT_FOUND'}
+            return error_response(ErrorCode.TASK_NOT_FOUND)
 
     await task_model.reorder(branch_id, body.task_ids, body.sprint_id, body.after_task_id, db)
     return {'status': True}
@@ -347,11 +348,11 @@ async def delete(task_id: int, branch_id: int, request: Request, db: AsyncSessio
     """Task 삭제"""
     user_id = request.state.payload.get('user_id')
     if not await member_model.is_member(branch_id, user_id, db):
-        return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+        return error_response(ErrorCode.NOT_BRANCH_MEMBER)
 
     task = await task_model.find_by_id(task_id, db)
     if not task or task['branch_id'] != branch_id:
-        return {'status': False, 'message': 'TASK_NOT_FOUND'}
+        return error_response(ErrorCode.TASK_NOT_FOUND)
 
     await activity_service.log_task_deleted(task_id, branch_id, user_id, db)
     await task_model.delete(task_id, db)
@@ -387,23 +388,23 @@ async def _resolve_view(saved_view_id, user_id, expect_branch_id, db):
     접근/스코프는 saved_view 컨트롤러의 Global 계약과 동일하게 여기서도 재검증(IDOR 방지)."""
     view = await sv_model.find_by_id(saved_view_id, db)
     if not view:
-        return {'status': False, 'message': 'VIEW_NOT_FOUND'}
+        return error_response(ErrorCode.VIEW_NOT_FOUND)
     # 접근: 개인 뷰=owner만; 브랜치 뷰=현재 멤버 AND (owner OR shared) — owner여도 멤버십 재확인(탈퇴 시 회수)
     if view['scope_branch_id'] is None:
         if view['owner_user_id'] != user_id:
-            return {'status': False, 'message': 'NOT_VIEW_VISIBLE'}
+            return error_response(ErrorCode.NOT_VIEW_VISIBLE)
     else:
         if not await member_model.is_member(view['scope_branch_id'], user_id, db):
-            return {'status': False, 'message': 'NOT_VIEW_VISIBLE'}
+            return error_response(ErrorCode.NOT_VIEW_VISIBLE)
         if view['owner_user_id'] != user_id and view['visibility'] != 'shared':
-            return {'status': False, 'message': 'NOT_VIEW_VISIBLE'}
+            return error_response(ErrorCode.NOT_VIEW_VISIBLE)
     # 스코프 일치
     if expect_branch_id is None:
         # 크로스=개인(scope NULL) 소유 뷰만. owner 재확인은 위 접근검사와 중복이지만 계약을 코드로 못박는 방어선.
         if view['scope_branch_id'] is not None or view['owner_user_id'] != user_id:
-            return {'status': False, 'message': 'VIEW_SCOPE_MISMATCH'}
+            return error_response(ErrorCode.VIEW_SCOPE_MISMATCH)
     elif view['scope_branch_id'] != expect_branch_id:
-        return {'status': False, 'message': 'VIEW_SCOPE_MISMATCH'}
+        return error_response(ErrorCode.VIEW_SCOPE_MISMATCH)
     # falsy(None/{}=server_default)만 빈 그룹으로 정규화. group/cond 루트는 보존(cond 루트도 유효).
     fs = view['filter_spec']
     spec = fs if fs else {'type': 'group', 'op': 'AND', 'negate': False, 'children': []}
@@ -413,7 +414,7 @@ async def _resolve_view(saved_view_id, user_id, expect_branch_id, db):
 async def query_branch(branch_id, body, request, db):
     user_id = request.state.payload.get('user_id')
     if not await member_model.is_member(branch_id, user_id, db):
-        return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+        return error_response(ErrorCode.NOT_BRANCH_MEMBER)
     spec, group_by, sort = body.filter, body.group_by, _dump_sort(body.sort)
     if getattr(body, 'saved_view_id', None) is not None:  # 뷰가 있으면 서버가 spec/group_by/sort 로드(body 값 무시)
         v = await _resolve_view(body.saved_view_id, user_id, branch_id, db)
@@ -424,7 +425,7 @@ async def query_branch(branch_id, body, request, db):
         validate_filter(spec)
         await validate_custom_fields(spec, branch_id, db)
     except FilterError as e:
-        return {'status': False, 'message': 'INVALID_FILTER', 'detail': str(e)}
+        return error_response(ErrorCode.INVALID_FILTER, detail=str(e))
     ctx = {'user_id': user_id, 'today': datetime.date.today()}
     limit, offset = _paging(body)
     result = await task_model.query([branch_id], spec, sort, group_by, limit, offset, ctx, db)
@@ -435,7 +436,7 @@ async def query_cross_branch(body, request, db):
     user_id = request.state.payload.get('user_id')
     if body.scope not in ("my", "all"):
         # 기본값 my인 API에서 오타가 더 넓은 결과를 주지 않도록 명시 거부
-        return {'status': False, 'message': 'INVALID_SCOPE'}
+        return error_response(ErrorCode.INVALID_SCOPE)
     spec, group_by, sort = body.filter, body.group_by, _dump_sort(body.sort)
     if getattr(body, 'saved_view_id', None) is not None:
         v = await _resolve_view(body.saved_view_id, user_id, None, db)  # 개인(scope NULL) 소유 뷰만
@@ -446,7 +447,7 @@ async def query_cross_branch(body, request, db):
         validate_filter(spec)
         await validate_custom_fields(spec, None, db)
     except FilterError as e:
-        return {'status': False, 'message': 'INVALID_FILTER', 'detail': str(e)}
+        return error_response(ErrorCode.INVALID_FILTER, detail=str(e))
     # 멤버인 branch만 — assignee 할당이 남아있어도 비멤버 branch는 제외(IDOR)
     member_ids = await member_model.member_branch_ids(user_id, db)
     if not member_ids:
