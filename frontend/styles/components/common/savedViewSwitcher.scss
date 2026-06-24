@@ -1,0 +1,175 @@
+@use '../../variables' as *;
+
+// 저장된 뷰 스위처 (Branch TaskList + MyTasks 공용)
+.SavedViewSwitcher {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+
+  &__Btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 10px;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    color: $color-text-secondary;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    cursor: pointer;
+    white-space: nowrap;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: all $transition-fast;
+
+    &:hover { border-color: $color-border-hover; }
+
+    &--active {
+      color: $color-primary;
+      border-color: $color-primary;
+      background: rgba($color-primary, 0.05);
+    }
+  }
+
+  &__Menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 60;
+    min-width: 220px;
+    max-width: 320px;
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: 4px;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: 10px;
+    box-shadow: $shadow-lg;
+  }
+
+  &__Empty {
+    padding: 8px 10px;
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+  }
+
+  &__Row {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    border-radius: $radius-sm;
+
+    &:hover { background: $color-surface-hover; }
+
+    &--active { background: rgba($color-primary, 0.06); }
+  }
+
+  &__Apply {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    font-size: $font-size-sm;
+    color: $color-text;
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__Shared {
+    font-size: 10px;
+    color: $color-text-tertiary;
+    border: 1px solid $color-border;
+    border-radius: $radius-sm;
+    padding: 0 4px;
+  }
+
+  &__Pin,
+  &__Edit,
+  &__Delete {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px;
+    color: $color-text-tertiary;
+    background: none;
+    border: none;
+    cursor: pointer;
+    border-radius: $radius-sm;
+    transition: all $transition-fast;
+
+    &:hover { color: $color-text; background: $color-surface-hover; }
+  }
+
+  &__Pin--on { color: $color-primary; }
+
+  &__Delete:hover { color: $color-error; background: $color-error-bg; }
+
+  &__Save { position: relative; }
+
+  &__SaveBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 5px 8px;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    color: $color-text-secondary;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all $transition-fast;
+
+    &:hover { border-color: $color-border-hover; }
+  }
+
+  &__SavePopover {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 60;
+    display: flex;
+    gap: 4px;
+    padding: 6px;
+    background: $color-bg;
+    border: 1px solid $color-border;
+    border-radius: 10px;
+    box-shadow: $shadow-lg;
+  }
+
+  &__SaveInput {
+    padding: 5px 8px;
+    font-size: $font-size-sm;
+    color: $color-text;
+    border: 1px solid $color-border;
+    border-radius: $radius-sm;
+    outline: none;
+    background: $color-bg;
+    width: 140px;
+
+    &:focus { border-color: $color-primary; }
+  }
+
+  &__SaveConfirm {
+    padding: 5px 10px;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    color: $color-text-inverse;
+    background: $color-primary;
+    border: none;
+    border-radius: $radius-sm;
+    cursor: pointer;
+
+    &:hover { background: $color-primary-hover; }
+    &:disabled { opacity: 0.5; cursor: not-allowed; }
+  }
+}

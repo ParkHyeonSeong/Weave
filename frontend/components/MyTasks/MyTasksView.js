@@ -6,7 +6,9 @@ import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import EntityIcon from '@/components/common/EntityIcon';
 import NavLink from '@/components/common/NavLink';
 import FilterBuilder from '@/components/Branch/FilterBuilder';
+import SavedViewSwitcher from '@/components/common/SavedViewSwitcher';
 import { emptyGroup, isEmptySpec } from '@/library/filterBuilderState';
+import { applySavedView } from '@/library/savedViewState';
 
 const STATUS_CATEGORY_OPTIONS = [
   { value: 'todo', label: 'To Do' },
@@ -49,6 +51,15 @@ const SORT_TO_QUERY = {
   due_date: [{ field: 'due_date', dir: 'asc' }],
 };
 
+// 저장된 뷰의 sort([{field,dir}]) → sort_by 값 역매핑(적용 시 복원). 매칭 없으면 기본 'updated'.
+const sortByFromQuery = (sort) => {
+  const first = (sort || [])[0];
+  if (!first) return 'updated';
+  const hit = Object.entries(SORT_TO_QUERY).find(
+    ([, v]) => v[0].field === first.field && v[0].dir === first.dir);
+  return hit ? hit[0] : 'updated';
+};
+
 export default function MyTasksView() {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -63,9 +74,77 @@ export default function MyTasksView() {
   const [serverTotal, setServerTotal] = useState(null); // 서버 모드일 때 total
   const [filterError, setFilterError] = useState(null); // 서버 모드 spec 거부 시 인라인 메시지
 
+  // 저장된 개인 뷰(scope_branch_id NULL) — 스위처
+  const [savedViews, setSavedViews] = useState([]);
+  const [activeViewId, setActiveViewId] = useState(null);
+  const [viewError, setViewError] = useState(null);
+
   // 고급 spec이 비어있지 않거나 scope='all'이면 서버 쿼리 모드.
   const advancedActive = !isEmptySpec(filterSpec);
   const serverMode = advancedActive || scope === 'all';
+
+  const loadSavedViews = useCallback(async () => {
+    try {
+      const res = await axios.get('/saved-views'); // 파라미터 없음 = 개인(전역) 뷰
+      setSavedViews(res.data?.status ? (res.data.views || []) : []);
+    } catch {
+      setSavedViews([]);
+    }
+  }, []);
+  useEffect(() => { loadSavedViews(); }, [loadSavedViews]);
+
+  // 저장/수정 payload: 개인 뷰는 전역 필드만(크로스브랜치 제약). 그룹핑 없음, 단일 sort.
+  // SORT_TO_QUERY가 이미 [{field,dir}] 형태라 그대로 sort로 쓴다(레거시 quick-chip 없어 합성 불필요).
+  const buildViewPayload = () => ({
+    filter_spec: advancedActive ? filterSpec : emptyGroup(),
+    group_by: null,
+    sort: SORT_TO_QUERY[filters.sort_by] || [],
+  });
+
+  const handleApplyView = (viewId) => {
+    const view = savedViews.find((v) => v.view_id === viewId);
+    if (!view) return;
+    const applied = applySavedView(view); // cond 루트 안전 정규화 포함
+    setFilterSpec(applied.filterSpec);
+    setFilters((prev) => ({ ...prev, sort_by: sortByFromQuery(view.sort) }));
+    setActiveViewId(viewId);
+    setViewError(null);
+  };
+
+  const handleSaveView = async (name) => {
+    try {
+      const res = await axios.post('/saved-views', { name, scope_branch_id: null, ...buildViewPayload(), visibility: 'private' });
+      if (res.data?.status) { await loadSavedViews(); setActiveViewId(res.data.view_id); setViewError(null); }
+      else setViewError('뷰를 저장할 수 없습니다 (조건을 확인하세요)');
+    } catch {
+      setViewError('뷰를 저장할 수 없습니다 (조건을 확인하세요)');
+    }
+  };
+
+  const handleUpdateView = async (viewId) => {
+    try {
+      const res = await axios.patch(`/saved-views/${viewId}`, buildViewPayload());
+      if (res.data?.status) { await loadSavedViews(); setViewError(null); }
+      else setViewError('뷰를 수정할 수 없습니다');
+    } catch {
+      setViewError('뷰를 수정할 수 없습니다');
+    }
+  };
+
+  const handleDeleteView = async (viewId) => {
+    try {
+      const res = await axios.delete(`/saved-views/${viewId}`);
+      if (res.data?.status) {
+        await loadSavedViews();
+        if (activeViewId === viewId) setActiveViewId(null);
+        setViewError(null);
+      } else {
+        setViewError('뷰를 삭제할 수 없습니다');
+      }
+    } catch {
+      setViewError('뷰를 삭제할 수 없습니다');
+    }
+  };
 
   const fetchTasks = useCallback(async () => {
     // 서버 쿼리 모드: 고급 spec 또는 크로스브랜치 scope → /tasks/query
@@ -149,6 +228,16 @@ export default function MyTasksView() {
 
       {/* 필터 바 */}
       <div className="MyTasks__FilterBar">
+        {/* 저장된 개인 뷰 스위처 */}
+        <SavedViewSwitcher
+          savedViews={savedViews}
+          activeViewId={activeViewId}
+          onApplyView={handleApplyView}
+          onSaveView={handleSaveView}
+          onUpdateView={handleUpdateView}
+          onDeleteView={handleDeleteView}
+        />
+
         {/* 서버 모드(고급 spec 또는 scope='all')에서는 /tasks/query가 기본 status/priority/branch_id를
             적용하지 않으므로, 적용도 안 되면서 활성처럼 보이는 기본 드롭다운을 숨긴다.
             Sort는 SORT_TO_QUERY로 서버 모드에서도 적용되므로 항상 노출한다. */}
@@ -209,6 +298,10 @@ export default function MyTasksView() {
           고급 필터
         </button>
       </div>
+
+      {viewError && (
+        <div className="MyTasks__FilterError" role="alert">{viewError}</div>
+      )}
 
       {/* 고급 필터 패널 (크로스브랜치 서버 폴백) */}
       {advancedOpen && (
