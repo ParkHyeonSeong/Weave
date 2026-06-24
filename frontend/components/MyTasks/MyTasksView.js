@@ -93,20 +93,30 @@ export default function MyTasksView() {
   }, []);
   useEffect(() => { loadSavedViews(); }, [loadSavedViews]);
 
-  // 저장/수정 payload: 개인 뷰는 전역 필드만(크로스브랜치 제약). 그룹핑 없음, 단일 sort.
-  // SORT_TO_QUERY가 이미 [{field,dir}] 형태라 그대로 sort로 쓴다(레거시 quick-chip 없어 합성 불필요).
-  const buildViewPayload = () => ({
-    filter_spec: advancedActive ? filterSpec : emptyGroup(),
-    group_by: null,
-    sort: SORT_TO_QUERY[filters.sort_by] || [],
-  });
+  // 저장/수정 payload: 현재 효과적 필터를 단일 filter_spec으로 합성한다(리뷰 P1).
+  // 기본 드롭다운(status_category/priority)도 조건으로 포함 → 기본 모드 상태도 뷰에 저장돼 복원된다.
+  // branch_id는 브랜치 전용이라 크로스브랜치 개인 뷰에 담지 않는다(적용 시 초기화).
+  // scope(my/all)는 뷰와 직교하는 세션 렌즈로 두고 저장하지 않는다(스키마에 scope 컬럼 없음 — v1).
+  const buildViewPayload = () => {
+    const cond = (field, value) => ({ type: 'cond', field, op: 'eq', value, negate: false });
+    const children = [];
+    if (filters.status) children.push(cond('status_category', filters.status));
+    if (filters.priority) children.push(cond('priority', filters.priority));
+    if (advancedActive) children.push(filterSpec);
+    const filter_spec = children.length === 1
+      ? children[0]
+      : { type: 'group', op: 'AND', negate: false, children };
+    return { filter_spec, group_by: null, sort: SORT_TO_QUERY[filters.sort_by] || [] };
+  };
 
   const handleApplyView = (viewId) => {
     const view = savedViews.find((v) => v.view_id === viewId);
     if (!view) return;
     const applied = applySavedView(view); // cond 루트 안전 정규화 포함
     setFilterSpec(applied.filterSpec);
-    setFilters((prev) => ({ ...prev, sort_by: sortByFromQuery(view.sort) }));
+    // 기본 quick 필터(status/priority/branch_id)는 비운다 — 뷰의 filter_spec이 단일 소스
+    // (안 비우면 적용 후에도 기존 드롭다운 필터가 남아 이중 필터 — 리뷰 P1).
+    setFilters((prev) => ({ ...prev, status: '', priority: '', branch_id: '', sort_by: sortByFromQuery(view.sort) }));
     setActiveViewId(viewId);
     setViewError(null);
   };
