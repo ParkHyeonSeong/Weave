@@ -5,6 +5,7 @@ import bcrypt
 from fastapi import Request, Response, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.errors import error_response, ErrorCode
 from core.model import user as user_model
 from core.controller.auth import _create_token, _set_auth_cookie
 from library import crypto
@@ -34,7 +35,7 @@ async def get_profile(request: Request, db: AsyncSession):
     user_id = request.state.payload.get('user_id')
     user = await user_model.find_by_id(user_id, db)
     if not user:
-        return {'status': False, 'message': 'USER_NOT_FOUND'}
+        return error_response(ErrorCode.USER_NOT_FOUND)
     return {'status': True, 'user': user}
 
 
@@ -43,7 +44,7 @@ async def update_username(body, request: Request, response: Response, db: AsyncS
     user_id = request.state.payload.get('user_id')
     user = await user_model.find_by_id(user_id, db)
     if not user:
-        return {'status': False, 'message': 'USER_NOT_FOUND'}
+        return error_response(ErrorCode.USER_NOT_FOUND)
 
     await user_model.update_username(user_id, body.username, db)
     # 쿠키 재발급 (username이 payload에 포함되므로)
@@ -67,18 +68,18 @@ async def update_password(body, request: Request, db: AsyncSession):
     user_id = request.state.payload.get('user_id')
     user = await user_model.find_by_id_with_password(user_id, db)
     if not user:
-        return {'status': False, 'message': 'USER_NOT_FOUND'}
+        return error_response(ErrorCode.USER_NOT_FOUND)
 
     # 현재 비밀번호 검증
     stored_password = user['password']
     if isinstance(stored_password, memoryview):
         stored_password = bytes(stored_password)
     if not bcrypt.checkpw(body.current_password.encode('utf-8'), stored_password):
-        return {'status': False, 'message': 'INVALID_CURRENT_PASSWORD'}
+        return error_response(ErrorCode.INVALID_CURRENT_PASSWORD)
 
     # 새 비밀번호 확인 일치 검증
     if body.new_password != body.confirm_password:
-        return {'status': False, 'message': 'PASSWORD_MISMATCH'}
+        return error_response(ErrorCode.PASSWORD_MISMATCH)
 
     new_hash = crypto.hash_password(body.new_password)
     await user_model.update_password(user_id, new_hash, db)
@@ -90,16 +91,16 @@ async def force_change_password(body, request: Request, db: AsyncSession):
     user_id = request.state.payload.get('user_id')
     user = await user_model.find_by_id_with_password(user_id, db)
     if not user:
-        return {'status': False, 'message': 'USER_NOT_FOUND'}
+        return error_response(ErrorCode.USER_NOT_FOUND)
 
     # must_change_password 플래그가 설정된 경우에만 허용
     # find_by_id_with_password에는 must_change_password가 없으므로 별도 조회
     check = await user_model.find_by_email(user['email'], db)
     if not check or not check.get('must_change_password'):
-        return {'status': False, 'message': 'NOT_ALLOWED'}
+        return error_response(ErrorCode.NOT_ALLOWED)
 
     if body.new_password != body.confirm_password:
-        return {'status': False, 'message': 'PASSWORD_MISMATCH'}
+        return error_response(ErrorCode.PASSWORD_MISMATCH)
 
     new_hash = crypto.hash_password(body.new_password)
     await user_model.update_password(user_id, new_hash, db)
@@ -111,23 +112,23 @@ async def upload_avatar(file: UploadFile, request: Request, db: AsyncSession):
     user_id = request.state.payload.get('user_id')
     user = await user_model.find_by_id(user_id, db)
     if not user:
-        return {'status': False, 'message': 'USER_NOT_FOUND'}
+        return error_response(ErrorCode.USER_NOT_FOUND)
 
     # 파일 검증
     if not file or not file.filename:
-        return {'status': False, 'message': 'NO_FILE'}
+        return error_response(ErrorCode.NO_FILE)
 
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
-        return {'status': False, 'message': 'INVALID_FILE_TYPE'}
+        return error_response(ErrorCode.INVALID_FILE_TYPE)
 
     content = await file.read()
     if len(content) > MAX_FILE_SIZE:
-        return {'status': False, 'message': 'FILE_TOO_LARGE'}
+        return error_response(ErrorCode.FILE_TOO_LARGE)
 
     # 매직 바이트 검증
     if not validate_image_magic_bytes(content, ext):
-        return {'status': False, 'message': 'INVALID_FILE_CONTENT'}
+        return error_response(ErrorCode.INVALID_FILE_CONTENT)
 
     # 업로드 디렉토리 생성
     os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -153,7 +154,7 @@ async def delete_avatar(request: Request, db: AsyncSession):
     user_id = request.state.payload.get('user_id')
     user = await user_model.find_by_id(user_id, db)
     if not user:
-        return {'status': False, 'message': 'USER_NOT_FOUND'}
+        return error_response(ErrorCode.USER_NOT_FOUND)
 
     if user.get('avatar_url'):
         _remove_avatar_file(user['avatar_url'])
@@ -167,7 +168,7 @@ async def update_avatar_color(body, request: Request, db: AsyncSession):
     user_id = request.state.payload.get('user_id')
     user = await user_model.find_by_id(user_id, db)
     if not user:
-        return {'status': False, 'message': 'USER_NOT_FOUND'}
+        return error_response(ErrorCode.USER_NOT_FOUND)
 
     await user_model.update_avatar_color(user_id, body.color, db)
     return {'status': True, 'avatar_color': body.color}

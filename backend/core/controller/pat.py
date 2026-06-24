@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.errors import error_response, ErrorCode
 from core.model import pat as pat_model
 from library import crypto
 
@@ -40,7 +41,7 @@ async def revoke_token(pat_id: int, request, db: AsyncSession) -> dict:
     user_id = request.state.payload["user_id"]
     ok = await pat_model.revoke(pat_id, user_id, db)
     if not ok:
-        return {"status": False, "message": "TOKEN_NOT_FOUND"}
+        return error_response(ErrorCode.TOKEN_NOT_FOUND)
     return {"status": True}
 
 
