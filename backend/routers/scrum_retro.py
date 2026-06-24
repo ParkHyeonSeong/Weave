@@ -4,6 +4,7 @@ from fastapi import APIRouter, Request, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.controller import scrum_retro as retro_controller
+from core.errors import error_response, ErrorCode
 from library.validator import require_login
 from routers.schema.scrum_cell import RetroCellWrite
 import db_engine as db
@@ -28,7 +29,7 @@ async def get_period(board_id: int, request: Request, date: str | None = None,
         try:
             target = date_type.fromisoformat(date)
         except ValueError:
-            return {'status': False, 'message': 'INVALID_DATE'}
+            return error_response(ErrorCode.INVALID_DATE)
     return await retro_controller.get_period(board_id, request, session, target)
 
 

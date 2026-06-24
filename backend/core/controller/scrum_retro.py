@@ -3,6 +3,7 @@ from datetime import date, datetime, timezone, timedelta
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.errors import error_response, ErrorCode
 from core.model import scrum_board as board_model
 from core.model import scrum_member as member_model
 from core.model import scrum_retro as retro_model
@@ -20,10 +21,10 @@ def _today_kst() -> date:
 async def _require_member(board_id: int, request: Request, db: AsyncSession):
     board = await board_model.find_by_id(board_id, db)
     if not board:
-        return None, {'status': False, 'message': 'BOARD_NOT_FOUND'}
+        return None, error_response(ErrorCode.BOARD_NOT_FOUND)
     user_id = request.state.payload.get('user_id')
     if not await member_model.is_member(board_id, user_id, db):
-        return None, {'status': False, 'message': 'PERMISSION_DENIED'}
+        return None, error_response(ErrorCode.PERMISSION_DENIED)
     return board, None
 
 
@@ -82,7 +83,7 @@ async def get_retro_cells(board_id: int, retro_id: int, request: Request, db: As
         return err
     retro = await retro_model.find_by_id(retro_id, db)
     if not retro or retro['board_id'] != board_id:
-        return {'status': False, 'message': 'RETRO_NOT_FOUND'}
+        return error_response(ErrorCode.RETRO_NOT_FOUND)
     members = await member_model.find_by_board(board_id, db)
     keys = [f"{m['user_id']}:{k}" for m in members for k in VALID_RETRO_KEYS]
     state = await scrum_retro_collab_manager.snapshot_state(retro_id, db)
@@ -97,9 +98,9 @@ async def write_retro_cell(board_id: int, retro_id: int, body: RetroCellWrite,
         return err
     retro = await retro_model.find_by_id(retro_id, db)
     if not retro or retro['board_id'] != board_id:
-        return {'status': False, 'message': 'RETRO_NOT_FOUND'}
+        return error_response(ErrorCode.RETRO_NOT_FOUND)
     if body.key not in VALID_RETRO_KEYS or body.mode not in VALID_MODES:
-        return {'status': False, 'message': 'INVALID_CELL'}
+        return error_response(ErrorCode.INVALID_CELL)
     user_id = request.state.payload.get('user_id')
     key = f"{user_id}:{body.key}"  # 본인 강제
     await scrum_retro_collab_manager.apply_external_mutation(

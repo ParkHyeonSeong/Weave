@@ -1,6 +1,7 @@
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.errors import error_response, ErrorCode
 from core.model import scrum_board as board_model
 from core.model import scrum_member as member_model
 from core.model import scrum_week as week_model
@@ -12,10 +13,10 @@ from routers.schema.scrum_cell import VALID_MODES, VALID_ROWS, WeekCellWrite
 async def _require_member(board_id: int, request: Request, db: AsyncSession):
     """보드 존재 + 멤버십 확인. 통과 시 (user_id, None), 실패 시 (None, err_dict)."""
     if not await board_model.find_by_id(board_id, db):
-        return None, {'status': False, 'message': 'BOARD_NOT_FOUND'}
+        return None, error_response(ErrorCode.BOARD_NOT_FOUND)
     user_id = request.state.payload.get('user_id')
     if not await member_model.is_member(board_id, user_id, db):
-        return None, {'status': False, 'message': 'PERMISSION_DENIED'}
+        return None, error_response(ErrorCode.PERMISSION_DENIED)
     return user_id, None
 
 
@@ -50,7 +51,7 @@ async def write_week_cell(board_id: int, iso_year: int, iso_week: int,
     if err:
         return err
     if body.row not in VALID_ROWS or body.mode not in VALID_MODES:
-        return {'status': False, 'message': 'INVALID_CELL'}
+        return error_response(ErrorCode.INVALID_CELL)
     week = await week_model.get_or_create(board_id, iso_year, iso_week, db)
     key = f"{user_id}:{body.day}:{body.row}"  # 본인 강제
     await scrum_week_collab_manager.apply_external_mutation(

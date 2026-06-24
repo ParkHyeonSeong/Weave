@@ -1,6 +1,7 @@
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.errors import error_response, ErrorCode
 from core.model import scrum_board as board_model
 from core.model import scrum_member as member_model
 from library.user_directory import strip_email
@@ -12,11 +13,11 @@ async def _require_role(board_id: int, request: Request, required: str,
     required: 'member' | 'admin'
     """
     if not await board_model.find_by_id(board_id, db):
-        return {'status': False, 'message': 'BOARD_NOT_FOUND'}
+        return error_response(ErrorCode.BOARD_NOT_FOUND)
     user_id = request.state.payload.get('user_id')
     role = await member_model.get_role(board_id, user_id, db)
     if not member_model.has_at_least(role, required):
-        return {'status': False, 'message': 'PERMISSION_DENIED'}
+        return error_response(ErrorCode.PERMISSION_DENIED)
     return None
 
 
@@ -48,11 +49,11 @@ async def get_list(request: Request, db: AsyncSession):
 async def get_detail(board_id: int, request: Request, db: AsyncSession):
     board = await board_model.find_by_id(board_id, db)
     if not board:
-        return {'status': False, 'message': 'BOARD_NOT_FOUND'}
+        return error_response(ErrorCode.BOARD_NOT_FOUND)
     user_id = request.state.payload.get('user_id')
     my_role = await member_model.get_role(board_id, user_id, db)
     if board['visibility'] == 'private' and not my_role:
-        return {'status': False, 'message': 'ACCESS_DENIED'}
+        return error_response(ErrorCode.ACCESS_DENIED)
     board['my_role'] = my_role
     board['members'] = await member_model.find_by_board(board_id, db)
     return {'status': True, 'board': board}
@@ -88,7 +89,7 @@ async def restore(board_id: int, request: Request, db: AsyncSession):
     user_id = request.state.payload.get('user_id')
     role = await member_model.get_role(board_id, user_id, db)
     if not member_model.has_at_least(role, 'admin'):
-        return {'status': False, 'message': 'PERMISSION_DENIED'}
+        return error_response(ErrorCode.PERMISSION_DENIED)
     await board_model.restore(board_id, db)
     return {'status': True}
 
@@ -98,7 +99,7 @@ async def permanent_delete(board_id: int, request: Request, db: AsyncSession):
     user_id = request.state.payload.get('user_id')
     role = await member_model.get_role(board_id, user_id, db)
     if not member_model.has_at_least(role, 'admin'):
-        return {'status': False, 'message': 'PERMISSION_DENIED'}
+        return error_response(ErrorCode.PERMISSION_DENIED)
     await board_model.hard_delete(board_id, db)
     return {'status': True}
 
@@ -107,11 +108,11 @@ async def get_members(board_id: int, request: Request, db: AsyncSession):
     # get_detail과 동일한 가시성 규칙: public은 누구나, private은 멤버만.
     board = await board_model.find_by_id(board_id, db)
     if not board:
-        return {'status': False, 'message': 'BOARD_NOT_FOUND'}
+        return error_response(ErrorCode.BOARD_NOT_FOUND)
     user_id = request.state.payload.get('user_id')
     my_role = await member_model.get_role(board_id, user_id, db)
     if board['visibility'] == 'private' and not my_role:
-        return {'status': False, 'message': 'ACCESS_DENIED'}
+        return error_response(ErrorCode.ACCESS_DENIED)
     members = await member_model.find_by_board(board_id, db)
     if not my_role:  # 비멤버(공개 board 조회자)에겐 이메일 비노출 (SEC-21 동류)
         members = strip_email(members)
@@ -127,7 +128,7 @@ async def add_member(board_id: int, body, request: Request, db: AsyncSession):
     target_role = await member_model.get_role(board_id, body.user_id, db)
     if target_role == 'admin' and body.role != 'admin':
         if await member_model.count_admins(board_id, db) <= 1:
-            return {'status': False, 'message': 'LAST_ADMIN'}
+            return error_response(ErrorCode.LAST_ADMIN)
     await member_model.add(board_id, body.user_id, body.role, db)
     return {'status': True}
 
@@ -139,11 +140,11 @@ async def update_member_role(board_id: int, target_user_id: int, body,
         return err
     target_role = await member_model.get_role(board_id, target_user_id, db)
     if not target_role:
-        return {'status': False, 'message': 'MEMBER_NOT_FOUND'}
+        return error_response(ErrorCode.MEMBER_NOT_FOUND)
     new_role = body.role
     if target_role == 'admin' and new_role != 'admin':
         if await member_model.count_admins(board_id, db) <= 1:
-            return {'status': False, 'message': 'LAST_ADMIN'}
+            return error_response(ErrorCode.LAST_ADMIN)
     await member_model.update_role(board_id, target_user_id, new_role, db)
     return {'status': True}
 
@@ -163,10 +164,10 @@ async def leave(board_id: int, request: Request, db: AsyncSession):
     user_id = request.state.payload.get('user_id')
     role = await member_model.get_role(board_id, user_id, db)
     if not role:
-        return {'status': False, 'message': 'NOT_BOARD_MEMBER'}
+        return error_response(ErrorCode.NOT_BOARD_MEMBER)
     # 마지막 admin이면 나갈 수 없음 (관리자 없는 보드 방지)
     if role == 'admin' and await member_model.count_admins(board_id, db) <= 1:
-        return {'status': False, 'message': 'CANNOT_LEAVE_LAST_ADMIN'}
+        return error_response(ErrorCode.CANNOT_LEAVE_LAST_ADMIN)
     await member_model.remove(board_id, user_id, db)
     return {'status': True}
 
@@ -174,17 +175,17 @@ async def leave(board_id: int, request: Request, db: AsyncSession):
 async def remove_member(board_id: int, target_user_id: int, request: Request,
                         db: AsyncSession):
     if not await board_model.find_by_id(board_id, db):
-        return {'status': False, 'message': 'BOARD_NOT_FOUND'}
+        return error_response(ErrorCode.BOARD_NOT_FOUND)
     user_id = request.state.payload.get('user_id')
     # 남을 제거하려면 admin, 본인 탈퇴(leave)는 멤버 누구나 가능
     if user_id != target_user_id:
         role = await member_model.get_role(board_id, user_id, db)
         if not member_model.has_at_least(role, 'admin'):
-            return {'status': False, 'message': 'PERMISSION_DENIED'}
+            return error_response(ErrorCode.PERMISSION_DENIED)
     target_role = await member_model.get_role(board_id, target_user_id, db)
     if not target_role:
         return {'status': True}  # 멱등 — 이미 멤버가 아님
     if target_role == 'admin' and await member_model.count_admins(board_id, db) <= 1:
-        return {'status': False, 'message': 'LAST_ADMIN'}
+        return error_response(ErrorCode.LAST_ADMIN)
     await member_model.remove(board_id, target_user_id, db)
     return {'status': True}
