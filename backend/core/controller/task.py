@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.model import task as task_model
 from core.model import branch_member as member_model
+from core.model import saved_view as sv_model
 from core.model import task_type_config as type_model
 from core.model import workflow_status as ws_model
 from core.model import recent_view
@@ -381,20 +382,52 @@ def _and(existing, extra):
     return {"type": "group", "op": "AND", "negate": False, "children": [existing, extra]}
 
 
+async def _resolve_view(saved_view_id, user_id, expect_branch_id, db):
+    """saved_view_id → {'spec','group_by','sort'} | 에러 dict. expect_branch_id=None이면 개인 뷰만 허용(크로스).
+    접근/스코프는 saved_view 컨트롤러의 Global 계약과 동일하게 여기서도 재검증(IDOR 방지)."""
+    view = await sv_model.find_by_id(saved_view_id, db)
+    if not view:
+        return {'status': False, 'message': 'VIEW_NOT_FOUND'}
+    # 접근: 개인 뷰=owner만; 브랜치 뷰=현재 멤버 AND (owner OR shared) — owner여도 멤버십 재확인(탈퇴 시 회수)
+    if view['scope_branch_id'] is None:
+        if view['owner_user_id'] != user_id:
+            return {'status': False, 'message': 'NOT_VIEW_VISIBLE'}
+    else:
+        if not await member_model.is_member(view['scope_branch_id'], user_id, db):
+            return {'status': False, 'message': 'NOT_VIEW_VISIBLE'}
+        if view['owner_user_id'] != user_id and view['visibility'] != 'shared':
+            return {'status': False, 'message': 'NOT_VIEW_VISIBLE'}
+    # 스코프 일치
+    if expect_branch_id is None:
+        # 크로스=개인(scope NULL) 소유 뷰만. owner 재확인은 위 접근검사와 중복이지만 계약을 코드로 못박는 방어선.
+        if view['scope_branch_id'] is not None or view['owner_user_id'] != user_id:
+            return {'status': False, 'message': 'VIEW_SCOPE_MISMATCH'}
+    elif view['scope_branch_id'] != expect_branch_id:
+        return {'status': False, 'message': 'VIEW_SCOPE_MISMATCH'}
+    # falsy(None/{}=server_default)만 빈 그룹으로 정규화. group/cond 루트는 보존(cond 루트도 유효).
+    fs = view['filter_spec']
+    spec = fs if fs else {'type': 'group', 'op': 'AND', 'negate': False, 'children': []}
+    return {'spec': spec, 'group_by': view['group_by'], 'sort': view['sort'] or []}
+
+
 async def query_branch(branch_id, body, request, db):
     user_id = request.state.payload.get('user_id')
     if not await member_model.is_member(branch_id, user_id, db):
         return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+    spec, group_by, sort = body.filter, body.group_by, _dump_sort(body.sort)
+    if getattr(body, 'saved_view_id', None) is not None:  # 뷰가 있으면 서버가 spec/group_by/sort 로드(body 값 무시)
+        v = await _resolve_view(body.saved_view_id, user_id, branch_id, db)
+        if 'status' in v:        # 에러 dict(성공 dict엔 status 키 없음)
+            return v
+        spec, group_by, sort = v['spec'], v['group_by'], v['sort']
     try:
-        validate_filter(body.filter)
-        await validate_custom_fields(body.filter, branch_id, db)
+        validate_filter(spec)
+        await validate_custom_fields(spec, branch_id, db)
     except FilterError as e:
         return {'status': False, 'message': 'INVALID_FILTER', 'detail': str(e)}
     ctx = {'user_id': user_id, 'today': datetime.date.today()}
     limit, offset = _paging(body)
-    result = await task_model.query([branch_id], body.filter,
-                                    _dump_sort(body.sort),
-                                    body.group_by, limit, offset, ctx, db)
+    result = await task_model.query([branch_id], spec, sort, group_by, limit, offset, ctx, db)
     return {'status': True, **result}
 
 
@@ -403,21 +436,24 @@ async def query_cross_branch(body, request, db):
     if body.scope not in ("my", "all"):
         # 기본값 my인 API에서 오타가 더 넓은 결과를 주지 않도록 명시 거부
         return {'status': False, 'message': 'INVALID_SCOPE'}
-    try:
-        validate_filter(body.filter)
-        await validate_custom_fields(body.filter, None, db)
+    spec, group_by, sort = body.filter, body.group_by, _dump_sort(body.sort)
+    if getattr(body, 'saved_view_id', None) is not None:
+        v = await _resolve_view(body.saved_view_id, user_id, None, db)  # 개인(scope NULL) 소유 뷰만
+        if 'status' in v:        # 에러 dict(성공 dict엔 status 키 없음)
+            return v
+        spec, group_by, sort = v['spec'], v['group_by'], v['sort']
+    try:                          # 로드한 뷰 spec도 SQL 전 재검증(개인 뷰가 cf 조건이면 FilterError→INVALID_FILTER)
+        validate_filter(spec)
+        await validate_custom_fields(spec, None, db)
     except FilterError as e:
         return {'status': False, 'message': 'INVALID_FILTER', 'detail': str(e)}
     # 멤버인 branch만 — assignee 할당이 남아있어도 비멤버 branch는 제외(IDOR)
     member_ids = await member_model.member_branch_ids(user_id, db)
     if not member_ids:
         return {'status': True, 'items': [], 'total': 0, 'groups': None}
-    spec = body.filter
     if body.scope == "my":
         spec = _and(spec, {"type": "cond", "field": "assignee", "op": "eq", "value": "$me", "negate": False})
     ctx = {'user_id': user_id, 'today': datetime.date.today()}
     limit, offset = _paging(body)
-    result = await task_model.query(list(member_ids), spec,
-                                    _dump_sort(body.sort),
-                                    body.group_by, limit, offset, ctx, db)
+    result = await task_model.query(list(member_ids), spec, sort, group_by, limit, offset, ctx, db)
     return {'status': True, **result}

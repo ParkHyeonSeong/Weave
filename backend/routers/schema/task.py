@@ -22,6 +22,8 @@ class TaskQuery(BaseModel):
     # limit/offset 직접 지정 시 page/page_size보다 우선(MCP offset 페이지네이션용 — 배수 제약 없음)
     limit: Optional[int] = None
     offset: Optional[int] = None
+    # 있으면 서버가 뷰의 filter/group_by/sort를 로드(body의 filter/group_by/sort는 무시)
+    saved_view_id: Optional[int] = None
 
 
 class TaskQueryCross(TaskQuery):
