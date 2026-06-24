@@ -11,6 +11,7 @@ the shared branch_scope guard for the unscoped fetch + the membership models.
 """
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.errors import error_response, ErrorCode
 from core.guard.branch_scope import find_resource_in_branch
 from core.model import star as star_model
 from core.model import branch_member as branch_member_model
@@ -28,21 +29,21 @@ async def _authorize_item(item_type: str, item_id: int, user_id: int,
         # branch_id and run our own membership check.
         task = await find_resource_in_branch(item_id, None, 'task', db)
         if task is None:
-            return {'status': False, 'message': 'TASK_NOT_FOUND'}
+            return error_response(ErrorCode.TASK_NOT_FOUND)
         if not await branch_member_model.is_member(task['branch_id'], user_id, db):
-            return {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+            return error_response(ErrorCode.NOT_BRANCH_MEMBER)
         return None
 
     if item_type == 'doc':
         # canvas_page guard returns canvas_id (page->canvas) and branch_id.
         page = await find_resource_in_branch(item_id, None, 'canvas_page', db)
         if page is None:
-            return {'status': False, 'message': 'PAGE_NOT_FOUND'}
+            return error_response(ErrorCode.PAGE_NOT_FOUND)
         if not await canvas_member_model.is_member(page['canvas_id'], user_id, db):
-            return {'status': False, 'message': 'NOT_CANVAS_MEMBER'}
+            return error_response(ErrorCode.NOT_CANVAS_MEMBER)
         return None
 
-    return {'status': False, 'message': 'INVALID_ITEM_TYPE'}
+    return error_response(ErrorCode.INVALID_ITEM_TYPE)
 
 
 async def toggle(body, request, db: AsyncSession):
