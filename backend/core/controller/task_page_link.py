@@ -1,6 +1,7 @@
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.errors import error_response, ErrorCode
 from core.model import task_page_link as link_model
 from core.model import branch_member as member_model
 from core.model import task as task_model
@@ -10,7 +11,7 @@ async def _check_member(branch_id: int, request: Request, db: AsyncSession):
     """Branch 멤버 확인"""
     user_id = request.state.payload.get('user_id')
     if not await member_model.is_member(branch_id, user_id, db):
-        return None, {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+        return None, error_response(ErrorCode.NOT_BRANCH_MEMBER)
     return user_id, None
 
 
@@ -23,7 +24,7 @@ async def link_page(body, branch_id: int, task_id: int, request: Request, db: As
     try:
         link_id = await link_model.create(task_id, body.page_id, user_id, db)
     except Exception:
-        return {'status': False, 'message': 'DUPLICATE_LINK'}
+        return error_response(ErrorCode.DUPLICATE_LINK)
 
     return {'status': True, 'link_id': link_id}
 

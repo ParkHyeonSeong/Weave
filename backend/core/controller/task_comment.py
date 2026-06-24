@@ -1,6 +1,7 @@
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.errors import error_response, ErrorCode
 from core.model import task_comment as comment_model
 from core.model import branch_member as member_model
 from core.model import task as task_model
@@ -14,7 +15,7 @@ async def _check_member(branch_id: int, request: Request, db: AsyncSession):
     """Branch 멤버 확인"""
     user_id = request.state.payload.get('user_id')
     if not await member_model.is_member(branch_id, user_id, db):
-        return None, {'status': False, 'message': 'NOT_BRANCH_MEMBER'}
+        return None, error_response(ErrorCode.NOT_BRANCH_MEMBER)
     return user_id, None
 
 
@@ -22,7 +23,7 @@ async def _check_task(task_id: int, branch_id: int, db: AsyncSession):
     """Task 존재 + branch 소속 확인. (task dict, None) 또는 (None, err)"""
     task = await task_model.find_by_id(task_id, db)
     if not task or task['branch_id'] != branch_id:
-        return None, {'status': False, 'message': 'TASK_NOT_FOUND'}
+        return None, error_response(ErrorCode.TASK_NOT_FOUND)
     return task, None
 
 
@@ -30,9 +31,9 @@ async def _check_author(comment_id: int, task_id: int, user_id: int, db: AsyncSe
     """댓글 존재 + task 소속 + 작성자 본인 확인."""
     comment = await comment_model.find_by_id(comment_id, db)
     if not comment or comment['task_id'] != task_id:
-        return None, {'status': False, 'message': 'COMMENT_NOT_FOUND'}
+        return None, error_response(ErrorCode.COMMENT_NOT_FOUND)
     if comment['author_id'] != user_id:
-        return None, {'status': False, 'message': 'NOT_AUTHOR'}
+        return None, error_response(ErrorCode.NOT_AUTHOR)
     return comment, None
 
 
@@ -123,15 +124,15 @@ async def create_comment(body, branch_id: int, task_id: int, request: Request,
     if parent_id is not None:
         parent = await comment_model.find_by_id(parent_id, db)
         if not parent or parent['task_id'] != task_id:
-            return {'status': False, 'message': 'INVALID_PARENT'}
+            return error_response(ErrorCode.INVALID_PARENT)
         if parent.get('deleted_at') is not None:
-            return {'status': False, 'message': 'PARENT_DELETED'}
+            return error_response(ErrorCode.PARENT_DELETED)
         if parent['parent_comment_id'] is not None:
             # normalize to root, then re-verify root is alive
             parent_id = parent['parent_comment_id']
             root = await comment_model.find_by_id(parent_id, db)
             if not root or root.get('deleted_at') is not None:
-                return {'status': False, 'message': 'PARENT_DELETED'}
+                return error_response(ErrorCode.PARENT_DELETED)
 
     comment_id = await comment_model.create(task_id, user_id, body.content, parent_id, db)
 
@@ -164,7 +165,7 @@ async def update_comment(body, branch_id: int, task_id: int, comment_id: int,
     if err:
         return err
     if comment.get('deleted_at') is not None:
-        return {'status': False, 'message': 'COMMENT_DELETED'}
+        return error_response(ErrorCode.COMMENT_DELETED)
 
     raw_new = extract_mention_user_ids(body.content)
     old_list = await comment_model.get_mentions(comment_id, db)
