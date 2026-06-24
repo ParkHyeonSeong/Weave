@@ -80,3 +80,9 @@ def test_order_multi():
 
 def test_order_unknown_ignored():
     assert build_order([{"field": "evil; DROP", "dir": "asc"}]).strip() == "t.task_id"
+
+def test_order_status_uses_workflow_sort_order():
+    # 평면 뷰의 status 정렬이 saved_view_id로 서버에 와도 워크플로 순서로 정렬돼야 한다(parity).
+    sql = build_order([{"field": "status", "dir": "asc"}])
+    assert "workflow_status" in sql and "sort_order" in sql
+    assert sql.index("sort_order") < sql.index("t.task_id")

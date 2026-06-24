@@ -141,9 +141,14 @@ def _custom(field, op, value, params, counter):
 
 _PRIORITY_CASE = ("CASE t.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 "
                   "WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END")
+# status는 브랜치별 workflow_status.sort_order로 정렬(태스크 status를 그 브랜치 워크플로에 매핑).
+# 평면 뷰의 단일정렬(클라이언트는 워크플로 순서로 정렬)을 saved_view_id로 서버/MCP에서 쓸 때도 동일하게
+# 정렬되도록 parity 보장. (branch_id,key) UNIQUE라 스칼라 서브쿼리 안전, 매칭 없으면 NULL→NULLS LAST.
+_STATUS_ORDER = ("(SELECT ws.sort_order FROM workflow_status ws "
+                 "WHERE ws.branch_id = t.branch_id AND ws.key = t.status)")
 _ORDERABLE = {"priority": _PRIORITY_CASE, "due_date": "t.due_date", "start_date": "t.start_date",
               "created": "t.created_at", "created_at": "t.created_at",
-              "updated_at": "t.updated_at", "title": "t.title"}
+              "updated_at": "t.updated_at", "title": "t.title", "status": _STATUS_ORDER}
 
 
 def build_order(sort):

@@ -98,3 +98,26 @@ async def test_query_cross_invalid_scope_rejected(db_session):
     body = SimpleNamespace(filter=None, sort=[], group_by=None, page=1, page_size=50, scope="mine")
     res = await ctrl.query_cross_branch(body, _req(uid), db_session)
     assert res["status"] is False and res["message"] == "INVALID_SCOPE"
+
+
+async def test_query_branch_status_sort_uses_workflow_order(db_session):
+    # 평면 뷰의 status 정렬이 워크플로 sort_order로 서버 정렬돼야(키 알파벳 아님) — saved_view parity
+    uid = await _user(db_session, "ss@t.test", "ss"); bid = await _branch(db_session, uid, "SST")
+    for key, so in (("zdone", 0), ("atodo", 1)):  # sort_order가 키 알파벳과 반대
+        await db_session.execute(text(
+            "INSERT INTO workflow_status (branch_id,key,label,color,category,sort_order,is_default) "
+            "VALUES (:b,:k,:k,'#000000','todo',:so,false)"), {"b": bid, "k": key, "so": so})
+
+    async def _t(status):
+        dn = (await db_session.execute(text("SELECT COALESCE(MAX(display_number),0)+1 FROM task WHERE branch_id=:b"),
+                                       {"b": bid})).scalar_one()
+        return (await db_session.execute(text(
+            "INSERT INTO task (branch_id,display_number,title,status,priority,created_by) "
+            "VALUES (:b,:dn,'t',:s,'medium',:u) RETURNING task_id"),
+            {"b": bid, "dn": dn, "s": status, "u": uid})).scalar_one()
+
+    t_z = await _t("zdone")  # sort_order 0
+    t_a = await _t("atodo")  # sort_order 1
+    res = await ctrl.query_branch(bid, _body(sort=[{"field": "status", "dir": "asc"}]), _req(uid), db_session)
+    ids = [it["task_id"] for it in res["items"]]
+    assert ids.index(t_z) < ids.index(t_a)  # sort_order 0(zdone) 먼저 — 키 알파벳이면 atodo가 먼저였을 것
