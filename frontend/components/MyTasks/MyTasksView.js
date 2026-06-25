@@ -93,10 +93,10 @@ export default function MyTasksView() {
   }, []);
   useEffect(() => { loadSavedViews(); }, [loadSavedViews]);
 
-  // 저장/수정 payload: 현재 효과적 필터를 단일 filter_spec으로 합성한다(리뷰 P1).
+  // 저장/수정 payload: 현재 효과적 필터를 단일 filter_spec으로 합성한다.
   // 기본 드롭다운(status_category/priority)도 조건으로 포함 → 기본 모드 상태도 뷰에 저장돼 복원된다.
   // branch_id는 브랜치 전용이라 크로스브랜치 개인 뷰에 담지 않는다(적용 시 초기화).
-  // scope(my/all)는 뷰와 직교하는 세션 렌즈로 두고 저장하지 않는다(스키마에 scope 컬럼 없음 — v1).
+  // scope(my/all)는 saved_view.scope 컬럼에 저장 → 적용 시 복원.
   const buildViewPayload = () => {
     const cond = (field, value) => ({ type: 'cond', field, op: 'eq', value, negate: false });
     const children = [];
@@ -106,7 +106,7 @@ export default function MyTasksView() {
     const filter_spec = children.length === 1
       ? children[0]
       : { type: 'group', op: 'AND', negate: false, children };
-    return { filter_spec, group_by: null, sort: SORT_TO_QUERY[filters.sort_by] || [] };
+    return { filter_spec, group_by: null, sort: SORT_TO_QUERY[filters.sort_by] || [], scope };
   };
 
   const handleApplyView = (viewId) => {
@@ -114,8 +114,8 @@ export default function MyTasksView() {
     if (!view) return;
     const applied = applySavedView(view); // cond 루트 안전 정규화 포함
     setFilterSpec(applied.filterSpec);
-    // 기본 quick 필터(status/priority/branch_id)는 비운다 — 뷰의 filter_spec이 단일 소스
-    // (안 비우면 적용 후에도 기존 드롭다운 필터가 남아 이중 필터 — 리뷰 P1).
+    setScope(view.scope === 'all' ? 'all' : 'my'); // 뷰 scope 복원(없으면 'my' 기본)
+    // 기본 quick 필터(status/priority/branch_id)는 비운다 — 뷰의 filter_spec이 단일 소스(이중 필터 방지).
     setFilters((prev) => ({ ...prev, status: '', priority: '', branch_id: '', sort_by: sortByFromQuery(view.sort) }));
     setActiveViewId(viewId);
     setViewError(null);
@@ -301,7 +301,7 @@ export default function MyTasksView() {
         {/* 고급 필터 토글 */}
         <button
           type="button"
-          className={`MyTasks__AdvancedBtn ${advancedActive ? 'MyTasks__AdvancedBtn--active' : ''}`}
+          className={`MyTasks__AdvancedBtn ${advancedActive || scope === 'all' ? 'MyTasks__AdvancedBtn--active' : ''}`}
           onClick={() => setAdvancedOpen((prev) => !prev)}
         >
           <SlidersHorizontal size={13} />
