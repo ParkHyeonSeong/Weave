@@ -12,6 +12,7 @@ import { sanitizeHtml } from '@/library/sanitize';
 import { formatYMD, formatDateTime } from '@/library/formatTime';
 import { selectableEpics } from '@/library/epics';
 import { useRefHydration } from '@/library/refHydration';
+import { errorText } from '@/library/errorText';
 import Avatar from '@/components/common/Avatar';
 import TaskIssueSection from './TaskIssueSection';
 import TaskSubtaskSection from './TaskSubtaskSection';
@@ -92,11 +93,8 @@ export default function TaskFullPage() {
     return <div className="TaskFullPage"><div className="TaskFullPage__Loading">Loading...</div></div>;
   }
   if (error || !task) {
-    const msg = error === 'NOT_BRANCH_MEMBER'
-      ? '이 태스크가 속한 브랜치의 멤버가 아닙니다.'
-      : error === 'NOT_FOUND'
-        ? '태스크를 찾을 수 없습니다.'
-        : '태스크를 불러올 수 없습니다.';
+    // error는 useTaskDetail이 setError(getErrorCode(res.data))로 저장한 코드 문자열
+    const msg = errorText(error) ?? '태스크를 불러올 수 없습니다.';
     return (
       <div className="TaskFullPage">
         <div className="TaskFullPage__Error">
