@@ -175,6 +175,22 @@ async def log_task_assignee_change(task_id: int, branch_id: int, actor_id: int,
     )
 
 
+async def log_task_assignee_role_change(task_id: int, branch_id: int, actor_id: int,
+                                        assignee: dict, db: AsyncSession):
+    """담당자 role-only 전이(sub→main 승격) 로그.
+
+    user_id set은 그대로라 _compute_set_diff에 안 잡히므로 summary로 기록한다.
+    """
+    name = assignee.get('username') or '담당자'
+    summary = f'{name}을(를) 메인 담당자로 변경'
+    # changes는 비워 summary로만 기록한다. 프론트 ChangeDetail은 added/removed 칩만
+    # 렌더하므로, role-only 승격을 added로 넣으면 '신규 추가'로 오인된다.
+    await log_model.create(
+        entity_type='task', entity_id=task_id, actor_id=actor_id,
+        action='updated', changes=[], summary=summary, branch_id=branch_id, db=db,
+    )
+
+
 async def log_task_label_change(task_id: int, branch_id: int, actor_id: int,
                                 old_labels: list[dict], new_labels: list[dict],
                                 db: AsyncSession):

@@ -11,6 +11,7 @@ from core.errors import ErrorCode, error_response
 from core.model import task as task_model
 from core.model import branch_member as member_model
 from library import activity_service
+from library import notification_service
 
 
 async def get_task_in_branch_or_error(task_id: int, branch_id: int, request: Request, db: AsyncSession):
@@ -53,4 +54,68 @@ async def remove_task_label(task_id: int, label_id: int, branch_id: int, request
     updated = await task_model.find_by_id(task_id, db)
     await activity_service.log_task_label_change(
         task_id, branch_id, user_id, old_labels, updated.get('labels') or [], db)
+    return {'status': True}
+
+
+async def add_task_assignee(task_id: int, user_id_to_add: int, role: str,
+                            branch_id: int, request: Request, db: AsyncSession):
+    """Task에 담당자 하나 추가/전이(결정 B 전이 표). role은 'sub'(기본) 또는 'main'."""
+    task, err = await get_task_in_branch_or_error(task_id, branch_id, request, db)
+    if err:
+        return err
+    if not await member_model.is_member(branch_id, user_id_to_add, db):
+        return error_response(ErrorCode.INVALID_ASSIGNEE)
+
+    old = task.get('assignees') or []
+    current_role = {a['user_id']: a['role'] for a in old}.get(user_id_to_add)
+    actor_id = request.state.payload.get('user_id')
+
+    if role == 'sub':
+        if current_role == 'main':
+            return error_response(ErrorCode.INVALID_ASSIGNEE)  # 의도 모호 차단(결정 B)
+        if current_role == 'sub':
+            return {'status': True}  # 멱등 no-op
+        await task_model.upsert_assignee(task_id, user_id_to_add, 'sub', db)
+    else:  # role == 'main'
+        if current_role == 'main':
+            return {'status': True}  # 멱등 no-op
+        await task_model.remove_main_except(task_id, user_id_to_add, db)  # 기존 main 제거
+        await task_model.upsert_assignee(task_id, user_id_to_add, 'main', db)
+
+    updated = await task_model.find_by_id(task_id, db)
+    new = updated.get('assignees') or []
+    # 추가/제거(기존 main 제거 포함)는 set-diff 로깅(변화 없으면 helper가 skip)
+    await activity_service.log_task_assignee_change(task_id, branch_id, actor_id, old, new, db)
+    # 여기서 current_role=='sub'는 sub→main 승격뿐(다른 전이는 위에서 early-return).
+    # user_id set이 그대로라 set-diff에 안 잡히므로 role 변경을 별도 로깅.
+    if current_role == 'sub':
+        promoted = next((a for a in new if a['user_id'] == user_id_to_add), None)
+        if promoted:
+            await activity_service.log_task_assignee_role_change(task_id, branch_id, actor_id, promoted, db)
+    # 새로 담당자가 된 유저에게 알림(이미 담당자였으면 skip)
+    if current_role is None:
+        username = request.state.payload.get('username', '')
+        display_id = task.get('display_id', '')
+        title = task.get('title', '')
+        link = f'/branch/{branch_id}/task/{task_id}'
+        await notification_service.notify_bulk(
+            [user_id_to_add], 'task_assigned', actor_id,
+            f'{username}님이 {display_id} {title}에 회원님을 담당자로 지정했습니다',
+            link, 'task', task_id, db,
+        )
+    return {'status': True}
+
+
+async def remove_task_assignee(task_id: int, user_id_to_remove: int,
+                               branch_id: int, request: Request, db: AsyncSession):
+    """Task에서 담당자 하나 제거(main/sub 무관)."""
+    task, err = await get_task_in_branch_or_error(task_id, branch_id, request, db)
+    if err:
+        return err
+    actor_id = request.state.payload.get('user_id')
+    old = task.get('assignees') or []
+    await task_model.remove_assignee(task_id, user_id_to_remove, db)
+    updated = await task_model.find_by_id(task_id, db)
+    await activity_service.log_task_assignee_change(
+        task_id, branch_id, actor_id, old, updated.get('assignees') or [], db)
     return {'status': True}

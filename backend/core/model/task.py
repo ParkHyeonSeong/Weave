@@ -1070,3 +1070,29 @@ async def set_assignees(task_id: int, main_user_id, sub_user_ids: list, db: Asyn
         await db.execute(text("""
             INSERT INTO task_assignee (task_id, user_id, role) VALUES (:task_id, :user_id, 'sub')
         """), {'task_id': task_id, 'user_id': sub_id})
+
+
+async def upsert_assignee(task_id: int, user_id: int, role: str, db: AsyncSession):
+    """담당자 1명 추가/role 갱신(멱등)."""
+    await db.execute(text("""
+        INSERT INTO task_assignee (task_id, user_id, role) VALUES (:task_id, :user_id, :role)
+        ON CONFLICT (task_id, user_id) DO UPDATE SET role = EXCLUDED.role
+    """), {'task_id': task_id, 'user_id': user_id, 'role': role})
+
+
+async def remove_assignee(task_id: int, user_id: int, db: AsyncSession):
+    """담당자 1명 제거."""
+    await db.execute(text("""
+        DELETE FROM task_assignee WHERE task_id = :task_id AND user_id = :user_id
+    """), {'task_id': task_id, 'user_id': user_id})
+
+
+async def remove_main_except(task_id: int, keep_user_id, db: AsyncSession):
+    """기존 main 담당자를 제거(결정 B: 새 main 설정 시 기존 main 제거).
+
+    keep_user_id가 현재 main이면 건드리지 않는다(멱등).
+    """
+    await db.execute(text("""
+        DELETE FROM task_assignee
+        WHERE task_id = :task_id AND role = 'main' AND user_id != :keep
+    """), {'task_id': task_id, 'keep': keep_user_id})
