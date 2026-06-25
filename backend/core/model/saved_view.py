@@ -14,20 +14,21 @@ def _row(row) -> dict:
 
 
 async def create(owner_user_id, scope_branch_id, name, filter_spec, group_by,
-                 sort, columns, visibility, db: AsyncSession) -> int:
+                 sort, columns, visibility, db: AsyncSession, scope=None) -> int:
     result = await db.execute(text("""
         INSERT INTO saved_view (owner_user_id, scope_branch_id, name, filter_spec,
-                                group_by, sort, columns, visibility)
-        VALUES (:owner, :scope, :name, CAST(:filter_spec AS jsonb), :group_by,
-                CAST(:sort AS jsonb), CAST(:columns AS jsonb), :visibility)
+                                group_by, sort, columns, visibility, scope)
+        VALUES (:owner, :scope_branch, :name, CAST(:filter_spec AS jsonb), :group_by,
+                CAST(:sort AS jsonb), CAST(:columns AS jsonb), :visibility, :scope)
         RETURNING view_id
     """), {
-        'owner': owner_user_id, 'scope': scope_branch_id, 'name': name,
+        'owner': owner_user_id, 'scope_branch': scope_branch_id, 'name': name,
         'filter_spec': json.dumps(filter_spec or {}),
         'group_by': group_by,
         'sort': json.dumps(sort) if sort is not None else None,
         'columns': json.dumps(columns) if columns is not None else None,
         'visibility': visibility,
+        'scope': scope,
     })
     return result.scalar_one()
 
@@ -35,7 +36,7 @@ async def create(owner_user_id, scope_branch_id, name, filter_spec, group_by,
 async def find_by_id(view_id: int, db: AsyncSession):
     result = await db.execute(text("""
         SELECT view_id, owner_user_id, scope_branch_id, name, filter_spec,
-               group_by, sort, columns, visibility, created_at, updated_at
+               group_by, sort, columns, visibility, scope, created_at, updated_at
         FROM saved_view WHERE view_id = :id
     """), {'id': view_id})
     row = result.fetchone()
@@ -49,7 +50,7 @@ async def find_accessible(user_id: int, scope_branch_id, db: AsyncSession):
     if scope_branch_id is None:
         result = await db.execute(text("""
             SELECT view_id, owner_user_id, scope_branch_id, name, filter_spec,
-                   group_by, sort, columns, visibility, created_at, updated_at,
+                   group_by, sort, columns, visibility, scope, created_at, updated_at,
                    (owner_user_id = :uid) AS is_owner
             FROM saved_view
             WHERE scope_branch_id IS NULL AND owner_user_id = :uid
@@ -59,7 +60,7 @@ async def find_accessible(user_id: int, scope_branch_id, db: AsyncSession):
         # 멤버십을 owner/shared 공통 전제로 끌어올림(EXISTS를 OR 밖에). owner여도 멤버 아니면 안 보임.
         result = await db.execute(text("""
             SELECT sv.view_id, sv.owner_user_id, sv.scope_branch_id, sv.name, sv.filter_spec,
-                   sv.group_by, sv.sort, sv.columns, sv.visibility, sv.created_at, sv.updated_at,
+                   sv.group_by, sv.sort, sv.columns, sv.visibility, sv.scope, sv.created_at, sv.updated_at,
                    (sv.owner_user_id = :uid) AS is_owner
             FROM saved_view sv
             WHERE sv.scope_branch_id = :bid
@@ -73,7 +74,7 @@ async def find_accessible(user_id: int, scope_branch_id, db: AsyncSession):
 
 async def update(view_id: int, fields: dict, db: AsyncSession):
     sets, params = [], {'id': view_id}
-    for col in ('name', 'group_by', 'visibility'):
+    for col in ('name', 'group_by', 'visibility', 'scope'):
         if col in fields:
             sets.append(f"{col} = :{col}"); params[col] = fields[col]
     for col in ('filter_spec', 'sort', 'columns'):

@@ -50,3 +50,16 @@ async def test_find_accessible_removed_owner_gets_nothing(db_session):
     assert vid in {v['view_id'] for v in await sv.find_accessible(owner, bid, db_session)}  # 멤버일 땐 보임
     await db_session.execute(text("DELETE FROM branch_member WHERE branch_id=:b AND user_id=:u"), {'b': bid, 'u': owner})
     assert vid not in {v['view_id'] for v in await sv.find_accessible(owner, bid, db_session)}  # 제거 후 회수
+
+
+async def test_create_find_with_scope(db_session):
+    # 개인 뷰의 scope('my'/'all')가 저장·반환돼야 한다(scope 컬럼).
+    uid = await _user(db_session, 'sc@t.test', 'sc')
+    g = {'type': 'group', 'op': 'AND', 'negate': False, 'children': []}
+    vid = await sv.create(uid, None, 'all-view', g, None, None, None, 'private', db_session, scope='all')
+    got = await sv.find_by_id(vid, db_session)
+    assert got['scope'] == 'all'
+    # scope 없이 만든 뷰(브랜치 뷰 등)는 NULL
+    bid = await _branch(db_session, uid, 'SCNB')
+    vid2 = await sv.create(uid, bid, 'branch-view', g, None, None, None, 'private', db_session)
+    assert (await sv.find_by_id(vid2, db_session))['scope'] is None
