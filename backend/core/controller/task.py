@@ -483,7 +483,7 @@ def _and(existing, extra):
 
 
 async def _resolve_view(saved_view_id, user_id, expect_branch_id, db):
-    """saved_view_id → {'spec','group_by','sort'} | 에러 dict. expect_branch_id=None이면 개인 뷰만 허용(크로스).
+    """saved_view_id → {'spec','group_by','sort','scope'} | 에러 dict. expect_branch_id=None이면 개인 뷰만 허용(크로스).
     접근/스코프는 saved_view 컨트롤러의 Global 계약과 동일하게 여기서도 재검증(IDOR 방지)."""
     view = await sv_model.find_by_id(saved_view_id, db)
     if not view:
