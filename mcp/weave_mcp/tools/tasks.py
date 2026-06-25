@@ -380,3 +380,19 @@ async def remove_task_assignee(branch_id: int, task_id: int, user_id: int) -> An
     return await get_client().call_json(
         "DELETE", f"/api/branches/{branch_id}/tasks/{task_id}/assignees/{user_id}",
     )
+
+
+@mcp.tool
+async def set_task_custom_field(branch_id: int, task_id: int, field_id: int,
+                                value: str | int | float | bool | None = None) -> Any:
+    """Set ONE custom field value on a task, preserving the others (per-key merge).
+
+    Use this instead of update_task(custom_fields=...) when you only want to change
+    one field — update_task replaces the whole custom_fields object. value=null clears
+    the field. field_id from list_custom_fields; value type must match the field
+    (number->number, checkbox->bool, date->"YYYY-MM-DD", select->an option, text/url->string).
+    """
+    return await get_client().call_json(
+        "PATCH", f"/api/branches/{branch_id}/tasks/{task_id}/custom-fields",
+        json={"field_id": field_id, "value": value},
+    )

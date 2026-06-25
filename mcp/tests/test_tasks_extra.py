@@ -343,3 +343,23 @@ async def test_remove_task_assignee(fake_client):
     fake_client.call_json.assert_awaited_once_with(
         "DELETE", "/api/branches/3/tasks/5/assignees/7"
     )
+
+
+async def test_set_task_custom_field(fake_client):
+    fake_client.call_json.return_value = {"status": True}
+    async with Client(_app.mcp) as client:
+        await client.call_tool("set_task_custom_field",
+                               {"branch_id": 3, "task_id": 5, "field_id": 9, "value": 42})
+    fake_client.call_json.assert_awaited_once_with(
+        "PATCH", "/api/branches/3/tasks/5/custom-fields", json={"field_id": 9, "value": 42}
+    )
+
+
+async def test_set_task_custom_field_null_clear(fake_client):
+    fake_client.call_json.return_value = {"status": True}
+    async with Client(_app.mcp) as client:
+        await client.call_tool("set_task_custom_field",
+                               {"branch_id": 3, "task_id": 5, "field_id": 9, "value": None})
+    fake_client.call_json.assert_awaited_once_with(
+        "PATCH", "/api/branches/3/tasks/5/custom-fields", json={"field_id": 9, "value": None}
+    )

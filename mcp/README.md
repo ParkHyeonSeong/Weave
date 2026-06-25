@@ -4,7 +4,7 @@ Exposes Weave project-management tools (tasks, sprints, epics, issues, docs, and
 Claude sessions over MCP (stdio). Talks to Weave's REST API only — the Weave backend is not
 modified. Each tool acts as the token's owner; `?` marks optional arguments.
 
-## Tools (181)
+## Tools (182)
 
 > The authoritative, always-current description of each tool is its docstring in
 > `weave_mcp/tools/*.py` (that's what the model reads). This list is the human-readable overview.
@@ -43,6 +43,7 @@ modified. Each tool acts as the token's owner; `?` marks optional arguments.
 - `update_task(branch_id, task_id, title?, description?, status?, priority?, task_type?, sprint_id?, epic_id?, start_date?, due_date?, assignee_main?, assignee_sub?, label_ids?, custom_fields?)` — update a task (label/assignee/custom_fields는 REPLACE; 하나만 추가/제거하려면 아래 전용 도구 사용)
 - `add_task_label(branch_id, task_id, label_id)` · `remove_task_label(branch_id, task_id, label_id)` — 기존 라벨 유지한 채 단일 라벨 추가/제거
 - `add_task_assignee(branch_id, task_id, user_id, role?)` · `remove_task_assignee(branch_id, task_id, user_id)` — 담당자 단일 추가/제거 (role='main'은 기존 main 교체)
+- `set_task_custom_field(branch_id, task_id, field_id, value?)` — custom field 한 키만 병합(value=null이면 clear), 나머지 보존
 - `reorder_tasks(branch_id, task_ids, sprint_id?, after_task_id?)` — reorder / move tasks between sprints (omit `sprint_id` for backlog)
 - `list_archived_tasks(branch_id, limit?, offset?)` — done/cancelled tasks (excluded from `list_branch_tasks`)
 - `delete_task(branch_id, task_id)` — delete a task
