@@ -175,34 +175,40 @@ async def log_task_assignee_change(task_id: int, branch_id: int, actor_id: int,
     )
 
 
-async def log_task_assignee_role_change(task_id: int, branch_id: int, actor_id: int,
-                                        assignee: dict, db: AsyncSession):
-    """담당자 role-only 전이(sub→main 승격) 로그.
+async def _log_main_role_change(task_id: int, branch_id: int, actor_id: int,
+                                assignee: dict, became_main: bool, db: AsyncSession):
+    """담당자 role-only 전이(main 승격/강등) summary 로그.
 
     user_id set은 그대로라 _compute_set_diff에 안 잡히므로 summary로 기록한다.
+    changes는 비워둔다 — 프론트 ChangeDetail은 added/removed 칩만 렌더하므로
+    role-only 변경을 added로 넣으면 '신규 추가'로 오인된다.
     """
     name = assignee.get('username') or '담당자'
-    summary = f'{name}을(를) 메인 담당자로 변경'
-    # changes는 비워 summary로만 기록한다. 프론트 ChangeDetail은 added/removed 칩만
-    # 렌더하므로, role-only 승격을 added로 넣으면 '신규 추가'로 오인된다.
+    role_label = '메인' if became_main else '서브'
     await log_model.create(
         entity_type='task', entity_id=task_id, actor_id=actor_id,
-        action='updated', changes=[], summary=summary, branch_id=branch_id, db=db,
+        action='updated', changes=[], summary=f'{name}을(를) {role_label} 담당자로 변경',
+        branch_id=branch_id, db=db,
     )
 
 
 async def log_task_assignee_role_changes(task_id: int, branch_id: int, actor_id: int,
                                          old_assignees: list[dict], new_assignees: list[dict],
                                          db: AsyncSession):
-    """old·new 양쪽에 있으면서 main으로 승격된 담당자를 role 로그로 남긴다.
+    """old·new 양쪽에 있고 main 역할이 바뀐 담당자(sub→main 승격 / main→sub 강등)를 로깅한다.
 
-    set-diff(user_id 기준)는 user가 양쪽에 있으면 변화로 안 보므로(replace·granular
-    공통), main 승격은 여기서 별도 기록한다. add/remove는 log_task_assignee_change가 담당.
+    set-diff(user_id 기준)는 user가 양쪽에 있으면 변화로 안 보므로(replace·granular 공통)
+    여기서 main 역할 변경을 별도 기록한다. add/remove는 log_task_assignee_change가 담당.
     """
     old_role = {a['user_id']: a['role'] for a in (old_assignees or [])}
     for a in (new_assignees or []):
-        if a['role'] == 'main' and old_role.get(a['user_id']) not in (None, 'main'):
-            await log_task_assignee_role_change(task_id, branch_id, actor_id, a, db)
+        prev = old_role.get(a['user_id'])
+        if prev is None or prev == a['role']:
+            continue  # 신규(set-diff 처리) 또는 role 변화 없음
+        if a['role'] == 'main':            # sub → main 승격
+            await _log_main_role_change(task_id, branch_id, actor_id, a, True, db)
+        elif prev == 'main':               # main → sub 강등(유저 잔존)
+            await _log_main_role_change(task_id, branch_id, actor_id, a, False, db)
 
 
 async def log_task_label_change(task_id: int, branch_id: int, actor_id: int,

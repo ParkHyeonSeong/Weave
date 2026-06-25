@@ -204,3 +204,29 @@ async def test_update_replace_logs_role_promotion(db_session):
         "SELECT summary FROM activity_log WHERE entity_type='task' AND entity_id=:t ORDER BY log_id"
     ), {"t": task1})).fetchall()]
     assert any("메인 담당자로 변경" in (s or "") for s in summaries[cnt0:])
+
+
+async def test_update_replace_logs_main_demotion(db_session):
+    """전체 교체로 main을 sub로 강등(유저 잔존)하는 role-only 변경도 로그를 남겨야 한다."""
+    from core.controller import task as ctrl
+    from routers.schema import task as schema
+    alice = await _make_user(db_session, "dm_a@t.test", "dm_a")
+    b1 = await _make_branch(db_session, alice, name="DM", key="DMB")
+    await _add_member(db_session, b1, alice, "admin")
+    task1 = await _make_task(db_session, b1, alice, "T1")
+    await ctrl.update(task1, schema.TaskUpdate(assignees=schema.AssigneeInput(main=alice, sub=[])),
+                      b1, _req(alice), db_session)
+    cnt0 = (await db_session.execute(text(
+        "SELECT COUNT(*) FROM activity_log WHERE entity_type='task' AND entity_id=:t"
+    ), {"t": task1})).scalar_one()
+
+    # alice를 main→sub로 강등(잔존)
+    res = await ctrl.update(task1, schema.TaskUpdate(assignees=schema.AssigneeInput(main=None, sub=[alice])),
+                            b1, _req(alice), db_session)
+    assert res["status"] is True
+    assert (await _assignee_rows(db_session, task1)) == {alice: 'sub'}
+
+    summaries = [r[0] for r in (await db_session.execute(text(
+        "SELECT summary FROM activity_log WHERE entity_type='task' AND entity_id=:t ORDER BY log_id"
+    ), {"t": task1})).fetchall()]
+    assert any("서브 담당자로 변경" in (s or "") for s in summaries[cnt0:])
