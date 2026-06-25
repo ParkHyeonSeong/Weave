@@ -34,8 +34,10 @@ export default function ResetPassword({ user, onClose }) {
         }
       } else {
         const err = getError(res.data);
-        const msg = errorText(err.code, err.category) ?? (err.code === 'CANNOT_RESET_OWN_PASSWORD' ? 'You cannot reset your own password.' : err.code === 'USER_NOT_FOUND' ? 'User not found.' : 'Failed to reset password.');
-        setError(msg);
+        let fallback = 'Failed to reset password.';
+        if (err.code === 'CANNOT_RESET_OWN_PASSWORD') fallback = 'You cannot reset your own password.';
+        else if (err.code === 'USER_NOT_FOUND') fallback = 'User not found.';
+        setError(errorText(err.code, err.category) ?? fallback);
       }
     } catch {
       setError('Failed to reset password.');

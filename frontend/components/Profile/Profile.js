@@ -143,7 +143,10 @@ export default function Profile() {
         showAlert('Success', 'Password updated.');
       } else {
         const err = getError(res.data);
-        const msg = errorText(err.code, err.category) ?? (err.code === 'INVALID_CURRENT_PASSWORD' ? 'Current password is incorrect.' : err.code === 'PASSWORD_MISMATCH' ? 'New passwords do not match.' : 'Failed to update password.');
+        let fallback = 'Failed to update password.';
+        if (err.code === 'INVALID_CURRENT_PASSWORD') fallback = 'Current password is incorrect.';
+        else if (err.code === 'PASSWORD_MISMATCH') fallback = 'New passwords do not match.';
+        const msg = errorText(err.code, err.category) ?? fallback;
         showAlert('Error', msg);
       }
     } catch {
@@ -186,7 +189,10 @@ export default function Profile() {
         showAlert('Success', 'Avatar updated.');
       } else {
         const err = getError(res.data);
-        const msg = errorText(err.code, err.category) ?? (err.code === 'INVALID_FILE_TYPE' ? 'Invalid file type.' : err.code === 'FILE_TOO_LARGE' ? 'File size must be less than 2MB.' : 'Failed to upload avatar.');
+        let fallback = 'Failed to upload avatar.';
+        if (err.code === 'INVALID_FILE_TYPE') fallback = 'Invalid file type.';
+        else if (err.code === 'FILE_TOO_LARGE') fallback = 'File size must be less than 2MB.';
+        const msg = errorText(err.code, err.category) ?? fallback;
         showAlert('Error', msg);
       }
     } catch {

@@ -5,7 +5,7 @@ import { UserPlus, X, Search, LogOut } from 'lucide-react';
 import CustomSelect from '@/components/common/CustomSelect';
 import Avatar from '@/components/common/Avatar';
 import { showToast } from '@/components/Layout/Toast';
-import { getErrorCode, getError } from '@/library/errorCode';
+import { getError } from '@/library/errorCode';
 import { errorText } from '@/library/errorText';
 
 const ROLE_OPTIONS = [
@@ -120,14 +120,11 @@ export default function ScrumMembersPanel({ boardId, myRole, onChanged, onLeave 
         role: newRole,
       });
       if (res.data.status) await afterMutation();
-      else if (getErrorCode(res.data) === 'LAST_ADMIN') {
+      else {
         const err = getError(res.data);
-        const msg = errorText(err.code, err.category) ?? '마지막 admin은 변경할 수 없습니다';
+        const fallback = err.code === 'LAST_ADMIN' ? '마지막 admin은 변경할 수 없습니다' : '변경 실패';
+        const msg = errorText(err.code, err.category) ?? fallback;
         showToast(msg, 'error');
-      } else {
-        const err2 = getError(res.data);
-        const msg2 = errorText(err2.code, err2.category) ?? '변경 실패';
-        showToast(msg2, 'error');
       }
     } catch {
       showToast('변경 실패', 'error');
@@ -139,14 +136,11 @@ export default function ScrumMembersPanel({ boardId, myRole, onChanged, onLeave 
       const res = await axios.delete(`/scrum/${boardId}/members/${userId}`);
       if (res.data.status) {
         await afterMutation();
-      } else if (getErrorCode(res.data) === 'LAST_ADMIN') {
-        const err = getError(res.data);
-        const msg = errorText(err.code, err.category) ?? '마지막 admin은 제거할 수 없습니다';
-        showToast(msg, 'error');
       } else {
-        const err2 = getError(res.data);
-        const msg2 = errorText(err2.code, err2.category) ?? '제거 실패';
-        showToast(msg2, 'error');
+        const err = getError(res.data);
+        const fallback = err.code === 'LAST_ADMIN' ? '마지막 admin은 제거할 수 없습니다' : '제거 실패';
+        const msg = errorText(err.code, err.category) ?? fallback;
+        showToast(msg, 'error');
       }
     } catch {
       showToast('제거 실패', 'error');
@@ -162,14 +156,14 @@ export default function ScrumMembersPanel({ boardId, myRole, onChanged, onLeave 
       if (res.data.status) {
         if (onLeave) onLeave();
         else router.push('/scrum');
-      } else if (getErrorCode(res.data) === 'LAST_ADMIN') {
-        const err = getError(res.data);
-        const msg = errorText(err.code, err.category) ?? '다른 admin을 먼저 지정하세요';
-        alert(msg);
       } else {
-        const err2 = getError(res.data);
-        const msg2 = errorText(err2.code, err2.category) ?? '나가기 실패';
-        showToast(msg2, 'error');
+        const err = getError(res.data);
+        if (err.code === 'LAST_ADMIN') {
+          alert(errorText(err.code, err.category) ?? '다른 admin을 먼저 지정하세요');
+        } else {
+          const msg = errorText(err.code, err.category) ?? '나가기 실패';
+          showToast(msg, 'error');
+        }
       }
     } catch {
       showToast('나가기 실패', 'error');

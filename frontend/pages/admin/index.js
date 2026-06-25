@@ -105,7 +105,10 @@ export default function AdminPage() {
         fetchUsers();
       } else {
         const err = getError(res.data);
-        const msg = errorText(err.code, err.category) ?? (err.code === 'CANNOT_CHANGE_OWN_ROLE' ? 'You cannot change your own role.' : err.code === 'USER_NOT_FOUND' ? 'User not found.' : 'Failed to change role.');
+        let fallback = 'Failed to change role.';
+        if (err.code === 'CANNOT_CHANGE_OWN_ROLE') fallback = 'You cannot change your own role.';
+        else if (err.code === 'USER_NOT_FOUND') fallback = 'User not found.';
+        const msg = errorText(err.code, err.category) ?? fallback;
         showAlert('Error', msg);
       }
     } catch {
