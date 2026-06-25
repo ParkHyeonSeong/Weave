@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import DatePicker from '@/components/common/DatePicker';
+import { getError } from '@/library/errorCode';
+import { errorText } from '@/library/errorText';
 
 const COLORS = ['#5E6AD2', '#2563EB', '#DC2626', '#16A34A', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4'];
 
@@ -55,7 +57,9 @@ export default function EpicModal({ branchId, epic, onClose }) {
         window.dispatchEvent(new Event('epic:updated'));
         onClose();
       } else {
-        setError(res.data.message);
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? 'Failed to save epic.';
+        setError(msg);
       }
     } catch {
       setError('Failed to save epic.');

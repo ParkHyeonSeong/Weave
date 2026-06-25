@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import { getError } from '@/library/errorCode';
+import { errorText } from '@/library/errorText';
 
 export default function CreateIssue({ branchId, taskId, onClose }) {
   const [title, setTitle] = useState('');
@@ -23,7 +25,9 @@ export default function CreateIssue({ branchId, taskId, onClose }) {
         window.dispatchEvent(new Event('issue:created'));
         onClose();
       } else {
-        setError(res.data.message);
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? 'Failed to create issue.';
+        setError(msg);
       }
     } catch {
       setError('Failed to create issue.');

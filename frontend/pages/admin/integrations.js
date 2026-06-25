@@ -5,6 +5,8 @@ import AdminLayout from '@/components/Admin/AdminLayout';
 import { axios } from '@/library/_axios';
 import { Blocks, Bot, Mail } from 'lucide-react';
 import Alert from '@/components/modal/Alert';
+import { getError } from '@/library/errorCode';
+import { errorText } from '@/library/errorText';
 
 export default function IntegrationsPage() {
   const router = useRouter();
@@ -91,7 +93,9 @@ export default function IntegrationsPage() {
         showAlert('Success', 'AI configuration saved successfully.');
         fetchAiConfig();
       } else {
-        showAlert('Error', res.data.message || 'Failed to save configuration.');
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? 'Failed to save configuration.';
+        showAlert('Error', msg);
       }
     } catch {
       showAlert('Error', 'Failed to save AI configuration.');
@@ -148,7 +152,9 @@ export default function IntegrationsPage() {
         showAlert('Success', 'SMTP configuration saved successfully.');
         fetchSmtpConfig();
       } else {
-        showAlert('Error', res.data.message || 'Failed to save configuration.');
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? 'Failed to save configuration.';
+        showAlert('Error', msg);
       }
     } catch {
       showAlert('Error', 'Failed to save SMTP configuration.');
@@ -167,7 +173,9 @@ export default function IntegrationsPage() {
       if (res.data.status) {
         showAlert('Success', `Test email sent to ${profile.email || senderEmail}.`);
       } else {
-        showAlert('Error', res.data.message || 'Failed to send test email.');
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? 'Failed to send test email.';
+        showAlert('Error', msg);
       }
     } catch {
       showAlert('Error', 'Failed to send test email.');

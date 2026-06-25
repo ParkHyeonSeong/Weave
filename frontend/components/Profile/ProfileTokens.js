@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { Key, Copy, Check, Trash2, Plus } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import ConfirmModal from '@/components/modal/ConfirmModal';
+import { getError } from '@/library/errorCode';
+import { errorText } from '@/library/errorText';
 
 const EXPIRY_OPTIONS = [
   { label: '30 days', value: 30 },
@@ -58,7 +60,9 @@ export default function ProfileTokens({ showAlert }) {
         setName('');
         fetchTokens();
       } else {
-        showAlert('Error', res.data.message);
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? 'Failed to create token.';
+        showAlert('Error', msg);
       }
     } catch {
       showAlert('Error', 'Failed to create token.');
@@ -85,7 +89,9 @@ export default function ProfileTokens({ showAlert }) {
       if (res.data.status) {
         setTokens((prev) => prev.filter((t) => t.pat_id !== target.pat_id));
       } else {
-        showAlert('Error', res.data.message);
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? 'Failed to revoke token.';
+        showAlert('Error', msg);
         fetchTokens();
       }
     } catch {

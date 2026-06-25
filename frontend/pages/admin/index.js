@@ -9,6 +9,8 @@ import AddMember from '@/components/modal/AddMember';
 import ResetPassword from '@/components/modal/ResetPassword';
 import ConfirmModal from '@/components/modal/ConfirmModal';
 import Avatar from '@/components/common/Avatar';
+import { getError } from '@/library/errorCode';
+import { errorText } from '@/library/errorText';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -72,7 +74,9 @@ export default function AdminPage() {
       if (res.data.status) {
         fetchUsers();
       } else {
-        showAlert('Error', res.data.message);
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? 'Failed to approve user.';
+        showAlert('Error', msg);
       }
     } catch {
       showAlert('Error', 'Failed to approve user.');
@@ -85,7 +89,9 @@ export default function AdminPage() {
       if (res.data.status) {
         fetchUsers();
       } else {
-        showAlert('Error', res.data.message);
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? 'Failed to reject user.';
+        showAlert('Error', msg);
       }
     } catch {
       showAlert('Error', 'Failed to reject user.');
@@ -98,11 +104,9 @@ export default function AdminPage() {
       if (res.data.status) {
         fetchUsers();
       } else {
-        const messages = {
-          'CANNOT_CHANGE_OWN_ROLE': 'You cannot change your own role.',
-          'USER_NOT_FOUND': 'User not found.',
-        };
-        showAlert('Error', messages[res.data.message] || res.data.message);
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? (err.code === 'CANNOT_CHANGE_OWN_ROLE' ? 'You cannot change your own role.' : err.code === 'USER_NOT_FOUND' ? 'User not found.' : 'Failed to change role.');
+        showAlert('Error', msg);
       }
     } catch {
       showAlert('Error', 'Failed to change role.');
@@ -117,7 +121,9 @@ export default function AdminPage() {
         fetchUsers();
         setDeleteTarget(null);
       } else {
-        showAlert('Error', res.data.message);
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? 'Failed to delete user.';
+        showAlert('Error', msg);
       }
     } catch {
       showAlert('Error', 'Failed to delete user.');
@@ -131,7 +137,9 @@ export default function AdminPage() {
       if (res.data.status) {
         fetchUsers();
       } else {
-        showAlert('Error', res.data.message);
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? 'Failed to update status.';
+        showAlert('Error', msg);
       }
     } catch {
       showAlert('Error', 'Failed to update status.');

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import { getError } from '@/library/errorCode';
+import { errorText } from '@/library/errorText';
 
 export default function CompleteSprintModal({ branchId, sprint, sprints, onClose }) {
   const [moveTo, setMoveTo] = useState('backlog');
@@ -33,7 +35,9 @@ export default function CompleteSprintModal({ branchId, sprint, sprints, onClose
         window.dispatchEvent(new Event('task:updated'));
         onClose();
       } else {
-        setError(res.data.message);
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? 'Failed to complete sprint.';
+        setError(msg);
       }
     } catch {
       setError('Failed to complete sprint.');

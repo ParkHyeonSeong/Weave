@@ -5,6 +5,8 @@ import Alert from '@/components/modal/Alert';
 import ProfileTokens from '@/components/Profile/ProfileTokens';
 import Avatar from '@/components/common/Avatar';
 import { AVATAR_COLORS } from '@/library/userAvatar';
+import { getError } from '@/library/errorCode';
+import { errorText } from '@/library/errorText';
 
 // sessionStorage의 profile 객체에 변경분을 병합하고 헤더 동기화 이벤트 발생
 function syncProfileSession(patch) {
@@ -99,7 +101,9 @@ export default function Profile() {
         window.dispatchEvent(new CustomEvent('profile:updated'));
         showAlert('Success', 'Name updated.');
       } else {
-        showAlert('Error', res.data.message);
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? 'Failed to update name.';
+        showAlert('Error', msg);
       }
     } catch {
       showAlert('Error', 'Failed to update name.');
@@ -138,11 +142,9 @@ export default function Profile() {
         setConfirmPassword('');
         showAlert('Success', 'Password updated.');
       } else {
-        const messages = {
-          INVALID_CURRENT_PASSWORD: 'Current password is incorrect.',
-          PASSWORD_MISMATCH: 'New passwords do not match.',
-        };
-        showAlert('Error', messages[res.data.message] || res.data.message);
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? (err.code === 'INVALID_CURRENT_PASSWORD' ? 'Current password is incorrect.' : err.code === 'PASSWORD_MISMATCH' ? 'New passwords do not match.' : 'Failed to update password.');
+        showAlert('Error', msg);
       }
     } catch {
       showAlert('Error', 'Failed to update password.');
@@ -183,11 +185,9 @@ export default function Profile() {
         window.dispatchEvent(new CustomEvent('profile:updated'));
         showAlert('Success', 'Avatar updated.');
       } else {
-        const messages = {
-          INVALID_FILE_TYPE: 'Invalid file type.',
-          FILE_TOO_LARGE: 'File size must be less than 2MB.',
-        };
-        showAlert('Error', messages[res.data.message] || res.data.message);
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? (err.code === 'INVALID_FILE_TYPE' ? 'Invalid file type.' : err.code === 'FILE_TOO_LARGE' ? 'File size must be less than 2MB.' : 'Failed to upload avatar.');
+        showAlert('Error', msg);
       }
     } catch {
       showAlert('Error', 'Failed to upload avatar.');
@@ -209,7 +209,9 @@ export default function Profile() {
         // avatar_url은 별도 sessionStorage 키 — 이벤트로 헤더만 갱신
         window.dispatchEvent(new CustomEvent('profile:updated'));
       } else {
-        showAlert('Error', res.data.message);
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? 'Failed to remove avatar.';
+        showAlert('Error', msg);
       }
     } catch {
       showAlert('Error', 'Failed to remove avatar.');
@@ -232,7 +234,9 @@ export default function Profile() {
         syncProfileSession({ avatar_color: saved });
       } else {
         setAvatarColor(prev);
-        showAlert('Error', res.data.message);
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? 'Failed to update avatar color.';
+        showAlert('Error', msg);
       }
     } catch {
       setAvatarColor(prev);

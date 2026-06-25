@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { X, Copy, Check, Mail, Link2 } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import { getError } from '@/library/errorCode';
+import { errorText } from '@/library/errorText';
 
 export default function ResetPassword({ user, onClose }) {
   const [loading, setLoading] = useState(false);
@@ -31,11 +33,9 @@ export default function ResetPassword({ user, onClose }) {
           setResetLink(absolute);
         }
       } else {
-        const messages = {
-          'CANNOT_RESET_OWN_PASSWORD': 'You cannot reset your own password.',
-          'USER_NOT_FOUND': 'User not found.',
-        };
-        setError(messages[res.data.message] || res.data.message);
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? (err.code === 'CANNOT_RESET_OWN_PASSWORD' ? 'You cannot reset your own password.' : err.code === 'USER_NOT_FOUND' ? 'User not found.' : 'Failed to reset password.');
+        setError(msg);
       }
     } catch {
       setError('Failed to reset password.');

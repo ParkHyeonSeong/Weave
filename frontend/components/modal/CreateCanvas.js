@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X, Globe, Lock } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import { getErrorCode } from '@/library/errorCode';
 
 export default function CreateCanvas({ onClose }) {
   const [canvasName, setCanvasName] = useState('');
@@ -33,7 +34,7 @@ export default function CreateCanvas({ onClose }) {
         // Sidebar 목록 갱신 이벤트
         window.dispatchEvent(new Event('canvas:created'));
         onClose();
-      } else if (res.data.message === 'KEY_ALREADY_EXISTS') {
+      } else if (getErrorCode(res.data) === 'KEY_ALREADY_EXISTS') {
         setError('This key is already in use.');
       }
     } catch {

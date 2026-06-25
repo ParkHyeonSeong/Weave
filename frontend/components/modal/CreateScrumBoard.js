@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { X, CalendarCheck, Globe, Lock, Check } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import { getError } from '@/library/errorCode';
+import { errorText } from '@/library/errorText';
 
 const COLOR_PRESETS = ['#16A34A', '#5E6AD2', '#10B981', '#F59E0B', '#9333EA', '#EC4899', '#0EA5E9', '#DC2626'];
 const CADENCES = [
@@ -44,7 +46,9 @@ export default function CreateScrumBoard({ onClose, onCreated }) {
         window.dispatchEvent(new Event('scrum:created'));
         onCreated(res.data.board_id);
       } else {
-        setError(res.data.message || '생성 실패');
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? '생성 실패';
+        setError(msg);
       }
     } catch (err) {
       setError(err?.response?.data?.detail?.[0]?.msg || '생성 실패');

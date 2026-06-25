@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import { getErrorCode, getError } from '@/library/errorCode';
+import { errorText } from '@/library/errorText';
 
 export default function AddMember({ onClose }) {
   const [email, setEmail] = useState('');
@@ -26,10 +28,12 @@ export default function AddMember({ onClose }) {
       if (res.data.status) {
         window.dispatchEvent(new Event('member:created'));
         onClose();
-      } else if (res.data.message === 'EMAIL_ALREADY_EXISTS') {
+      } else if (getErrorCode(res.data) === 'EMAIL_ALREADY_EXISTS') {
         setError('This email is already registered.');
       } else {
-        setError(res.data.message);
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? 'Failed to create member.';
+        setError(msg);
       }
     } catch {
       setError('Failed to create member.');

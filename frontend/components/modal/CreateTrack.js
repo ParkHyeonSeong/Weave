@@ -3,6 +3,8 @@ import { X, Workflow, Globe, Lock, Check } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import { useUiPrefs } from '@/library/UiPrefsContext';
 import EntityIcon from '@/components/common/EntityIcon';
+import { getError } from '@/library/errorCode';
+import { errorText } from '@/library/errorText';
 
 const COLOR_PRESETS = [
   '#5E6AD2', '#10B981', '#F59E0B', '#9333EA',
@@ -67,7 +69,9 @@ export default function CreateTrack({ onClose, onCreated }) {
         window.dispatchEvent(new Event('track:created'));
         onCreated(res.data.track_id);
       } else {
-        setError(res.data.message || 'Failed to create track');
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? 'Failed to create track';
+        setError(msg);
       }
     } catch (err) {
       setError(err?.response?.data?.detail?.[0]?.msg || 'Failed to create track');

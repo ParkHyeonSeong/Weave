@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { X } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import DatePicker from '@/components/common/DatePicker';
+import { getError } from '@/library/errorCode';
+import { errorText } from '@/library/errorText';
 
 export default function SprintModal({ branchId, sprint, onClose }) {
   const isEdit = !!sprint?.sprint_id;
@@ -38,7 +40,9 @@ export default function SprintModal({ branchId, sprint, onClose }) {
         window.dispatchEvent(new Event('task:updated'));
         onClose();
       } else {
-        setError(res.data.message);
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? 'Failed to save sprint.';
+        setError(msg);
       }
     } catch {
       setError('Failed to save sprint.');
