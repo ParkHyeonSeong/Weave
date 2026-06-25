@@ -358,3 +358,25 @@ async def remove_task_label(branch_id: int, task_id: int, label_id: int) -> Any:
     return await get_client().call_json(
         "DELETE", f"/api/branches/{branch_id}/tasks/{task_id}/labels/{label_id}",
     )
+
+
+@mcp.tool
+async def add_task_assignee(branch_id: int, task_id: int, user_id: int, role: str = "sub") -> Any:
+    """Add one assignee to a task without replacing the rest. role is "sub" (default) or "main".
+
+    Use this instead of update_task(assignee_*) when you only want to ADD someone —
+    update_task replaces the whole assignee set. role="main" replaces the current main;
+    adding role="sub" to the current main is rejected.
+    """
+    return await get_client().call_json(
+        "POST", f"/api/branches/{branch_id}/tasks/{task_id}/assignees",
+        json={"user_id": user_id, "role": role},
+    )
+
+
+@mcp.tool
+async def remove_task_assignee(branch_id: int, task_id: int, user_id: int) -> Any:
+    """Remove one assignee (main or sub) from a task, keeping the others."""
+    return await get_client().call_json(
+        "DELETE", f"/api/branches/{branch_id}/tasks/{task_id}/assignees/{user_id}",
+    )

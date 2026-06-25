@@ -316,3 +316,30 @@ async def test_remove_task_label(fake_client):
     fake_client.call_json.assert_awaited_once_with(
         "DELETE", "/api/branches/3/tasks/5/labels/2"
     )
+
+
+async def test_add_task_assignee_default_sub(fake_client):
+    fake_client.call_json.return_value = {"status": True}
+    async with Client(_app.mcp) as client:
+        await client.call_tool("add_task_assignee", {"branch_id": 3, "task_id": 5, "user_id": 7})
+    fake_client.call_json.assert_awaited_once_with(
+        "POST", "/api/branches/3/tasks/5/assignees", json={"user_id": 7, "role": "sub"}
+    )
+
+
+async def test_add_task_assignee_main_role(fake_client):
+    fake_client.call_json.return_value = {"status": True}
+    async with Client(_app.mcp) as client:
+        await client.call_tool("add_task_assignee", {"branch_id": 3, "task_id": 5, "user_id": 7, "role": "main"})
+    fake_client.call_json.assert_awaited_once_with(
+        "POST", "/api/branches/3/tasks/5/assignees", json={"user_id": 7, "role": "main"}
+    )
+
+
+async def test_remove_task_assignee(fake_client):
+    fake_client.call_json.return_value = {"status": True}
+    async with Client(_app.mcp) as client:
+        await client.call_tool("remove_task_assignee", {"branch_id": 3, "task_id": 5, "user_id": 7})
+    fake_client.call_json.assert_awaited_once_with(
+        "DELETE", "/api/branches/3/tasks/5/assignees/7"
+    )
