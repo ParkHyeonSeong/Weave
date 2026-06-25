@@ -343,8 +343,8 @@ export default function Layout({ children }) {
       ws.onclose = () => {
         if (!alive) return;
         // 끊김 원인이 access 토큰 만료(SEC-29)인 경우가 많으므로 첫 끊김부터 토큰 갱신을
-        // 트리거한다. 단 갱신 완료를 재연결의 전제로 삼지 않는다: refreshAccessToken이
-        // 호출하는 /auth/refresh는 timeout이 없어(_axios) 멈추면 재연결까지 막힐 수 있다.
+        // 트리거한다. 단 갱신 완료를 재연결의 전제로 삼지 않는다: /auth/refresh에 10s
+        // timeout이 있어도(_axios) 갱신을 기다리면 그만큼 재연결이 늦어진다.
         // → 갱신은 fire-and-forget(쿨다운/in-flight 통합이 폭주를 막음), 재연결 타이머는
         //   항상 독립적으로 3초 뒤에 건다. 갱신은 보통 3초 내 끝나 다음 connect가 새 쿠키를 쓴다.
         refreshAccessToken().catch(() => {});

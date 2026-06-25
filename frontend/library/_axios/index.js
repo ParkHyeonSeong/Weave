@@ -18,20 +18,40 @@ const handleResponseFulfilled = (response) => {
 
 // 단기 access 토큰(SEC-29) 만료로 401이 오면 refresh 쿠키로 1회 갱신 후 원요청을 재시도한다.
 // 동시 다발 401은 단일 in-flight refresh로 합쳐 refresh 폭주를 막는다.
-let refreshPromise = null;
-let lastRefreshedAt = 0;
+const REFRESH_LOCK = 'weave-token-refresh';
+const REFRESH_TS_KEY = 'weave_last_refresh_at';  // 탭 간 공유(localStorage)
+const REFRESH_COOLDOWN_MS = 5000;
 
+let refreshPromise = null;  // 같은 탭 내 동시 호출 병합
+
+function lastRefreshAt() {
+  try { return Number(localStorage.getItem(REFRESH_TS_KEY)) || 0; } catch { return 0; }
+}
+function markRefreshed() {
+  try { localStorage.setItem(REFRESH_TS_KEY, String(Date.now())); } catch {}
+}
+
+// 실제 refresh 1회 실행(쿨다운 내면 생략). 락 안에서만 호출된다.
+async function doRefreshOnce() {
+  // 다른 탭이 방금(쿨다운 내) 회전했으면 쿠키가 이미 신선 → 재갱신 생략(회전 토큰 중복 소비 방지).
+  if (Date.now() - lastRefreshAt() <= REFRESH_COOLDOWN_MS) return;
+  const r = await api.post('/auth/refresh', null, { _skipAuthRetry: true, timeout: 10000 });
+  markRefreshed();
+  return r;
+}
+
+// 브라우저 전역 single-flight: Web Locks로 한 번에 한 탭만 refresh한다.
+// 단일사용·회전 refresh 토큰을 여러 탭이 동시 소비해 한쪽이 NEED_LOGIN으로 튕기는 레이스를 차단.
+// 같은 탭 내 동시 401은 refreshPromise로, 탭 간은 락+공유 쿨다운으로 합친다.
+// timeout 10s: refresh가 멈춰 락을 영구 점유해 다른 탭 인증까지 막는 걸 방지(실패 시 정상 로그아웃).
 function refreshAccessToken() {
-  // 갱신 직후(5s 쿨다운)의 추가 401은 새 refresh를 또 발생시키지 않고 기존 쿠키로 재시도시킨다
-  // (회전 토큰을 중복 소비해 불필요한 강제 로그아웃이 나는 레이스 방지).
-  if (!refreshPromise && Date.now() - lastRefreshedAt > 5000) {
-    refreshPromise = api
-      .post('/auth/refresh', null, { _skipAuthRetry: true })
-      .then((r) => { lastRefreshedAt = Date.now(); return r; })
-      .finally(() => { refreshPromise = null; });
-  } else if (!refreshPromise) {
-    return Promise.resolve();  // 쿨다운 내 — 이미 갱신됨
-  }
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = (async () => {
+    if (typeof navigator !== 'undefined' && navigator.locks) {
+      return navigator.locks.request(REFRESH_LOCK, doRefreshOnce);
+    }
+    return doRefreshOnce();  // Web Locks 미지원 폴백(in-tab 쿨다운만)
+  })().finally(() => { refreshPromise = null; });
   return refreshPromise;
 }
 
