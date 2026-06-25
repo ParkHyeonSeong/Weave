@@ -4,7 +4,7 @@ Exposes Weave project-management tools (tasks, sprints, epics, issues, docs, and
 Claude sessions over MCP (stdio). Talks to Weave's REST API only — the Weave backend is not
 modified. Each tool acts as the token's owner; `?` marks optional arguments.
 
-## Tools (175)
+## Tools (179)
 
 > The authoritative, always-current description of each tool is its docstring in
 > `weave_mcp/tools/*.py` (that's what the model reads). This list is the human-readable overview.
@@ -40,7 +40,8 @@ modified. Each tool acts as the token's owner; `?` marks optional arguments.
 - `list_branch_tasks(branch_id, sprint_id?, limit?, offset?)` — all tasks in a branch
 - `get_task(branch_id, task_id)` — full task detail
 - `create_task(branch_id, title, description?, priority?, status?, task_type?, due_date?, start_date?, sprint_id?, epic_id?, parent_task_id?, assignee_main?, assignee_sub?, label_ids?, custom_fields?)` — create a task
-- `update_task(branch_id, task_id, title?, description?, status?, priority?, task_type?, sprint_id?, epic_id?, start_date?, due_date?, assignee_main?, assignee_sub?, label_ids?, custom_fields?)` — update a task
+- `update_task(branch_id, task_id, title?, description?, status?, priority?, task_type?, sprint_id?, epic_id?, start_date?, due_date?, assignee_main?, assignee_sub?, label_ids?, custom_fields?)` — update a task (label/assignee/custom_fields는 REPLACE; 하나만 추가/제거하려면 아래 전용 도구 사용)
+- `add_task_label(branch_id, task_id, label_id)` · `remove_task_label(branch_id, task_id, label_id)` — 기존 라벨 유지한 채 단일 라벨 추가/제거
 - `reorder_tasks(branch_id, task_ids, sprint_id?, after_task_id?)` — reorder / move tasks between sprints (omit `sprint_id` for backlog)
 - `list_archived_tasks(branch_id, limit?, offset?)` — done/cancelled tasks (excluded from `list_branch_tasks`)
 - `delete_task(branch_id, task_id)` — delete a task

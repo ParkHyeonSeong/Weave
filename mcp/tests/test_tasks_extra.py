@@ -298,3 +298,21 @@ async def test_query_tasks_explicit_limit_offset(fake_client):
             "scope": "my",
         },
     )
+
+
+async def test_add_task_label(fake_client):
+    fake_client.call_json.return_value = {"status": True}
+    async with Client(_app.mcp) as client:
+        await client.call_tool("add_task_label", {"branch_id": 3, "task_id": 5, "label_id": 2})
+    fake_client.call_json.assert_awaited_once_with(
+        "POST", "/api/branches/3/tasks/5/labels", json={"label_id": 2}
+    )
+
+
+async def test_remove_task_label(fake_client):
+    fake_client.call_json.return_value = {"status": True}
+    async with Client(_app.mcp) as client:
+        await client.call_tool("remove_task_label", {"branch_id": 3, "task_id": 5, "label_id": 2})
+    fake_client.call_json.assert_awaited_once_with(
+        "DELETE", "/api/branches/3/tasks/5/labels/2"
+    )

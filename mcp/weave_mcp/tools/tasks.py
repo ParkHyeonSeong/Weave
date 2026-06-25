@@ -337,3 +337,24 @@ async def list_saved_views(scope_branch_id: int | None = None) -> Any:
     Each view's view_id can be passed to query_tasks(saved_view_id=...)."""
     params = {"scope_branch_id": scope_branch_id} if scope_branch_id is not None else {}
     return await get_client().call_json("GET", "/api/saved-views", params=params)
+
+
+@mcp.tool
+async def add_task_label(branch_id: int, task_id: int, label_id: int) -> Any:
+    """Add one label to a task, keeping existing labels (no replace).
+
+    Use this instead of update_task(label_ids=...) when you only want to ADD a
+    label — update_task replaces the whole set. label_id from list_labels(branch_id).
+    """
+    return await get_client().call_json(
+        "POST", f"/api/branches/{branch_id}/tasks/{task_id}/labels",
+        json={"label_id": label_id},
+    )
+
+
+@mcp.tool
+async def remove_task_label(branch_id: int, task_id: int, label_id: int) -> Any:
+    """Remove one label from a task, keeping the others."""
+    return await get_client().call_json(
+        "DELETE", f"/api/branches/{branch_id}/tasks/{task_id}/labels/{label_id}",
+    )
