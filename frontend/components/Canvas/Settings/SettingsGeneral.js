@@ -4,6 +4,7 @@ import { axios } from '@/library/_axios';
 import { Globe, Lock, AlertTriangle } from 'lucide-react';
 import AppearanceSection from '@/components/common/AppearanceSection';
 import { DEFAULT_COLORS } from '@/library/entityAppearance';
+import { getErrorCode } from '@/library/errorCode';
 
 export default function SettingsGeneral({ canvasId, canvas, isAdmin, onUpdated }) {
   const router = useRouter();
@@ -48,7 +49,7 @@ export default function SettingsGeneral({ canvasId, canvas, isAdmin, onUpdated }
         if (onUpdated) onUpdated();
         window.dispatchEvent(new Event('canvas:created'));
         setTimeout(() => setSaved(false), 2000);
-      } else if (res.data.message === 'KEY_ALREADY_EXISTS') {
+      } else if (getErrorCode(res.data) === 'KEY_ALREADY_EXISTS') {
         setKeyError('This key is already in use.');
       }
     } catch {}

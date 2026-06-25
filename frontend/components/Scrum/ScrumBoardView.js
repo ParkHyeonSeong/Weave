@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { ChevronLeft, ChevronRight, Users, Settings } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import { getErrorCode } from '@/library/errorCode';
 import useScrumWeekCollab from '@/library/useScrumWeekCollab';
 import ScrumWeekGrid from './ScrumWeekGrid';
 import RetroView from './RetroView';
@@ -58,7 +59,7 @@ export default function ScrumBoardView() {
           ? [...ms].sort((a, b) => (b.user_id === myId) - (a.user_id === myId))
           : ms;
         setMembers(ordered);
-      } else setErr(res.data.message || '접근 불가');
+      } else setErr(getErrorCode(res.data) ?? '접근 불가');
     } catch { setErr('불러오기 실패'); }
   }, [boardId, user?.user_id]);
 

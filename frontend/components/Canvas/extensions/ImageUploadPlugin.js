@@ -1,6 +1,8 @@
 import { Plugin } from '@tiptap/pm/state';
 import { axios } from '@/library/_axios';
 import { showToast } from '@/components/Layout/Toast';
+import { getErrorCode } from '@/library/errorCode';
+import { errorText } from '@/library/errorText';
 
 const MAX_IMAGE_SIZE_MB = 10;
 const MAX_IMAGE_SIZE = MAX_IMAGE_SIZE_MB * 1024 * 1024;
@@ -81,7 +83,9 @@ async function uploadAndInsert(file, context, view, insertPos) {
       const tr = view.state.tr.insert(pos, node);
       view.dispatch(tr);
     } else {
-      showToast(uploadErrorMessage(res.data?.message), 'error');
+      const code = getErrorCode(res.data);
+      const msg = errorText(code, null) ?? uploadErrorMessage(code);
+      showToast(msg, 'error');
     }
   } catch {
     showToast(uploadErrorMessage(), 'error');

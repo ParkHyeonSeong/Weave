@@ -4,6 +4,8 @@ import { Lock, Globe, AlertTriangle, Check } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import { showToast } from '@/components/Layout/Toast';
 import { COLOR_PRESETS, DEFAULT_COLORS } from '@/library/entityAppearance';
+import { getError } from '@/library/errorCode';
+import { errorText } from '@/library/errorText';
 
 const CADENCES = [
   { v: 'weekly', label: '매주' },
@@ -63,7 +65,9 @@ export default function ScrumSettingsGeneral({ board, boardId, isAdmin, onUpdate
         window.dispatchEvent(new Event('scrum:updated'));
         setTimeout(() => setSaved(false), 2000);
       } else {
-        showToast(`저장 실패: ${res.data.message}`, 'error');
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? '저장 실패';
+        showToast(msg, 'error');
       }
     } catch {
       showToast('저장 실패', 'error');
@@ -80,7 +84,9 @@ export default function ScrumSettingsGeneral({ board, boardId, isAdmin, onUpdate
         window.dispatchEvent(new Event('scrum:updated'));
         router.replace('/scrum');
       } else {
-        showToast(`아카이브 실패: ${res.data.message}`, 'error');
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? '아카이브 실패';
+        showToast(msg, 'error');
         setDeleting(false);
       }
     } catch {
