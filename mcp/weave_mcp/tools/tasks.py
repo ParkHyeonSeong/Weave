@@ -111,6 +111,7 @@ async def update_task(
     custom_fields: dict | None = None,
     parent_task_id: int | None = None,
     promote_to_top: bool = False,
+    dry_run: bool = False,
 ) -> Any:
     """Update fields of an existing task. All parameters are optional; only the ones
     you pass change.
@@ -122,6 +123,10 @@ async def update_task(
     since providing only one clears the other. label_ids and custom_fields are likewise
     REPLACE, not merge: pass the complete desired list/object (e.g. label_ids=[] clears all
     labels), not just the ones to add.
+    To ADD or REMOVE just one item without touching the rest, use the granular tools
+    instead: add_task_label/remove_task_label, add_task_assignee/remove_task_assignee,
+    set_task_custom_field. Pass dry_run=True to preview the added/removed/final diff
+    WITHOUT writing (all validation still runs).
     To re-parent (make this a subtask of another task) pass parent_task_id with that
     task's id. To promote it to a top-level task, pass promote_to_top=True (this sends
     parent_task_id=null). Leaving both out keeps the current parent unchanged.
@@ -155,6 +160,8 @@ async def update_task(
     }
     if assignees:
         body["assignees"] = assignees
+    if dry_run:
+        body["dry_run"] = True
     return await get_client().call_json(
         "PATCH", f"/api/branches/{branch_id}/tasks/{task_id}", json=body
     )

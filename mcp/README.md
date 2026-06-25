@@ -40,7 +40,7 @@ modified. Each tool acts as the token's owner; `?` marks optional arguments.
 - `list_branch_tasks(branch_id, sprint_id?, limit?, offset?)` — all tasks in a branch
 - `get_task(branch_id, task_id)` — full task detail
 - `create_task(branch_id, title, description?, priority?, status?, task_type?, due_date?, start_date?, sprint_id?, epic_id?, parent_task_id?, assignee_main?, assignee_sub?, label_ids?, custom_fields?)` — create a task
-- `update_task(branch_id, task_id, title?, description?, status?, priority?, task_type?, sprint_id?, epic_id?, start_date?, due_date?, assignee_main?, assignee_sub?, label_ids?, custom_fields?)` — update a task (label/assignee/custom_fields는 REPLACE; 하나만 추가/제거하려면 아래 전용 도구 사용)
+- `update_task(branch_id, task_id, title?, description?, status?, priority?, task_type?, sprint_id?, epic_id?, start_date?, due_date?, assignee_main?, assignee_sub?, label_ids?, custom_fields?, dry_run?)` — update a task (label/assignee/custom_fields는 REPLACE; 하나만 추가/제거하려면 아래 전용 도구. dry_run=true면 쓰기 없이 변경 diff만 반환)
 - `add_task_label(branch_id, task_id, label_id)` · `remove_task_label(branch_id, task_id, label_id)` — 기존 라벨 유지한 채 단일 라벨 추가/제거
 - `add_task_assignee(branch_id, task_id, user_id, role?)` · `remove_task_assignee(branch_id, task_id, user_id)` — 담당자 단일 추가/제거 (role='main'은 기존 main 교체)
 - `set_task_custom_field(branch_id, task_id, field_id, value?)` — custom field 한 키만 병합(value=null이면 clear), 나머지 보존

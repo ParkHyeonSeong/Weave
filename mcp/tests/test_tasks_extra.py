@@ -363,3 +363,22 @@ async def test_set_task_custom_field_null_clear(fake_client):
     fake_client.call_json.assert_awaited_once_with(
         "PATCH", "/api/branches/3/tasks/5/custom-fields", json={"field_id": 9, "value": None}
     )
+
+
+async def test_update_task_dry_run_sent(fake_client):
+    fake_client.call_json.return_value = {"status": True, "dry_run": True, "changes": {}}
+    async with Client(_app.mcp) as client:
+        await client.call_tool("update_task",
+                               {"branch_id": 3, "task_id": 5, "label_ids": [2], "dry_run": True})
+    fake_client.call_json.assert_awaited_once_with(
+        "PATCH", "/api/branches/3/tasks/5", json={"label_ids": [2], "dry_run": True}
+    )
+
+
+async def test_update_task_dry_run_omitted_when_false(fake_client):
+    fake_client.call_json.return_value = {"status": True}
+    async with Client(_app.mcp) as client:
+        await client.call_tool("update_task", {"branch_id": 3, "task_id": 5, "status": "done"})
+    fake_client.call_json.assert_awaited_once_with(
+        "PATCH", "/api/branches/3/tasks/5", json={"status": "done"}
+    )
