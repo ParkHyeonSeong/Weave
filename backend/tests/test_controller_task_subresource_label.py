@@ -8,6 +8,8 @@ from types import SimpleNamespace
 from sqlalchemy import text
 
 from core.controller import task as ctrl
+from core.controller import task_subresource as sub
+from core.model import task as task_model
 from routers.schema import task as schema
 
 
@@ -175,3 +177,101 @@ async def test_create_assignee_main_in_sub_dedupes_main_wins(db_session):
     ), {"t": res["task_id"], "u": alice})).fetchall()
     assert len(rows) == 1
     assert rows[0][0] == "main"
+
+
+# ---------------------------------------------------------------------------
+# Task 1.1 — single add_label/remove_label model functions
+# ---------------------------------------------------------------------------
+
+async def test_add_label_is_idempotent_then_remove(db_session):
+    alice = await _make_user(db_session, "m_a@t.test", "m_a")
+    b1 = await _make_branch(db_session, alice, name="M1", key="MM1")
+    label = await _make_label(db_session, b1, "X")
+    task1 = await _make_task(db_session, b1, alice, "T1")
+
+    await task_model.add_label(task1, label, db_session)
+    await task_model.add_label(task1, label, db_session)  # 두 번째도 500 없이 무시
+    count = (await db_session.execute(text(
+        "SELECT COUNT(*) FROM task_label WHERE task_id = :t"
+    ), {"t": task1})).scalar_one()
+    assert count == 1
+
+    await task_model.remove_label(task1, label, db_session)
+    count = (await db_session.execute(text(
+        "SELECT COUNT(*) FROM task_label WHERE task_id = :t"
+    ), {"t": task1})).scalar_one()
+    assert count == 0
+
+
+# ---------------------------------------------------------------------------
+# Task 1.2 — add_task_label / remove_task_label controller
+# ---------------------------------------------------------------------------
+
+async def test_add_task_label_controller(db_session):
+    alice = await _make_user(db_session, "c_a@t.test", "c_a")
+    b1 = await _make_branch(db_session, alice, name="C1", key="CC1")
+    await _add_member(db_session, b1, alice, "admin")
+    label = await _make_label(db_session, b1, "X")
+    task1 = await _make_task(db_session, b1, alice, "T1")
+
+    res = await sub.add_task_label(task1, label, b1, _req(alice), db_session)
+    assert res["status"] is True
+    count = (await db_session.execute(text(
+        "SELECT COUNT(*) FROM task_label WHERE task_id = :t AND label_id = :l"
+    ), {"t": task1, "l": label})).scalar_one()
+    assert count == 1
+    # 멱등 재호출
+    res2 = await sub.add_task_label(task1, label, b1, _req(alice), db_session)
+    assert res2["status"] is True
+
+    # 제거
+    res3 = await sub.remove_task_label(task1, label, b1, _req(alice), db_session)
+    assert res3["status"] is True
+    count = (await db_session.execute(text(
+        "SELECT COUNT(*) FROM task_label WHERE task_id = :t"
+    ), {"t": task1})).scalar_one()
+    assert count == 0
+
+
+async def test_add_task_label_rejects_cross_branch_label(db_session):
+    alice = await _make_user(db_session, "c_b@t.test", "c_b")
+    bob = await _make_user(db_session, "c_c@t.test", "c_c")
+    b1 = await _make_branch(db_session, alice, name="C2", key="CC2")
+    await _add_member(db_session, b1, alice, "admin")
+    b2 = await _make_branch(db_session, bob, name="C3", key="CC3")
+    foreign_label = await _make_label(db_session, b2, "F")
+    task1 = await _make_task(db_session, b1, alice, "T1")
+
+    res = await sub.add_task_label(task1, foreign_label, b1, _req(alice), db_session)
+    assert res["status"] is False
+    assert res["code"] == "LABEL_NOT_FOUND"
+
+
+async def test_add_task_label_rejects_cross_branch_task(db_session):
+    alice = await _make_user(db_session, "c_d@t.test", "c_d")
+    bob = await _make_user(db_session, "c_e@t.test", "c_e")
+    b1 = await _make_branch(db_session, alice, name="C4", key="CC4")
+    await _add_member(db_session, b1, alice, "admin")
+    b2 = await _make_branch(db_session, bob, name="C5", key="CC5")
+    label1 = await _make_label(db_session, b1, "X")
+    foreign_task = await _make_task(db_session, b2, bob, "FT")
+
+    # alice가 b1 컨텍스트로 b2 task를 건드림 → TASK_NOT_FOUND
+    res = await sub.add_task_label(foreign_task, label1, b1, _req(alice), db_session)
+    assert res["status"] is False
+    assert res["code"] == "TASK_NOT_FOUND"
+
+
+async def test_remove_task_label_rejects_cross_branch_label(db_session):
+    """remove도 타 브랜치 label_id는 거부(add와 대칭, 활동로그 정보누출 방지)."""
+    alice = await _make_user(db_session, "c_f@t.test", "c_f")
+    bob = await _make_user(db_session, "c_g@t.test", "c_g")
+    b1 = await _make_branch(db_session, alice, name="C6", key="CC6")
+    await _add_member(db_session, b1, alice, "admin")
+    b2 = await _make_branch(db_session, bob, name="C7", key="CC7")
+    foreign_label = await _make_label(db_session, b2, "F")
+    task1 = await _make_task(db_session, b1, alice, "T1")
+
+    res = await sub.remove_task_label(task1, foreign_label, b1, _req(alice), db_session)
+    assert res["status"] is False
+    assert res["code"] == "LABEL_NOT_FOUND"

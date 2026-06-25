@@ -980,6 +980,21 @@ async def set_labels(task_id: int, label_ids: list, db: AsyncSession):
         """), {'task_id': task_id, 'label_id': label_id})
 
 
+async def add_label(task_id: int, label_id: int, db: AsyncSession):
+    """단일 라벨 추가(기존 라벨 유지). 멱등."""
+    await db.execute(text("""
+        INSERT INTO task_label (task_id, label_id) VALUES (:task_id, :label_id)
+        ON CONFLICT (task_id, label_id) DO NOTHING
+    """), {'task_id': task_id, 'label_id': label_id})
+
+
+async def remove_label(task_id: int, label_id: int, db: AsyncSession):
+    """단일 라벨 제거."""
+    await db.execute(text("""
+        DELETE FROM task_label WHERE task_id = :task_id AND label_id = :label_id
+    """), {'task_id': task_id, 'label_id': label_id})
+
+
 async def batch_statuses(task_ids: list[int], user_id: int, db: AsyncSession) -> dict:
     """Ref 상태 배치 조회 (task_id → status/title/display_id + workflow info), 멤버인 branch만"""
     if not task_ids:

@@ -35,6 +35,7 @@ from routers import canvas_page as canvas_page_router
 from routers import canvas_annotation as canvas_annotation_router
 from routers import task_issue as task_issue_router
 from routers import task_comment as task_comment_router
+from routers import task_label as task_label_router
 from routers import my_tasks as my_tasks_router
 from routers import ws_canvas as ws_canvas_router
 from routers import ref_status as ref_status_router
@@ -214,6 +215,11 @@ app.include_router(
     task_comment_router.router,
     prefix="/api/branches/{branch_id}/tasks/{task_id}/comments",
     tags=["task-comments"],
+)
+app.include_router(
+    task_label_router.router,
+    prefix="/api/branches/{branch_id}/tasks/{task_id}/labels",
+    tags=["task-labels"],
 )
 app.include_router(my_tasks_router.router, prefix="/api/my-tasks", tags=["my-tasks"])
 app.include_router(ref_status_router.router, prefix="/api/ref-status", tags=["ref-status"])
