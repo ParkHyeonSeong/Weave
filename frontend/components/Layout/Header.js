@@ -16,6 +16,18 @@ const NOTI_ICONS = {
   task_status_changed: CheckCircle2,
 };
 
+// 알림 타입 → 색 그룹(스캔용) + 짧은 한글 라벨. 그룹 색은 SCSS의
+// .Header__NotiChip--{group}가 입힌다(멘션=primary·태스크=success·이슈=warning).
+// 매핑에 없는 타입은 칩을 그리지 않는다.
+const NOTI_TYPE_META = {
+  mention:             { group: 'mention', label: '멘션' },
+  chat_mention:        { group: 'mention', label: '멘션' },
+  task_assigned:       { group: 'task',    label: '배정' },
+  task_status_changed: { group: 'task',    label: '상태' },
+  issue_created:       { group: 'issue',   label: '이슈' },
+  issue_comment:       { group: 'issue',   label: '댓글' },
+};
+
 // 알림 title은 항상 "{actor_name}님이 …" 템플릿으로 생성되는데, 같은 이름이
 // 바로 윗줄(NotiSender)에 이미 보인다. 본문에서 그 접두를 떼어 좁은 너비를
 // 발신자 반복 대신 핵심(엔티티)에 쓰게 한다. 시스템 알림(actor 없음)이거나
@@ -38,6 +50,7 @@ export default function Header({ isMobile, hasSidebar = false, onToggleSidebar, 
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [showNotiMenu, setShowNotiMenu] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [notiFilterUnread, setNotiFilterUnread] = useState(false);
   const settingsRef = useRef(null);
   const notiRef = useRef(null);
   const userMenuRef = useRef(null);
@@ -127,6 +140,91 @@ export default function Header({ isMobile, hasSidebar = false, onToggleSidebar, 
     setShowNotiMenu(false);
   };
 
+  // 안읽음 필터: 토글 라벨 수는 "지금 로드된 목록"의 미읽음 기준(전역 unreadCount는
+  // 30개 한도를 넘는 경우 필터 결과와 어긋날 수 있어, 실제 보일 것과 일치시킨다).
+  const unreadNotis = notifications.filter((n) => !n.is_read);
+  const notiUnreadInList = unreadNotis.length;
+  const visibleNotis = notiFilterUnread ? unreadNotis : notifications;
+
+  // 알림 행 내부(아바타/아이콘 + 본문)는 link 유무와 무관하게 동일 → 한 곳에서 그린다.
+  const renderNotiInner = (noti) => {
+    const Icon = NOTI_ICONS[noti.type] || Bell;
+    const typeMeta = NOTI_TYPE_META[noti.type];
+    return (
+      <>
+        {noti.actor_id ? (
+          <div className="Header__NotiAvatar">
+            <Avatar
+              user={{
+                name: noti.actor_name,
+                id: noti.actor_id,
+                avatar_url: noti.actor_avatar_url,
+                avatar_color: noti.actor_avatar_color,
+              }}
+              size="sm"
+            />
+            <span className="Header__NotiTypeBadge">
+              <Icon size={10} />
+            </span>
+          </div>
+        ) : (
+          // 행위자 없는 시스템 알림은 타입 아이콘을 메인 그래픽으로
+          <div className="Header__NotiIcon">
+            <Icon size={14} />
+          </div>
+        )}
+        <div className="Header__NotiBody">
+          <div className="Header__NotiItemTop">
+            <span className="Header__NotiSenderWrap">
+              <span className="Header__NotiSender">{noti.actor_name || 'System'}</span>
+              {typeMeta && (
+                <span className={`Header__NotiChip Header__NotiChip--${typeMeta.group}`}>
+                  {typeMeta.label}
+                </span>
+              )}
+            </span>
+            <span className="Header__NotiTime">{formatMessageTime(noti.created_at)}</span>
+          </div>
+          <span className="Header__NotiContent">{stripActorPrefix(noti.title, noti.actor_name)}</span>
+        </div>
+      </>
+    );
+  };
+
+  // link가 있으면 네비게이션(NavLink), 없으면 사이드이펙트 전용 버튼. 내부는 공통.
+  const renderNotiItem = (noti) => {
+    const itemClass = `Header__NotiItem ${!noti.is_read ? 'Header__NotiItem--unread' : ''}`;
+    if (noti.link) {
+      return (
+        <NavLink
+          key={noti.notification_id}
+          href={noti.link}
+          className={itemClass}
+          onClick={() => {
+            if (!noti.is_read && onReadNotification) {
+              onReadNotification(noti.notification_id);
+            }
+            if (onNotiClick) {
+              onNotiClick(noti);
+            }
+            setShowNotiMenu(false);
+          }}
+        >
+          {renderNotiInner(noti)}
+        </NavLink>
+      );
+    }
+    return (
+      <button
+        key={noti.notification_id}
+        className={itemClass}
+        onClick={() => handleNotiClick(noti)}
+      >
+        {renderNotiInner(noti)}
+      </button>
+    );
+  };
+
   return (
     <header className={`Header ${isMobile ? 'Header--mobile' : ''}`}>
       <div className="Header__Left">
@@ -201,99 +299,29 @@ export default function Header({ isMobile, hasSidebar = false, onToggleSidebar, 
                   )}
                 </div>
               </div>
+              {notifications.length > 0 && (
+                <div className="Header__NotiFilter">
+                  <button
+                    className={`Header__NotiFilterBtn ${!notiFilterUnread ? 'Header__NotiFilterBtn--active' : ''}`}
+                    onClick={() => setNotiFilterUnread(false)}
+                  >
+                    All
+                  </button>
+                  <button
+                    className={`Header__NotiFilterBtn ${notiFilterUnread ? 'Header__NotiFilterBtn--active' : ''}`}
+                    onClick={() => setNotiFilterUnread(true)}
+                  >
+                    Unread{notiUnreadInList > 0 ? ` ${notiUnreadInList}` : ''}
+                  </button>
+                </div>
+              )}
               <div className="Header__NotiList">
                 {notifications.length === 0 ? (
                   <div className="Header__NotiEmpty">No notifications</div>
+                ) : visibleNotis.length === 0 ? (
+                  <div className="Header__NotiEmpty">No unread notifications</div>
                 ) : (
-                  notifications.map((noti) => {
-                    const Icon = NOTI_ICONS[noti.type] || Bell;
-                    // Only navigate if notification has a link
-                    if (noti.link) {
-                      return (
-                        <NavLink
-                          key={noti.notification_id}
-                          href={noti.link}
-                          className={`Header__NotiItem ${!noti.is_read ? 'Header__NotiItem--unread' : ''}`}
-                          onClick={(e) => {
-                            // Mark as read before navigation
-                            if (!noti.is_read && onReadNotification) {
-                              onReadNotification(noti.notification_id);
-                            }
-                            if (onNotiClick) {
-                              onNotiClick(noti);
-                            }
-                            setShowNotiMenu(false);
-                          }}
-                        >
-                          {noti.actor_id ? (
-                            <div className="Header__NotiAvatar">
-                              <Avatar
-                                user={{
-                                  name: noti.actor_name,
-                                  id: noti.actor_id,
-                                  avatar_url: noti.actor_avatar_url,
-                                  avatar_color: noti.actor_avatar_color,
-                                }}
-                                size="sm"
-                              />
-                              <span className="Header__NotiTypeBadge">
-                                <Icon size={10} />
-                              </span>
-                            </div>
-                          ) : (
-                            // 행위자 없는 시스템 알림은 타입 아이콘을 메인 그래픽으로
-                            <div className="Header__NotiIcon">
-                              <Icon size={14} />
-                            </div>
-                          )}
-                          <div className="Header__NotiBody">
-                            <div className="Header__NotiItemTop">
-                              <span className="Header__NotiSender">{noti.actor_name || 'System'}</span>
-                              <span className="Header__NotiTime">{formatMessageTime(noti.created_at)}</span>
-                            </div>
-                            <span className="Header__NotiContent">{stripActorPrefix(noti.title, noti.actor_name)}</span>
-                          </div>
-                        </NavLink>
-                      );
-                    }
-                    // No link: plain button for click side-effects only
-                    return (
-                      <button
-                        key={noti.notification_id}
-                        className={`Header__NotiItem ${!noti.is_read ? 'Header__NotiItem--unread' : ''}`}
-                        onClick={() => handleNotiClick(noti)}
-                      >
-                        {noti.actor_id ? (
-                          <div className="Header__NotiAvatar">
-                            <Avatar
-                              user={{
-                                name: noti.actor_name,
-                                id: noti.actor_id,
-                                avatar_url: noti.actor_avatar_url,
-                                avatar_color: noti.actor_avatar_color,
-                              }}
-                              size="sm"
-                            />
-                            <span className="Header__NotiTypeBadge">
-                              <Icon size={10} />
-                            </span>
-                          </div>
-                        ) : (
-                          // 행위자 없는 시스템 알림은 타입 아이콘을 메인 그래픽으로
-                          <div className="Header__NotiIcon">
-                            <Icon size={14} />
-                          </div>
-                        )}
-                        <div className="Header__NotiBody">
-                          <div className="Header__NotiItemTop">
-                            <span className="Header__NotiSender">{noti.actor_name || 'System'}</span>
-                            <span className="Header__NotiTime">{formatMessageTime(noti.created_at)}</span>
-                          </div>
-                          <span className="Header__NotiContent">{stripActorPrefix(noti.title, noti.actor_name)}</span>
-                        </div>
-                      </button>
-                    );
-                  })
+                  visibleNotis.map(renderNotiItem)
                 )}
               </div>
             </div>

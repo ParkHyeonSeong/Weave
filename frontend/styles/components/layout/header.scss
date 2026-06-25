@@ -146,7 +146,7 @@
     position: absolute;
     top: calc(100% + 4px);
     right: 0;
-    width: 320px;
+    width: 360px;
     background: $color-bg;
     border: 1px solid $color-border;
     border-radius: $radius-lg;
@@ -186,8 +186,35 @@
     }
   }
 
+  // 전체 / 안읽음 세그먼트 필터
+  &__NotiFilter {
+    display: flex;
+    align-items: center;
+    gap: $space-1;
+    padding: $space-2 $space-4;
+    border-bottom: 1px solid $color-border;
+  }
+
+  &__NotiFilterBtn {
+    padding: 2px $space-2;
+    border-radius: $radius-sm;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    color: $color-text-tertiary;
+    transition: background $transition-fast, color $transition-fast;
+
+    &:hover {
+      color: $color-text;
+    }
+
+    &--active {
+      background: $color-surface;
+      color: $color-text;
+    }
+  }
+
   &__NotiList {
-    max-height: 360px;
+    max-height: 420px;
     overflow-y: auto;
   }
 
@@ -277,10 +304,49 @@
     gap: $space-2;
   }
 
+  // 발신자 이름 + 타입 칩 묶음. 이름이 길면 칩은 지키고 이름을 말줄임한다.
+  &__NotiSenderWrap {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    min-width: 0;
+    flex: 1;
+  }
+
   &__NotiSender {
+    min-width: 0;
     font-size: $font-size-sm;
     font-weight: $font-weight-medium;
     color: $color-text;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  // 타입 색 칩: 글자를 읽지 않고 색으로 분류(멘션/태스크/이슈). 틴트는 시맨틱
+  // 토큰의 rgba로(기존 rgba($color-primary, …) 관용구와 동일, 색상함수 미사용).
+  &__NotiChip {
+    flex-shrink: 0;
+    padding: 1px 6px;
+    border-radius: $radius-sm;
+    font-size: 10px;
+    font-weight: $font-weight-medium;
+    line-height: 1.4;
+
+    &--mention {
+      color: $color-primary;
+      background: rgba($color-primary, 0.1);
+    }
+
+    &--task {
+      color: $color-success;
+      background: rgba($color-success, 0.1);
+    }
+
+    &--issue {
+      color: $color-warning;
+      background: rgba($color-warning, 0.1);
+    }
   }
 
   &__NotiTime {
