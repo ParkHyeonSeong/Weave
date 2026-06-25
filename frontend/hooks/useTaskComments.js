@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { axios } from '@/library/_axios';
+import { getErrorCode } from '@/library/errorCode';
 
 /**
  * Task 댓글 데이터 hook.
@@ -28,7 +29,7 @@ export default function useTaskComments(branchId, taskId) {
           setComments(res.data.comments || []);
           setError(null);
         } else {
-          setError(res.data?.message || 'FETCH_FAILED');
+          setError(getErrorCode(res.data) ?? 'FETCH_FAILED');
         }
       } catch (e) {
         if (cancelled) return;
@@ -63,7 +64,7 @@ export default function useTaskComments(branchId, taskId) {
   const _mutate = useCallback(async (fn, fallback) => {
     if (!base) throw new Error('NO_TASK');
     const res = await fn();
-    if (!res.data?.status) throw new Error(res.data?.message || fallback);
+    if (!res.data?.status) throw new Error(getErrorCode(res.data) ?? fallback);
     await fetchComments();
     return res.data;
   }, [base, fetchComments]);

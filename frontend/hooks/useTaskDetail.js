@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { axios } from '@/library/_axios';
+import { getErrorCode } from '@/library/errorCode';
 
 export default function useTaskDetail(branchId, taskId) {
   const [task, setTask] = useState(null);
@@ -32,7 +33,7 @@ export default function useTaskDetail(branchId, taskId) {
       if (res.data.status) {
         setTask(res.data.task);
       } else if (!silent) {
-        setError(res.data.message || 'UNKNOWN_ERROR');
+        setError(getErrorCode(res.data) ?? 'UNKNOWN_ERROR');
       }
     } catch {
       if (!silent) setError('NETWORK_ERROR');

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getErrorCode } from '@/library/errorCode';
 
 let isAuthExpiredDispatched = false;
 
@@ -12,7 +13,7 @@ function dispatchAuthExpired() {
 }
 
 const handleResponseFulfilled = (response) => {
-  if (response.data?.message === 'NEED_LOGIN') dispatchAuthExpired();
+  if (getErrorCode(response.data) === 'NEED_LOGIN') dispatchAuthExpired();
   return response;
 };
 
