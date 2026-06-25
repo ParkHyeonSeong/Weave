@@ -70,6 +70,7 @@ class TaskUpdate(BaseModel):
     start_date: Optional[date] = None
     due_date: Optional[date] = None
     custom_fields: Optional[dict] = None
+    dry_run: bool = False  # True면 검증만 거치고 DB 쓰기 없이 변경 diff 반환
 
     @field_validator('priority')
     @classmethod

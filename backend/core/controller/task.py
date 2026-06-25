@@ -225,6 +225,51 @@ async def get_archive(branch_id: int, request: Request, db: AsyncSession):
     return {'status': True, 'tasks': tasks}
 
 
+def _build_dry_run_preview(task, fields, body, unique_label_ids):
+    """검증 통과 후, 실제 write 없이 변경 예상 diff를 계산해 반환(순수 함수)."""
+    changes = {}
+
+    field_changes = {}
+    for k, v in fields.items():
+        if k == 'custom_fields':
+            continue
+        if task.get(k) != v:
+            field_changes[k] = {'from': task.get(k), 'to': v}
+    if field_changes:
+        changes['fields'] = field_changes
+
+    if unique_label_ids is not None:
+        old_ids = [l['label_id'] for l in (task.get('labels') or [])]
+        changes['labels'] = {
+            'added': [i for i in unique_label_ids if i not in old_ids],
+            'removed': [i for i in old_ids if i not in unique_label_ids],
+            'final': unique_label_ids,
+        }
+
+    if body.assignees is not None:
+        # 순서/dedupe 규칙(main 우선)은 model.set_assignees와 동일하게 유지할 것
+        main_id = body.assignees.main
+        sub_ids = [u for u in dict.fromkeys(body.assignees.sub or []) if u != main_id]
+        new_ids = ([main_id] if main_id else []) + sub_ids
+        old_ids = [a['user_id'] for a in (task.get('assignees') or [])]
+        changes['assignees'] = {
+            'added': [i for i in new_ids if i not in old_ids],
+            'removed': [i for i in old_ids if i not in new_ids],
+            'final': new_ids,
+        }
+
+    if 'custom_fields' in fields and fields['custom_fields'] is not None:
+        old_cf = task.get('custom_fields') or {}
+        new_cf = fields['custom_fields']
+        changes['custom_fields'] = {
+            'set': new_cf,
+            'removed': [k for k in old_cf if k not in new_cf],
+            'final': new_cf,
+        }
+
+    return {'status': True, 'dry_run': True, 'changes': changes}
+
+
 async def update(task_id: int, body, branch_id: int, request: Request, db: AsyncSession):
     """Task 수정"""
     user_id = request.state.payload.get('user_id')
@@ -246,7 +291,7 @@ async def update(task_id: int, body, branch_id: int, request: Request, db: Async
         if err:
             return err
 
-    fields = body.model_dump(exclude_unset=True, exclude={'label_ids', 'assignees'})
+    fields = body.model_dump(exclude_unset=True, exclude={'label_ids', 'assignees', 'dry_run'})
 
     # status 동적 검증
     if 'status' in fields and fields['status'] is not None:
@@ -284,6 +329,10 @@ async def update(task_id: int, body, branch_id: int, request: Request, db: Async
             type_cfg['type_id'], fields['custom_fields'], db, strict=False)
         if verr:
             return error_response(verr)
+
+    # dry_run: 모든 검증을 동일하게 거친 뒤, DB 쓰기/로깅/알림 없이 변경 diff만 반환
+    if body.dry_run:
+        return _build_dry_run_preview(task, fields, body, unique_label_ids)
 
     if fields:
         await task_model.update(task_id, fields, db)
