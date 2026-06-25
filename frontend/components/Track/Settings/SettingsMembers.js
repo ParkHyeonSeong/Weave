@@ -6,6 +6,8 @@ import CustomSelect from '@/components/common/CustomSelect';
 import ConfirmModal from '@/components/modal/ConfirmModal';
 import Avatar from '@/components/common/Avatar';
 import { showToast } from '@/components/Layout/Toast';
+import { getError } from '@/library/errorCode';
+import { errorText } from '@/library/errorText';
 
 const ROLE_OPTIONS = [
   { value: 'viewer', label: 'Viewer' },
@@ -89,7 +91,9 @@ export default function SettingsMembers({ trackId, isOwner }) {
         fetchMembers();
         setSearchResults((prev) => prev.filter((u) => u.user_id !== userId));
       } else {
-        showToast(`초대 실패: ${res.data.message}`, 'error');
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? '초대 실패';
+        showToast(msg, 'error');
       }
     } catch {
       showToast('초대 실패', 'error');
@@ -102,10 +106,10 @@ export default function SettingsMembers({ trackId, isOwner }) {
         role: newRole,
       });
       if (res.data.status) fetchMembers();
-      else if (res.data.message === 'LAST_OWNER') {
-        showToast('마지막 owner는 강등할 수 없습니다', 'error');
-      } else {
-        showToast(`변경 실패: ${res.data.message}`, 'error');
+      else {
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? '마지막 owner는 강등할 수 없습니다';
+        showToast(msg, 'error');
       }
     } catch {
       showToast('변경 실패', 'error');
@@ -117,10 +121,10 @@ export default function SettingsMembers({ trackId, isOwner }) {
       const res = await axios.delete(`/tracks/${trackId}/members/${userId}`);
       if (res.data.status) {
         fetchMembers();
-      } else if (res.data.message === 'LAST_OWNER') {
-        showToast('마지막 owner는 제거할 수 없습니다', 'error');
       } else {
-        showToast(`제거 실패: ${res.data.message}`, 'error');
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? '마지막 owner는 제거할 수 없습니다';
+        showToast(msg, 'error');
       }
     } catch {
       showToast('제거 실패', 'error');
@@ -135,10 +139,10 @@ export default function SettingsMembers({ trackId, isOwner }) {
       const res = await axios.delete(`/tracks/${trackId}/members/${myUserId}`);
       if (res.data.status) {
         router.replace('/tracks');
-      } else if (res.data.message === 'LAST_OWNER') {
-        showToast('마지막 owner는 Track을 나갈 수 없습니다. 다른 owner를 먼저 지정하세요.', 'error');
       } else {
-        showToast(`나가기 실패: ${res.data.message}`, 'error');
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? '마지막 owner는 Track을 나갈 수 없습니다. 다른 owner를 먼저 지정하세요.';
+        showToast(msg, 'error');
       }
     } catch {
       showToast('나가기 실패', 'error');

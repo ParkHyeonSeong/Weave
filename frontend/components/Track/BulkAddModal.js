@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { getError } from '@/library/errorCode';
+import { errorText } from '@/library/errorText';
 import { X, Zap, Calendar, Filter } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import CustomSelect from '@/components/common/CustomSelect';
@@ -193,8 +195,10 @@ export default function BulkAddModal({
       if (res.data.status) {
         onAdded(res.data.added);
       } else {
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? '추가 실패';
         window.dispatchEvent(new CustomEvent('toast', {
-          detail: { message: `추가 실패: ${res.data.message}`, type: 'error' },
+          detail: { message: msg, type: 'error' },
         }));
       }
     } catch {

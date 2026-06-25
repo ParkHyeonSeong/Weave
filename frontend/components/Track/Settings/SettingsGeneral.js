@@ -3,6 +3,8 @@ import { useRouter } from 'next/router';
 import { Lock, Globe, AlertTriangle } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import { showToast } from '@/components/Layout/Toast';
+import { getError } from '@/library/errorCode';
+import { errorText } from '@/library/errorText';
 import AppearanceSection from '@/components/common/AppearanceSection';
 import { HEX_RE, DEFAULT_TRACK_COLOR } from './constants';
 
@@ -48,7 +50,9 @@ export default function SettingsGeneral({ trackId, track, isOwner, onUpdated }) 
         window.dispatchEvent(new Event('track:updated'));
         setTimeout(() => setSaved(false), 2000);
       } else {
-        showToast(`저장 실패: ${res.data.message}`, 'error');
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? '저장 실패';
+        showToast(msg, 'error');
       }
     } catch {
       showToast('저장 실패', 'error');
@@ -65,7 +69,9 @@ export default function SettingsGeneral({ trackId, track, isOwner, onUpdated }) 
         window.dispatchEvent(new Event('track:updated'));
         router.replace('/tracks');
       } else {
-        showToast(`삭제 실패: ${res.data.message}`, 'error');
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? '삭제 실패';
+        showToast(msg, 'error');
         setDeleting(false);
       }
     } catch {

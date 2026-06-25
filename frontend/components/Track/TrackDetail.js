@@ -9,6 +9,8 @@ import TrackTree from './Tree/TrackTree';
 import TrackItemDetail from './Detail/TrackItemDetail';
 import BulkAddModal from './BulkAddModal';
 import { showToast } from '@/components/Layout/Toast';
+import { getErrorCode, getError } from '@/library/errorCode';
+import { errorText } from '@/library/errorText';
 import { WORKFLOW_STATUSES, getBranchDistribution } from './mockData';
 
 // 서버 hydrated item → 컴포넌트가 기대하는 형태로 정규화
@@ -219,7 +221,9 @@ export default function TrackDetail() {
     try {
       const res = await axios.delete(`/tracks/${trackId}/branches/${branchId}`);
       if (!res.data?.status) {
-        showToast(`제거 실패: ${res.data.message}`, 'error');
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? 'Branch 제거 실패';
+        showToast(msg, 'error');
         return;
       }
       const [branchesRes, itemsRes, linksRes] = await Promise.all([
@@ -250,11 +254,11 @@ export default function TrackDetail() {
           position_y: dropPosition.y,
         });
         if (!res.data.status) {
+          const err = getError(res.data);
+          const msg = errorText(err.code, err.category) ?? '이 task의 branch 멤버가 아니에요';
           window.dispatchEvent(new CustomEvent('toast', {
             detail: {
-              message: res.data.message === 'NOT_BRANCH_MEMBER'
-                ? '이 task의 branch 멤버가 아니에요'
-                : `Failed: ${res.data.message}`,
+              message: msg,
               type: 'error',
             },
           }));
@@ -307,7 +311,7 @@ export default function TrackDetail() {
     if (selectedItemId === itemId) setSelectedItemId(null);
     try {
       const res = await axios.delete(`/tracks/${trackId}/items/${itemId}`);
-      if (!res.data?.status) throw new Error(res.data?.message || 'DELETE_FAILED');
+      if (!res.data?.status) throw new Error(getErrorCode(res.data) ?? 'DELETE_FAILED');
       setSourceReloadKey((k) => k + 1);
     } catch (err) {
       // 롤백 + 사용자 알림
@@ -336,10 +340,11 @@ export default function TrackDetail() {
         materialize: edgeType === 'flow_to' ? materializeOnCreate : false,
       });
       if (!res.data.status) {
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? '자기 자신과 연결할 수 없어요';
         window.dispatchEvent(new CustomEvent('toast', {
           detail: {
-            message: res.data.message === 'SELF_LINK' ? '자기 자신과 연결할 수 없어요'
-              : `Failed: ${res.data.message}`,
+            message: msg,
             type: 'error',
           },
         }));
@@ -370,7 +375,7 @@ export default function TrackDetail() {
     });
     try {
       const res = await axios.delete(`/tracks/${trackId}/links/${linkId}`);
-      if (!res.data?.status) throw new Error(res.data?.message);
+      if (!res.data?.status) throw new Error(getErrorCode(res.data) ?? 'DELETE_FAILED');
     } catch {
       if (snapshot) setLinks(snapshot);
       window.dispatchEvent(new CustomEvent('toast', {

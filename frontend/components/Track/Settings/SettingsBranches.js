@@ -4,6 +4,8 @@ import { axios } from '@/library/_axios';
 import { Pencil, X, RotateCcw, Info } from 'lucide-react';
 import ConfirmModal from '@/components/modal/ConfirmModal';
 import { showToast } from '@/components/Layout/Toast';
+import { getError } from '@/library/errorCode';
+import { errorText } from '@/library/errorText';
 import { COLOR_PRESETS, HEX_RE, DEFAULT_TRACK_COLOR } from './constants';
 import EntityIcon from '@/components/common/EntityIcon';
 
@@ -54,7 +56,9 @@ export default function SettingsBranches({ trackId, isEditor }) {
         setEditingId(null);
         window.dispatchEvent(new Event('track:updated'));
       } else {
-        showToast(`저장 실패: ${res.data.message}`, 'error');
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? '저장 실패';
+        showToast(msg, 'error');
       }
     } catch {
       showToast('저장 실패', 'error');
@@ -83,7 +87,9 @@ export default function SettingsBranches({ trackId, isEditor }) {
       if (res.data.status) {
         fetchBranches();
       } else {
-        showToast(`제거 실패: ${res.data.message}`, 'error');
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? '제거 실패';
+        showToast(msg, 'error');
       }
     } catch {
       showToast('제거 실패', 'error');
