@@ -3,6 +3,8 @@ import { Paperclip, File as FileIcon, Send, X } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import { showToast } from '@/components/Layout/Toast';
 import { isCodeMode, parseSlashInput, buildAttachmentsPayload, formatFileSize } from '@/library/messengerCompose';
+import { getError } from '@/library/errorCode';
+import { errorText } from '@/library/errorText';
 import TaskSearchPopup from './TaskSearchPopup';
 import TaskRefCard from './TaskRefCard';
 import DocSearchPopup from './DocSearchPopup';
@@ -141,7 +143,9 @@ const MessengerComposer = forwardRef(function MessengerComposer(
           file_type: res.data.file_type, file_size: res.data.file_size,
         } : f));
       } else {
-        showToast(uploadErrorMessage(res.data?.message), 'error');
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? '파일 업로드에 실패했습니다.';
+        showToast(msg, 'error');
         setPendingFiles((prev) => prev.filter((f) => f.id !== tempId));
       }
     } catch {
