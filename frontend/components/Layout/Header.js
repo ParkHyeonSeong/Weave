@@ -16,6 +16,17 @@ const NOTI_ICONS = {
   task_status_changed: CheckCircle2,
 };
 
+// 알림 title은 항상 "{actor_name}님이 …" 템플릿으로 생성되는데, 같은 이름이
+// 바로 윗줄(NotiSender)에 이미 보인다. 본문에서 그 접두를 떼어 좁은 너비를
+// 발신자 반복 대신 핵심(엔티티)에 쓰게 한다. 시스템 알림(actor 없음)이거나
+// 발신자 개명 등으로 접두가 안 맞으면 원문을 그대로 둔다(graceful).
+function stripActorPrefix(title, actorName) {
+  if (actorName && title?.startsWith(`${actorName}님이`)) {
+    return title.slice(`${actorName}님이`.length).replace(/^\s+/, '');
+  }
+  return title || '';
+}
+
 export default function Header({ isMobile, hasSidebar = false, onToggleSidebar, onSearchClick, notifications = [], unreadCount = 0, chatUnreadCount = 0, onChatClick, onClearNotifications, onMarkAllRead, onReadNotification, onNotiClick }) {
   const router = useRouter();
   const [workspaceName, setWorkspaceName] = useState('');
@@ -240,7 +251,7 @@ export default function Header({ isMobile, hasSidebar = false, onToggleSidebar, 
                               <span className="Header__NotiSender">{noti.actor_name || 'System'}</span>
                               <span className="Header__NotiTime">{formatMessageTime(noti.created_at)}</span>
                             </div>
-                            <span className="Header__NotiContent">{noti.title}</span>
+                            <span className="Header__NotiContent">{stripActorPrefix(noti.title, noti.actor_name)}</span>
                           </div>
                         </NavLink>
                       );
@@ -278,7 +289,7 @@ export default function Header({ isMobile, hasSidebar = false, onToggleSidebar, 
                             <span className="Header__NotiSender">{noti.actor_name || 'System'}</span>
                             <span className="Header__NotiTime">{formatMessageTime(noti.created_at)}</span>
                           </div>
-                          <span className="Header__NotiContent">{noti.title}</span>
+                          <span className="Header__NotiContent">{stripActorPrefix(noti.title, noti.actor_name)}</span>
                         </div>
                       </button>
                     );

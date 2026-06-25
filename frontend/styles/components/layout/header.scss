@@ -293,9 +293,11 @@
   &__NotiContent {
     font-size: $font-size-xs;
     color: $color-text-tertiary;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   // -- Settings dropdown --
