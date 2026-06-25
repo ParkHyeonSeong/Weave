@@ -51,7 +51,7 @@ export default function useTaskComments(branchId, taskId) {
         setComments(res.data.comments || []);
         setError(null);
       } else {
-        setError(res.data?.message || 'FETCH_FAILED');
+        setError(getErrorCode(res.data) ?? 'FETCH_FAILED');
       }
     } catch (e) {
       setError(e?.message || 'FETCH_ERROR');

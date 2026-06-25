@@ -55,7 +55,7 @@ export default function ForceChangePassword() {
         router.replace(getReturnToFromQuery(router.query));
       } else {
         const err = getError(res.data);
-        const msg = errorText(err.code, err.category) ?? 'Password change is not required.';
+        const msg = errorText(err.code, err.category) ?? 'An unexpected error occurred. Please try again.';
         showAlert('Error', msg);
       }
     } catch {
