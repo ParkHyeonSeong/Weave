@@ -4,6 +4,8 @@ import { Lock, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import { getReturnToFromQuery } from '@/library/authRedirect';
 import Alert from '@/components/modal/Alert';
+import { getError } from '@/library/errorCode';
+import { errorText } from '@/library/errorText';
 
 
 export default function ForceChangePassword() {
@@ -52,12 +54,9 @@ export default function ForceChangePassword() {
         sessionStorage.setItem('profile', JSON.stringify(profile));
         router.replace(getReturnToFromQuery(router.query));
       } else {
-        const messages = {
-          'NOT_ALLOWED': 'Password change is not required.',
-          'PASSWORD_MISMATCH': 'Passwords do not match.',
-          'USER_NOT_FOUND': 'User not found.',
-        };
-        showAlert('Error', messages[res.data.message] || res.data.message);
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? 'Password change is not required.';
+        showAlert('Error', msg);
       }
     } catch {
       showAlert('Error', 'An unexpected error occurred. Please try again.');

@@ -3,6 +3,8 @@ import { X, Search } from 'lucide-react';
 import EmojiPicker from 'emoji-picker-react';
 import EntityIcon, { LUCIDE_MAP } from './EntityIcon';
 import { axios } from '@/library/_axios';
+import { getError } from '@/library/errorCode';
+import { errorText } from '@/library/errorText';
 import {
   CURATED_LUCIDE_ICONS,
   parseIcon,
@@ -88,7 +90,9 @@ export default function IconPicker({
       if (res.data.status) {
         setDraft(res.data.icon);
       } else {
-        setUploadError(res.data.message || '업로드 실패');
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? '업로드 실패';
+        setUploadError(msg);
       }
     } catch {
       setUploadError('업로드 실패');

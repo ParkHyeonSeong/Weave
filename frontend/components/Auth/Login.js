@@ -4,6 +4,8 @@ import { Mail, Lock, User, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import { buildChangePasswordPath, getReturnToFromQuery } from '@/library/authRedirect';
 import Alert from '@/components/modal/Alert';
+import { getError } from '@/library/errorCode';
+import { errorText } from '@/library/errorText';
 
 
 export default function Login() {
@@ -103,17 +105,10 @@ export default function Login() {
         }
         router.replace(returnTo);
       } else {
-        const messages = {
-          'INVALID_CREDENTIALS': 'Invalid email or password.',
-          'PASSWORD_TOO_SHORT': 'Password must be at least 8 characters.',
-          'REGISTRATION_DISABLED': 'Registration is not available. Contact your administrator.',
-          'NOT_INITIALIZED': 'System setup is required first.',
-          'ACCOUNT_PENDING': 'Your account is awaiting admin approval.',
-          'ACCOUNT_REJECTED': 'Your registration was rejected. Contact your administrator.',
-          'ACCOUNT_INACTIVE': 'Your account has been deactivated. Contact your administrator.',
-        };
         const isLoginAttempt = mode === 'login';
-        showAlert('Error', messages[response.data.message] || response.data.message, isLoginAttempt);
+        const err = getError(response.data);
+        const msg = errorText(err.code, err.category) ?? response.data.message ?? 'An unexpected error occurred.';
+        showAlert('Error', msg, isLoginAttempt);
       }
     } catch (error) {
       showAlert('Error', 'An unexpected error occurred. Please try again.', mode === 'login');

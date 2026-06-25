@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import Alert from '@/components/modal/Alert';
+import { getError } from '@/library/errorCode';
+import { errorText } from '@/library/errorText';
 
 const TOTAL_STEPS = 3;
 
@@ -82,11 +84,9 @@ export default function SetupWizard() {
         sessionStorage.setItem('profile', JSON.stringify(res.data.profile));
         router.push('/');
       } else {
-        const messages = {
-          'ALREADY_INITIALIZED': 'Setup has already been completed.',
-          'EMAIL_ALREADY_EXISTS': 'This email is already registered.',
-        };
-        showAlert('Error', messages[res.data.message] || res.data.message);
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? 'An unexpected error occurred. Please try again.';
+        showAlert('Error', msg);
       }
     } catch (error) {
       showAlert('Error', 'An unexpected error occurred. Please try again.');

@@ -4,6 +4,8 @@ import { Lock, Eye, EyeOff, Loader2, CheckCircle2 } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import { LOGIN_PATH } from '@/library/authRedirect';
 import Alert from '@/components/modal/Alert';
+import { getError } from '@/library/errorCode';
+import { errorText } from '@/library/errorText';
 
 
 export default function ResetPassword({ token }) {
@@ -72,11 +74,9 @@ export default function ResetPassword({ token }) {
       if (res.data.status) {
         setDone(true);
       } else {
-        const messages = {
-          'INVALID_OR_EXPIRED_TOKEN': 'This link has expired or is invalid. Please request a new password reset.',
-          'PASSWORD_TOO_SHORT': 'Password must be at least 8 characters.',
-        };
-        showAlert('Error', messages[res.data.message] || res.data.message);
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? 'This link has expired or is invalid. Please request a new password reset.';
+        showAlert('Error', msg);
       }
     } catch {
       showAlert('Error', 'An unexpected error occurred. Please try again.');
