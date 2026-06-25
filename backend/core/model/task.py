@@ -995,6 +995,31 @@ async def remove_label(task_id: int, label_id: int, db: AsyncSession):
     """), {'task_id': task_id, 'label_id': label_id})
 
 
+async def merge_custom_field(task_id: int, field_id: int, value, db: AsyncSession):
+    """custom_fields JSONB에서 한 키만 원자적으로 병합/삭제(나머지 키 보존). value=None이면 키 제거.
+
+    단일 UPDATE의 JSONB 연산(`||` / `-`)으로 처리해 read-modify-write 경쟁
+    (동시에 다른 키를 set할 때 한쪽이 유실되는 문제)을 피한다.
+    """
+    import json
+    key = str(field_id)
+    if value is None:
+        await db.execute(text("""
+            UPDATE task
+            SET custom_fields = COALESCE(custom_fields, '{}'::jsonb) - CAST(:key AS text),
+                updated_at = NOW()
+            WHERE task_id = :task_id
+        """), {'task_id': task_id, 'key': key})
+    else:
+        await db.execute(text("""
+            UPDATE task
+            SET custom_fields = COALESCE(custom_fields, '{}'::jsonb)
+                                || jsonb_build_object(CAST(:key AS text), CAST(:val AS jsonb)),
+                updated_at = NOW()
+            WHERE task_id = :task_id
+        """), {'task_id': task_id, 'key': key, 'val': json.dumps(value)})
+
+
 async def batch_statuses(task_ids: list[int], user_id: int, db: AsyncSession) -> dict:
     """Ref 상태 배치 조회 (task_id → status/title/display_id + workflow info), 멤버인 branch만"""
     if not task_ids:

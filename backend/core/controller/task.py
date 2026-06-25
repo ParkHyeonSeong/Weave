@@ -15,6 +15,7 @@ from core.query.filter_spec import validate_filter, FilterError
 from core.query.filter_db import validate_custom_fields
 from library import notification_service
 from library import activity_service
+from library.custom_field_validator import validate_custom_field_values
 from library.mention_parser import extract_mention_user_ids
 from library.date_validator import is_valid_date_order
 
@@ -100,6 +101,13 @@ async def create(body, branch_id: int, request: Request, db: AsyncSession):
     if unique_label_ids and await task_model.count_label_ids_in_branch(
             branch_id, unique_label_ids, db) != len(unique_label_ids):
         return error_response(ErrorCode.LABEL_NOT_FOUND)
+
+    # custom_fields lenient 검증 (task 생성 전; 위에서 검증된 valid_type 재사용)
+    if body.custom_fields:
+        verr = await validate_custom_field_values(
+            valid_type['type_id'], body.custom_fields, db, strict=False)
+        if verr:
+            return error_response(verr)
 
     # display_number 발급
     display_number = await task_model.next_display_number(branch_id, db)
@@ -265,6 +273,17 @@ async def update(task_id: int, body, branch_id: int, request: Request, db: Async
         if unique_label_ids and await task_model.count_label_ids_in_branch(
                 branch_id, unique_label_ids, db) != len(unique_label_ids):
             return error_response(ErrorCode.LABEL_NOT_FOUND)
+
+    # custom_fields lenient 검증 (첫 write 전; 최종 task_type 기준)
+    if 'custom_fields' in fields and fields['custom_fields']:
+        final_type_key = fields.get('task_type') or task['task_type']
+        type_cfg = await type_model.find_by_key(branch_id, final_type_key, db)
+        if not type_cfg:  # 타입 미해석 시 무검증 통과 금지(조용한 skip 차단)
+            return error_response(ErrorCode.INVALID_TASK_TYPE)
+        verr = await validate_custom_field_values(
+            type_cfg['type_id'], fields['custom_fields'], db, strict=False)
+        if verr:
+            return error_response(verr)
 
     if fields:
         await task_model.update(task_id, fields, db)

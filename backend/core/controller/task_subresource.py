@@ -10,8 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.errors import ErrorCode, error_response
 from core.model import task as task_model
 from core.model import branch_member as member_model
+from core.model import task_type_config as type_model
 from library import activity_service
 from library import notification_service
+from library.custom_field_validator import validate_custom_field_values
 
 
 async def get_task_in_branch_or_error(task_id: int, branch_id: int, request: Request, db: AsyncSession):
@@ -118,4 +120,22 @@ async def remove_task_assignee(task_id: int, user_id_to_remove: int,
     updated = await task_model.find_by_id(task_id, db)
     await activity_service.log_task_assignee_change(
         task_id, branch_id, actor_id, old, updated.get('assignees') or [], db)
+    return {'status': True}
+
+
+async def set_task_custom_field(task_id: int, field_id: int, value,
+                                branch_id: int, request: Request, db: AsyncSession):
+    """Task의 custom field 한 키만 병합/clear(나머지 보존). 신규 도구는 엄격 검증."""
+    task, err = await get_task_in_branch_or_error(task_id, branch_id, request, db)
+    if err:
+        return err
+    # 태스크의 최종 task_type → type_id 해석 후 키/타입 엄격 검증
+    type_cfg = await type_model.find_by_key(branch_id, task['task_type'], db)
+    if not type_cfg:
+        return error_response(ErrorCode.INVALID_TASK_TYPE)
+    verr = await validate_custom_field_values(
+        type_cfg['type_id'], {str(field_id): value}, db, strict=True)
+    if verr:
+        return error_response(verr)
+    await task_model.merge_custom_field(task_id, field_id, value, db)
     return {'status': True}
