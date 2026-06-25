@@ -8,6 +8,7 @@ from config import (JWT_SECRET_KEY, JWT_ALGORITHM, COOKIE_NAME, DEBUG,
                     WS_MAX_MESSAGE_BYTES, WS_MEMBERSHIP_RECHECK_SECS)
 from library.origins import reject_ws_if_forbidden_origin
 from library.ws_collab_manager import collab_manager
+from library.ws_manager import schedule_token_expiry_close
 from core.model import canvas_member as member_model
 from core.model import canvas_page as page_model
 import db_engine as db
@@ -53,6 +54,9 @@ async def websocket_canvas_collab(ws: WebSocket, canvas_id: int, page_id: int):
 
     await ws.accept()
 
+    # 토큰 만료 직전 서버가 선제 종료 → 클라가 새 쿠키로 재연결(SEC-29)
+    expiry_task = schedule_token_expiry_close(ws, payload)
+
     # join을 try 안에 둬서 join 실패 시에도 finally의 leave가 보장되게 함
     # (leave는 room 부재 시 no-op이라 안전). ws_scrum 등 형제 핸들러와 동일 패턴.
     try:
@@ -77,4 +81,6 @@ async def websocket_canvas_collab(ws: WebSocket, canvas_id: int, page_id: int):
     except Exception:
         logger.error("canvas ws error (page_id=%s)", page_id, exc_info=DEBUG)
     finally:
+        if expiry_task:
+            expiry_task.cancel()
         await collab_manager.leave(page_id, user_id, ws)

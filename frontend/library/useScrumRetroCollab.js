@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 import { getWsBaseURL } from '@/library/_axios';
+import { attachWsTokenRefresh } from '@/library/wsTokenRefresh';
 import { userColor as avatarColor } from '@/library/userAvatar';
 
 export default function useScrumRetroCollab(boardId, retroId, user) {
@@ -21,6 +22,7 @@ export default function useScrumRetroCollab(boardId, retroId, user) {
     const doc = new Y.Doc();
     const serverUrl = `${getWsBaseURL()}/api/ws/scrum/${boardId}/retros`;
     const prov = new WebsocketProvider(serverUrl, String(retroId), doc, { connect: true });
+    const detachTokenRefresh = attachWsTokenRefresh(prov);  // 토큰 만료 선제종료 시 refresh 뒤 재연결
     // 구버전 세션은 profile에 avatar_url이 없을 수 있어 별도 키로 폴백
     const avatarUrl = user.avatar_url ?? sessionStorage.getItem('avatar_url') ?? null;
     prov.awareness.setLocalStateField('user', {
@@ -39,6 +41,7 @@ export default function useScrumRetroCollab(boardId, retroId, user) {
     prov.awareness.on('change', update); update();
     setYdoc(doc); setProvider(prov);
     return () => {
+      detachTokenRefresh();
       prov.awareness.off('change', update);
       prov.disconnect(); prov.destroy(); doc.destroy();
       setYdoc(null); setProvider(null);

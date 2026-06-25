@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 import { getWsBaseURL } from '@/library/_axios';
+import { attachWsTokenRefresh } from '@/library/wsTokenRefresh';
 import { userColor as avatarColor } from '@/library/userAvatar';
 
 /**
@@ -38,6 +39,8 @@ export default function useCollabProvider(canvasId, pageId, user) {
       doc,
       { connect: true }
     );
+    // 토큰 만료 선제종료 시 refresh 완료 뒤 재연결(만료 쿠키 4001 회피)
+    const detachTokenRefresh = attachWsTokenRefresh(prov);
 
     // Awareness에 사용자 정보 설정 (사진은 프레즌스/커서 아바타에서 사용)
     // 구버전 세션은 profile에 avatar_url이 없을 수 있어 별도 키로 폴백
@@ -73,6 +76,7 @@ export default function useCollabProvider(canvasId, pageId, user) {
     setProvider(prov);
 
     return () => {
+      detachTokenRefresh();
       prov.awareness.off('change', updateConnectedUsers);
       prov.disconnect();
       prov.destroy();

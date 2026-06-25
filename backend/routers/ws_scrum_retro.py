@@ -7,6 +7,7 @@ from config import (JWT_SECRET_KEY, JWT_ALGORITHM, COOKIE_NAME, DEBUG,
                     WS_MAX_MESSAGE_BYTES, WS_MEMBERSHIP_RECHECK_SECS)
 from library.origins import reject_ws_if_forbidden_origin
 from library.ws_collab_manager import scrum_retro_collab_manager
+from library.ws_manager import schedule_token_expiry_close
 from core.model import scrum_member as member_model
 from core.model import scrum_retro as retro_model
 import db_engine as db
@@ -43,6 +44,8 @@ async def websocket_scrum_retro(ws: WebSocket, board_id: int, retro_id: int):
             await ws.close(code=4004, reason="Retro not found")
             return
     await ws.accept()
+    # 토큰 만료 직전 서버가 선제 종료 → 클라가 새 쿠키로 재연결(SEC-29)
+    expiry_task = schedule_token_expiry_close(ws, payload)
     try:
         async with db.transactional_session() as session:
             await scrum_retro_collab_manager.join(retro_id, user_id, ws, session)
@@ -65,4 +68,6 @@ async def websocket_scrum_retro(ws: WebSocket, board_id: int, retro_id: int):
     except Exception:
         logger.error("scrum retro ws error (retro_id=%s)", retro_id, exc_info=DEBUG)
     finally:
+        if expiry_task:
+            expiry_task.cancel()
         await scrum_retro_collab_manager.leave(retro_id, user_id, ws)

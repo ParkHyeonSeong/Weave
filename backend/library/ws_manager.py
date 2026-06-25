@@ -1,4 +1,6 @@
+import asyncio
 import json
+import time
 from fastapi import WebSocket
 from sqlalchemy import text
 
@@ -63,3 +65,24 @@ class ConnectionManager:
 
 # 싱글톤 인스턴스
 manager = ConnectionManager()
+
+
+def schedule_token_expiry_close(ws, payload, code: int = 4002, skew_secs: float = 5.0):
+    """access 토큰 만료 약간 전(skew_secs)에 WS를 닫는 백그라운드 태스크(선제 종료).
+    만료 직전에 닫아 클라가 갱신할 여유를 준다 — 클라는 닫힘을 받고 새 쿠키로 재연결(SEC-29).
+    정상 종료 시 호출부 finally에서 .cancel() 해야 한다. payload에 exp가 없으면 None.
+    (클라는 close 시 항상 토큰을 갱신·재연결하므로, 만료 전 종료라도 재연결-즉시-재종료 루프는 없다.)"""
+    exp = payload.get('exp')
+    if not exp:
+        return None
+    delay = exp - time.time() - skew_secs
+
+    async def _closer():
+        try:
+            if delay > 0:
+                await asyncio.sleep(delay)
+            await ws.close(code=code)
+        except Exception:
+            pass
+
+    return asyncio.create_task(_closer())

@@ -8,6 +8,7 @@ from config import (JWT_SECRET_KEY, JWT_ALGORITHM, COOKIE_NAME, DEBUG,
                     WS_MAX_MESSAGE_BYTES, WS_MEMBERSHIP_RECHECK_SECS)
 from library.origins import reject_ws_if_forbidden_origin
 from library.ws_collab_manager import scrum_week_collab_manager
+from library.ws_manager import schedule_token_expiry_close
 from core.model import scrum_member as member_model
 from core.model import scrum_week as week_model
 import db_engine as db
@@ -50,6 +51,9 @@ async def websocket_scrum_week(ws: WebSocket, board_id: int, week_id: int):
 
     await ws.accept()
 
+    # 토큰 만료 직전 서버가 선제 종료 → 클라가 새 쿠키로 재연결(SEC-29)
+    expiry_task = schedule_token_expiry_close(ws, payload)
+
     # join을 try 안에 둬서 join 실패 시에도 finally의 leave가 보장되게 함.
     # leave는 room 부재 시 no-op이라 실패한 join 뒤 호출도 안전.
     try:
@@ -74,4 +78,6 @@ async def websocket_scrum_week(ws: WebSocket, board_id: int, week_id: int):
     except Exception:
         logger.error("scrum week ws error (week_id=%s)", week_id, exc_info=DEBUG)
     finally:
+        if expiry_task:
+            expiry_task.cancel()
         await scrum_week_collab_manager.leave(week_id, user_id, ws)

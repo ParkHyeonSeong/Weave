@@ -7,7 +7,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from config import JWT_SECRET_KEY, JWT_ALGORITHM, COOKIE_NAME, WS_MAX_MESSAGE_BYTES
 from library.origins import reject_ws_if_forbidden_origin
-from library.ws_manager import manager
+from library.ws_manager import manager, schedule_token_expiry_close
 from core.model import chat_message as message_model
 from core.model import chat_member as member_model
 from core.model import chat_attachment as attachment_model
@@ -62,6 +62,9 @@ async def websocket_chat(ws: WebSocket):
             'user_id': user_id,
             'status': 'online',
         })
+
+    # 토큰 만료 직전 서버가 선제 종료 → 클라(Layout)가 새 쿠키로 재연결(SEC-29)
+    expiry_task = schedule_token_expiry_close(ws, payload)
 
     # 보낸 사람 아바타 — 연결당 1회만 조회해 모든 메시지 broadcast에 재사용
     # (라이브 메시지가 reload 후 find_by_room 결과와 같은 아바타를 갖도록)
@@ -231,6 +234,8 @@ async def websocket_chat(ws: WebSocket):
     except Exception:
         pass
     finally:
+        if expiry_task:
+            expiry_task.cancel()
         # 정상 종료·끊김·예외·크기초과(break) 모든 경로에서 연결 정리(중복 제거)
         manager.disconnect(user_id, ws)
         if not manager.is_online(user_id):
