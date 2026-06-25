@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, ChevronDown } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import { getError } from '@/library/errorCode';
+import { errorText } from '@/library/errorText';
 import DatePicker from '@/components/common/DatePicker';
 import Avatar from '@/components/common/Avatar';
 
@@ -138,7 +140,9 @@ export default function ScheduleEventModal({ branchId, event, defaultDate, onClo
         window.dispatchEvent(new Event('schedule:updated'));
         onClose();
       } else {
-        setError(res.data.message);
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? '이벤트를 저장하지 못했습니다.';
+        setError(msg);
       }
     } catch {
       setError('Failed to save event.');

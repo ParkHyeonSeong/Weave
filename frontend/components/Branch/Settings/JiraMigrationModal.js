@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { axios } from '@/library/_axios';
+import { getError } from '@/library/errorCode';
+import { errorText } from '@/library/errorText';
 import { X, Upload, ArrowRight, Check, AlertCircle } from 'lucide-react';
 
 const STEPS = ['upload', 'mapping', 'result'];
@@ -64,11 +66,9 @@ export default function JiraMigrationModal({ branchId, onClose }) {
         setStats(res.data.stats);
         setStep('mapping');
       } else {
-        setUploadError(
-          res.data.message === 'CSV_PARSE_ERROR'
-            ? 'CSV 파일을 파싱할 수 없습니다. Jira에서 내보낸 CSV인지 확인해주세요.'
-            : res.data.message
-        );
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? (err.code === 'CSV_PARSE_ERROR' ? 'CSV 파일을 파싱할 수 없습니다. Jira에서 내보낸 CSV인지 확인해주세요.' : 'CSV 업로드에 실패했습니다.');
+        setUploadError(msg);
       }
     } catch {
       setUploadError('업로드 중 오류가 발생했습니다.');
@@ -104,11 +104,9 @@ export default function JiraMigrationModal({ branchId, onClose }) {
         setResult(res.data.stats);
         setStep('result');
       } else {
-        setExecuteError(
-          res.data.message === 'MIGRATION_EXPIRED'
-            ? '세션이 만료되었습니다. CSV를 다시 업로드해주세요.'
-            : res.data.detail || res.data.message
-        );
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? (err.code === 'MIGRATION_EXPIRED' ? '세션이 만료되었습니다. CSV를 다시 업로드해주세요.' : res.data.detail || '마이그레이션에 실패했습니다.');
+        setExecuteError(msg);
       }
     } catch {
       setExecuteError('마이그레이션 중 오류가 발생했습니다.');

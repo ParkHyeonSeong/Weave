@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { axios } from '@/library/_axios';
+import { getError } from '@/library/errorCode';
+import { errorText } from '@/library/errorText';
 import { Plus, Trash2, Pencil, Check, X, Star, ChevronUp, ChevronDown } from 'lucide-react';
 
 const PRESET_COLORS = [
@@ -92,8 +94,10 @@ export default function SettingsWorkflow({ branchId, isAdmin }) {
       if (res.data.status) {
         fetchStatuses();
         window.dispatchEvent(new Event('workflow:updated'));
-      } else if (res.data.message === 'STATUS_IN_USE') {
-        alert('This status is in use by existing tasks and cannot be deleted.');
+      } else {
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? 'This status is in use by existing tasks and cannot be deleted.';
+        alert(msg);
       }
     } catch {}
   };

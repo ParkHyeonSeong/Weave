@@ -5,6 +5,8 @@ import { axios } from '@/library/_axios';
 import useContextMenu from '@/components/common/useContextMenu';
 import { showToast } from '@/components/Layout/Toast';
 import { taskDeleteMessage } from '@/library/taskDeleteMessage';
+import { getError } from '@/library/errorCode';
+import { errorText } from '@/library/errorText';
 
 /**
  * 태스크 행/카드 공용 우클릭 메뉴 훅. 리스트·보드 뷰가 같이 쓴다.
@@ -37,7 +39,9 @@ export default function useTaskContextMenu({ branchId, onSelectTask }) {
         window.dispatchEvent(new Event('task:updated'));
         showToast(parentTaskId === null ? '상위 태스크로 승격했습니다' : '하위 태스크로 이동했습니다');
       } else {
-        showToast(PARENT_REJECT_MSG[res.data?.message] || '이동하지 못했습니다.', 'error');
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? PARENT_REJECT_MSG[err.code] ?? '이동하지 못했습니다.';
+        showToast(msg, 'error');
       }
     } catch {
       showToast('이동하지 못했습니다. 잠시 후 다시 시도해 주세요.', 'error');
@@ -97,7 +101,9 @@ export default function useTaskContextMenu({ branchId, onSelectTask }) {
         // 상세 패널이 이 태스크를 열고 있으면 닫도록 알림 (BranchDetail이 수신)
         window.dispatchEvent(new CustomEvent('task:deleted', { detail: { taskId: task.task_id } }));
       } else {
-        showToast(res.data?.message || '태스크를 삭제하지 못했습니다.', 'error');
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? '태스크를 삭제하지 못했습니다.';
+        showToast(msg, 'error');
       }
     } catch {
       showToast('태스크를 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.', 'error');

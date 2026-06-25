@@ -11,6 +11,8 @@ import ConfirmModal from '@/components/modal/ConfirmModal';
 import { isParentExpanded } from '@/library/subtaskProgress';
 import { countMatchedTasks } from '@/library/taskFilters';
 import { formatSprintRange } from '@/library/formatTime';
+import { getError } from '@/library/errorCode';
+import { errorText } from '@/library/errorText';
 
 export default function TaskListSprint({
   sprint, branchKey, branchId, taskTypes, workflowStatuses, epics, members, sprints,
@@ -115,13 +117,14 @@ export default function TaskListSprint({
         setInlineTitle('');
         window.dispatchEvent(new Event('task:updated'));
       } else {
-        const messages = {
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? {
           INVALID_TASK_TYPE: '이 브랜치에 없는 작업 유형이에요. 유형을 다시 선택해 주세요.',
           INVALID_STATUS: '이 브랜치에 없는 상태예요.',
           INVALID_ASSIGNEE: '담당자가 이 브랜치의 멤버가 아니에요.',
           NOT_BRANCH_MEMBER: '이 브랜치의 멤버가 아니에요.',
-        };
-        setInlineError(messages[res.data.message] || res.data.message || '작업을 만들지 못했어요.');
+        }[err.code] ?? '작업을 만들지 못했어요.';
+        setInlineError(msg);
       }
     } catch {
       setInlineError('작업을 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
@@ -151,7 +154,9 @@ export default function TaskListSprint({
         window.dispatchEvent(new Event('task:updated'));
       } else {
         // 컨트롤러 검증 실패는 200 + {status:false} (silent-200 계약). 호출부에서 확인.
-        setSubtaskError(res.data.message || res.data.detail || '하위태스크를 만들지 못했어요.');
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? '하위태스크를 만들지 못했어요.';
+        setSubtaskError(msg);
       }
     } catch {
       setSubtaskError('하위태스크를 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
@@ -168,11 +173,12 @@ export default function TaskListSprint({
       if (res.data.status) {
         window.dispatchEvent(new Event('task:updated'));
       } else {
-        const messages = {
-          'SPRINT_NOT_FUTURE': 'Only future sprints can be started.',
-          'SPRINT_EMPTY': 'Cannot start a sprint with no tasks.',
-        };
-        setStartError(messages[res.data.message] || res.data.message);
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? {
+          SPRINT_NOT_FUTURE: 'Only future sprints can be started.',
+          SPRINT_EMPTY: 'Cannot start a sprint with no tasks.',
+        }[err.code] ?? '스프린트를 시작하지 못했습니다.';
+        setStartError(msg);
         setTimeout(() => setStartError(''), 3000);
       }
     } catch {

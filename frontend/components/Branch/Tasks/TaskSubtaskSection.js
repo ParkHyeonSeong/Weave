@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Plus, Circle, CheckCircle2, X } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import { getError } from '@/library/errorCode';
+import { errorText } from '@/library/errorText';
 import Avatar from '@/components/common/Avatar';
 
 // status.category === 'done' 인 status key 집합 → done 카운트 폴백
@@ -56,10 +58,11 @@ export default function TaskSubtaskSection({
         onChanged?.();
       } else {
         // 컨트롤러 검증 실패는 200 + {status:false} (silent-200 계약). 호출부에서 확인.
-        const messages = {
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? {
           INVALID_TASK_TYPE: '이 브랜치에 없는 작업 유형이에요. 유형을 다시 선택해 주세요.',
-        };
-        setSubtaskError(messages[res.data.message] || res.data.message || res.data.detail || '하위태스크를 만들지 못했어요.');
+        }[err.code] ?? '하위태스크를 만들지 못했어요.';
+        setSubtaskError(msg);
       }
     } catch {
       setSubtaskError('하위태스크를 만들지 못했어요. 잠시 후 다시 시도해 주세요.');

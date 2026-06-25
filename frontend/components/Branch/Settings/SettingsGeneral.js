@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/router';
 import { axios } from '@/library/_axios';
+import { getErrorCode } from '@/library/errorCode';
 import { Globe, Lock, AlertTriangle, Upload } from 'lucide-react';
 import JiraMigrationModal from './JiraMigrationModal';
 import AppearanceSection from '@/components/common/AppearanceSection';
@@ -50,7 +51,7 @@ export default function SettingsGeneral({ branchId, branch, isAdmin, onUpdated }
         if (onUpdated) onUpdated();
         window.dispatchEvent(new Event('branch:created'));
         setTimeout(() => setSaved(false), 2000);
-      } else if (res.data.message === 'KEY_ALREADY_EXISTS') {
+      } else if (getErrorCode(res.data) === 'KEY_ALREADY_EXISTS') {
         setKeyError('This key is already in use.');
       }
     } catch {}

@@ -2,6 +2,8 @@ import { useState, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { ArrowLeft } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import { getError } from '@/library/errorCode';
+import { errorText } from '@/library/errorText';
 import IssueEditor from './IssueEditor';
 
 export default function CreateIssuePage() {
@@ -29,7 +31,9 @@ export default function CreateIssuePage() {
         window.dispatchEvent(new Event('issue:created'));
         router.replace(`/branch/${branchId}/task/${taskId}/issue/${res.data.issue_id}`);
       } else {
-        setError(res.data.message);
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? '이슈를 만들지 못했습니다.';
+        setError(msg);
       }
     } catch {
       setError('Failed to create issue.');

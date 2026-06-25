@@ -11,6 +11,8 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { axios } from '@/library/_axios';
+import { getError } from '@/library/errorCode';
+import { errorText } from '@/library/errorText';
 import TaskNode from './TaskNode';
 import DeletableEdge from './DeletableEdge';
 
@@ -170,11 +172,9 @@ export default function FlowCanvas({
         setEdges((eds) => addEdge(newEdge, eds));
         if (onDataChange) onDataChange();
       } else {
-        window.dispatchEvent(new CustomEvent('toast', {
-          detail: { message: res.data.message === 'CIRCULAR_DEPENDENCY'
-            ? 'Cannot create: circular dependency detected'
-            : res.data.message },
-        }));
+        const err = getError(res.data);
+        const msg = errorText(err.code, err.category) ?? (err.code === 'CIRCULAR_DEPENDENCY' ? 'Cannot create: circular dependency detected' : '의존 관계를 만들지 못했습니다.');
+        window.dispatchEvent(new CustomEvent('toast', { detail: { message: msg } }));
       }
     } catch {}
   }, [branchId, edgeType, setEdges, onDataChange]);
