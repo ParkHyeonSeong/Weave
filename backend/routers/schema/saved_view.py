@@ -10,6 +10,7 @@ class SavedViewCreate(BaseModel):
     sort: Optional[List[dict]] = None
     columns: Optional[List[str]] = None
     visibility: str = "private"  # 'private' | 'shared'
+    scope: Optional[str] = None  # 개인 뷰의 'my'|'all'(크로스 스코프). 브랜치 뷰는 None
 
 
 class SavedViewUpdate(BaseModel):
@@ -19,3 +20,4 @@ class SavedViewUpdate(BaseModel):
     sort: Optional[List[dict]] = None
     columns: Optional[List[str]] = None
     visibility: Optional[str] = None
+    scope: Optional[str] = None

@@ -43,11 +43,17 @@ async def create(body, request: Request, db: AsyncSession):
         return error_response(ErrorCode.INVALID_VISIBILITY)
     if body.visibility == 'shared' and body.scope_branch_id is None:
         return error_response(ErrorCode.VIEW_SCOPE_MISMATCH)  # 개인(scope NULL) 뷰는 공유 불가
+    if body.scope is not None:
+        if body.scope not in ('my', 'all'):
+            return error_response(ErrorCode.INVALID_SCOPE)           # 잘못된 값
+        if body.scope_branch_id is not None:
+            return error_response(ErrorCode.VIEW_SCOPE_MISMATCH)     # scope는 개인(크로스) 뷰 전용(리뷰 P2)
     spec, err = await _validate_spec(body.filter_spec, body.scope_branch_id, db)
     if err:
         return err
     view_id = await sv_model.create(user_id, body.scope_branch_id, body.name, spec,
-                                    body.group_by, body.sort, body.columns, body.visibility, db)
+                                    body.group_by, body.sort, body.columns, body.visibility, db,
+                                    scope=body.scope)
     return {'status': True, 'view_id': view_id}
 
 
@@ -98,6 +104,11 @@ async def update(view_id: int, body, request: Request, db: AsyncSession):
         return error_response(ErrorCode.INVALID_VISIBILITY)  # create()와 대칭(잘못된 enum 거부)
     if fields.get('visibility') == 'shared' and view['scope_branch_id'] is None:
         return error_response(ErrorCode.VIEW_SCOPE_MISMATCH)
+    if 'scope' in fields and fields['scope'] is not None:
+        if fields['scope'] not in ('my', 'all'):
+            return error_response(ErrorCode.INVALID_SCOPE)          # create와 대칭(잘못된 값)
+        if view['scope_branch_id'] is not None:
+            return error_response(ErrorCode.VIEW_SCOPE_MISMATCH)    # 브랜치 뷰엔 scope 설정 불가(리뷰 P2)
     if 'filter_spec' in fields:  # 저장 시점 재검증 + 정규화
         spec, verr = await _validate_spec(fields['filter_spec'], view['scope_branch_id'], db)
         if verr:

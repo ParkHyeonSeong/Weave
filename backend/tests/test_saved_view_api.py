@@ -88,3 +88,26 @@ async def test_update_clears_group_by_with_explicit_null(db_session):
     got = (await ctrl.get_detail(vid, _req(uid), db_session))['view']
     assert got['group_by'] is None   # 그룹핑 해제됨
     assert got['name'] == 'grouped'  # 안 보낸 필드는 보존
+
+async def test_create_rejects_invalid_scope(db_session):
+    uid = await _user(db_session, 'is@sv.test', 'is')
+    res = await ctrl.create(SavedViewCreate(name='bad', scope_branch_id=None, filter_spec=_SPEC, scope='bogus'), _req(uid), db_session)
+    assert res['status'] is False and res['message'] == 'INVALID_SCOPE'
+
+async def test_personal_view_scope_roundtrip(db_session):
+    # 개인 뷰의 scope가 저장·조회·수정으로 라운드트립
+    uid = await _user(db_session, 'rs@sv.test', 'rs')
+    vid = (await ctrl.create(SavedViewCreate(name='allv', scope_branch_id=None, filter_spec=_SPEC, scope='all'), _req(uid), db_session))['view_id']
+    assert (await ctrl.get_detail(vid, _req(uid), db_session))['view']['scope'] == 'all'
+    await ctrl.update(vid, SavedViewUpdate(scope='my'), _req(uid), db_session)
+    assert (await ctrl.get_detail(vid, _req(uid), db_session))['view']['scope'] == 'my'
+
+async def test_branch_view_rejects_scope(db_session):
+    # 브랜치 뷰에는 scope 설정 불가(create·update 모두) — 계약 위반 데이터 차단(리뷰 P2)
+    uid = await _user(db_session, 'bs@sv.test', 'bs'); bid = await _branch(db_session, uid, 'SVBS')
+    r = await ctrl.create(SavedViewCreate(name='bad', scope_branch_id=bid, filter_spec=_SPEC, scope='all'), _req(uid), db_session)
+    assert r['status'] is False and r['message'] == 'VIEW_SCOPE_MISMATCH'
+    # 정상 브랜치 뷰 생성 후 scope 수정 시도도 거부
+    vid = (await ctrl.create(SavedViewCreate(name='ok', scope_branch_id=bid, filter_spec=_SPEC), _req(uid), db_session))['view_id']
+    r2 = await ctrl.update(vid, SavedViewUpdate(scope='all'), _req(uid), db_session)
+    assert r2['status'] is False and r2['message'] == 'VIEW_SCOPE_MISMATCH'
