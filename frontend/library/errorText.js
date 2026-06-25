@@ -28,7 +28,7 @@ const ERROR_TEXT = {
   NO_FILE: '첨부할 파일을 찾을 수 없어요.',
   FILE_TOO_LARGE: '파일 용량 제한을 초과했어요.',
   INVALID_FILE_TYPE: '지원하지 않는 파일 형식이에요.',
-  INVALID_FILE_CONTENT: '지원하지 않는 파일 형식이에요.',
+  INVALID_FILE_CONTENT: '파일 내용이 지원하지 않는 형식이에요.',
   SELF_LINK: '자기 자신과 연결할 수 없어요.',
   CSV_PARSE_ERROR: 'CSV를 파싱할 수 없어요. Jira에서 내보낸 CSV인지 확인해 주세요.',
 
