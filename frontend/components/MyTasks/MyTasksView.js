@@ -93,16 +93,20 @@ export default function MyTasksView() {
   }, []);
   useEffect(() => { loadSavedViews(); }, [loadSavedViews]);
 
-  // 저장/수정 payload: 현재 효과적 필터를 단일 filter_spec으로 합성한다.
-  // 기본 드롭다운(status_category/priority)도 조건으로 포함 → 기본 모드 상태도 뷰에 저장돼 복원된다.
-  // branch_id는 브랜치 전용이라 크로스브랜치 개인 뷰에 담지 않는다(적용 시 초기화).
+  // 저장/수정 payload: 화면에 "실제 적용되는" 필터만 단일 filter_spec으로 합성한다.
+  // 기본 드롭다운(status_category/priority)은 기본 모드에서만 조회에 적용되고 serverMode에선
+  // 적용도 안 되며 숨겨지므로(조회는 filterSpec만 전송) — !serverMode일 때만 합성해 화면과 일치시킨다(리뷰 P1).
+  // serverMode에선 filterSpec(advancedActive)만 담는다. branch_id는 브랜치 전용이라 미포함(적용 시 초기화).
   // scope(my/all)는 saved_view.scope 컬럼에 저장 → 적용 시 복원.
   const buildViewPayload = () => {
     const cond = (field, value) => ({ type: 'cond', field, op: 'eq', value, negate: false });
     const children = [];
-    if (filters.status) children.push(cond('status_category', filters.status));
-    if (filters.priority) children.push(cond('priority', filters.priority));
-    if (advancedActive) children.push(filterSpec);
+    if (!serverMode) {
+      if (filters.status) children.push(cond('status_category', filters.status));
+      if (filters.priority) children.push(cond('priority', filters.priority));
+    } else if (advancedActive) {
+      children.push(filterSpec);
+    }
     const filter_spec = children.length === 1
       ? children[0]
       : { type: 'group', op: 'AND', negate: false, children };
