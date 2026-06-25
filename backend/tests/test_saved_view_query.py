@@ -99,3 +99,17 @@ async def test_cross_query_branch_view_rejected(db_session):
     vid = (await sv_ctrl.create(SavedViewCreate(name='br', scope_branch_id=bid, filter_spec=_EMPTY), _req(uid), db_session))['view_id']
     res = await task_ctrl.query_cross_branch(_q(saved_view_id=vid, scope='all'), _req(uid), db_session)
     assert res['status'] is False and res['message'] == 'VIEW_SCOPE_MISMATCH'
+
+
+async def test_cross_query_honors_view_scope(db_session):
+    # 개인 뷰 scope='all'을 saved_view_id로 적용하면 body.scope='my'여도 전체(남의 태스크 포함)가 나와야.
+    owner = await _user(db_session, 'vsc@sv.test', 'vsc'); bid = await _branch(db_session, owner, 'VSC')
+    other = await _user(db_session, 'vso@sv.test', 'vso'); await _member(db_session, bid, other)
+    t_mine = await _task(db_session, bid, owner, priority='high')
+    # 남의 태스크(다른 사람에게 배정)
+    t_other = await _task(db_session, bid, owner, priority='high')
+    await db_session.execute(text("INSERT INTO task_assignee (task_id,user_id,role) VALUES (:t,:u,'main')"), {'t': t_other, 'u': other})
+    vid = (await sv_ctrl.create(SavedViewCreate(name='allv', scope_branch_id=None, filter_spec=_EMPTY, scope='all'), _req(owner), db_session))['view_id']
+    res = await task_ctrl.query_cross_branch(_q(saved_view_id=vid, scope='my'), _req(owner), db_session)
+    ids = {it['task_id'] for it in res['items']}
+    assert t_other in ids  # 뷰 scope='all'이 body 'my'를 덮어 남의 태스크도 포함

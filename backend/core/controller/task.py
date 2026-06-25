@@ -507,7 +507,7 @@ async def _resolve_view(saved_view_id, user_id, expect_branch_id, db):
     # falsy(None/{}=server_default)만 빈 그룹으로 정규화. group/cond 루트는 보존(cond 루트도 유효).
     fs = view['filter_spec']
     spec = fs if fs else {'type': 'group', 'op': 'AND', 'negate': False, 'children': []}
-    return {'spec': spec, 'group_by': view['group_by'], 'sort': view['sort'] or []}
+    return {'spec': spec, 'group_by': view['group_by'], 'sort': view['sort'] or [], 'scope': view['scope']}
 
 
 async def query_branch(branch_id, body, request, db):
@@ -536,12 +536,15 @@ async def query_cross_branch(body, request, db):
     if body.scope not in ("my", "all"):
         # 기본값 my인 API에서 오타가 더 넓은 결과를 주지 않도록 명시 거부
         return error_response(ErrorCode.INVALID_SCOPE)
+    effective_scope = body.scope
     spec, group_by, sort = body.filter, body.group_by, _dump_sort(body.sort)
     if getattr(body, 'saved_view_id', None) is not None:
         v = await _resolve_view(body.saved_view_id, user_id, None, db)  # 개인(scope NULL) 소유 뷰만
         if 'status' in v:        # 에러 dict(성공 dict엔 status 키 없음)
             return v
         spec, group_by, sort = v['spec'], v['group_by'], v['sort']
+        if v.get('scope') in ('my', 'all'):  # 뷰가 scope를 가지면 우선(뷰가 full 표현 — body.scope 무시)
+            effective_scope = v['scope']
     try:                          # 로드한 뷰 spec도 SQL 전 재검증(개인 뷰가 cf 조건이면 FilterError→INVALID_FILTER)
         validate_filter(spec)
         await validate_custom_fields(spec, None, db)
@@ -551,7 +554,7 @@ async def query_cross_branch(body, request, db):
     member_ids = await member_model.member_branch_ids(user_id, db)
     if not member_ids:
         return {'status': True, 'items': [], 'total': 0, 'groups': None}
-    if body.scope == "my":
+    if effective_scope == "my":
         spec = _and(spec, {"type": "cond", "field": "assignee", "op": "eq", "value": "$me", "negate": False})
     ctx = {'user_id': user_id, 'today': datetime.date.today()}
     limit, offset = _paging(body)

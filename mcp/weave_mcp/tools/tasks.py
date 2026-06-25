@@ -316,6 +316,8 @@ async def query_tasks(
     saved_view_id: load a saved view's filter/group_by/sort on the server (filter/group_by/
       sort args are ignored). Get ids from list_saved_views. A branch-scoped view requires a
       matching branch_id; a personal (global) view works only cross-branch (no branch_id).
+      If that personal view has a saved cross-branch scope (my/all), it overrides the `scope`
+      arg too — `scope` is only a fallback when the view has none.
     With branch_id → that branch only (custom fields allowed). Without branch_id →
     cross-branch over your member branches; scope "my" (assigned to you) or "all".
     """
