@@ -72,6 +72,18 @@ def test_known_controller_codes_are_registered():
     assert sample <= registered
 
 
+def test_invalid_custom_field_registered_and_shaped():
+    assert "INVALID_CUSTOM_FIELD" in {m.value for m in ErrorCode}
+    body = error_response(ErrorCode.INVALID_CUSTOM_FIELD)
+    assert body == {
+        "status": False,
+        "message": "INVALID_CUSTOM_FIELD",
+        "code": "INVALID_CUSTOM_FIELD",
+        "category": "validation",
+        "retryable": False,
+    }
+
+
 def test_synonyms_point_to_registered_canonicals():
     for dep, canonical in SYNONYMS.items():
         assert isinstance(canonical, ErrorCode)
