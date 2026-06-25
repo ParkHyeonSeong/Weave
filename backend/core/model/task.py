@@ -953,12 +953,28 @@ async def find_by_assignee(user_id: int, status: str, status_category: str, prio
     return tasks
 
 
+async def count_label_ids_in_branch(branch_id: int, label_ids: list, db: AsyncSession) -> int:
+    """label_ids 중 해당 branch 소속(중복 제거) 라벨 수. cross-branch IDOR 방어.
+
+    반환값은 COUNT(DISTINCT)이므로 호출부는 **dedupe된 입력**의 len과 비교할 것
+    (all-or-nothing). 예: count == len(list(dict.fromkeys(label_ids))).
+    """
+    if not label_ids:
+        return 0
+    result = await db.execute(text("""
+        SELECT COUNT(DISTINCT label_id)
+        FROM label
+        WHERE branch_id = :branch_id AND label_id = ANY(:label_ids)
+    """), {'branch_id': branch_id, 'label_ids': list(label_ids)})
+    return result.scalar_one()
+
+
 async def set_labels(task_id: int, label_ids: list, db: AsyncSession):
     """Task 라벨 전체 교체"""
     await db.execute(text("""
         DELETE FROM task_label WHERE task_id = :task_id
     """), {'task_id': task_id})
-    for label_id in label_ids:
+    for label_id in dict.fromkeys(label_ids):  # 순서 보존 dedupe (PK 위반 방지)
         await db.execute(text("""
             INSERT INTO task_label (task_id, label_id) VALUES (:task_id, :label_id)
         """), {'task_id': task_id, 'label_id': label_id})
@@ -1022,7 +1038,10 @@ async def find_for_calendar(branch_id: int, range_start, range_end, db: AsyncSes
 
 
 async def set_assignees(task_id: int, main_user_id, sub_user_ids: list, db: AsyncSession):
-    """Task 담당자 전체 교체 (메인 1명 + 서브 N명)"""
+    """Task 담당자 전체 교체 (메인 1명 + 서브 N명).
+
+    sub 중복과 main 중복을 제거해 (task_id, user_id) PK 위반을 방지한다(main 우선).
+    """
     await db.execute(text("""
         DELETE FROM task_assignee WHERE task_id = :task_id
     """), {'task_id': task_id})
@@ -1030,7 +1049,9 @@ async def set_assignees(task_id: int, main_user_id, sub_user_ids: list, db: Asyn
         await db.execute(text("""
             INSERT INTO task_assignee (task_id, user_id, role) VALUES (:task_id, :user_id, 'main')
         """), {'task_id': task_id, 'user_id': main_user_id})
-    for sub_id in sub_user_ids:
+    for sub_id in dict.fromkeys(sub_user_ids):  # 순서 보존 dedupe
+        if sub_id == main_user_id:
+            continue  # main으로 이미 추가됨 (main 우선)
         await db.execute(text("""
             INSERT INTO task_assignee (task_id, user_id, role) VALUES (:task_id, :user_id, 'sub')
         """), {'task_id': task_id, 'user_id': sub_id})

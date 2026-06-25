@@ -95,6 +95,12 @@ async def create(body, branch_id: int, request: Request, db: AsyncSession):
         if err:
             return err
 
+    # 라벨 branch 소속 검증 (task 생성 전 — 실패 시 task가 남지 않도록)
+    unique_label_ids = list(dict.fromkeys(body.label_ids)) if body.label_ids else []
+    if unique_label_ids and await task_model.count_label_ids_in_branch(
+            branch_id, unique_label_ids, db) != len(unique_label_ids):
+        return error_response(ErrorCode.LABEL_NOT_FOUND)
+
     # display_number 발급
     display_number = await task_model.next_display_number(branch_id, db)
 
@@ -116,9 +122,9 @@ async def create(body, branch_id: int, request: Request, db: AsyncSession):
         custom_fields=body.custom_fields,
     )
 
-    # 라벨 할당
-    if body.label_ids:
-        await task_model.set_labels(task_id, body.label_ids, db)
+    # 라벨 할당 (위에서 검증/dedupe 완료)
+    if unique_label_ids:
+        await task_model.set_labels(task_id, unique_label_ids, db)
 
     # 담당자 할당
     if body.assignees:
@@ -240,11 +246,25 @@ async def update(task_id: int, body, branch_id: int, request: Request, db: Async
         if not valid_status:
             return error_response(ErrorCode.INVALID_STATUS)
 
+    # task_type 동적 검증 (변경 시) — create와 동일 규칙
+    if 'task_type' in fields and fields['task_type'] is not None:
+        valid_type = await type_model.find_by_key(branch_id, fields['task_type'], db)
+        if not valid_type:
+            return error_response(ErrorCode.INVALID_TASK_TYPE)
+
     # 날짜 순서 검증 (부분 PATCH는 기존 값과 병합)
     new_start = fields.get('start_date', task['start_date'])
     new_due = fields.get('due_date', task['due_date'])
     if not is_valid_date_order(new_start, new_due):
         return error_response(ErrorCode.INVALID_DATE_RANGE)
+
+    # 라벨 branch 소속 검증 (첫 write 전 — title 등만 부분 적용되는 것 방지)
+    unique_label_ids = None
+    if body.label_ids is not None:
+        unique_label_ids = list(dict.fromkeys(body.label_ids))
+        if unique_label_ids and await task_model.count_label_ids_in_branch(
+                branch_id, unique_label_ids, db) != len(unique_label_ids):
+            return error_response(ErrorCode.LABEL_NOT_FOUND)
 
     if fields:
         await task_model.update(task_id, fields, db)
@@ -267,10 +287,10 @@ async def update(task_id: int, body, branch_id: int, request: Request, db: Async
                 link, 'task', task_id, db,
             )
 
-    # 라벨 업데이트
-    if body.label_ids is not None:
+    # 라벨 업데이트 (위에서 검증/dedupe 완료)
+    if unique_label_ids is not None:
         old_labels = task.get('labels') or []
-        await task_model.set_labels(task_id, body.label_ids, db)
+        await task_model.set_labels(task_id, unique_label_ids, db)
         # 새 라벨 목록 조회 후 diff 로깅
         updated_task = await task_model.find_by_id(task_id, db)
         new_labels = updated_task.get('labels') or []
@@ -284,6 +304,7 @@ async def update(task_id: int, body, branch_id: int, request: Request, db: Async
         for a in old_assignees_list:
             old_assignee_ids.add(a['user_id'])
 
+        # set_assignees가 sub 중복·main 중복을 제거(PK 위반 방지)
         await task_model.set_assignees(task_id, body.assignees.main, body.assignees.sub or [], db)
 
         # 담당자 변경 활동 로그
