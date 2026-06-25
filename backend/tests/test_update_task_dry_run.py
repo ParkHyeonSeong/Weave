@@ -119,3 +119,25 @@ async def test_dry_run_field_diff(db_session):
     st = (await db_session.execute(text(
         "SELECT status FROM task WHERE task_id = :t"), {"t": task1})).scalar_one()
     assert st == "todo"
+
+
+async def test_dry_run_assignee_role_promotion(db_session):
+    """dry_run이 sub→main 같은 role-only 변경(main 교체)을 preview에 보여줘야 한다."""
+    alice = await _make_user(db_session, "drp_a@t.test", "drp_a")
+    bob = await _make_user(db_session, "drp_b@t.test", "drp_b")
+    b1 = await _make_branch(db_session, alice, name="DRP", key="DRP")
+    await _add_member(db_session, b1, alice, "admin")
+    await _add_member(db_session, b1, bob, "member")
+    task1 = await _make_task(db_session, b1, alice, "T1")
+    await ctrl.update(task1, schema.TaskUpdate(assignees=schema.AssigneeInput(main=None, sub=[bob])),
+                      b1, _req(alice), db_session)
+
+    # dry_run: bob을 main으로 → user set은 그대로지만 main이 None→bob
+    body = schema.TaskUpdate(assignees=schema.AssigneeInput(main=bob, sub=[]), dry_run=True)
+    res = await ctrl.update(task1, body, b1, _req(alice), db_session)
+    assert res["status"] is True and res["dry_run"] is True
+    assert res["changes"]["assignees"]["main_change"] == {"from": None, "to": bob}
+    # 저장 안 됨(bob은 여전히 sub)
+    assert (await db_session.execute(text(
+        "SELECT role FROM task_assignee WHERE task_id=:t AND user_id=:u"
+    ), {"t": task1, "u": bob})).scalar_one() == "sub"

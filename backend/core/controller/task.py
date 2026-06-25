@@ -251,12 +251,18 @@ def _build_dry_run_preview(task, fields, body, unique_label_ids):
         main_id = body.assignees.main
         sub_ids = [u for u in dict.fromkeys(body.assignees.sub or []) if u != main_id]
         new_ids = ([main_id] if main_id else []) + sub_ids
-        old_ids = [a['user_id'] for a in (task.get('assignees') or [])]
-        changes['assignees'] = {
+        old_assignees = task.get('assignees') or []
+        old_ids = [a['user_id'] for a in old_assignees]
+        a_changes = {
             'added': [i for i in new_ids if i not in old_ids],
             'removed': [i for i in old_ids if i not in new_ids],
             'final': new_ids,
         }
+        # main 변경(role-only 포함, set-diff엔 안 잡힘)도 표시
+        old_main = next((a['user_id'] for a in old_assignees if a['role'] == 'main'), None)
+        if old_main != main_id:
+            a_changes['main_change'] = {'from': old_main, 'to': main_id}
+        changes['assignees'] = a_changes
 
     if 'custom_fields' in fields and fields['custom_fields'] is not None:
         old_cf = task.get('custom_fields') or {}
@@ -375,10 +381,13 @@ async def update(task_id: int, body, branch_id: int, request: Request, db: Async
         # set_assignees가 sub 중복·main 중복을 제거(PK 위반 방지)
         await task_model.set_assignees(task_id, body.assignees.main, body.assignees.sub or [], db)
 
-        # 담당자 변경 활동 로그
+        # 담당자 변경 활동 로그 (add/remove는 set-diff, main 승격은 role 로그)
         updated_task_for_assignees = await task_model.find_by_id(task_id, db)
         new_assignees_list = updated_task_for_assignees.get('assignees') or []
         await activity_service.log_task_assignee_change(
+            task_id, branch_id, user_id, old_assignees_list, new_assignees_list, db
+        )
+        await activity_service.log_task_assignee_role_changes(
             task_id, branch_id, user_id, old_assignees_list, new_assignees_list, db
         )
 

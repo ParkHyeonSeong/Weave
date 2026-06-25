@@ -191,6 +191,20 @@ async def log_task_assignee_role_change(task_id: int, branch_id: int, actor_id: 
     )
 
 
+async def log_task_assignee_role_changes(task_id: int, branch_id: int, actor_id: int,
+                                         old_assignees: list[dict], new_assignees: list[dict],
+                                         db: AsyncSession):
+    """old·new 양쪽에 있으면서 main으로 승격된 담당자를 role 로그로 남긴다.
+
+    set-diff(user_id 기준)는 user가 양쪽에 있으면 변화로 안 보므로(replace·granular
+    공통), main 승격은 여기서 별도 기록한다. add/remove는 log_task_assignee_change가 담당.
+    """
+    old_role = {a['user_id']: a['role'] for a in (old_assignees or [])}
+    for a in (new_assignees or []):
+        if a['role'] == 'main' and old_role.get(a['user_id']) not in (None, 'main'):
+            await log_task_assignee_role_change(task_id, branch_id, actor_id, a, db)
+
+
 async def log_task_label_change(task_id: int, branch_id: int, actor_id: int,
                                 old_labels: list[dict], new_labels: list[dict],
                                 db: AsyncSession):

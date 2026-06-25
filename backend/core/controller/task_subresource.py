@@ -86,14 +86,9 @@ async def add_task_assignee(task_id: int, user_id_to_add: int, role: str,
 
     updated = await task_model.find_by_id(task_id, db)
     new = updated.get('assignees') or []
-    # 추가/제거(기존 main 제거 포함)는 set-diff 로깅(변화 없으면 helper가 skip)
+    # 추가/제거(기존 main 제거 포함)는 set-diff, main 승격은 role 로그(replace 경로와 동일 헬퍼)
     await activity_service.log_task_assignee_change(task_id, branch_id, actor_id, old, new, db)
-    # 여기서 current_role=='sub'는 sub→main 승격뿐(다른 전이는 위에서 early-return).
-    # user_id set이 그대로라 set-diff에 안 잡히므로 role 변경을 별도 로깅.
-    if current_role == 'sub':
-        promoted = next((a for a in new if a['user_id'] == user_id_to_add), None)
-        if promoted:
-            await activity_service.log_task_assignee_role_change(task_id, branch_id, actor_id, promoted, db)
+    await activity_service.log_task_assignee_role_changes(task_id, branch_id, actor_id, old, new, db)
     # 새로 담당자가 된 유저에게 알림(이미 담당자였으면 skip)
     if current_role is None:
         username = request.state.payload.get('username', '')

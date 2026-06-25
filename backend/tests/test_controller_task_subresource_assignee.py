@@ -175,3 +175,32 @@ async def test_promotion_logs_old_main_removal(db_session):
             for item in (ch.get('removed') or []):
                 removed_ids.append(item.get('user_id'))
     assert alice in removed_ids
+
+
+async def test_update_replace_logs_role_promotion(db_session):
+    """update_task 전체 교체 경로의 sub→main 승격도 role 로그를 남겨야 한다(granular와 동일)."""
+    from core.controller import task as ctrl
+    from routers.schema import task as schema
+    alice = await _make_user(db_session, "rp_a@t.test", "rp_a")
+    bob = await _make_user(db_session, "rp_b@t.test", "rp_b")
+    b1 = await _make_branch(db_session, alice, name="RP", key="RPB")
+    await _add_member(db_session, b1, alice, "admin")
+    await _add_member(db_session, b1, bob, "member")
+    task1 = await _make_task(db_session, b1, alice, "T1")
+    # bob=sub 세팅
+    await ctrl.update(task1, schema.TaskUpdate(assignees=schema.AssigneeInput(main=None, sub=[bob])),
+                      b1, _req(alice), db_session)
+    cnt0 = (await db_session.execute(text(
+        "SELECT COUNT(*) FROM activity_log WHERE entity_type='task' AND entity_id=:t"
+    ), {"t": task1})).scalar_one()
+
+    # bob을 main으로 승격(전체 교체, sub=[])
+    res = await ctrl.update(task1, schema.TaskUpdate(assignees=schema.AssigneeInput(main=bob, sub=[])),
+                            b1, _req(alice), db_session)
+    assert res["status"] is True
+    assert (await _assignee_rows(db_session, task1)) == {bob: 'main'}
+
+    summaries = [r[0] for r in (await db_session.execute(text(
+        "SELECT summary FROM activity_log WHERE entity_type='task' AND entity_id=:t ORDER BY log_id"
+    ), {"t": task1})).fetchall()]
+    assert any("메인 담당자로 변경" in (s or "") for s in summaries[cnt0:])
