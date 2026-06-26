@@ -2,6 +2,7 @@ from weave_mcp.errors import (
     make_error, CATEGORIES, RETRYABLE, MCP_LOCAL_CODES,
     TOKEN_NOT_SET, WEEKEND_NO_CELL, MCP_TOOL_EXCEPTION,
     category_for_code,
+    error_from_body, error_from_status, normalize_embedded,
 )
 
 
@@ -41,7 +42,7 @@ def test_make_error_reserved_extra_keys_are_dropped():
 
 
 def test_make_error_none_extra_omitted():
-    out = make_error("auth", code=TOKEN_NOT_SET)
+    out = make_error("auth", code=TOKEN_NOT_SET, detail=None)
     assert "detail" not in out["error"]
 
 
@@ -75,9 +76,6 @@ def test_category_for_code_overrides():
 def test_category_for_code_unknown_is_business():
     assert category_for_code("TOTALLY_MADE_UP") == "business"
     assert category_for_code(None) == "business"
-
-
-from weave_mcp.errors import error_from_body, error_from_status, normalize_embedded
 
 
 def test_error_from_body_trusts_body_category_over_anything():
