@@ -85,29 +85,6 @@
     }
   }
 
-  &__DragHandle {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: $color-text-tertiary;
-    cursor: grab;
-    opacity: 0;
-    transition: opacity $transition-fast;
-    flex-shrink: 0;
-
-    &:hover {
-      color: $color-text-secondary;
-    }
-
-    &:active {
-      cursor: grabbing;
-    }
-  }
-
-  &__SprintHeader:hover &__DragHandle {
-    opacity: 1;
-  }
-
   &__SprintLeft {
     display: flex;
     align-items: center;

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronRight, ChevronDown, Plus, Settings, Play, CheckCircle, GripVertical } from 'lucide-react';
+import { ChevronRight, ChevronDown, Plus, Settings, Play, CheckCircle } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import { useSortable } from '@dnd-kit/sortable';
 import { useDroppable } from '@dnd-kit/core';
@@ -41,7 +41,6 @@ export default function TaskListSprint({
 
   // Sprint 자체의 sortable (백로그 제외)
   const {
-    attributes: sprintAttributes,
     listeners: sprintListeners,
     setNodeRef: setSprintNodeRef,
     transform: sprintTransform,
@@ -57,6 +56,9 @@ export default function TaskListSprint({
     transition: sprintTransition,
     opacity: isSprintDragging ? 0.4 : 1,
   };
+
+  // 헤더 우측 버튼 위에서 누를 때 드래그가 시작되지 않도록 mousedown/touchstart 전파 차단
+  const stopDrag = (e) => e.stopPropagation();
 
   // Sprint body의 droppable (태스크 드롭 영역)
   const { setNodeRef: setDroppableRef } = useDroppable({
@@ -205,19 +207,12 @@ export default function TaskListSprint({
       style={sprintStyle}
     >
       {/* Sprint 헤더 */}
-      <div className="TaskList__SprintHeader" onClick={onToggleCollapse}>
+      <div
+        className="TaskList__SprintHeader"
+        onClick={onToggleCollapse}
+        {...(!isBacklog && !sortActive ? sprintListeners : {})}
+      >
         <div className="TaskList__SprintLeft">
-          {/* 드래그 핸들 (백로그/정렬 중 제외) */}
-          {!isBacklog && !sortActive && (
-            <span
-              className="TaskList__DragHandle"
-              {...sprintAttributes}
-              {...sprintListeners}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <GripVertical size={14} />
-            </span>
-          )}
           {collapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
           <div className="TaskList__SprintText">
             <div className="TaskList__SprintNameRow">
@@ -240,7 +235,12 @@ export default function TaskListSprint({
             )}
           </div>
         </div>
-        <div className="TaskList__SprintRight" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="TaskList__SprintRight"
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={stopDrag}
+          onTouchStart={stopDrag}
+        >
           {!isBacklog && sprint.status === 'future' && (
             <button className="TaskList__SprintStartBtn" onClick={() => setShowStartConfirm(true)}>
               <Play size={12} />
