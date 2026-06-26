@@ -1,6 +1,18 @@
 import httpx
 
+from . import errors as E
 from .config import Settings, get_settings
+
+
+def _retry_after(resp):
+    """Parse a Retry-After header (integer seconds or HTTP-date) → int|str|None.
+
+    Weave's 429 handler sends no Retry-After today, so this is usually None.
+    """
+    raw = (resp.headers.get("Retry-After") or "").strip()
+    if not raw:
+        return None
+    return int(raw) if raw.isdigit() else raw
 
 
 class WeaveClient:
@@ -32,44 +44,50 @@ class WeaveClient:
         return await self._http.request(method, path, **kwargs)
 
     async def call_json(self, method: str, path: str, **kwargs):
-        """Call the API and return a JSON-friendly result.
+        """Call the API; return raw body on success, a nested error envelope on failure.
 
-        On success returns the parsed body (dict or list). On any failure — HTTP
-        error, network error, missing token, OR a business rejection the backend
-        returns as HTTP 200 + ``{"status": False}`` — returns a dict with an
-        "error" key so tools never raise into the MCP layer and never report a
-        rejected action as success.
+        Failure shape (SP-3): {"error": {category, code, message, http_status,
+        retryable, retry_after, detail?}}. Success returns the parsed body (dict|list|
+        scalar) unchanged, or {"text": ...} for a 2xx non-JSON/empty body. Tools never
+        raise into the MCP layer; an unexpected tool exception is absorbed by the
+        on_call_tool middleware as a structured `server` error.
         """
         if not self._settings.token:
-            return {"error": "auth", "detail": "WEAVE_API_TOKEN is not set"}
+            return E.make_error("auth", code=E.TOKEN_NOT_SET,
+                                message="WEAVE_API_TOKEN is not set")
         try:
             resp = await self.call(method, path, **kwargs)
         except httpx.HTTPError as exc:
-            return {"error": "network", "detail": str(exc)}
+            return E.make_error("network", message=str(exc), detail=str(exc))
+
+        retry_after = _retry_after(resp)
 
         if resp.is_success:
             try:
                 body = resp.json()
             except ValueError:
-                return {"text": resp.text}
-            # Weave returns business/authorization failures as HTTP 200 with
-            # {"status": False, "message": ...} (e.g. NOT_MEMBER, FORBIDDEN,
-            # CIRCULAR_DEPENDENCY, cross-branch rejections). Surface those as
-            # errors so a rejected action is never reported to the model as success.
-            if isinstance(body, dict) and body.get("status") is False:
-                return {"error": "business", "detail": body.get("message", body)}
-            return body
+                return {"text": resp.text}            # 2xx non-JSON / 204 — success marker
+            if isinstance(body, dict):
+                if body.get("status") is False:
+                    return E.error_from_body(body, 200, retry_after=retry_after)
+                # Contract: a successful payload never carries a top-level "error" field,
+                # so a truthy "error" on a 2xx body is always a failure marker — normalize it.
+                if body.get("error"):
+                    return E.normalize_embedded(body, 200)
+            return body                                # list / scalar / ok-dict — raw success
 
+        # non-2xx
         try:
-            detail = resp.json()
+            body = resp.json()
         except ValueError:
-            detail = resp.text
-        # 401 = the token itself is invalid/expired/revoked — flag it as "auth" so the
-        # model/orchestrator can stop instead of hammering every tool with a dead token.
-        # 403 (forbidden THIS resource) keeps its numeric code: the token is still fine.
-        if resp.status_code == 401:
-            return {"error": "auth", "detail": detail}
-        return {"error": resp.status_code, "detail": detail}
+            body = None
+        if isinstance(body, dict) and (
+            body.get("category") or body.get("code")
+            or body.get("message") or body.get("status") is False
+        ):
+            return E.error_from_body(body, resp.status_code, retry_after=retry_after)
+        detail = body.get("detail") if isinstance(body, dict) else (resp.text or None)
+        return E.error_from_status(resp.status_code, detail=detail, retry_after=retry_after)
 
     async def aclose(self) -> None:
         await self._http.aclose()
