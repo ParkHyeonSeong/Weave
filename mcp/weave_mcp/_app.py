@@ -29,6 +29,9 @@ invalid/expired (stop and surface this — retrying other tools won't help). Tre
 
 mcp = FastMCP("weave", instructions=INSTRUCTIONS)
 
+from ._middleware import WeaveDriftGuard  # noqa: E402
+mcp.add_middleware(WeaveDriftGuard())
+
 _client: WeaveClient | None = None
 
 
