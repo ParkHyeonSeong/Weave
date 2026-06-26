@@ -105,24 +105,6 @@ export default function TaskListRow({ task, branchId, taskTypes, workflowStatuse
       onContextMenu={onContextMenu}
       {...(draggable ? listeners : {})}
     >
-      {/* 하위태스크 펼침 셰브론 (없으면 자리만 차지) */}
-      {indent ? (
-        <span className="TaskListRow__ChevronSpacer" />
-      ) : expandable ? (
-        <button
-          type="button"
-          className="TaskListRow__Chevron"
-          onMouseDown={stopDrag}
-          onTouchStart={stopDrag}
-          onClick={(e) => { e.stopPropagation(); onToggleExpand?.(); }}
-          title={expanded ? '하위태스크 접기' : '하위태스크 펼치기'}
-        >
-          {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-        </button>
-      ) : (
-        <span className="TaskListRow__ChevronSpacer" />
-      )}
-
       {/* 타입 아이콘 */}
       <span className="TaskListRow__TypeIcon">
         <TaskTypeIcon
@@ -138,6 +120,18 @@ export default function TaskListRow({ task, branchId, taskTypes, workflowStatuse
       {/* 제목 + 이슈 카운트 */}
       <div className="TaskListRow__TitleWrap">
         <span className="TaskListRow__Title">{task.title}</span>
+        {expandable && (
+          <button
+            type="button"
+            className="TaskListRow__Chevron"
+            onMouseDown={stopDrag}
+            onTouchStart={stopDrag}
+            onClick={(e) => { e.stopPropagation(); onToggleExpand?.(); }}
+            title={expanded ? '하위태스크 접기' : '하위태스크 펼치기'}
+          >
+            {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          </button>
+        )}
         {contextOnly && (
           <span
             className="TaskListRow__ContextTag"
