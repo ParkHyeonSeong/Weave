@@ -16,6 +16,9 @@ CATEGORIES = frozenset({
 })
 RETRYABLE = frozenset({"network", "server", "rate_limited"})
 
+# The six core keys every error envelope carries (always present; values may be None).
+CORE_KEYS = frozenset({"category", "code", "message", "http_status", "retryable", "retry_after"})
+
 # Keys the backend framework owns; never copied verbatim into the error object.
 _RESERVED_BODY_KEYS = frozenset({"status", "message", "code", "category", "retryable"})
 
@@ -100,7 +103,7 @@ def make_error(category, *, code=None, message=None, http_status=None,
         "code": code,
         "message": message,
         "http_status": http_status,
-        "retryable": (category in RETRYABLE) if retryable is None else bool(retryable),
+        "retryable": retryable if isinstance(retryable, bool) else (category in RETRYABLE),
         "retry_after": retry_after,
     }
     for k, v in extra.items():
@@ -139,7 +142,8 @@ def error_from_body(body, http_status, retry_after=None):
         # status:false free-text body → business (_category_from_status(200) == business).
         category = category_for_code(code) if code else _category_from_status(http_status)
     retryable = body.get("retryable")  # None → make_error derives from category
-    extra = {k: v for k, v in body.items() if k not in _RESERVED_BODY_KEYS}
+    extra = {k: v for k, v in body.items()
+             if k not in _RESERVED_BODY_KEYS and k not in ("http_status", "retry_after")}
     return make_error(category, code=code, message=message, http_status=http_status,
                       retryable=retryable, retry_after=retry_after, **extra)
 
@@ -151,10 +155,13 @@ def error_from_status(status_code, detail=None, retry_after=None):
 
 
 def normalize_embedded(body, http_status):
-    """A 2xx body that already has a truthy top-level 'error'. Lift it; idempotent."""
+    """A 2xx body that already carries a top-level 'error'. Lift/normalize it; idempotent."""
     err = body.get("error")
-    if isinstance(err, dict) and err.get("category") in CATEGORIES and "retryable" in err:
-        return body  # already canonical — do not double-wrap
     if isinstance(err, dict):
+        if (CORE_KEYS <= err.keys()
+                and err.get("category") in CATEGORIES
+                and isinstance(err.get("retryable"), bool)):
+            return body  # already canonical — do not re-shape
         return error_from_body(err, http_status)
-    return make_error("business", message=str(err), http_status=http_status)
+    # non-dict error value (str / empty / None) → wrap as a business failure
+    return make_error("business", message=str(err) if err else None, http_status=http_status)

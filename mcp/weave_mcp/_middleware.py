@@ -1,24 +1,26 @@
-"""on_call_tool guard: validates the structured error shape and absorbs unexpected
-tool exceptions into a structured `server` error so a tool never raises into the
-MCP layer (SP-3 §7)."""
+"""on_call_tool guard: validates the structured error shape on tool returns, and as
+defense-in-depth absorbs an unexpected non-framework exception in the call chain into
+a structured `server` error; framework control-flow exceptions (FastMCPError/McpError/
+NotFoundError — incl. tool-body exceptions FastMCP already wraps as ToolError) are
+re-raised and surfaced via FastMCP's native error reporting."""
 import json
 
 from fastmcp.server.middleware import Middleware
-from fastmcp.exceptions import FastMCPError, McpError
+from fastmcp.exceptions import FastMCPError, McpError, NotFoundError
 from fastmcp.tools.base import ToolResult
 import mcp.types as mt
 
 from . import errors as E
 
-# The wire contract's six core keys — always present (values may be None).
-_CORE_KEYS = frozenset({"category", "code", "message", "http_status", "retryable", "retry_after"})
+# Single-source core keys from errors.py.
+_CORE_KEYS = E.CORE_KEYS
 
 
 class WeaveDriftGuard(Middleware):
     async def on_call_tool(self, context, call_next) -> ToolResult:
         try:
             result = await call_next(context)
-        except (FastMCPError, McpError):
+        except (FastMCPError, McpError, NotFoundError):
             raise  # framework control-flow signals — never absorb
         except Exception as exc:
             err = E.make_error("server", code=E.MCP_TOOL_EXCEPTION, message=str(exc))

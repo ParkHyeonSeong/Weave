@@ -158,3 +158,34 @@ def test_normalize_embedded_lifts_flat_error():
     out = normalize_embedded(body, 200)["error"]
     assert out["category"] == "forbidden"
     assert out["code"] == "NOT_BRANCH_MEMBER"
+    assert {"category", "code", "message", "http_status", "retryable", "retry_after"} <= out.keys()
+    assert "status" not in out
+
+
+def test_error_from_body_body_retry_after_key_does_not_collide():
+    out = error_from_body({"status": False, "message": "slow", "retry_after": 12}, 200)["error"]
+    assert out["retry_after"] is None            # header/transport param wins; body key dropped
+    assert {"category", "code", "message", "http_status", "retryable", "retry_after"} <= out.keys()
+
+
+def test_error_from_body_body_http_status_key_does_not_collide():
+    out = error_from_body({"status": False, "message": "x", "http_status": 999}, 200)["error"]
+    assert out["http_status"] == 200             # transport status wins; body key dropped
+    assert isinstance(out["retryable"], bool)
+
+
+def test_make_error_non_bool_retryable_derives_from_category():
+    assert make_error("business", retryable="false")["error"]["retryable"] is False   # not bool("false")==True
+    assert make_error("network", retryable="x")["error"]["retryable"] is True          # derives from category
+
+
+def test_normalize_embedded_reshapes_partial_embedded_error():
+    out = normalize_embedded({"error": {"category": "forbidden", "retryable": False}}, 200)["error"]
+    assert {"category", "code", "message", "http_status", "retryable", "retry_after"} <= out.keys()
+    assert out["category"] == "forbidden" and out["http_status"] == 200
+
+
+def test_normalize_embedded_reshapes_non_bool_retryable():
+    src = {"category": "forbidden", "retryable": "no", "code": None, "message": None,
+           "http_status": None, "retry_after": None}
+    assert isinstance(normalize_embedded({"error": src}, 200)["error"]["retryable"], bool)

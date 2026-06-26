@@ -5,14 +5,15 @@ from .config import Settings, get_settings
 
 
 def _retry_after(resp):
-    """Parse a Retry-After header (integer seconds or HTTP-date) → int|str|None.
+    """Parse a Retry-After header to non-negative int seconds, else None.
 
-    Weave's 429 handler sends no Retry-After today, so this is usually None.
+    Weave's 429 handler sends no Retry-After today, so this is usually None. Non-numeric
+    forms (HTTP-date, negative, junk) are dropped to None to keep retry_after a clean int|None.
     """
     raw = (resp.headers.get("Retry-After") or "").strip()
-    if not raw:
+    if not raw.isdigit():
         return None
-    return int(raw) if raw.isdigit() else raw
+    return int(raw)
 
 
 class WeaveClient:
@@ -71,9 +72,9 @@ class WeaveClient:
             if isinstance(body, dict):
                 if body.get("status") is False:
                     return E.error_from_body(body, 200, retry_after=retry_after)
-                # Contract: a successful payload never carries a top-level "error" field,
-                # so a truthy "error" on a 2xx body is always a failure marker — normalize it.
-                if body.get("error"):
+                # Contract: a successful payload never carries a top-level "error" field.
+                # A present, non-null "error" on a 2xx body is a failure marker — normalize it.
+                if body.get("error") is not None:
                     return E.normalize_embedded(body, 200)
             return body                                # list / scalar / ok-dict — raw success
 

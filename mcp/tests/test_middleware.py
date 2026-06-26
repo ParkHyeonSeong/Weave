@@ -83,3 +83,11 @@ async def test_absorbs_unexpected_tool_exception():
 
 def test_middleware_registered_on_app():
     assert any(isinstance(m, WeaveDriftGuard) for m in _app.mcp.middleware)
+
+
+async def test_reraises_not_found_error():
+    from fastmcp.exceptions import NotFoundError
+    async def call_next(ctx):
+        raise NotFoundError("Unknown tool: 'nope'")
+    with pytest.raises(NotFoundError):
+        await WeaveDriftGuard().on_call_tool(_ctx(), call_next)

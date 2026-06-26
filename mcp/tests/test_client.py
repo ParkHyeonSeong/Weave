@@ -219,3 +219,35 @@ async def test_2xx_embedded_error_is_normalized():
     assert isinstance(out["error"], dict)
     assert out["error"]["category"] == "forbidden"
     assert isinstance(out["error"]["retryable"], bool)
+
+
+@respx.mock
+async def test_2xx_empty_error_dict_is_normalized_failure():
+    respx.post("http://test/api/x").mock(return_value=httpx.Response(200, json={"error": {}}))
+    c = make_client(); out = await c.call_json("POST", "/api/x"); await c.aclose()
+    assert isinstance(out["error"], dict) and out["error"]["category"] == "business"
+    assert isinstance(out["error"]["retryable"], bool)
+
+
+@respx.mock
+async def test_2xx_empty_error_string_is_normalized_failure():
+    respx.post("http://test/api/x").mock(return_value=httpx.Response(200, json={"error": ""}))
+    c = make_client(); out = await c.call_json("POST", "/api/x"); await c.aclose()
+    assert out["error"]["category"] == "business"
+
+
+@respx.mock
+async def test_2xx_null_error_is_success():
+    respx.get("http://test/api/x").mock(return_value=httpx.Response(200, json={"status": True, "error": None}))
+    c = make_client(); out = await c.call_json("GET", "/api/x"); await c.aclose()
+    assert out == {"status": True, "error": None}   # null error = no error → raw success
+
+
+@respx.mock
+async def test_retry_after_non_numeric_dropped_to_none():
+    respx.get("http://test/api/x").mock(return_value=httpx.Response(
+        429, headers={"Retry-After": "Wed, 21 Oct 2025 07:28:00 GMT"},
+        json={"status": False, "code": "RATE_LIMIT_EXCEEDED", "message": "RATE_LIMIT_EXCEEDED",
+              "category": "rate_limited", "retryable": True}))
+    c = make_client(); out = await c.call_json("GET", "/api/x"); await c.aclose()
+    assert out["error"]["retry_after"] is None
