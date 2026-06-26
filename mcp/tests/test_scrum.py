@@ -57,7 +57,10 @@ async def test_write_scrum_daily_weekend_errors(fake_client, monkeypatch):
     async with Client(_app.mcp) as client:
         res = await client.call_tool("write_scrum_daily", {"board_id": 4, "text": "x"})
     fake_client.call_json.assert_not_awaited()
-    assert res.data["error"] == "weekend"
+    err = res.data["error"]
+    assert err["code"] == "WEEKEND_NO_CELL"
+    assert err["category"] == "validation"
+    assert err["retryable"] is False
 
 
 async def test_write_scrum_daily_explicit_day(fake_client):

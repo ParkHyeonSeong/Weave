@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from .. import errors as E
 from .._app import mcp, get_client
 
 _KST = timezone(timedelta(hours=9))
@@ -158,8 +159,9 @@ async def write_scrum_daily(board_id: int, text: str, row: str = "plan",
         iso_week = w
     if day is None:
         if wd >= 6:
-            return {"error": "weekend",
-                    "detail": "주말에는 데일리스크럼 셀이 없습니다. day(0=Mon..4=Fri)를 지정하세요."}
+            return E.make_error(
+                "validation", code=E.WEEKEND_NO_CELL,
+                message="주말에는 데일리스크럼 셀이 없습니다. day(0=Mon..4=Fri)를 지정하세요.")
         day = wd - 1
     body = {"day": day, "row": row, "text": text, "mode": mode}
     return await get_client().call_json(
