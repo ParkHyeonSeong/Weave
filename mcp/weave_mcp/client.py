@@ -50,9 +50,11 @@ class WeaveClient:
 
         Failure shape (SP-3): {"error": {category, code, message, http_status,
         retryable, retry_after, detail?}}. Success returns the parsed body (dict|list|
-        scalar) unchanged, or {"text": ...} for a 2xx non-JSON/empty body. Tools never
-        raise into the MCP layer; an unexpected tool exception is absorbed by the
-        on_call_tool middleware as a structured `server` error.
+        scalar) unchanged, or {"text": ...} for a 2xx non-JSON/empty body. call_json
+        itself never raises — a transport error becomes a `network` envelope. (A tool-body
+        exception is wrapped by FastMCP as a ToolError and surfaced via its native error
+        reporting, not this envelope; the on_call_tool guard re-raises framework
+        exceptions and only absorbs a stray non-framework exception as defense-in-depth.)
         """
         if not self._settings.token:
             return E.make_error("auth", code=E.TOKEN_NOT_SET,
