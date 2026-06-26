@@ -29,13 +29,37 @@ MCP_LOCAL_CODES = frozenset({TOKEN_NOT_SET, WEEKEND_NO_CELL, MCP_TOOL_EXCEPTION}
 # Irregular codes whose suffix/keyword rules don't classify correctly.
 # Extended to green against the full backend ErrorCode enum by test_errors_parity.py.
 _OVERRIDES = {
+    # --- auth: ACCOUNT_* and INVALID_*_TOKEN/CREDENTIALS aren't caught by suffix rules ---
+    "ACCOUNT_INACTIVE": "auth", "ACCOUNT_PENDING": "auth", "ACCOUNT_REJECTED": "auth",
+    "INVALID_CREDENTIALS": "auth", "INVALID_OR_EXPIRED_TOKEN": "auth",
+    "NEED_LOGIN": "auth",
+    # --- forbidden: explicit entries so NOT_*_PUBLIC and SCOPE_* are covered ---
     "ADMIN_ONLY": "forbidden", "ACCESS_DENIED": "forbidden", "NOT_ALLOWED": "forbidden",
     "PERMISSION_DENIED": "forbidden", "ADMIN_REQUIRED": "forbidden",
+    "SCOPE_BRANCH_NOT_PARTICIPATING": "forbidden",
+    "BRANCH_NOT_PUBLIC": "forbidden", "CANVAS_NOT_PUBLIC": "forbidden",
+    # --- not_found: NOT_FOUND_OR_NOT_OWNER starts with NOT_ so forbidden rule fires ---
+    "NOT_FOUND_OR_NOT_OWNER": "not_found",
+    # --- validation: codes that don't match INVALID_/TOO_LARGE/TOO_SHORT suffix rules ---
+    "CSV_FILE_REQUIRED": "validation", "CSV_PARSE_ERROR": "validation",
+    "DM_REQUIRES_ONE_MEMBER": "validation", "NO_FILE": "validation",
+    "PARENT_SELF": "validation", "PASSWORD_MISMATCH": "validation",
+    "SELF_REFERENCE": "validation", "SELF_DEPENDENCY": "validation", "SELF_LINK": "validation",
+    "SMTP_PASSWORD_REQUIRED": "validation", "VIEW_SCOPE_MISMATCH": "validation",
+    # --- conflict: ALREADY_*/DUPLICATE_*/COMMENT_DELETED/PARENT_DELETED/IN_USE ---
     "CIRCULAR_DEPENDENCY": "conflict", "DEPENDENCY_CYCLE": "conflict",
-    "PARENT_CYCLE": "conflict", "SELF_DEPENDENCY": "conflict", "SELF_LINK": "conflict",
-    "RATE_LIMIT_EXCEEDED": "rate_limited",
+    "PARENT_CYCLE": "conflict",
+    "ALREADY_INITIALIZED": "conflict", "ALREADY_LINKED": "conflict",
+    "ALREADY_MEMBER": "conflict", "COMMENT_DELETED": "conflict",
+    "DUPLICATE_DEPENDENCY": "conflict", "DUPLICATE_LINK": "conflict",
+    "PARENT_DELETED": "conflict", "IN_USE": "conflict",
+    # --- business: NOT_INITIALIZED starts with NOT_ so forbidden rule fires ---
+    "NOT_INITIALIZED": "business",
+    # --- server: *_NOT_CONFIGURED and MIGRATION_FAILED aren't caught by any rule ---
+    "AI_NOT_CONFIGURED": "server", "MIGRATION_FAILED": "server",
+    "SMTP_NOT_CONFIGURED": "server",
     "INTERNAL_SERVER_ERROR": "server",
-    "NEED_LOGIN": "auth",
+    "RATE_LIMIT_EXCEEDED": "rate_limited",
 }
 
 
