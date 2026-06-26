@@ -204,3 +204,18 @@ async def test_2xx_scalar_body_returned_verbatim():
     out = await c.call_json("GET", "/api/x")
     await c.aclose()
     assert out == 42
+
+
+@respx.mock
+async def test_2xx_embedded_error_is_normalized():
+    # 2xx body with a top-level "error" dict that is NOT yet canonical (no "retryable" key).
+    # normalize_embedded delegates to error_from_body, which must produce a canonical envelope.
+    respx.post("http://test/api/branches/1/members").mock(return_value=httpx.Response(
+        200, json={"error": {"category": "forbidden", "code": "ADMIN_ONLY"}}
+    ))
+    c = make_client()
+    out = await c.call_json("POST", "/api/branches/1/members")
+    await c.aclose()
+    assert isinstance(out["error"], dict)
+    assert out["error"]["category"] == "forbidden"
+    assert isinstance(out["error"]["retryable"], bool)
