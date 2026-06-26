@@ -142,7 +142,7 @@ async def restore_canvas(canvas_id: int) -> Any:
 async def leave_canvas(canvas_id: int) -> Any:
     """Leave a canvas (remove yourself as a member); any member may leave.
 
-    May be rejected with a business error if you are the canvas's last admin.
+    May return a category=business rejection (e.g. LAST_ADMIN / LAST_OWNER) if you are the canvas's last admin.
     """
     return await get_client().call_json("POST", f"/api/canvases/{canvas_id}/leave")
 

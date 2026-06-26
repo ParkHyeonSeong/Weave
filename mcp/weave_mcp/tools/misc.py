@@ -108,7 +108,7 @@ async def restore_branch(branch_id: int) -> Any:
 async def leave_branch(branch_id: int) -> Any:
     """Leave a branch (remove yourself as a member); any member may leave.
 
-    May be rejected with a business error if you are the branch's last admin.
+    May return a category=business rejection (e.g. LAST_ADMIN / LAST_OWNER) if you are the branch's last admin.
     """
     return await get_client().call_json("POST", f"/api/branches/{branch_id}/leave")
 
@@ -157,7 +157,7 @@ async def add_branch_member(branch_id: int, user_id: int, role: str = "member") 
     """Add (invite) a user to a branch. role is "admin" or "member" (default).
 
     Resolve user_id via search_branch_non_members(branch_id). Admin-only — a
-    non-admin caller gets an {"error": "business", ...} rejection.
+    non-admin caller gets a category=business rejection (e.g. LAST_ADMIN / LAST_OWNER).
     """
     return await get_client().call_json(
         "POST", f"/api/branches/{branch_id}/members",

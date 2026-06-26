@@ -20,12 +20,15 @@ Before creating or updating tasks:
 - assignees (assignee_main/assignee_sub) and event participants are user ids — resolve
   names via list_branch_members(branch_id).
 
-Conventions: ids are integers and dates are ISO YYYY-MM-DD. Every tool returns the API's
-JSON on success, or a dict with an "error" key on failure — including
-{"error": "business", "detail": ...} when the backend rejects an action (e.g. not a
-member, or a change that would create a cycle), and {"error": "auth"} when the token is
-invalid/expired (stop and surface this — retrying other tools won't help). Treat any
-"error" key as failure, never as success."""
+Conventions: ids are integers and dates are ISO YYYY-MM-DD. Every tool returns the
+API's JSON on success, or {"error": {...}} on failure — a nested object with
+"category" (one of auth, forbidden, not_found, validation, conflict, rate_limited,
+network, server, business), "code" (the canonical error code, may be null), "message",
+"http_status", "retryable" (true only for network/server/rate_limited), and optional
+"retry_after"/"detail". Treat any top-level "error" key as failure, never success — a
+successful result never carries a top-level "error" field. category="auth" means the
+token is dead — stop and surface it; "forbidden" means the token is fine but the action
+isn't allowed."""
 
 mcp = FastMCP("weave", instructions=INSTRUCTIONS)
 

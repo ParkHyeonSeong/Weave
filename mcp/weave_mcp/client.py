@@ -20,8 +20,9 @@ class WeaveClient:
 
     The token is sent as an ``Authorization: Bearer`` header on every request. PATs are
     long-lived, so there is no login, cookie, session, or refresh logic — an invalid or
-    revoked token yields a 401, surfaced by ``call_json`` as ``{"error": "auth"}`` (distinct
-    from a forbidden resource) so a dead token can be detected without retrying every tool.
+    revoked token yields a 401, surfaced by ``call_json`` as
+    ``{"error": {"category": "auth", ...}}`` (distinct from a forbidden resource, whose
+    category is ``"forbidden"``) so a dead token can be detected without retrying every tool.
     """
 
     def __init__(self, settings: Settings | None = None):

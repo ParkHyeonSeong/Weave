@@ -115,7 +115,7 @@ async def restore_scrum_board(board_id: int) -> Any:
 async def leave_scrum_board(board_id: int) -> Any:
     """Leave a Scrum board (remove yourself as a member); any member may leave.
 
-    May be rejected with a business error if you are the board's last admin.
+    May return a category=business rejection (e.g. LAST_ADMIN / LAST_OWNER) if you are the board's last admin.
     """
     return await get_client().call_json("POST", f"/api/scrum/{board_id}/leave")
 

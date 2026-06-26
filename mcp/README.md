@@ -184,6 +184,8 @@ mcp/.venv/bin/python -m pytest mcp/tests -v
 ## Auth model
 The client sends a Weave Personal Access Token as an `Authorization: Bearer` header on every
 request. Tokens are long-lived and revocable (revoke in the Weave UI), so there is no login,
-cookie, or session refresh. An invalid/revoked/expired token returns a 401, surfaced as an
-`{"error": "auth"}` result (distinct from a forbidden resource, 403, which keeps its numeric
-code). The token lives only in `WEAVE_API_TOKEN` (env / git-ignored `mcp/.env`).
+cookie, or session refresh. An invalid/revoked/expired token returns a 401, surfaced as
+`{"error": {"category": "auth", ...}}` (distinct from a forbidden resource, whose
+`"category"` is `"forbidden"`). The `"retryable"` field is `false` for auth — stop and
+surface the error rather than retrying. The token lives only in `WEAVE_API_TOKEN`
+(env / git-ignored `mcp/.env`).

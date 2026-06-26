@@ -325,7 +325,7 @@ async def restore_track(track_id: int) -> Any:
 async def leave_track(track_id: int) -> Any:
     """Leave a track (remove yourself as a member); any member may leave.
 
-    May be rejected with a business error if you are the track's last owner.
+    May return a category=business rejection (e.g. LAST_ADMIN / LAST_OWNER) if you are the track's last owner.
     """
     return await get_client().call_json("POST", f"/api/tracks/{track_id}/leave")
 
