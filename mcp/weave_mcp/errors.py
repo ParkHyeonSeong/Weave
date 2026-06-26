@@ -24,6 +24,42 @@ MCP_TOOL_EXCEPTION = "MCP_TOOL_EXCEPTION"  # unexpected tool exception (_middlew
 MCP_LOCAL_CODES = frozenset({TOKEN_NOT_SET, WEEKEND_NO_CELL, MCP_TOOL_EXCEPTION})
 
 
+# Irregular codes whose suffix/keyword rules don't classify correctly.
+# Extended to green against the full backend ErrorCode enum by test_errors_parity.py.
+_OVERRIDES = {
+    "ADMIN_ONLY": "forbidden", "ACCESS_DENIED": "forbidden", "NOT_ALLOWED": "forbidden",
+    "PERMISSION_DENIED": "forbidden", "ADMIN_REQUIRED": "forbidden",
+    "CIRCULAR_DEPENDENCY": "conflict", "DEPENDENCY_CYCLE": "conflict",
+    "PARENT_CYCLE": "conflict", "SELF_DEPENDENCY": "conflict", "SELF_LINK": "conflict",
+    "RATE_LIMIT_EXCEEDED": "rate_limited",
+    "INTERNAL_SERVER_ERROR": "server",
+    "NEED_LOGIN": "auth",
+}
+
+
+def category_for_code(code):
+    """Resolve a backend code string to a category. Deterministic; BUSINESS fallback.
+
+    Defensive: the MCP surface almost always receives body['category'] directly
+    (error_response dual-emit). This resolver only fires when a categoryless body
+    carries a code. Its correctness across the FULL backend enum is asserted by
+    test_errors_parity.py — add an _OVERRIDES entry when a new code fails parity.
+    """
+    if not code:
+        return "business"
+    if code in _OVERRIDES:
+        return _OVERRIDES[code]
+    if code.endswith("_NOT_FOUND"):
+        return "not_found"
+    if code.startswith("NOT_") or code.endswith("_AUTHOR") or code.startswith("PERMISSION_"):
+        return "forbidden"
+    if code.startswith("INVALID_") or code.endswith("_TOO_LARGE") or code.endswith("_TOO_SHORT"):
+        return "validation"
+    if code.endswith("_IN_USE") or code.endswith("_ALREADY_EXISTS") or code.endswith("_EXISTS"):
+        return "conflict"
+    return "business"
+
+
 def make_error(category, *, code=None, message=None, http_status=None,
                retryable=None, retry_after=None, **extra):
     """Build the canonical nested failure envelope {"error": {...}}.

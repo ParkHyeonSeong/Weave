@@ -1,6 +1,7 @@
 from weave_mcp.errors import (
     make_error, CATEGORIES, RETRYABLE, MCP_LOCAL_CODES,
     TOKEN_NOT_SET, WEEKEND_NO_CELL, MCP_TOOL_EXCEPTION,
+    category_for_code,
 )
 
 
@@ -51,3 +52,26 @@ def test_constants_shape():
     })
     assert RETRYABLE == frozenset({"network", "server", "rate_limited"})
     assert MCP_LOCAL_CODES == frozenset({TOKEN_NOT_SET, WEEKEND_NO_CELL, MCP_TOOL_EXCEPTION})
+
+
+def test_category_for_code_suffix_rules():
+    assert category_for_code("BRANCH_NOT_FOUND") == "not_found"
+    assert category_for_code("NOT_BRANCH_MEMBER") == "forbidden"
+    assert category_for_code("NOT_ANNOTATION_AUTHOR") == "forbidden"
+    assert category_for_code("INVALID_STATUS") == "validation"
+    assert category_for_code("FILE_TOO_LARGE") == "validation"
+    assert category_for_code("STATUS_IN_USE") == "conflict"
+    assert category_for_code("KEY_ALREADY_EXISTS") == "conflict"
+
+
+def test_category_for_code_overrides():
+    assert category_for_code("ADMIN_ONLY") == "forbidden"
+    assert category_for_code("ACCESS_DENIED") == "forbidden"
+    assert category_for_code("CIRCULAR_DEPENDENCY") == "conflict"
+    assert category_for_code("RATE_LIMIT_EXCEEDED") == "rate_limited"
+    assert category_for_code("INTERNAL_SERVER_ERROR") == "server"
+
+
+def test_category_for_code_unknown_is_business():
+    assert category_for_code("TOTALLY_MADE_UP") == "business"
+    assert category_for_code(None) == "business"
