@@ -182,6 +182,10 @@ export default function Layout({ children }) {
   // 글로벌 단축키
   useEffect(() => {
     const handleKeyDown = (e) => {
+      // input/textarea/contenteditable 편집 중에는 글로벌 단축키 무시
+      // (스크럼/Canvas 에디터의 Cmd+B 볼드 등과 충돌 방지)
+      const tag = e.target.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable) return;
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         setShowPalette((prev) => !prev);
