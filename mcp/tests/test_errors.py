@@ -75,3 +75,88 @@ def test_category_for_code_overrides():
 def test_category_for_code_unknown_is_business():
     assert category_for_code("TOTALLY_MADE_UP") == "business"
     assert category_for_code(None) == "business"
+
+
+from weave_mcp.errors import error_from_body, error_from_status, normalize_embedded
+
+
+def test_error_from_body_trusts_body_category_over_anything():
+    # ADMIN_REQUIRED arrives under HTTP 401 but body says forbidden
+    body = {"status": False, "message": "ADMIN_REQUIRED", "code": "ADMIN_REQUIRED",
+            "category": "forbidden", "retryable": False}
+    out = error_from_body(body, 401)["error"]
+    assert out["category"] == "forbidden"
+    assert out["code"] == "ADMIN_REQUIRED"
+    assert out["http_status"] == 401
+    assert out["retryable"] is False
+
+
+def test_error_from_body_need_login_is_auth():
+    body = {"status": False, "message": "NEED_LOGIN", "code": "NEED_LOGIN",
+            "category": "auth", "retryable": False}
+    assert error_from_body(body, 401)["error"]["category"] == "auth"
+
+
+def test_error_from_body_preserves_detail_extra():
+    body = {"status": False, "message": "INVALID_FILTER", "code": "INVALID_FILTER",
+            "category": "validation", "retryable": False, "detail": "custom fields: [12]"}
+    out = error_from_body(body, 200)["error"]
+    assert out["detail"] == "custom fields: [12]"
+    assert out["category"] == "validation"
+
+
+def test_error_from_body_no_category_uses_resolver():
+    # legacy categoryless body (code-only)
+    body = {"status": False, "message": "NOT_CANVAS_MEMBER"}
+    out = error_from_body(body, 200)["error"]
+    assert out["category"] == "forbidden"
+    assert out["code"] == "NOT_CANVAS_MEMBER"
+
+
+def test_error_from_body_free_text_message_is_not_a_code():
+    body = {"status": False, "message": "something went wrong, try again"}
+    out = error_from_body(body, 200)["error"]
+    assert out["code"] is None
+    assert out["message"] == "something went wrong, try again"
+    assert out["category"] == "business"
+
+
+def test_error_from_body_free_text_non_2xx_uses_status_category():
+    # non-2xx free-text (no code, no category) → transport status drives the category
+    assert error_from_body({"message": "Not found"}, 404)["error"]["category"] == "not_found"
+    assert error_from_body({"message": "slow down"}, 429)["error"]["category"] == "rate_limited"
+    # ...but a 200 status:false free-text body stays business
+    assert error_from_body({"status": False, "message": "oops"}, 200)["error"]["category"] == "business"
+
+
+def test_error_from_body_missing_message_never_stores_whole_dict():
+    body = {"status": False, "weird": 1}
+    out = error_from_body(body, 200)["error"]
+    assert out["message"] is None
+    assert out["code"] is None
+    assert out["category"] == "business"
+    assert out["weird"] == 1  # non-reserved extra passes through
+
+
+def test_error_from_status_maps_known_statuses():
+    assert error_from_status(404)["error"]["category"] == "not_found"
+    assert error_from_status(422, detail=[{"loc": ["x"]}])["error"]["category"] == "validation"
+    assert error_from_status(422, detail=[{"loc": ["x"]}])["error"]["detail"] == [{"loc": ["x"]}]
+    assert error_from_status(429)["error"]["category"] == "rate_limited"
+    assert error_from_status(429)["error"]["retryable"] is True
+    assert error_from_status(503)["error"]["category"] == "server"
+    assert error_from_status(418)["error"]["category"] == "business"
+
+
+def test_normalize_embedded_idempotent_for_canonical():
+    canonical = {"error": {"category": "business", "code": "X", "message": None,
+                           "http_status": 200, "retryable": False, "retry_after": None}}
+    assert normalize_embedded(canonical, 200) == canonical
+
+
+def test_normalize_embedded_lifts_flat_error():
+    body = {"error": {"status": False, "code": "NOT_BRANCH_MEMBER",
+                      "category": "forbidden", "retryable": False}}
+    out = normalize_embedded(body, 200)["error"]
+    assert out["category"] == "forbidden"
+    assert out["code"] == "NOT_BRANCH_MEMBER"

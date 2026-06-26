@@ -7,6 +7,8 @@ http_status, retryable, retry_after, ...extra}}; the six core keys are always pr
 See docs/superpowers/specs/2026-06-25-sp3-mcp-structured-errors-design.md.
 """
 
+import re
+
 # 9 categories — identical strings to backend core.errors.Category
 CATEGORIES = frozenset({
     "auth", "forbidden", "not_found", "validation",
@@ -81,3 +83,54 @@ def make_error(category, *, code=None, message=None, http_status=None,
         if k not in _RESERVED_BODY_KEYS and v is not None:
             err[k] = v
     return {"error": err}
+
+
+_CODE_RE = re.compile(r"^[A-Z][A-Z0-9_]+$")
+
+_STATUS_CATEGORY = {
+    401: "auth", 403: "forbidden", 404: "not_found",
+    413: "validation", 422: "validation", 429: "rate_limited",
+}
+
+
+def _category_from_status(status_code):
+    """HTTP status → category. None/unknown → business; any 5xx → server."""
+    if status_code is None:
+        return "business"
+    if status_code >= 500:
+        return "server"
+    return _STATUS_CATEGORY.get(status_code, "business")
+
+
+def error_from_body(body, http_status, retry_after=None):
+    """Reshape a failure dict body (2xx status:False OR a unified HTTP-error body)."""
+    category = body.get("category")
+    code = body.get("code")
+    message = body.get("message")
+    if code is None and isinstance(message, str) and _CODE_RE.match(message):
+        code = message
+    if category is None:
+        # code present → resolve by code; else fall back to the transport status, so a
+        # non-2xx free-text body (404 {"message":"Not found"}) → not_found, while a 200
+        # status:false free-text body → business (_category_from_status(200) == business).
+        category = category_for_code(code) if code else _category_from_status(http_status)
+    retryable = body.get("retryable")  # None → make_error derives from category
+    extra = {k: v for k, v in body.items() if k not in _RESERVED_BODY_KEYS}
+    return make_error(category, code=code, message=message, http_status=http_status,
+                      retryable=retryable, retry_after=retry_after, **extra)
+
+
+def error_from_status(status_code, detail=None, retry_after=None):
+    """Pure status→category fallback when no usable category-bearing body exists."""
+    return make_error(_category_from_status(status_code), http_status=status_code,
+                      retry_after=retry_after, detail=detail)
+
+
+def normalize_embedded(body, http_status):
+    """A 2xx body that already has a truthy top-level 'error'. Lift it; idempotent."""
+    err = body.get("error")
+    if isinstance(err, dict) and err.get("category") in CATEGORIES and "retryable" in err:
+        return body  # already canonical — do not double-wrap
+    if isinstance(err, dict):
+        return error_from_body(err, http_status)
+    return make_error("business", message=str(err), http_status=http_status)
