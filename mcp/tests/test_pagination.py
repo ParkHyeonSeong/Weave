@@ -8,7 +8,8 @@ def test_passes_through_non_dict():
 
 
 def test_passes_through_error_result():
-    err = {"error": "business", "detail": "NOT_MEMBER"}
+    err = {"error": {"category": "forbidden", "code": "NOT_A_MEMBER", "message": None,
+                     "http_status": 200, "retryable": False, "retry_after": None}}
     assert paginate(err, "tasks") == err
 
 
@@ -85,3 +86,9 @@ def test_preserves_sibling_fields_and_uses_given_key():
     assert out["status"] is True
     assert out["items"] == [{"i": 1}]
     assert out["pagination"]["total"] == 1
+
+
+def test_paginate_passes_nested_error_through_unsliced():
+    err = {"error": {"category": "conflict", "code": "DEPENDENCY_CYCLE", "message": None,
+                     "http_status": 200, "retryable": False, "retry_after": None}}
+    assert paginate(err, "tasks") == err

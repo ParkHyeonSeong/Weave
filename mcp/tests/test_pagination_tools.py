@@ -55,7 +55,9 @@ async def test_list_track_items_uses_items_key(fake_client):
 
 
 async def test_pagination_passes_error_through(fake_client):
-    fake_client.call_json.return_value = {"error": 401, "detail": "bad token"}
+    fake_client.call_json.return_value = {"error": {
+        "category": "auth", "code": "NEED_LOGIN", "message": None,
+        "http_status": 401, "retryable": False, "retry_after": None}}
     result = await _call("list_branch_tasks", {"branch_id": 1})
-    assert result.data["error"] == 401
+    assert result.data["error"]["category"] == "auth"
     assert "pagination" not in result.data

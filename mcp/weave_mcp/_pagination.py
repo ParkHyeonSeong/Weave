@@ -20,7 +20,7 @@ def paginate(result, key, *, limit=None, offset=None):
     """Return a page of ``result[key]`` with a ``pagination`` summary attached.
 
     Error results and payloads without a list at ``key`` pass straight through
-    untouched, so a backend ``{"error": ...}`` or an unexpected shape is never
+    untouched, so a backend ``{"error": {...}}`` or an unexpected shape is never
     mangled. Defaults to the first ``DEFAULT_LIMIT`` items; if that page would
     still exceed ``MAX_PAGE_CHARS`` it is shrunk further so a page of large
     items can't overflow the client either. Nothing is dropped silently — the
