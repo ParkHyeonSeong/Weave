@@ -43,8 +43,8 @@ async def find_by_id(issue_id: int, db: AsyncSession):
 
 
 async def update_issue(issue_id: int, fields: dict, db: AsyncSession):
-    """이슈 수정 (title/body/status)"""
-    allowed = {'title', 'body', 'status'}
+    """이슈 수정 (title/body)"""
+    allowed = {'title', 'body'}  # status는 transition_status() 단일 경로로만 기록
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
         return
@@ -207,3 +207,42 @@ async def delete_comment(comment_id: int, db: AsyncSession):
     await db.execute(text("""
         DELETE FROM task_issue_comment WHERE comment_id = :comment_id
     """), {'comment_id': comment_id})
+
+
+# -- 상태 변경 이벤트 (close/reopen 타임라인) --
+
+async def create_event(issue_id: int, actor_id: int, event_type: str, db: AsyncSession) -> int:
+    """이슈 상태 변경 이벤트 기록 (closed/reopened)"""
+    result = await db.execute(text("""
+        INSERT INTO task_issue_event (issue_id, actor_id, event_type)
+        VALUES (:issue_id, :actor_id, :event_type)
+        RETURNING event_id
+    """), {'issue_id': issue_id, 'actor_id': actor_id, 'event_type': event_type})
+    return result.scalar_one()
+
+
+async def find_events(issue_id: int, db: AsyncSession):
+    """이슈의 상태 변경 이벤트 목록 (시간순, 동률은 event_id)"""
+    result = await db.execute(text("""
+        SELECT e.event_id, e.issue_id, e.actor_id, e.event_type, e.created_at,
+               u.username AS actor_name,
+               u.avatar_url AS actor_avatar_url, u.avatar_color AS actor_avatar_color
+        FROM task_issue_event e
+        INNER JOIN "user" u ON e.actor_id = u.user_id
+        WHERE e.issue_id = :issue_id
+        ORDER BY e.created_at ASC, e.event_id ASC
+    """), {'issue_id': issue_id})
+    return [dict(r._mapping) for r in result.fetchall()]
+
+
+async def transition_status(issue_id: int, target_status: str, db: AsyncSession) -> bool:
+    """조건부 상태 전환. 실제로 바뀌면 True (동시/중복 호출 안전).
+
+    WHERE status != target 덕에 동시 요청 중 한쪽만 0이 아닌 행을 갱신한다.
+    """
+    result = await db.execute(text("""
+        UPDATE task_issue SET status = :target, updated_at = NOW()
+        WHERE issue_id = :issue_id AND status != :target
+        RETURNING issue_id
+    """), {'issue_id': issue_id, 'target': target_status})
+    return result.fetchone() is not None

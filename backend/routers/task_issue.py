@@ -41,6 +41,18 @@ async def delete_issue(branch_id: int, task_id: int, issue_id: int,
     return await controller.delete_issue(branch_id, task_id, issue_id, request, session)
 
 
+@router.post("/{issue_id}/close", summary="이슈 닫기(+선택 댓글)", dependencies=[Depends(require_login)])
+async def close_issue(branch_id: int, task_id: int, issue_id: int, body: schema.IssueTransition,
+                      request: Request, session: AsyncSession = Depends(db.session)):
+    return await controller.close_issue(body, branch_id, task_id, issue_id, request, session)
+
+
+@router.post("/{issue_id}/reopen", summary="이슈 다시 열기(+선택 댓글)", dependencies=[Depends(require_login)])
+async def reopen_issue(branch_id: int, task_id: int, issue_id: int, body: schema.IssueTransition,
+                       request: Request, session: AsyncSession = Depends(db.session)):
+    return await controller.reopen_issue(body, branch_id, task_id, issue_id, request, session)
+
+
 # -- 댓글 --
 
 @router.post("/{issue_id}/comments", summary="댓글 추가", dependencies=[Depends(require_login)])

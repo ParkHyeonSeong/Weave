@@ -79,3 +79,18 @@ class CommentUpdate(BaseModel):
         if len(v) > 10000:
             raise ValueError('content must be 10000 characters or less')
         return v
+
+
+class IssueTransition(BaseModel):
+    comment: Optional[str] = None
+
+    @field_validator('comment')
+    @classmethod
+    def validate_comment(cls, v):
+        if v is None:
+            return v
+        if is_empty_html(v):
+            raise ValueError('comment cannot be empty')
+        if len(v) > 10000:
+            raise ValueError('comment must be 10000 characters or less')
+        return v
