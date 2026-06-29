@@ -4,7 +4,7 @@ Exposes Weave project-management tools (tasks, sprints, epics, issues, docs, and
 Claude sessions over MCP (stdio). Talks to Weave's REST API only — the Weave backend is not
 modified. Each tool acts as the token's owner; `?` marks optional arguments.
 
-## Tools (182)
+## Tools (184)
 
 > The authoritative, always-current description of each tool is its docstring in
 > `weave_mcp/tools/*.py` (that's what the model reads). This list is the human-readable overview.
@@ -60,6 +60,7 @@ modified. Each tool acts as the token's owner; `?` marks optional arguments.
 - `create_task_issue(branch_id, task_id, title, body?)`
 - `update_task_issue(branch_id, task_id, issue_id, title?, body?, status?)`
 - `delete_task_issue(branch_id, task_id, issue_id)`
+- `close_task_issue(branch_id, task_id, issue_id, comment?)` · `reopen_task_issue(branch_id, task_id, issue_id, comment?)` — GitHub-style close/reopen, optionally post a comment in the same action
 - `add_issue_comment(branch_id, task_id, issue_id, content)` · `update_issue_comment(..., comment_id, content)` · `delete_issue_comment(..., comment_id)` — comments are read via `get_task_issue`
 
 **Dependencies**

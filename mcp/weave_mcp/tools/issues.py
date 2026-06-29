@@ -101,3 +101,29 @@ async def delete_issue_comment(
         "DELETE",
         f"/api/branches/{branch_id}/tasks/{task_id}/issues/{issue_id}/comments/{comment_id}",
     )
+
+
+@mcp.tool
+async def close_task_issue(
+    branch_id: int, task_id: int, issue_id: int, comment: str | None = None
+) -> Any:
+    """Close a task issue. Optionally post a comment in the same action (GitHub-style
+    close-with-comment). comment is non-empty HTML (max 10000 chars) when given."""
+    payload = {} if comment is None else {"comment": comment}
+    return await get_client().call_json(
+        "POST", f"/api/branches/{branch_id}/tasks/{task_id}/issues/{issue_id}/close",
+        json=payload,
+    )
+
+
+@mcp.tool
+async def reopen_task_issue(
+    branch_id: int, task_id: int, issue_id: int, comment: str | None = None
+) -> Any:
+    """Reopen a closed task issue. Optionally post a comment in the same action.
+    comment is non-empty HTML (max 10000 chars) when given."""
+    payload = {} if comment is None else {"comment": comment}
+    return await get_client().call_json(
+        "POST", f"/api/branches/{branch_id}/tasks/{task_id}/issues/{issue_id}/reopen",
+        json=payload,
+    )

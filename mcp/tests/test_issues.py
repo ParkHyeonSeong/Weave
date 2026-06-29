@@ -89,3 +89,37 @@ async def test_delete_issue_comment(fake_client):
     fake_client.call_json.assert_awaited_once_with(
         "DELETE", "/api/branches/1/tasks/2/issues/3/comments/5"
     )
+
+
+async def test_close_task_issue_no_comment(fake_client):
+    fake_client.call_json.return_value = {"status": True}
+    async with Client(_app.mcp) as client:
+        await client.call_tool(
+            "close_task_issue", {"branch_id": 1, "task_id": 2, "issue_id": 3}
+        )
+    fake_client.call_json.assert_awaited_once_with(
+        "POST", "/api/branches/1/tasks/2/issues/3/close", json={}
+    )
+
+
+async def test_close_task_issue_with_comment(fake_client):
+    fake_client.call_json.return_value = {"status": True}
+    async with Client(_app.mcp) as client:
+        await client.call_tool(
+            "close_task_issue",
+            {"branch_id": 1, "task_id": 2, "issue_id": 3, "comment": "<p>done</p>"},
+        )
+    fake_client.call_json.assert_awaited_once_with(
+        "POST", "/api/branches/1/tasks/2/issues/3/close", json={"comment": "<p>done</p>"}
+    )
+
+
+async def test_reopen_task_issue(fake_client):
+    fake_client.call_json.return_value = {"status": True}
+    async with Client(_app.mcp) as client:
+        await client.call_tool(
+            "reopen_task_issue", {"branch_id": 1, "task_id": 2, "issue_id": 3}
+        )
+    fake_client.call_json.assert_awaited_once_with(
+        "POST", "/api/branches/1/tasks/2/issues/3/reopen", json={}
+    )
