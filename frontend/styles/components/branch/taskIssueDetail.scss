@@ -409,6 +409,27 @@
     border-top: 1px solid $color-border;
   }
 
+  &__EventRow {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: $space-1 $space-1 $space-1 44px;
+    color: $color-text-secondary;
+    font-size: $font-size-sm;
+  }
+
+  &__EventIcon {
+    flex-shrink: 0;
+
+    &--closed { color: #9333EA; }
+    &--reopened { color: #16A34A; }
+  }
+
+  &__EventText strong {
+    color: $color-text;
+    font-weight: $font-weight-medium;
+  }
+
   &__StatusToggle {
     display: flex;
     align-items: center;

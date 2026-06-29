@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/router';
-import { Search, Bell, Settings, Shield, AtSign, UserPlus, AlertCircle, MessageSquare, CheckCircle2, Menu, User, LogOut } from 'lucide-react';
+import { Search, Bell, Settings, Shield, AtSign, UserPlus, AlertCircle, MessageSquare, CheckCircle2, CircleDot, Menu, User, LogOut } from 'lucide-react';
 import { formatMessageTime } from '@/library/formatTime';
 import { LOGIN_PATH } from '@/library/authRedirect';
 import AppSwitcher from './AppSwitcher';
@@ -13,6 +13,8 @@ const NOTI_ICONS = {
   task_assigned: UserPlus,
   issue_created: AlertCircle,
   issue_comment: MessageSquare,
+  issue_closed: CheckCircle2,
+  issue_reopened: CircleDot,
   task_status_changed: CheckCircle2,
 };
 
@@ -26,6 +28,8 @@ const NOTI_TYPE_META = {
   task_status_changed: { group: 'task',    label: '상태' },
   issue_created:       { group: 'issue',   label: '이슈' },
   issue_comment:       { group: 'issue',   label: '댓글' },
+  issue_closed:        { group: 'issue',   label: '닫힘' },
+  issue_reopened:      { group: 'issue',   label: '재개' },
 };
 
 // 알림 title은 항상 "{actor_name}님이 …" 템플릿으로 생성되는데, 같은 이름이

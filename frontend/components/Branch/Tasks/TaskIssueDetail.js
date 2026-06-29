@@ -15,6 +15,8 @@ export default function TaskIssueDetail() {
 
   const [issue, setIssue] = useState(null);
   const [comments, setComments] = useState([]);
+  const [timeline, setTimeline] = useState([]);
+  const [composerEmpty, setComposerEmpty] = useState(true);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -54,6 +56,7 @@ export default function TaskIssueDetail() {
       if (res.data.status) {
         setIssue(res.data.issue);
         setComments(res.data.comments || []);
+        setTimeline(res.data.timeline || []);
       }
     } catch {}
     setLoading(false);
@@ -63,18 +66,26 @@ export default function TaskIssueDetail() {
     fetchIssue();
   }, [branchId, taskId, issueId]);
 
-  // 상태 토글
-  const toggleStatus = async () => {
-    const newStatus = issue.status === 'open' ? 'closed' : 'open';
+  // 상태 전환 (+선택 댓글) — close/reopen 공통
+  const transition = async (kind) => {            // kind: 'close' | 'reopen'
+    if (submitting) return;
+    // 클릭 시점에 에디터를 직접 읽어 composerEmpty stale state 리스크 제거
+    const isEmpty = newCommentRef.current?.isEmpty() ?? true;
+    const html = isEmpty ? null : newCommentRef.current?.getHTML();
+    setSubmitting(true);
     try {
-      const res = await axios.patch(`/branches/${branchId}/tasks/${taskId}/issues/${issueId}`, {
-        status: newStatus,
-      });
+      const res = await axios.post(
+        `/branches/${branchId}/tasks/${taskId}/issues/${issueId}/${kind}`,
+        html ? { comment: html } : {}
+      );
       if (res.data.status) {
-        setIssue((prev) => ({ ...prev, status: newStatus }));
+        newCommentRef.current?.clearContent();
+        setComposerEmpty(true);
+        fetchIssue();
         window.dispatchEvent(new Event('issue:updated'));
       }
     } catch {}
+    setSubmitting(false);
   };
 
   // 제목 저장
@@ -127,6 +138,7 @@ export default function TaskIssueDetail() {
       });
       if (res.data.status) {
         newCommentRef.current?.clearContent();
+        setComposerEmpty(true);
         fetchIssue();
       }
     } catch {}
@@ -150,6 +162,7 @@ export default function TaskIssueDetail() {
             : c
           )
         );
+        setTimeline((prev) => prev.map((t) => (t.kind === 'comment' && t.comment_id === commentId) ? { ...t, content: html, updated_at: new Date().toISOString() } : t));
       }
     } catch {}
     setEditingCommentId(null);
@@ -163,6 +176,7 @@ export default function TaskIssueDetail() {
       );
       if (res.data.status) {
         setComments((prev) => prev.filter((c) => c.comment_id !== commentId));
+        setTimeline((prev) => prev.filter((t) => !(t.kind === 'comment' && t.comment_id === commentId)));
       }
     } catch {}
   };
@@ -318,14 +332,28 @@ export default function TaskIssueDetail() {
           </div>
         </div>
 
-        {/* 댓글 */}
-        {comments.map((comment) => {
+        {/* 타임라인: 댓글 + 상태 이벤트 (백엔드 정렬) */}
+        {timeline.map((item) => {
+          if (item.kind === 'event') {
+            return (
+              <div key={`ev-${item.event_id}`} className="IssueDetail__EventRow">
+                {item.event_type === 'closed'
+                  ? <XCircle size={14} className="IssueDetail__EventIcon IssueDetail__EventIcon--closed" />
+                  : <CircleDot size={14} className="IssueDetail__EventIcon IssueDetail__EventIcon--reopened" />}
+                <span className="IssueDetail__EventText">
+                  <strong>{item.actor_name}</strong>
+                  {item.event_type === 'closed' ? ' 님이 이슈를 닫음' : ' 님이 이슈를 다시 엶'}
+                  {' '}&middot; {formatDate(item.created_at)}
+                </span>
+              </div>
+            );
+          }
+          const comment = item;
           const isCommentAuthor = myProfile.user_id === comment.author_id;
           const isEditingThis = editingCommentId === comment.comment_id;
           const isIssueAuthor = comment.author_id === issue.created_by;
-
           return (
-            <div key={comment.comment_id} className="IssueDetail__TimelineItem">
+            <div key={`c-${comment.comment_id}`} className="IssueDetail__TimelineItem">
               <Avatar
                 name={comment.author_name}
                 userId={comment.author_id}
@@ -391,21 +419,25 @@ export default function TaskIssueDetail() {
             placeholder="Leave a comment..."
             minHeight={100}
             branchId={branchId}
+            onChange={(empty) => setComposerEmpty(empty)}
           />
           <div className="IssueDetail__ReplyActions">
             <button
               type="button"
               className={`IssueDetail__StatusToggle IssueDetail__StatusToggle--${issue.status === 'open' ? 'close' : 'reopen'}`}
-              onClick={toggleStatus}
+              onClick={() => transition(issue.status === 'open' ? 'close' : 'reopen')}
+              disabled={submitting}
             >
               {issue.status === 'open' ? <XCircle size={14} /> : <CircleDot size={14} />}
-              {issue.status === 'open' ? 'Close issue' : 'Reopen issue'}
+              {issue.status === 'open'
+                ? (composerEmpty ? 'Close issue' : 'Close with comment')
+                : (composerEmpty ? 'Reopen issue' : 'Comment and reopen')}
             </button>
             <button
               type="button"
               className="IssueDetail__ReplySubmit"
               onClick={handleAddComment}
-              disabled={submitting}
+              disabled={submitting || composerEmpty}
             >
               {submitting ? 'Commenting...' : 'Comment'}
             </button>

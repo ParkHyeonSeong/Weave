@@ -37,7 +37,7 @@ const makeBaseExtensions = (placeholder) => [
   MermaidExtension,
 ];
 
-const IssueEditor = forwardRef(({ content, placeholder, minHeight = 150, branchId }, ref) => {
+const IssueEditor = forwardRef(({ content, placeholder, minHeight = 150, branchId, onChange }, ref) => {
   const extensions = useMemo(() => {
     const ext = makeBaseExtensions(placeholder);
     ext.push(MentionNode.configure({ branchId }));
@@ -67,6 +67,7 @@ const IssueEditor = forwardRef(({ content, placeholder, minHeight = 150, branchI
     immediatelyRender: false,
     extensions,
     content: content || '',
+    onUpdate: ({ editor }) => onChange?.(editor.isEmpty),
   });
 
   // 칩 하이드레이션: 마운트 직후 + 탭 내 태스크 변경 시
