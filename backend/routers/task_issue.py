@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Request, Depends, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .schema import task_issue as schema
@@ -42,14 +42,18 @@ async def delete_issue(branch_id: int, task_id: int, issue_id: int,
 
 
 @router.post("/{issue_id}/close", summary="이슈 닫기(+선택 댓글)", dependencies=[Depends(require_login)])
-async def close_issue(branch_id: int, task_id: int, issue_id: int, body: schema.IssueTransition,
-                      request: Request, session: AsyncSession = Depends(db.session)):
+async def close_issue(branch_id: int, task_id: int, issue_id: int,
+                      request: Request, session: AsyncSession = Depends(db.session),
+                      body: schema.IssueTransition = Body(default_factory=schema.IssueTransition)):
+    # body는 선택 — 댓글 없이 닫을 땐 빈 body/no-body 모두 허용 (GitHub식)
     return await controller.close_issue(body, branch_id, task_id, issue_id, request, session)
 
 
 @router.post("/{issue_id}/reopen", summary="이슈 다시 열기(+선택 댓글)", dependencies=[Depends(require_login)])
-async def reopen_issue(branch_id: int, task_id: int, issue_id: int, body: schema.IssueTransition,
-                       request: Request, session: AsyncSession = Depends(db.session)):
+async def reopen_issue(branch_id: int, task_id: int, issue_id: int,
+                       request: Request, session: AsyncSession = Depends(db.session),
+                       body: schema.IssueTransition = Body(default_factory=schema.IssueTransition)):
+    # body는 선택 — 댓글 없이 다시 열 땐 빈 body/no-body 모두 허용
     return await controller.reopen_issue(body, branch_id, task_id, issue_id, request, session)
 
 
