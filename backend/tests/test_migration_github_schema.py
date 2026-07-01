@@ -124,3 +124,26 @@ async def test_github_webhook_event_partial_claimable_index(db_session):
     defn = rows.scalar_one_or_none()
     assert defn is not None
     assert "WHERE" in defn.upper() and "pending" in defn and "failed" in defn
+
+
+async def test_user_is_system_column(db_session):
+    cols = await _columns(db_session, "user")
+    assert "is_system" in cols
+    assert cols["is_system"].data_type == "boolean"
+    assert cols["is_system"].is_nullable == "NO"
+    assert cols["is_system"].column_default is not None and "false" in cols["is_system"].column_default.lower()
+
+
+async def test_github_bot_seeded(db_session):
+    row = await db_session.execute(text("""
+        SELECT user_id, is_system, status FROM "user"
+        WHERE email = 'github-bot@weave.local'
+    """))
+    bot = row.fetchone()
+    assert bot is not None
+    assert bot.is_system is True
+    # exactly one bot
+    cnt = await db_session.execute(text("""
+        SELECT COUNT(*) FROM "user" WHERE email = 'github-bot@weave.local'
+    """))
+    assert cnt.scalar_one() == 1
