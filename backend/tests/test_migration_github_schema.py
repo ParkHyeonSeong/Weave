@@ -78,3 +78,49 @@ async def test_task_github_ref_partial_unique_indexes(db_session):
     assert "sha" in defs["uq_tgr_commit"] and "'commit'" in defs["uq_tgr_commit"]
     # duplicate-PR upsert (same task/repo/number → UPDATE not INSERT) is exercised
     # against a seeded task in Slice 4 Task 4.4 (upsert_pr).
+
+
+async def test_github_webhook_event_table_exists(db_session):
+    reg = await db_session.execute(text("SELECT to_regclass('public.github_webhook_event')"))
+    assert reg.scalar_one() is not None
+
+
+async def test_github_webhook_event_columns(db_session):
+    cols = await _columns(db_session, "github_webhook_event")
+    assert cols["delivery_id"].is_nullable == "NO"
+    assert cols["event_type"].is_nullable == "NO"
+    assert cols["payload"].data_type == "jsonb"
+    assert cols["status"].is_nullable == "NO"
+    assert cols["status"].column_default is not None and "pending" in cols["status"].column_default
+    assert cols["attempts"].is_nullable == "NO"
+    assert cols["locked_at"].is_nullable == "YES"
+    assert cols["processed_at"].is_nullable == "YES"
+    assert cols["last_error"].is_nullable == "YES"
+
+
+async def test_github_webhook_event_delivery_id_unique(db_session):
+    # the UNIQUE on delivery_id is what blocks GitHub redelivery (row dup)
+    from sqlalchemy.exc import IntegrityError
+    await db_session.execute(text("""
+        INSERT INTO github_webhook_event (delivery_id, event_type, payload)
+        VALUES ('dup-1', 'pull_request', '{}'::jsonb)
+    """))
+    try:
+        await db_session.execute(text("""
+            INSERT INTO github_webhook_event (delivery_id, event_type, payload)
+            VALUES ('dup-1', 'pull_request', '{}'::jsonb)
+        """))
+        inserted_twice = True
+    except IntegrityError:
+        inserted_twice = False
+    assert inserted_twice is False
+
+
+async def test_github_webhook_event_partial_claimable_index(db_session):
+    rows = await db_session.execute(text("""
+        SELECT indexdef FROM pg_indexes
+        WHERE tablename = 'github_webhook_event' AND indexname = 'idx_ghwe_claimable'
+    """))
+    defn = rows.scalar_one_or_none()
+    assert defn is not None
+    assert "WHERE" in defn.upper() and "pending" in defn and "failed" in defn
