@@ -36,3 +36,26 @@ async def insert(delivery_id: str, event_type: str, payload: dict, db: AsyncSess
         return dict(row._mapping)
     except IntegrityError:
         return None
+
+
+async def claim_one(db: AsyncSession, max_attempts: int = 5) -> dict | None:
+    """미처리(pending/failed, attempts<max) 또는 죽은 락(processing>5분) 행 1개를
+    단일승자로 잡아 processing으로 옮기고 반환. 동시 워커는 FOR UPDATE SKIP LOCKED로
+    같은 행을 건너뛴다. 잡을 게 없으면 None."""
+    result = await db.execute(text("""
+        UPDATE github_webhook_event
+        SET status='processing', locked_at=NOW(), attempts=attempts+1
+        WHERE event_id = (
+            SELECT event_id FROM github_webhook_event
+            WHERE (status IN ('pending', 'failed') AND attempts < :max_attempts
+                   AND (next_attempt_at IS NULL OR next_attempt_at <= NOW()))
+               OR (status = 'processing' AND attempts < :max_attempts
+                   AND locked_at < NOW() - INTERVAL '5 minutes')
+            ORDER BY received_at
+            FOR UPDATE SKIP LOCKED
+            LIMIT 1
+        )
+        RETURNING event_id, delivery_id, event_type, payload, attempts
+    """), {'max_attempts': max_attempts})
+    row = result.fetchone()
+    return dict(row._mapping) if row else None
