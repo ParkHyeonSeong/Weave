@@ -4,6 +4,8 @@ Style: 모델 직접 호출, rollback-isolated db_session 픽스처. 동시성(S
 검증은 단일 트랜잭션 안에서 같은 행 재획득 불가/죽은 락 재획득을 raw UPDATE로
 타임스탬프를 back-dating해 결정적으로 재현한다.
 """
+from datetime import datetime, timezone
+
 from sqlalchemy import text
 
 from core.model import github_webhook_event as ghwe_model
@@ -65,6 +67,7 @@ async def test_second_claim_does_not_return_same_row(db_session):
     first = await ghwe_model.claim_one(db_session)
     second = await ghwe_model.claim_one(db_session)
     # 첫 claim이 잡은 행은 processing이라 두 번째는 다른 행(또는 없음)
+    assert second is not None  # 큐에 행이 2개라 두 번째도 잡혀야 함
     assert first["event_id"] != second["event_id"]
     assert {first["event_id"], second["event_id"]} == {a["event_id"], b["event_id"]}
     # 큐가 비면 None
@@ -131,12 +134,17 @@ async def test_mark_done(db_session):
 
 async def test_mark_failed_records_error(db_session):
     inserted = await ghwe_model.insert("d-fail", "push", {}, db_session)
+    before = datetime.now(timezone.utc)
     await ghwe_model.claim_one(db_session)
     await ghwe_model.mark_failed(inserted["event_id"], "boom", db_session)
     res = await db_session.execute(text(
-        "SELECT status, last_error, attempts FROM github_webhook_event WHERE event_id = :e"
+        "SELECT status, last_error, attempts, next_attempt_at"
+        " FROM github_webhook_event WHERE event_id = :e"
     ), {"e": inserted["event_id"]})
     row = res.fetchone()
     assert row.status == "failed"
     assert row.last_error == "boom"
     assert row.attempts == 1  # claim에서 1로 올랐고 mark_failed는 안 건드림
+    # 백오프: next_attempt_at은 반드시 미래여야 즉시 재소비가 차단된다
+    assert row.next_attempt_at is not None
+    assert row.next_attempt_at > before  # TIMESTAMPTZ → tz-aware 비교
