@@ -1,15 +1,17 @@
 import { useState } from 'react';
-import { Settings, Users, Layers, GitBranch } from 'lucide-react';
+import { Settings, Users, Layers, GitBranch, Github } from 'lucide-react';
 import SettingsGeneral from './SettingsGeneral';
 import SettingsMembers from './SettingsMembers';
 import SettingsTaskTypes from './SettingsTaskTypes';
 import SettingsWorkflow from './SettingsWorkflow';
+import SettingsGithubIntegration from './SettingsGithubIntegration';
 
 const SUB_TABS = [
   { key: 'general', label: 'General', icon: Settings },
   { key: 'members', label: 'Members', icon: Users },
   { key: 'task_types', label: 'Task Types', icon: Layers },
   { key: 'workflow', label: 'Workflow', icon: GitBranch },
+  { key: 'github', label: 'GitHub', icon: Github, adminOnly: true },  // GitHub 설정은 admin만
 ];
 
 export default function BranchSettings({ branchId, branch, myRole, onBranchUpdated }) {
@@ -20,7 +22,7 @@ export default function BranchSettings({ branchId, branch, myRole, onBranchUpdat
     <div className="BranchSettings">
       {/* 서브탭 */}
       <div className="BranchSettings__SubTabs">
-        {SUB_TABS.map(({ key, label, icon: Icon }) => (
+        {SUB_TABS.filter((tab) => !tab.adminOnly || isAdmin).map(({ key, label, icon: Icon }) => (
           <button
             key={key}
             className={`BranchSettings__SubTab ${activeSubTab === key ? 'BranchSettings__SubTab--active' : ''}`}
@@ -51,6 +53,9 @@ export default function BranchSettings({ branchId, branch, myRole, onBranchUpdat
         )}
         {activeSubTab === 'workflow' && (
           <SettingsWorkflow branchId={branchId} isAdmin={isAdmin} />
+        )}
+        {activeSubTab === 'github' && isAdmin && (
+          <SettingsGithubIntegration key={branchId} branchId={branchId} isAdmin={isAdmin} />
         )}
       </div>
     </div>
