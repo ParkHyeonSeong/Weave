@@ -75,6 +75,7 @@ async def search_non_members(board_id: int, query: str, db: AsyncSession):
         FROM "user" u
         WHERE u.status = 'active'
           AND u.deleted_at IS NULL
+          AND u.is_system = FALSE
           AND u.user_id NOT IN (SELECT user_id FROM scrum_member WHERE board_id = :board_id)
           AND (u.username ILIKE :q OR u.email ILIKE :q)
         ORDER BY u.username
