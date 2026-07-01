@@ -1,0 +1,177 @@
+@use 'sass:color';
+@use '../../variables' as *;
+
+.SettingsGithub {
+  display: flex;
+  flex-direction: column;
+  gap: $space-3;
+  max-width: 640px;
+
+  &__Intro {
+    display: flex;
+    align-items: flex-start;
+    gap: $space-2;
+    padding: $space-3 $space-4;
+    font-size: $font-size-sm;
+    line-height: 1.5;
+    color: $color-text-secondary;
+    background: $color-surface;
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+
+    code {
+      font-size: $font-size-xs;
+      background: $color-code-bg;
+      color: $color-code-text;
+      padding: 1px 5px;
+      border-radius: $radius-sm;
+    }
+  }
+
+  &__Empty {
+    padding: $space-4;
+    text-align: center;
+    font-size: $font-size-sm;
+    color: $color-text-tertiary;
+    border: 1px dashed $color-border;
+    border-radius: $radius-lg;
+  }
+
+  &__List {
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+    overflow: hidden;
+  }
+
+  &__Item {
+    display: flex;
+    align-items: center;
+    gap: $space-3;
+    padding: $space-3 $space-4;
+    border-bottom: 1px solid $color-border;
+
+    &:last-child { border-bottom: none; }
+    &:hover { background: $color-surface; }
+  }
+
+  &__ItemInfo {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__Repo {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-text;
+  }
+
+  &__InstId {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+  }
+
+  &__State {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    padding: 1px 8px;
+    border-radius: 9999px;
+    flex-shrink: 0;
+
+    &--on {
+      color: $color-success;
+      background: $color-success-bg;
+    }
+    &--off {
+      color: $color-text-secondary;
+      background: $color-surface;
+    }
+  }
+
+  &__ItemActions {
+    display: flex;
+    gap: $space-1;
+    flex-shrink: 0;
+  }
+
+  &__ActionBtn {
+    padding: $space-1;
+    color: $color-text-tertiary;
+    border-radius: $radius-sm;
+    transition: all $transition-fast;
+
+    &:hover { color: $color-text; background: $color-surface-hover; }
+    &--danger:hover { color: $color-error; background: $color-error-bg; }
+  }
+
+  &__AddForm {
+    display: flex;
+    flex-direction: column;
+    gap: $space-2;
+    padding: $space-4;
+    border: 1px dashed $color-border;
+    border-radius: $radius-lg;
+  }
+
+  &__Input {
+    padding: $space-2 $space-3;
+    font-size: $font-size-sm;
+    color: $color-text;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    outline: none;
+    background: $color-bg;
+
+    &:focus { border-color: $color-primary; box-shadow: $shadow-focus; }
+    &::placeholder { color: $color-text-tertiary; }
+  }
+
+  &__Error {
+    font-size: $font-size-xs;
+    color: $color-error;
+  }
+
+  &__AddActions {
+    display: flex;
+    gap: $space-2;
+  }
+
+  &__SubmitBtn {
+    padding: $space-2 $space-4;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-text-inverse;
+    background: $color-primary;
+    border-radius: $radius-md;
+    transition: background $transition-fast;
+
+    &:hover:not(:disabled) { background: $color-primary-hover; }
+    &:disabled { opacity: 0.6; cursor: not-allowed; }
+  }
+
+  &__CancelBtn {
+    padding: $space-2 $space-4;
+    font-size: $font-size-sm;
+    color: $color-text-secondary;
+    border-radius: $radius-md;
+    transition: all $transition-fast;
+
+    &:hover { background: $color-surface-hover; }
+  }
+
+  &__AddBtn {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: $space-2 $space-3;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-text-secondary;
+    border-radius: $radius-md;
+    transition: all $transition-fast;
+
+    &:hover { color: $color-primary; background: $color-primary-subtle; }
+  }
+}
