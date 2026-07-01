@@ -10,6 +10,7 @@ _COLS = (
 async def create(branch_id: int, repo_full_name: str, installation_id: int,
                  created_by: int, db: AsyncSession) -> dict:
     """브랜치-레포 연결 생성."""
+    repo_full_name = repo_full_name.lower()
     result = await db.execute(text(f"""
         INSERT INTO github_integration (branch_id, repo_full_name, installation_id, created_by)
         VALUES (:branch_id, :repo_full_name, :installation_id, :created_by)

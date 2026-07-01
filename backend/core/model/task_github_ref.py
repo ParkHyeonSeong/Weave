@@ -11,6 +11,7 @@ async def upsert_pr(task_id: int, repo_full_name: str, ref_number: int, sha,
                     title, state, html_url: str, linked_by, db: AsyncSession) -> dict:
     """PR 링크 upsert. (task_id, repo_full_name, ref_number) 부분유니크 키로 충돌 시
     state/title/url/last_synced_at만 갱신(linked_by/linked_at는 보존)."""
+    repo_full_name = repo_full_name.lower()
     result = await db.execute(text(f"""
         INSERT INTO task_github_ref
             (task_id, repo_full_name, ref_type, ref_number, sha, title, state,
@@ -44,6 +45,7 @@ async def create(task_id: int, repo_full_name: str, ref_type: str, ref_number,
                  sha, title, state, html_url: str, created_by: int,
                  db: AsyncSession) -> dict:
     """수동 ref 생성 (linked_by=수동 연결 유저)."""
+    repo_full_name = repo_full_name.lower()
     result = await db.execute(text(f"""
         INSERT INTO task_github_ref
             (task_id, repo_full_name, ref_type, ref_number, sha, title, state,

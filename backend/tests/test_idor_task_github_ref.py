@@ -353,3 +353,62 @@ async def test_link_repo_not_connected(db_session):
     body = schema.RefLinkCreate(html_url="https://github.com/org/unconnected/pull/1")
     res = await ref_ctrl.link_ref(body, branch_a, task_a, _req(alice), db_session)
     assert res["status"] is False and res["code"] == "REPO_NOT_CONNECTED"
+
+
+# ---------------------------------------------------------------------------
+# P2 data-integrity: repo_full_name case-variant duplicates
+# ---------------------------------------------------------------------------
+
+
+async def test_create_integration_case_variant_is_duplicate(db_session):
+    """조회는 LOWER 매칭이지만 저장은 대소문자 보존이었던 버그: Org/Repo와 org/repo가
+    같은 브랜치에 둘 다 연결될 수 있었다. 모델 write 시 소문자 정규화 후에는
+    두 번째 연결이 기존 UNIQUE(branch_id, repo_full_name)에 부딪혀 DUPLICATE_LINK."""
+    admin = await _make_user(db_session, "ghcase@gh.test", "ghcase")
+    b = await _make_branch(db_session, admin, key="GHCS")
+    await _add_member(db_session, b, admin, "admin")
+
+    first = await int_ctrl.create_integration(
+        schema.IntegrationCreate(repo_full_name="Org/Repo", installation_id=11),
+        b, _req(admin), db_session)
+    assert first["status"] is True
+    assert first["integration"]["repo_full_name"] == "org/repo"  # normalized
+
+    dup = await int_ctrl.create_integration(
+        schema.IntegrationCreate(repo_full_name="org/repo", installation_id=11),
+        b, _req(admin), db_session)
+    assert dup["status"] is False and dup["code"] == "DUPLICATE_LINK"
+
+    rows = await ghi.find_by_branch(b, db_session)
+    assert len(rows) == 1
+
+
+async def test_link_case_variant_pr_is_duplicate(db_session, monkeypatch):
+    """같은 PR을 URL 케이스만 바꿔 수동 link하면 두 번째가 정규화된
+    uq_tgr_pr(task_id, repo_full_name, ref_number)에 부딪혀 DUPLICATE_LINK."""
+    alice = await _make_user(db_session, "ghlc@gh.test", "ghlc")
+    b = await _make_branch(db_session, alice, name="A", key="GHLC")
+    await _add_member(db_session, b, alice, "member")
+    task_a = await _make_task(db_session, b, alice, title="t")
+    await ghi.create(b, "org/repo", 123, alice, db_session)  # repo가 연결돼 있어야 함
+
+    monkeypatch.setattr(ref_ctrl.config, "GITHUB_APP_ID", "1")
+    monkeypatch.setattr(ref_ctrl.config, "GITHUB_APP_PRIVATE_KEY", "stub_key")
+    monkeypatch.setattr(github_app, "fetch_pull_request",
+                        _async_pr(number=9, title="Hi", state="open", merged=False,
+                                  merge_commit_sha=None,
+                                  html_url="https://github.com/Org/Repo/pull/9"))
+
+    first = await ref_ctrl.link_ref(
+        schema.RefLinkCreate(html_url="https://github.com/Org/Repo/pull/9"),
+        b, task_a, _req(alice), db_session)
+    assert first["status"] is True
+    assert first["ref"]["repo_full_name"] == "org/repo"  # normalized
+
+    dup = await ref_ctrl.link_ref(
+        schema.RefLinkCreate(html_url="https://github.com/org/repo/pull/9"),
+        b, task_a, _req(alice), db_session)
+    assert dup["status"] is False and dup["code"] == "DUPLICATE_LINK"
+
+    refs = await tgr.find_by_task(task_a, db_session)
+    assert len(refs) == 1
