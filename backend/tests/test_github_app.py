@@ -3,11 +3,10 @@
 Covers webhook signature verification (HMAC-SHA256 / compare_digest), App JWT
 (RS256), and installation-token minting/caching. Later tasks append to this file.
 """
-import base64
 import hashlib
 import hmac
-import json
 import time
+from datetime import datetime, timedelta, timezone
 
 import httpx
 import jwt
@@ -101,7 +100,7 @@ def test_app_jwt_claims_have_backdated_iat_and_bounded_exp(monkeypatch, rsa_keyp
     before = int(time.time())
     token = github_app.app_jwt()
     # Decode without verifying exp/iat to inspect raw claims.
-    claims = jwt.decode(token, options={"verify_signature": False})
+    claims = jwt.decode(token, options={"verify_signature": False}, algorithms=["RS256"])
     # iat backdated ~60s to absorb clock skew (GitHub rejects future-iat).
     assert claims["iat"] <= before - 30
     # exp must be within GitHub's 10-minute hard cap.
@@ -116,9 +115,6 @@ def test_app_jwt_raises_when_private_key_unset(monkeypatch):
 
 
 # ── Task 4: installation_token (httpx + cache) ──────────────────────────
-from datetime import datetime, timedelta, timezone
-
-
 def _iso_in(seconds: int) -> str:
     # GitHub returns expires_at like "2026-06-26T12:00:00Z".
     dt = datetime.now(timezone.utc) + timedelta(seconds=seconds)
@@ -214,8 +210,6 @@ def _async_return(value):
 
 
 async def test_fetch_pull_request_returns_json(monkeypatch):
-    import httpx
-    from library import github_app
     captured = {}
 
     def handler(request):
@@ -235,8 +229,6 @@ async def test_fetch_pull_request_returns_json(monkeypatch):
 
 
 async def test_fetch_pull_request_non_200_returns_none(monkeypatch):
-    import httpx
-    from library import github_app
     monkeypatch.setattr(github_app, "installation_token", _async_return("ghs_tok"))
     monkeypatch.setattr(github_app, "_github_client",
                         lambda: httpx.AsyncClient(
