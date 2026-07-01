@@ -34,26 +34,19 @@ GATE_TO_ALLOWED_CATEGORIES = {
 
 
 async def _other_active_pr_exists(task_id: int, this_ref_id, db: AsyncSession) -> bool:
-    """이 PR(this_ref_id) 외에 state in (open, merged)인 PR 링크가 남아있는지."""
-    if this_ref_id is None:
-        result = await db.execute(text("""
-            SELECT EXISTS (
-                SELECT 1 FROM task_github_ref
-                WHERE task_id = :task_id
-                  AND ref_type = 'pull_request'
-                  AND state IN ('open', 'merged')
-            )
-        """), {'task_id': task_id})
-    else:
-        result = await db.execute(text("""
-            SELECT EXISTS (
-                SELECT 1 FROM task_github_ref
-                WHERE task_id = :task_id
-                  AND ref_type = 'pull_request'
-                  AND state IN ('open', 'merged')
-                  AND ref_id != :this_ref_id
-            )
-        """), {'task_id': task_id, 'this_ref_id': this_ref_id})
+    """이 PR(this_ref_id) 외에 state in (open, merged)인 PR 링크가 남아있는지.
+
+    this_ref_id=None이면 모든 활성 PR을 검사한다(제외 없음).
+    """
+    result = await db.execute(text("""
+        SELECT EXISTS (
+            SELECT 1 FROM task_github_ref
+            WHERE task_id = :task_id
+              AND ref_type = 'pull_request'
+              AND state IN ('open', 'merged')
+              AND (CAST(:this_ref_id AS BIGINT) IS NULL OR ref_id != :this_ref_id)
+        )
+    """), {'task_id': task_id, 'this_ref_id': this_ref_id})
     return bool(result.scalar_one())
 
 
@@ -65,6 +58,13 @@ async def transition(task_id: int, branch_id: int, gate: str, actor_id: int,
       {'status': True, 'moved': True}  — 실제 이동(부수효과 발사됨)
       {'status': True, 'moved': False} — 선조건 불일치/목표 category 없음/close 차단(skip)
       error_response(INVALID_STATUS_TRANSITION) — gate가 미지(방어용)
+
+    [호출부 계약 — close 게이트]
+    gate='close'로 호출하기 전에 웹훅 dispatch는 반드시 이 PR의 상태를
+    task_github_ref에 ('closed' 또는 'merged'로) upsert해야 한다.
+    그렇지 않으면 닫히는 PR 자신이 state='open'으로 남아 _other_active_pr_exists가
+    "다른 활성 PR 있음"으로 오판해 todo 복귀를 잘못 차단한다.
+    (this_ref_id를 전달해도 제외 조건이 적용되므로 반드시 ref_id를 넘길 것)
     """
     if gate not in GATE_TO_TARGET_CATEGORY:
         return error_response(ErrorCode.INVALID_STATUS_TRANSITION)
