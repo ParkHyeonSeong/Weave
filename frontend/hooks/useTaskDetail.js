@@ -82,6 +82,15 @@ export default function useTaskDetail(branchId, taskId) {
     fetchOptions();
   }, [fetchTask, fetchOptions]);
 
+  // 원격 전이(GitHub broadcast_to_branch → Layout이 task:updated emit) 시 열린 패널 본문을 재조회.
+  // emit-only였던 task:updated를 여기서 수신한다(현재 보는 task_id로 가드, silent로 포커스 유지).
+  useEffect(() => {
+    if (!taskId) return;
+    const onTaskUpdated = () => { fetchTask({ silent: true }); };
+    window.addEventListener('task:updated', onTaskUpdated);
+    return () => window.removeEventListener('task:updated', onTaskUpdated);
+  }, [taskId, fetchTask]);
+
   // task와 taskTypes가 로드된 후 custom fields 가져오기
   useEffect(() => {
     fetchCustomFields();

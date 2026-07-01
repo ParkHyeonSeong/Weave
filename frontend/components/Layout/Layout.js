@@ -341,6 +341,12 @@ export default function Layout({ children }) {
               }
             }
           }
+
+          if (data.type === 'task_updated') {
+            // GitHub 전이/원격 변경 → ref 칩·리스트·보드 캐시 무효화 + 열린 패널 재조회 트리거.
+            // task:updated는 멱등 re-fetch라 self-skip 없이 모든 멤버(본인 다른 탭 포함) 갱신.
+            window.dispatchEvent(new Event('task:updated'));
+          }
         } catch {}
       };
 
