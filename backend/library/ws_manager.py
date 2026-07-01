@@ -62,6 +62,20 @@ class ConnectionManager:
         for uid in member_ids:
             await self.send_to_user(uid, data)
 
+    async def broadcast_to_branch(self, branch_id: int, data: dict, db):
+        """브랜치 멤버 중 온라인 사용자에게 broadcast (GitHub 자동 전이 등 실시간 갱신).
+
+        broadcast_to_room과 동형. actor self-skip 없음 — 모든 멤버와 본인 다른 탭이
+        task:updated를 멱등 re-fetch하면 되므로 발신자도 제외하지 않는다.
+        """
+        result = await db.execute(text("""
+            SELECT user_id FROM branch_member WHERE branch_id = :branch_id
+        """), {'branch_id': branch_id})
+        member_ids = [row[0] for row in result.fetchall()]
+
+        for uid in member_ids:
+            await self.send_to_user(uid, data)
+
 
 # 싱글톤 인스턴스
 manager = ConnectionManager()
