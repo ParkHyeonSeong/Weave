@@ -1121,3 +1121,25 @@ async def remove_main_except(task_id: int, keep_user_id, db: AsyncSession):
         DELETE FROM task_assignee
         WHERE task_id = :task_id AND role = 'main' AND user_id != :keep
     """), {'task_id': task_id, 'keep': keep_user_id})
+
+
+async def transition_status(task_id: int, target_key: str,
+                            allowed_current_keys: list, db: AsyncSession):
+    """원자적 조건부 전이(CAS): 현재 status가 allowed_current_keys에 있을 때만
+    target_key로 옮긴다. RETURNING task_id로 실제 이동 여부를 보고한다.
+
+    read-then-update가 아니라 단일 UPDATE의 WHERE가 compare-and-swap을 수행하므로
+    처리 중 사람이 옮긴 status를 stale overwrite하지 않는다(전진 전용 보장).
+    None = 선조건 불일치/경쟁 패배 → 호출부는 부수효과 없이 skip.
+    """
+    result = await db.execute(text("""
+        UPDATE task SET status = :target_key, updated_at = NOW()
+        WHERE task_id = :task_id AND status = ANY(:allowed_current_keys)
+        RETURNING task_id
+    """), {
+        'target_key': target_key,
+        'task_id': task_id,
+        'allowed_current_keys': list(allowed_current_keys),
+    })
+    row = result.fetchone()
+    return row[0] if row else None
