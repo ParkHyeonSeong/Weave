@@ -121,3 +121,40 @@ def test_all_controller_failure_codes_are_registered():
     assert found, "scan found no failure codes — regex or path is wrong"
     missing = found - registered
     assert not missing, f"Unregistered error codes in controllers: {sorted(missing)}"
+
+
+def test_github_error_codes_present_and_categorized():
+    from core.errors import ErrorCode, Category, error_response
+
+    assert ErrorCode.REF_NOT_FOUND == "REF_NOT_FOUND"
+    assert ErrorCode.REF_NOT_FOUND.category is Category.NOT_FOUND
+    assert ErrorCode.REF_NOT_FOUND.retryable is False
+
+    assert ErrorCode.INVALID_STATUS_TRANSITION == "INVALID_STATUS_TRANSITION"
+    assert ErrorCode.INVALID_STATUS_TRANSITION.category is Category.CONFLICT
+    assert ErrorCode.INVALID_STATUS_TRANSITION.retryable is False
+
+    body = error_response(ErrorCode.REF_NOT_FOUND)
+    assert body == {
+        "status": False,
+        "message": "REF_NOT_FOUND",
+        "code": "REF_NOT_FOUND",
+        "category": "not_found",
+        "retryable": False,
+    }
+
+    body2 = error_response(ErrorCode.INVALID_STATUS_TRANSITION)
+    assert body2["code"] == "INVALID_STATUS_TRANSITION"
+    assert body2["category"] == "conflict"
+
+    # manual-link codes (consumed by Slice 4's github_ref controller)
+    assert ErrorCode.INVALID_GITHUB_URL.category is Category.VALIDATION
+    assert ErrorCode.REPO_NOT_CONNECTED.category is Category.VALIDATION
+    assert ErrorCode.GITHUB_FETCH_FAILED.category is Category.SERVER
+    assert error_response(ErrorCode.INVALID_GITHUB_URL)["category"] == "validation"
+    assert error_response(ErrorCode.GITHUB_FETCH_FAILED)["category"] == "server"
+    # retryability follows category: VALIDATION not-retryable, SERVER retryable (RETRYABLE_CATEGORIES)
+    assert ErrorCode.INVALID_GITHUB_URL.retryable is False
+    assert ErrorCode.REPO_NOT_CONNECTED.retryable is False
+    assert ErrorCode.GITHUB_FETCH_FAILED.retryable is True
+    assert error_response(ErrorCode.GITHUB_FETCH_FAILED)["retryable"] is True

@@ -92,6 +92,7 @@ class ErrorCode(str, Enum):
     PAGE_NOT_FOUND = ("PAGE_NOT_FOUND", Category.NOT_FOUND)
     PARENT_NOT_FOUND = ("PARENT_NOT_FOUND", Category.NOT_FOUND)
     PARENT_PAGE_NOT_FOUND = ("PARENT_PAGE_NOT_FOUND", Category.NOT_FOUND)
+    REF_NOT_FOUND = ("REF_NOT_FOUND", Category.NOT_FOUND)  # github 수동 ref unlink/update 시 ref가 task에 없음
     REPLY_NOT_FOUND = ("REPLY_NOT_FOUND", Category.NOT_FOUND)
     RETRO_NOT_FOUND = ("RETRO_NOT_FOUND", Category.NOT_FOUND)
     SCOPE_NOT_FOUND = ("SCOPE_NOT_FOUND", Category.NOT_FOUND)
@@ -122,6 +123,7 @@ class ErrorCode(str, Enum):
     INVALID_FILE_CONTENT = ("INVALID_FILE_CONTENT", Category.VALIDATION)
     INVALID_FILE_TYPE = ("INVALID_FILE_TYPE", Category.VALIDATION)
     INVALID_FILTER = ("INVALID_FILTER", Category.VALIDATION)
+    INVALID_GITHUB_URL = ("INVALID_GITHUB_URL", Category.VALIDATION)  # PR URL이 github.com/{owner}/{repo}/pull/{n} 형식이 아님
     INVALID_ITEM_TYPE = ("INVALID_ITEM_TYPE", Category.VALIDATION)
     INVALID_MIGRATION_ID = ("INVALID_MIGRATION_ID", Category.VALIDATION)
     INVALID_MOVE_TARGET = ("INVALID_MOVE_TARGET", Category.VALIDATION)
@@ -134,6 +136,7 @@ class ErrorCode(str, Enum):
     PARENT_SELF = ("PARENT_SELF", Category.VALIDATION)
     PASSWORD_MISMATCH = ("PASSWORD_MISMATCH", Category.VALIDATION)
     PASSWORD_TOO_SHORT = ("PASSWORD_TOO_SHORT", Category.VALIDATION)
+    REPO_NOT_CONNECTED = ("REPO_NOT_CONNECTED", Category.VALIDATION)  # 수동 링크 대상 repo가 이 브랜치에 연결돼 있지 않음
     REQUEST_TOO_LARGE = ("REQUEST_TOO_LARGE", Category.VALIDATION)  # handler (413)
     SELF_REFERENCE = ("SELF_REFERENCE", Category.VALIDATION)  # canonical of self_reference (new)
     SELF_DEPENDENCY = ("SELF_DEPENDENCY", Category.VALIDATION)
@@ -151,6 +154,7 @@ class ErrorCode(str, Enum):
     PARENT_CYCLE = ("PARENT_CYCLE", Category.CONFLICT)
     DUPLICATE_DEPENDENCY = ("DUPLICATE_DEPENDENCY", Category.CONFLICT)
     DUPLICATE_LINK = ("DUPLICATE_LINK", Category.CONFLICT)
+    INVALID_STATUS_TRANSITION = ("INVALID_STATUS_TRANSITION", Category.CONFLICT)  # 원자적 전이 0행(선조건 불일치/경쟁 패배)
     EMAIL_ALREADY_EXISTS = ("EMAIL_ALREADY_EXISTS", Category.CONFLICT)
     KEY_ALREADY_EXISTS = ("KEY_ALREADY_EXISTS", Category.CONFLICT)  # canonical of key_already_exists
     TYPE_KEY_ALREADY_EXISTS = ("TYPE_KEY_ALREADY_EXISTS", Category.CONFLICT)
@@ -187,6 +191,7 @@ class ErrorCode(str, Enum):
 
     # --- server -------------------------------------------------------------
     AI_NOT_CONFIGURED = ("AI_NOT_CONFIGURED", Category.SERVER)
+    GITHUB_FETCH_FAILED = ("GITHUB_FETCH_FAILED", Category.SERVER)  # GitHub PR 메타 조회 실패(네트워크/권한/404)
     MIGRATION_FAILED = ("MIGRATION_FAILED", Category.SERVER)
     SMTP_NOT_CONFIGURED = ("SMTP_NOT_CONFIGURED", Category.SERVER)
     INTERNAL_SERVER_ERROR = ("INTERNAL_SERVER_ERROR", Category.SERVER)  # handler (500)
