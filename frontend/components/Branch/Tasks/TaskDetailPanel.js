@@ -13,6 +13,7 @@ import { selectableEpics } from '@/library/epics';
 import { useRefHydration } from '@/library/refHydration';
 import Avatar from '@/components/common/Avatar';
 import TaskIssueSection from './TaskIssueSection';
+import TaskGithubRefSection from './TaskGithubRefSection';
 import TaskSubtaskSection from './TaskSubtaskSection';
 import TaskDependencySection from './TaskDependencySection';
 import TaskPageLinkSection from './TaskPageLinkSection';
@@ -460,6 +461,11 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
 
         {/* 이슈 섹션 */}
         <TaskIssueSection branchId={branchId} taskId={task.task_id} />
+
+        <div className="TaskDetailPanel__Divider" />
+
+        {/* GitHub PR 섹션 */}
+        <TaskGithubRefSection branchId={branchId} taskId={task.task_id} />
 
         <div className="TaskDetailPanel__Divider" />
 
