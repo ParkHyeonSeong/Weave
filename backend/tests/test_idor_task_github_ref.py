@@ -162,3 +162,171 @@ async def test_create_integration_duplicate_survives_outer_tx(db_session):
     # PendingRollbackError / InFailedSqlTransaction instead of returning.
     rows = await ghi.find_by_branch(b, db_session)
     assert len(rows) == 1
+
+
+# ---------------------------------------------------------------------------
+# cross-branch IDOR — manual ref unlink/link
+# ---------------------------------------------------------------------------
+# github_ref 컨트롤러는 Task 4.6에서 생성되므로 여기(4.7 append)에서 import한다
+# (4.5 헤더에 두면 github_ref 부재로 4.5 단독 실행 시 collection ImportError).
+from core.controller import github_ref as ref_ctrl
+from library import github_app
+
+
+def _async_pr(**fields):
+    """github_app.fetch_pull_request monkeypatch용 — 가짜 PR dict를 반환하는 async fn."""
+    async def _f(*a, **k):
+        return fields
+    return _f
+
+
+async def test_cross_branch_unlink_via_foreign_task_denied(db_session):
+    """alice(branchA 멤버)가 URL을 branch_id=A / task_id=B(branchB)로 위조해도
+    STEP2 task-in-branch 가드가 TASK_NOT_FOUND로 막고 refB는 살아남는다."""
+    alice = await _make_user(db_session, "idor_a@gh.test", "idor_a")
+    bob = await _make_user(db_session, "idor_b@gh.test", "idor_b")
+
+    branch_a = await _make_branch(db_session, alice, name="A", key="IDRA")
+    await _add_member(db_session, branch_a, alice, "member")
+
+    branch_b = await _make_branch(db_session, bob, name="B", key="IDRB")
+    await _add_member(db_session, branch_b, bob, "admin")
+    task_b = await _make_task(db_session, branch_b, bob, title="B task")
+    ref_b = await tgr.create(task_b, "org/repo", "pull_request", 5, None, "B PR",
+                             "open", "https://gh/pr/5", bob, db_session)
+
+    # alice는 branchA 멤버지만 task_b는 branchB 소속 -> STEP2에서 TASK_NOT_FOUND
+    res = await ref_ctrl.unlink_ref(branch_a, task_b, ref_b["ref_id"],
+                                    _req(alice), db_session)
+    assert res["status"] is False
+    assert res["code"] == "TASK_NOT_FOUND"
+    # refB는 그대로 살아있다
+    assert ref_b["ref_id"] in [r["ref_id"] for r in await tgr.find_by_task(task_b, db_session)]
+
+
+async def test_cross_branch_unlink_via_foreign_ref_denied(db_session):
+    """alice가 자기 task_a에 refB의 ref_id로 unlink 시도해도 STEP3 튜플 삭제가
+    (ref_id, task_a)로 0행이라 REF_NOT_FOUND, refB는 살아남는다."""
+    alice = await _make_user(db_session, "idor_c@gh.test", "idor_c")
+    bob = await _make_user(db_session, "idor_d@gh.test", "idor_d")
+
+    branch_a = await _make_branch(db_session, alice, name="A", key="IDRC")
+    await _add_member(db_session, branch_a, alice, "member")
+    task_a = await _make_task(db_session, branch_a, alice, title="A task")
+
+    branch_b = await _make_branch(db_session, bob, name="B", key="IDRD")
+    await _add_member(db_session, branch_b, bob, "admin")
+    task_b = await _make_task(db_session, branch_b, bob, title="B task")
+    ref_b = await tgr.create(task_b, "org/repo", "pull_request", 6, None, "B PR",
+                             "open", "https://gh/pr/6", bob, db_session)
+
+    # branch_a + task_a는 alice가 정당하게 접근 가능하지만 ref_b는 task_b 소속
+    res = await ref_ctrl.unlink_ref(branch_a, task_a, ref_b["ref_id"],
+                                    _req(alice), db_session)
+    assert res["status"] is False
+    assert res["code"] == "REF_NOT_FOUND"
+    assert ref_b["ref_id"] in [r["ref_id"] for r in await tgr.find_by_task(task_b, db_session)]
+
+
+async def test_own_ref_unlink_succeeds(db_session):
+    """회귀: 본인 branch/task의 ref는 정상 해제된다."""
+    alice = await _make_user(db_session, "idor_e@gh.test", "idor_e")
+    branch_a = await _make_branch(db_session, alice, name="A", key="IDRE")
+    await _add_member(db_session, branch_a, alice, "member")
+    task_a = await _make_task(db_session, branch_a, alice, title="A task")
+    ref_a = await tgr.create(task_a, "org/repo", "pull_request", 7, None, "A PR",
+                             "open", "https://gh/pr/7", alice, db_session)
+
+    res = await ref_ctrl.unlink_ref(branch_a, task_a, ref_a["ref_id"],
+                                    _req(alice), db_session)
+    assert res["status"] is True
+    assert await tgr.find_by_task(task_a, db_session) == []
+
+
+async def test_non_member_cannot_list_or_link(db_session):
+    """STEP1: branchA 비멤버는 list/link 모두 NOT_BRANCH_MEMBER."""
+    alice = await _make_user(db_session, "idor_f@gh.test", "idor_f")
+    intruder = await _make_user(db_session, "idor_g@gh.test", "idor_g")
+    branch_a = await _make_branch(db_session, alice, name="A", key="IDRF")
+    await _add_member(db_session, branch_a, alice, "member")
+    task_a = await _make_task(db_session, branch_a, alice, title="A task")
+
+    listed = await ref_ctrl.list_refs(branch_a, task_a, _req(intruder), db_session)
+    assert listed["status"] is False
+    assert listed["code"] == "NOT_BRANCH_MEMBER"
+
+    body = schema.RefLinkCreate(html_url="https://github.com/org/repo/pull/8")
+    linked = await ref_ctrl.link_ref(body, branch_a, task_a, _req(intruder), db_session)
+    assert linked["status"] is False
+    assert linked["code"] == "NOT_BRANCH_MEMBER"
+
+
+async def test_own_branch_link_succeeds(db_session, monkeypatch):
+    """회귀: 멤버가 연결된 repo의 PR을 본인 task에 link하면 메타와 함께 ref가 생성된다."""
+    alice = await _make_user(db_session, "idor_h@gh.test", "idor_h")
+    branch_a = await _make_branch(db_session, alice, name="A", key="IDRH")
+    await _add_member(db_session, branch_a, alice, "member")
+    task_a = await _make_task(db_session, branch_a, alice, title="A task")
+    await ghi.create(branch_a, "org/repo", 123, alice, db_session)  # repo가 연결돼 있어야 함
+    monkeypatch.setattr(github_app, "fetch_pull_request",
+                        _async_pr(number=9, title="Hi", state="open", merged=False,
+                                  merge_commit_sha=None,
+                                  html_url="https://github.com/org/repo/pull/9"))
+
+    body = schema.RefLinkCreate(html_url="https://github.com/org/repo/pull/9")
+    res = await ref_ctrl.link_ref(body, branch_a, task_a, _req(alice), db_session)
+    assert res["status"] is True
+    assert res["ref"]["ref_number"] == 9
+    assert res["ref"]["title"] == "Hi" and res["ref"]["state"] == "open"
+    assert res["ref"]["linked_by"] == alice
+
+
+async def test_duplicate_link_conflict_keeps_session_usable(db_session, monkeypatch):
+    """수동 link 중복 → DUPLICATE_LINK, 그리고 savepoint 덕분에 후속 쿼리가 살아있다."""
+    alice = await _make_user(db_session, "idor_dup@gh.test", "idor_dup")
+    branch_a = await _make_branch(db_session, alice, name="A", key="IDRP")
+    await _add_member(db_session, branch_a, alice, "member")
+    task_a = await _make_task(db_session, branch_a, alice, title="A task")
+    await ghi.create(branch_a, "org/repo", 123, alice, db_session)
+    monkeypatch.setattr(github_app, "fetch_pull_request",
+                        _async_pr(number=77, title="Dup", state="open", merged=False,
+                                  merge_commit_sha=None,
+                                  html_url="https://github.com/org/repo/pull/77"))
+    url = "https://github.com/org/repo/pull/77"
+    first = await ref_ctrl.link_ref(schema.RefLinkCreate(html_url=url),
+                                    branch_a, task_a, _req(alice), db_session)
+    assert first["status"] is True
+    dup = await ref_ctrl.link_ref(schema.RefLinkCreate(html_url=url),
+                                  branch_a, task_a, _req(alice), db_session)
+    assert dup["status"] is False and dup["code"] == "DUPLICATE_LINK"
+    # savepoint가 바깥 트랜잭션을 살렸는지: 후속 read가 정상이어야 한다
+    listed = await ref_ctrl.list_refs(branch_a, task_a, _req(alice), db_session)
+    assert listed["status"] is True and len(listed["refs"]) == 1
+
+
+async def test_link_rejects_non_github_url(db_session):
+    """P2: host가 정확히 github.com이 아니면 INVALID_GITHUB_URL (부분문자열 위장 차단).
+
+    integration 조회/fetch 이전(URL 검증 단계)에서 막히므로 시드/모킹이 필요 없다."""
+    alice = await _make_user(db_session, "idor_url@gh.test", "idor_url")
+    branch_a = await _make_branch(db_session, alice, name="A", key="IDRU")
+    await _add_member(db_session, branch_a, alice, "member")
+    task_a = await _make_task(db_session, branch_a, alice, title="A task")
+    evil = schema.RefLinkCreate(html_url="https://evil.example/?u=github.com/org/repo/pull/1")
+    res = await ref_ctrl.link_ref(evil, branch_a, task_a, _req(alice), db_session)
+    assert res["status"] is False and res["code"] == "INVALID_GITHUB_URL"
+
+
+async def test_duplicate_integration_conflict_keeps_session_usable(db_session):
+    """admin repo 연결 중복 → DUPLICATE_LINK + 후속 쿼리 정상(savepoint)."""
+    from core.controller import github_integration as ghi_ctrl
+    admin = await _make_user(db_session, "idor_gi@gh.test", "idor_gi")
+    branch_a = await _make_branch(db_session, admin, name="A", key="IDRG")
+    await _add_member(db_session, branch_a, admin, "admin")
+    body = schema.IntegrationCreate(repo_full_name="org/repo", installation_id=123)
+    first = await ghi_ctrl.create_integration(body, branch_a, _req(admin), db_session)
+    assert first["status"] is True
+    dup = await ghi_ctrl.create_integration(body, branch_a, _req(admin), db_session)
+    assert dup["status"] is False and dup["code"] == "DUPLICATE_LINK"
+    listed = await ghi_ctrl.list_integrations(branch_a, _req(admin), db_session)
+    assert listed["status"] is True and len(listed["integrations"]) == 1
