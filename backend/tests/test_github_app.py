@@ -113,3 +113,94 @@ def test_app_jwt_raises_when_private_key_unset(monkeypatch):
     monkeypatch.setattr(github_app.config, "GITHUB_APP_PRIVATE_KEY", "")
     with pytest.raises(RuntimeError, match="GITHUB_APP_PRIVATE_KEY"):
         github_app.app_jwt()
+
+
+# ── Task 4: installation_token (httpx + cache) ──────────────────────────
+from datetime import datetime, timedelta, timezone
+
+
+def _iso_in(seconds: int) -> str:
+    # GitHub returns expires_at like "2026-06-26T12:00:00Z".
+    dt = datetime.now(timezone.utc) + timedelta(seconds=seconds)
+    return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+class _CountingTransport(httpx.MockTransport):
+    """MockTransport that counts POSTs and returns a configurable token + expires_at."""
+    def __init__(self, token="ghs_aaa", expires_in=3600):
+        self.calls = []
+        self._token = token
+        self._expires_in = expires_in
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            self.calls.append(str(request.url))
+            return httpx.Response(
+                201,
+                json={"token": self._token, "expires_at": _iso_in(self._expires_in)},
+            )
+
+        super().__init__(handler)
+
+
+@pytest.fixture(autouse=True)
+def _clear_token_cache():
+    # github_app keeps a module-level cache — isolate every test.
+    github_app._token_cache.clear()
+    yield
+    github_app._token_cache.clear()
+
+
+@pytest.fixture
+def app_jwt_stub(monkeypatch):
+    # installation_token signs an App JWT internally; stub it so these tests need no RSA key.
+    monkeypatch.setattr(github_app, "app_jwt", lambda: "stub.jwt.token")
+
+
+async def test_installation_token_posts_and_returns_token(monkeypatch, app_jwt_stub):
+    transport = _CountingTransport(token="ghs_first")
+    monkeypatch.setattr(
+        github_app, "_github_client",
+        lambda: httpx.AsyncClient(transport=transport, base_url=github_app.GITHUB_API_BASE),
+    )
+    tok = await github_app.installation_token(99)
+    assert tok == "ghs_first"
+    assert len(transport.calls) == 1
+    assert transport.calls[0].endswith("/app/installations/99/access_tokens")
+
+
+async def test_installation_token_caches_within_expiry(monkeypatch, app_jwt_stub):
+    transport = _CountingTransport(token="ghs_cached", expires_in=3600)
+    monkeypatch.setattr(
+        github_app, "_github_client",
+        lambda: httpx.AsyncClient(transport=transport, base_url=github_app.GITHUB_API_BASE),
+    )
+    first = await github_app.installation_token(7)
+    second = await github_app.installation_token(7)
+    assert first == second == "ghs_cached"
+    # Second call must be a cache hit — exactly one POST.
+    assert len(transport.calls) == 1
+
+
+async def test_installation_token_refreshes_after_expiry(monkeypatch, app_jwt_stub):
+    # expires_in tiny so it is already inside the 60s refresh skew => treated as expired.
+    transport = _CountingTransport(token="ghs_x", expires_in=10)
+    monkeypatch.setattr(
+        github_app, "_github_client",
+        lambda: httpx.AsyncClient(transport=transport, base_url=github_app.GITHUB_API_BASE),
+    )
+    await github_app.installation_token(5)
+    await github_app.installation_token(5)
+    # expires_at within skew window => not cached => two POSTs.
+    assert len(transport.calls) == 2
+
+
+async def test_installation_token_isolates_per_installation(monkeypatch, app_jwt_stub):
+    transport = _CountingTransport(token="ghs_iso", expires_in=3600)
+    monkeypatch.setattr(
+        github_app, "_github_client",
+        lambda: httpx.AsyncClient(transport=transport, base_url=github_app.GITHUB_API_BASE),
+    )
+    await github_app.installation_token(1)
+    await github_app.installation_token(2)
+    # Different installation ids never share a cache entry.
+    assert len(transport.calls) == 2
