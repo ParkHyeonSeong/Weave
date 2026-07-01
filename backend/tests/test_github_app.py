@@ -62,3 +62,54 @@ def test_verify_signature_rejects_empty_secret():
     # No configured secret => fail closed (never accept).
     body = b"body"
     assert github_app.verify_signature("", body, _sign("", body)) is False
+
+
+# ── Task 3: app_jwt (RS256) ─────────────────────────────────────────────
+@pytest.fixture
+def rsa_keypair():
+    """Generate a throwaway RSA keypair (cryptography — newly pinned by this feature)."""
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    private_pem = key.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.PKCS8,
+        serialization.NoEncryption(),
+    ).decode()
+    public_pem = key.public_key().public_bytes(
+        serialization.Encoding.PEM,
+        serialization.PublicFormat.SubjectPublicKeyInfo,
+    ).decode()
+    return private_pem, public_pem
+
+
+def test_app_jwt_is_rs256_and_decodable_with_public_key(monkeypatch, rsa_keypair):
+    private_pem, public_pem = rsa_keypair
+    monkeypatch.setattr(github_app.config, "GITHUB_APP_ID", "424242")
+    monkeypatch.setattr(github_app.config, "GITHUB_APP_PRIVATE_KEY", private_pem)
+
+    token = github_app.app_jwt()
+    header = jwt.get_unverified_header(token)
+    assert header["alg"] == "RS256"
+
+    decoded = jwt.decode(token, public_pem, algorithms=["RS256"])
+    assert decoded["iss"] == "424242"
+
+def test_app_jwt_claims_have_backdated_iat_and_bounded_exp(monkeypatch, rsa_keypair):
+    private_pem, _ = rsa_keypair
+    monkeypatch.setattr(github_app.config, "GITHUB_APP_ID", "1")
+    monkeypatch.setattr(github_app.config, "GITHUB_APP_PRIVATE_KEY", private_pem)
+
+    before = int(time.time())
+    token = github_app.app_jwt()
+    # Decode without verifying exp/iat to inspect raw claims.
+    claims = jwt.decode(token, options={"verify_signature": False})
+    # iat backdated ~60s to absorb clock skew (GitHub rejects future-iat).
+    assert claims["iat"] <= before - 30
+    # exp must be within GitHub's 10-minute hard cap.
+    assert claims["exp"] - claims["iat"] <= 600
+    assert claims["exp"] > before
+
+def test_app_jwt_raises_when_private_key_unset(monkeypatch):
+    monkeypatch.setattr(github_app.config, "GITHUB_APP_ID", "1")
+    monkeypatch.setattr(github_app.config, "GITHUB_APP_PRIVATE_KEY", "")
+    with pytest.raises(RuntimeError, match="GITHUB_APP_PRIVATE_KEY"):
+        github_app.app_jwt()

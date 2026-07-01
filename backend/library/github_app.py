@@ -10,6 +10,9 @@
 """
 import hashlib
 import hmac
+import time
+
+import jwt
 
 import config
 
@@ -30,3 +33,20 @@ def verify_signature(secret: str, raw_body: bytes, signature_header: str) -> boo
     ).hexdigest()
     # 타이밍 사이드채널 방지 — '==' 금지(레포 전역 미사용 신규 도입).
     return hmac.compare_digest(expected, signature_header)
+
+
+def app_jwt() -> str:
+    """App private key로 RS256 서명한 단기 App JWT를 만든다.
+
+    iss=GITHUB_APP_ID, iat는 시계 스큐 흡수용 -60초, exp는 GitHub 상한(10분) 내인 +9분.
+    이 JWT는 /app/installations/{id}/access_tokens 호출의 Bearer로만 쓴다.
+    """
+    if not config.GITHUB_APP_PRIVATE_KEY:
+        raise RuntimeError("GITHUB_APP_PRIVATE_KEY is not configured")
+    now = int(time.time())
+    payload = {
+        "iss": config.GITHUB_APP_ID,
+        "iat": now - 60,   # 시계 스큐 흡수(future-iat 거부 회피)
+        "exp": now + 540,  # 9분 < GitHub 10분 상한
+    }
+    return jwt.encode(payload, config.GITHUB_APP_PRIVATE_KEY, algorithm="RS256")
