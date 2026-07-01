@@ -1,3 +1,4 @@
+import base64
 import ipaddress
 import logging
 import os
@@ -85,6 +86,22 @@ PASSWORD_RESET_TOKEN_EXPIRE_HOURS = int(os.getenv("PASSWORD_RESET_TOKEN_EXPIRE_H
 VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
 VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
 VAPID_SUBJECT = os.getenv("VAPID_SUBJECT", "mailto:admin@weave.local")
+
+# GitHub App 연동 (PR 기반 태스크 자동 전환; 커밋 링크는 v2). 비밀번호 같은 하드요구가 아니라
+# 브랜치 admin이 repo를 연결하기 전까지 기능이 꺼져 있어 빈 기본값을 허용한다. 다만
+# 예제 파일을 복사하고 치환을 잊으면 잡도록, prod에서는 webhook secret의 CHANGE_ME
+# 플레이스홀더를 거부한다(JWT_SECRET_KEY·ENCRYPT_KEY와 동일 안전장치).
+GITHUB_APP_ID = os.getenv("GITHUB_APP_ID", "")
+# private key는 멀티라인 PEM → .env/compose 안전을 위해 base64(단일행)로 받아 디코드한다.
+# 생성: base64 -w0 your-app.private-key.pem  (macOS: base64 -i your-app.private-key.pem | tr -d '\n')
+_GITHUB_APP_PRIVATE_KEY_B64 = os.getenv("GITHUB_APP_PRIVATE_KEY", "")
+GITHUB_APP_PRIVATE_KEY = (
+    base64.b64decode(_GITHUB_APP_PRIVATE_KEY_B64).decode("utf-8")
+    if _GITHUB_APP_PRIVATE_KEY_B64 else ""
+)
+GITHUB_WEBHOOK_SECRET = os.getenv("GITHUB_WEBHOOK_SECRET", "")
+if not DEBUG and GITHUB_WEBHOOK_SECRET and _PLACEHOLDER_MARK in GITHUB_WEBHOOK_SECRET:
+    raise RuntimeError("GITHUB_WEBHOOK_SECRET must not be the example placeholder in production")
 
 # WebSocket 협업 메시지 최대 크기(바이트). Yjs 업데이트/동기화는 바이너리 CRDT 인코딩이며
 # 증분 업데이트는 보통 수 KB 수준이지만, 대형 프레임 반복으로 인한 메모리/CPU 고갈(DoS)을
