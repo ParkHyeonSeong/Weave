@@ -305,6 +305,20 @@ async def find_by_key(key: str, db: AsyncSession):
     return result.fetchone() is not None
 
 
+async def find_by_key_row(key: str, db: AsyncSession):
+    """key로 active Branch row 조회 (대소문자 무시). GitHub 참조 해석용.
+
+    기존 find_by_key는 중복체크용 bool을 반환하므로 branch_id가 필요한
+    dispatch 경로에선 쓸 수 없다. 활성 브랜치만(is_archived=FALSE) 반환한다.
+    """
+    result = await db.execute(text("""
+        SELECT branch_id, key FROM branch
+        WHERE UPPER(key) = UPPER(:key) AND is_archived = FALSE
+    """), {'key': key})
+    row = result.fetchone()
+    return dict(row._mapping) if row else None
+
+
 async def archive(branch_id: int, db: AsyncSession):
     """Branch 아카이브 (soft delete)"""
     await db.execute(text("""
