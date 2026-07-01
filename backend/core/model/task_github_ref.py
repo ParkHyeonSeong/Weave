@@ -87,14 +87,15 @@ async def delete(ref_id: int, task_id: int, db: AsyncSession):
     return row[0] if row else None
 
 
-async def count_active_prs(task_id: int, exclude_ref_id: int, db: AsyncSession) -> int:
+async def count_active_prs(task_id: int, exclude_ref_id, db: AsyncSession) -> int:
     """이 task의 활성(open|merged) PR 링크 수 — exclude_ref_id 한 건 제외.
+    exclude_ref_id=None이면 제외 없이 전체 활성 PR 수를 반환한다.
     머지 없이 닫힘 처리 시 '다른 활성 PR 없음' 게이트에 쓴다."""
     result = await db.execute(text("""
         SELECT COUNT(*) FROM task_github_ref
         WHERE task_id = :task_id
           AND ref_type = 'pull_request'
           AND state IN ('open', 'merged')
-          AND ref_id != :exclude_ref_id
+          AND (CAST(:exclude_ref_id AS BIGINT) IS NULL OR ref_id != :exclude_ref_id)
     """), {'task_id': task_id, 'exclude_ref_id': exclude_ref_id})
     return result.scalar_one()

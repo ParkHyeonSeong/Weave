@@ -166,3 +166,21 @@ async def test_count_active_prs_excludes_self_and_closed(db_session):
     # excluding nothing (-1) counts both open + merged
     assert await tgr.count_active_prs(t, -1, db_session) == 2
     _ = merged_pr  # silence unused
+
+
+async def test_count_active_prs_none_excludes_nothing(db_session):
+    """exclude_ref_id=None은 제외 없이 활성 PR 전체를 카운트해야 한다.
+    None이 NULL 비교로 처리되면 모든 행이 ref_id != NULL → NULL(falsy)이 되어
+    0을 반환하는 버그가 발생하므로 이를 회귀 방지한다."""
+    u = await _make_user(db_session, "tgr_e@gh.test", "tgr_e")
+    b = await _make_branch(db_session, u, key="TGRE")
+    t = await _make_task(db_session, b, u)
+    await tgr.upsert_pr(t, "org/repo", 10, None, "open pr", "open",
+                        "https://gh/pr/10", None, db_session)
+    await tgr.upsert_pr(t, "org/repo", 11, None, "merged pr", "merged",
+                        "https://gh/pr/11", None, db_session)
+    await tgr.upsert_pr(t, "org/repo", 12, None, "closed pr", "closed",
+                        "https://gh/pr/12", None, db_session)
+
+    # None → 제외 없음; open+merged=2, closed는 제외
+    assert await tgr.count_active_prs(t, None, db_session) == 2
