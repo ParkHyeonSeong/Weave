@@ -6,6 +6,7 @@ fixture (same pattern as test_idor_ref_status.py).
 from sqlalchemy import text
 
 from core.model import github_integration as ghi
+from core.model import task_github_ref as tgr
 
 
 async def _make_user(db, email, username):
@@ -85,7 +86,6 @@ async def test_delete_is_tuple_scoped(db_session):
 # ---------------------------------------------------------------------------
 # task_github_ref
 # ---------------------------------------------------------------------------
-from core.model import task_github_ref as tgr
 
 
 async def _make_task(db, branch_id, created_by, title="t"):
@@ -163,8 +163,8 @@ async def test_count_active_prs_excludes_self_and_closed(db_session):
 
     # active = open|merged; excluding open_pr leaves only merged_pr (closed never counts)
     assert await tgr.count_active_prs(t, open_pr["ref_id"], db_session) == 1
-    # excluding nothing (-1) counts both open + merged
-    assert await tgr.count_active_prs(t, -1, db_session) == 2
+    # excluding nothing (None) counts both open + merged
+    assert await tgr.count_active_prs(t, None, db_session) == 2
     _ = merged_pr  # silence unused
 
 

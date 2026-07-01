@@ -41,9 +41,9 @@ async def link_ref(body, branch_id: int, task_id: int, request: Request, db: Asy
     if err:
         return err
     # P2: host가 정확히 github.com인지 검사(부분문자열 위장 URL 차단)
-    parsed = urlparse(body.html_url or '')
-    m = re.match(r'^/([^/]+)/([^/]+)/pull/(\d+)$', parsed.path or '')
-    if parsed.scheme not in ('http', 'https') or parsed.netloc.lower() != 'github.com' or not m:
+    parsed = urlparse(body.html_url)
+    m = re.match(r'^/([^/]+)/([^/]+)/pull/(\d{1,8})$', parsed.path or '')
+    if parsed.scheme != 'https' or parsed.netloc.lower() != 'github.com' or not m:
         return error_response(ErrorCode.INVALID_GITHUB_URL)
     owner, repo = m.group(1), m.group(2)
     repo_full_name = f"{owner}/{repo}"

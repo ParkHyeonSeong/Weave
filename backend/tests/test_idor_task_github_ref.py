@@ -17,9 +17,11 @@ import pytest
 from sqlalchemy import text
 
 from core.controller import github_integration as int_ctrl
+from core.controller import github_ref as ref_ctrl
 from routers.schema import github as schema
 from core.model import github_integration as ghi
 from core.model import task_github_ref as tgr
+from library import github_app
 
 
 def _req(user_id: int):
@@ -168,10 +170,6 @@ async def test_create_integration_duplicate_survives_outer_tx(db_session):
 # ---------------------------------------------------------------------------
 # cross-branch IDOR — manual ref unlink/link
 # ---------------------------------------------------------------------------
-# github_ref 컨트롤러는 Task 4.6에서 생성되므로 여기(4.7 append)에서 import한다
-# (4.5 헤더에 두면 github_ref 부재로 4.5 단독 실행 시 collection ImportError).
-from core.controller import github_ref as ref_ctrl
-from library import github_app
 
 
 def _async_pr(**fields):
@@ -340,3 +338,14 @@ async def test_duplicate_integration_conflict_keeps_session_usable(db_session):
     assert dup["status"] is False and dup["code"] == "DUPLICATE_LINK"
     listed = await ghi_ctrl.list_integrations(branch_a, _req(admin), db_session)
     assert listed["status"] is True and len(listed["integrations"]) == 1
+
+
+async def test_link_repo_not_connected(db_session):
+    """멤버가 형식은 맞지만 이 브랜치에 연결 안 된 repo의 PR을 link하면 REPO_NOT_CONNECTED."""
+    alice = await _make_user(db_session, "idor_rnc@gh.test", "idor_rnc")
+    branch_a = await _make_branch(db_session, alice, name="A", key="IDRN")
+    await _add_member(db_session, branch_a, alice, "member")
+    task_a = await _make_task(db_session, branch_a, alice, title="A task")
+    body = schema.RefLinkCreate(html_url="https://github.com/org/unconnected/pull/1")
+    res = await ref_ctrl.link_ref(body, branch_a, task_a, _req(alice), db_session)
+    assert res["status"] is False and res["code"] == "REPO_NOT_CONNECTED"
