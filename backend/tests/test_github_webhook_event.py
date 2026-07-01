@@ -111,3 +111,32 @@ async def test_claim_respects_attempts_cap(db_session):
 
 async def test_claim_empty_queue_returns_none(db_session):
     assert await ghwe_model.claim_one(db_session) is None
+
+
+# ---------------------------------------------------------------------------
+# mark_done / mark_failed
+# ---------------------------------------------------------------------------
+
+async def test_mark_done(db_session):
+    inserted = await ghwe_model.insert("d-done", "push", {}, db_session)
+    await ghwe_model.claim_one(db_session)
+    await ghwe_model.mark_done(inserted["event_id"], db_session)
+    res = await db_session.execute(text(
+        "SELECT status, processed_at FROM github_webhook_event WHERE event_id = :e"
+    ), {"e": inserted["event_id"]})
+    row = res.fetchone()
+    assert row.status == "done"
+    assert row.processed_at is not None
+
+
+async def test_mark_failed_records_error(db_session):
+    inserted = await ghwe_model.insert("d-fail", "push", {}, db_session)
+    await ghwe_model.claim_one(db_session)
+    await ghwe_model.mark_failed(inserted["event_id"], "boom", db_session)
+    res = await db_session.execute(text(
+        "SELECT status, last_error, attempts FROM github_webhook_event WHERE event_id = :e"
+    ), {"e": inserted["event_id"]})
+    row = res.fetchone()
+    assert row.status == "failed"
+    assert row.last_error == "boom"
+    assert row.attempts == 1  # claim에서 1로 올랐고 mark_failed는 안 건드림

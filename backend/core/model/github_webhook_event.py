@@ -59,3 +59,26 @@ async def claim_one(db: AsyncSession, max_attempts: int = 5) -> dict | None:
     """), {'max_attempts': max_attempts})
     row = result.fetchone()
     return dict(row._mapping) if row else None
+
+
+async def mark_done(event_id: int, db: AsyncSession):
+    """처리 성공 — status='done', processed_at=NOW()."""
+    await db.execute(text("""
+        UPDATE github_webhook_event
+        SET status='done', processed_at=NOW(), last_error=NULL
+        WHERE event_id = :event_id
+    """), {'event_id': event_id})
+
+
+async def mark_failed(event_id: int, error: str, db: AsyncSession):
+    """처리 실패 — status='failed', last_error + 지수 백오프(next_attempt_at) 기록.
+
+    attempts는 claim에서 이미 증가. backoff로 같은 drain 틱에서 즉시 재소비되지 않게 하고,
+    next_attempt_at <= NOW()가 될 때까지 claim 대상에서 제외된다(claim_one WHERE 참조).
+    """
+    await db.execute(text("""
+        UPDATE github_webhook_event
+        SET status='failed', last_error=:error,
+            next_attempt_at = NOW() + INTERVAL '1 minute' * LEAST(POWER(2, attempts), 60)
+        WHERE event_id = :event_id
+    """), {'event_id': event_id, 'error': error})
