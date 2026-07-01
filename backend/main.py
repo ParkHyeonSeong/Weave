@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 
 from slowapi.errors import RateLimitExceeded
 
+import config
 from config import MAX_REQUEST_BODY_BYTES
 from core.errors import error_response, ErrorCode
 from library import validator
@@ -123,6 +124,10 @@ async def lifespan(app):
     # Startup: 시작 시 1회 고아 임시파일 청소 + 주기 청소 태스크 기동(SEC-24).
     # 동기 I/O라 to_thread로 위임해 스타트업 이벤트루프 블로킹을 피한다.
     await asyncio.to_thread(jira_migrate_controller.cleanup_temp_files)
+    if not config.GITHUB_WEBHOOK_SECRET:
+        logger.warning(
+            "GITHUB_WEBHOOK_SECRET가 비어 있어 GitHub webhook이 비활성화됩니다"
+            " (모든 수신이 401). 배포 환경변수를 확인하세요.")
     cleanup_task = asyncio.create_task(_periodic_jira_temp_cleanup())
     github_retry_task = asyncio.create_task(_periodic_github_event_retry())
     yield

@@ -91,7 +91,11 @@ async def test_find_by_key_row_missing_returns_none(db_session):
 from core.controller import github as github_controller
 
 
-def _pr_payload(repo, action, merged, number, title, body, head_ref, html_url):
+def _pr_payload(repo, action, merged, number, title, body, head_ref, html_url, state=None):
+    # GitHub sends pull_request.state='closed' for 'closed' action (merged or not),
+    # 'open' for all other actions. Caller may override via state=.
+    if state is None:
+        state = 'closed' if action == 'closed' else 'open'
     return {
         "action": action,
         "repository": {"full_name": repo},
@@ -102,6 +106,7 @@ def _pr_payload(repo, action, merged, number, title, body, head_ref, html_url):
             "body": body,
             "head": {"ref": head_ref},
             "html_url": html_url,
+            "state": state,
             "user": {"login": "octocat"},
         },
     }
@@ -289,3 +294,67 @@ async def test_claim_one_then_done_drains_single_event(db_session):
     await event_model.mark_done(claimed["event_id"], db_session)
     again = await event_model.claim_one(db_session)
     assert again is None  # already done -> not re-claimed
+
+
+# --- gate-consolidation tests (Slice 5 gate commit) -----------------------
+
+async def test_find_by_key_row_excludes_archived(db_session):
+    alice = await _make_user(db_session, "arch_fk@gh.test", "arch_fk")
+    bid = await _make_branch(db_session, alice, key="ARCHK")
+    await db_session.execute(text("UPDATE branch SET is_archived = TRUE WHERE branch_id = :b"), {"b": bid})
+    assert await branch_model.find_by_key_row("ARCHK", db_session) is None
+
+
+async def test_unknown_action_preserves_merged_ref_state(db_session):
+    bid, tid, dn, _ = await _branch_with_task(db_session, "UNKA", "org/unka")
+    merge_pl = _pr_payload("org/unka", "closed", True, 20, f"UNKA-{dn}", "", "f",
+                           "https://github.com/org/unka/pull/20")
+    await github_controller.dispatch_event("pull_request", merge_pl, db_session)
+    assert await _ref_state(db_session, tid) == "merged"
+    # a 'labeled' event on the same (now merged) PR must not downgrade state or move the task
+    label_pl = _pr_payload("org/unka", "labeled", True, 20, f"UNKA-{dn}", "", "f",
+                           "https://github.com/org/unka/pull/20")
+    branch_ids = await github_controller.dispatch_event("pull_request", label_pl, db_session)
+    assert await _ref_state(db_session, tid) == "merged"   # NOT downgraded to 'open'
+    assert await _task_status(db_session, tid) == "done"
+    assert bid in branch_ids                                # dispatch returns affected branches
+
+
+async def test_unknown_action_synchronize_upserts_no_move(db_session):
+    bid, tid, dn, _ = await _branch_with_task(db_session, "SYNC", "org/sync", status="in_progress")
+    pl = _pr_payload("org/sync", "synchronize", False, 21, f"SYNC-{dn}", "", "f",
+                     "https://github.com/org/sync/pull/21")
+    await github_controller.dispatch_event("pull_request", pl, db_session)
+    assert await _ref_state(db_session, tid) == "open"
+    assert await _task_status(db_session, tid) == "in_progress"  # gate=None -> no move
+
+
+async def test_dispatch_returns_affected_branch_ids(db_session):
+    bid, tid, dn, _ = await _branch_with_task(db_session, "RETB", "org/retb")
+    pl = _pr_payload("org/retb", "closed", True, 22, f"RETB-{dn}", "", "f",
+                     "https://github.com/org/retb/pull/22")
+    branch_ids = await github_controller.dispatch_event("pull_request", pl, db_session)
+    assert branch_ids == [bid]
+    # unconnected repo -> no affected branch
+    empty = await github_controller.dispatch_event("pull_request",
+        _pr_payload("org/none", "closed", True, 23, f"RETB-{dn}", "", "f",
+                    "https://github.com/org/none/pull/23"), db_session)
+    assert empty == []
+
+
+async def test_dispatch_non_dict_payload_is_noop(db_session):
+    assert await github_controller.dispatch_event("pull_request", None, db_session) == []
+
+
+async def test_dispatch_without_system_bot_skips_transition(db_session):
+    await db_session.execute(text('DELETE FROM "user" WHERE is_system = TRUE'))
+    owner = await _make_user(db_session, "nobot@gh.test", "nobot")
+    bid = await _make_branch(db_session, owner, key="NOBOT")
+    await _add_member(db_session, bid, owner, "admin")
+    tid, dn = await _make_task(db_session, bid, owner, status="in_progress")
+    await _make_integration(db_session, bid, "org/nobot", 555, owner)
+    pl = _pr_payload("org/nobot", "closed", True, 24, f"NOBOT-{dn}", "", "f",
+                     "https://github.com/org/nobot/pull/24")
+    await github_controller.dispatch_event("pull_request", pl, db_session)
+    assert await _ref_state(db_session, tid) == "merged"          # ref still upserted
+    assert await _task_status(db_session, tid) == "in_progress"   # NOT moved (no actor)

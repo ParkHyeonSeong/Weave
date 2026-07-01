@@ -2,7 +2,7 @@
 
 자동 경로는 외부 GitHub API 호출이 없다(payload에 제목·본문·state·head.ref·html_url
 이 포함). 따라서 dispatch는 순수 DB 작업 + 부수효과(transition 내부의 활동/알림)뿐이다.
-WS 브로드캐스트는 트랜잭션 커밋 후에만(process_webhook_event) 발사한다.
+WS 브로드캐스트는 트랜잭션 커밋 후에만(drain_webhook_events) 발사한다.
 """
 import logging
 
@@ -20,21 +20,25 @@ import db_engine as db_engine
 
 logger = logging.getLogger("weave")
 
-# PR action -> (transition gate, ref state). gate None = 링크만, 전이 없음.
-_ACTION_GATE = {
-    'opened': ('open', 'open'),
-    'reopened': ('open', 'open'),
-    'ready_for_review': ('open', 'open'),
-}
+_OPEN_ACTIONS = {'opened', 'reopened', 'ready_for_review'}
 
 
-def _gate_and_state(action: str, merged: bool):
-    """PR action(+merged)을 transition gate와 ref state로 매핑."""
+def _gate_for(action: str, merged: bool):
+    """PR action -> transition gate (None = 링크만, 전이 없음)."""
     if action == 'closed':
-        if merged:
-            return ('merge', 'merged')
-        return ('close', 'closed')
-    return _ACTION_GATE.get(action, (None, 'open'))
+        return 'merge' if merged else 'close'
+    if action in _OPEN_ACTIONS:
+        return 'open'
+    return None
+
+
+def _ref_state_for(merged: bool, pr_state) -> str:
+    """실제 PR 상태로 ref state를 결정(action-gate와 독립). merged 우선."""
+    if merged:
+        return 'merged'
+    if pr_state == 'closed':
+        return 'closed'
+    return 'open'
 
 
 async def _resolve_actor_id(db) -> int | None:
@@ -45,20 +49,24 @@ async def _resolve_actor_id(db) -> int | None:
     return row[0] if row else None
 
 
-async def dispatch_event(event_type: str, payload: dict, db) -> None:
+async def dispatch_event(event_type: str, payload: dict, db) -> list[int]:
     """단일 webhook 이벤트를 처리한다(이미 claim된 row의 payload).
 
     pull_request 외 이벤트는 v1에서 무시(push 커밋 링크는 v2 보류).
     매칭 0건/연결 안 된 repo/없는 태스크는 조용히 skip(에러 아님).
+    반환: 실제 ref가 upsert된 branch_id 리스트(정렬·중복 제거).
     """
     if event_type != 'pull_request':
-        return
+        return []
+
+    if not isinstance(payload, dict):
+        return []
 
     pr = payload.get('pull_request') or {}
     action = payload.get('action') or ''
     repo = (payload.get('repository') or {}).get('full_name')
     if not repo:
-        return
+        return []
 
     number = pr.get('number')
     title = pr.get('title') or ''
@@ -67,14 +75,19 @@ async def dispatch_event(event_type: str, payload: dict, db) -> None:
     html_url = pr.get('html_url') or ''
     merged = bool(pr.get('merged'))
     if number is None or not html_url:
-        return
+        return []
 
-    gate, ref_state = _gate_and_state(action, merged)
+    gate = _gate_for(action, merged)
+    ref_state = _ref_state_for(merged, pr.get('state'))
     refs = github_parser.extract_refs(f"{head_ref} {title} {body}")
     if not refs:
-        return
+        return []
 
     actor_id = await _resolve_actor_id(db)
+    if actor_id is None:
+        logger.warning("GitHub 시스템 봇 부재 — 자동 전이를 skip하고 링크만 수행합니다.")
+
+    affected: set[int] = set()
 
     for key, display_number in refs:
         branch_row = await branch_model.find_by_key_row(key, db)
@@ -96,20 +109,14 @@ async def dispatch_event(event_type: str, payload: dict, db) -> None:
             sha=None, title=title, state=ref_state, html_url=html_url,
             linked_by=None, db=db,
         )
+        affected.add(branch_id)
 
-        if gate is not None:
+        if gate is not None and actor_id is not None:
             await task_transition.transition(
                 task_id, branch_id, gate, actor_id, db, this_ref_id=ref['ref_id'],
             )
 
-
-async def process_webhook_event(event: dict, db) -> None:
-    """claim된 단일 이벤트를 dispatch한다. mark_done/mark_failed는 호출자 소유.
-
-    WS 브로드캐스트는 여기서 모으지 않고 dispatch 후 별도 commit 경계 뒤에
-    drain_webhook_events가 발사한다(커밋 후 발사 규칙).
-    """
-    await dispatch_event(event['event_type'], event['payload'], db)
+    return sorted(affected)
 
 
 async def drain_webhook_events() -> int:
@@ -128,38 +135,31 @@ async def drain_webhook_events() -> int:
             break
 
         processed += 1
-        broadcasts: list[tuple[int, dict]] = []
+        branch_ids: list[int] = []
         try:
             async with db_engine.transactional_session() as work_db:
-                await process_webhook_event(event, work_db)
-                # 전이/링크 대상 브랜치 수집(커밋 후 발사)
-                refs = github_parser.extract_refs(
-                    _collectable_text(event['payload']))
-                for key, _num in refs:
-                    brow = await branch_model.find_by_key_row(key, work_db)
-                    if brow:
-                        broadcasts.append((brow['branch_id'], {
-                            'type': 'task_updated',
-                            'branch_id': brow['branch_id'],
-                            'source': 'github',
-                        }))
+                branch_ids = await dispatch_event(
+                    event['event_type'], event['payload'], work_db)
                 await event_model.mark_done(event['event_id'], work_db)
-        except Exception as exc:  # noqa: BLE001 — poison 격리 위해 광범위 catch
+        except Exception as exc:  # noqa: BLE001 — poison 격리
             logger.warning("github webhook event %s failed: %s",
                            event.get('event_id'), exc, exc_info=False)
             async with db_engine.transactional_session() as fail_db:
                 await event_model.mark_failed(event['event_id'], str(exc), fail_db)
             continue
 
-        # 2) 커밋 후 브로드캐스트(트랜잭션 밖, best-effort)
-        async with db_engine.transactional_session() as bc_db:
-            for branch_id, data in broadcasts:
-                await manager.broadcast_to_branch(branch_id, data, bc_db)
+        # 커밋 후 브로드캐스트 — best-effort, 실패해도 드레인 루프는 계속
+        if branch_ids:
+            try:
+                async with db_engine.transactional_session() as bc_db:
+                    for bid in branch_ids:
+                        await manager.broadcast_to_branch(bid, {
+                            'type': 'task_updated',
+                            'branch_id': bid,
+                            'source': 'github',
+                        }, bc_db)
+            except Exception as exc:  # noqa: BLE001 — 브로드캐스트 실패는 비치명
+                logger.warning("github broadcast for event %s failed: %s",
+                               event.get('event_id'), exc, exc_info=False)
 
     return processed
-
-
-def _collectable_text(payload: dict) -> str:
-    pr = payload.get('pull_request') or {}
-    head_ref = ((pr.get('head') or {}).get('ref')) or ''
-    return f"{head_ref} {pr.get('title') or ''} {pr.get('body') or ''}"

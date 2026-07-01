@@ -41,6 +41,9 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
     except (ValueError, UnicodeDecodeError):
         return JSONResponse(status_code=202, content={"status": True, "skipped": True})
 
+    if not isinstance(payload, dict):
+        return JSONResponse(status_code=202, content={"status": True, "skipped": True})
+
     # 2) 멱등 staging — delivery_id 충돌(재전송)은 insert가 None 반환 -> 202 no-op
     async with db.transactional_session() as session:
         row = await event_model.insert(delivery_id, event_type, payload, session)

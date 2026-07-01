@@ -3,6 +3,10 @@
 Weave branch key 형태(^[A-Z][A-Z0-9]{1,9}$, 대문자 2~10자)와 동일한 정규식으로
 결정적으로 매칭한다. 대소문자 무시 후 key는 upper 정규화한다. 한 텍스트가 여러
 태스크를 참조할 수 있으므로 등장 순서를 보존하며 중복만 제거한다.
+
+정규식은 `WV-1`과 `wv-1` 양쪽을 모두 잡고 key를 upper 정규화한다. `\b` 경계
+매칭이므로 `xWV-1` 같이 알파뉴메릭 접두가 붙은 토큰도 `XWV` 키로 추출되지만,
+dispatch가 알 수 없는 branch key를 skip해 무해하다.
 """
 import re
 
@@ -11,7 +15,7 @@ _REF_RE = re.compile(r"\b([A-Za-z][A-Za-z0-9]{1,9})-(\d+)\b")
 
 
 def extract_refs(text: str) -> list[tuple[str, int]]:
-    if not text:
+    if not text or not isinstance(text, str):
         return []
     seen: set[tuple[str, int]] = set()
     out: list[tuple[str, int]] = []
