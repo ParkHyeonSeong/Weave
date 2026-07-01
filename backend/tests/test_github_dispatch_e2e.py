@@ -185,3 +185,76 @@ async def test_dispatch_logs_activity_on_merge(db_session):
         WHERE entity_type = 'task' AND entity_id = :tid
     """), {"tid": tid})
     assert r.scalar_one() >= 1
+
+
+# --- webhook router tests (HMAC-verified, ASGI) ----------------------------
+import contextlib
+import importlib
+
+from fastapi import FastAPI
+from httpx import AsyncClient, ASGITransport
+
+import db_engine
+
+
+def _sign(secret: str, raw: bytes) -> str:
+    mac = hmac.new(secret.encode(), raw, hashlib.sha256).hexdigest()
+    return "sha256=" + mac
+
+
+def _wire_test_db(app, db_session, monkeypatch):
+    """Route the handler's request session AND the BackgroundTask's
+    transactional_session to the rolled-back test session, so the webhook's
+    staging INSERT + background claim/dispatch never write to a DB outside the
+    fixture (mirrors tests/test_pat_routes.py)."""
+    @contextlib.asynccontextmanager
+    async def _fake_txn():
+        yield db_session
+
+    async def _override_session():
+        yield db_session  # db_session fixture owns the transaction/rollback
+
+    monkeypatch.setattr(db_engine, "transactional_session", _fake_txn)
+    app.dependency_overrides[db_engine.session] = _override_session
+
+
+async def test_webhook_bad_signature_401(db_session, monkeypatch):
+    import config
+    monkeypatch.setattr(config, "GITHUB_WEBHOOK_SECRET", "topsecret", raising=False)
+    import routers.github_webhook as gh
+    importlib.reload(gh)
+    app = FastAPI()
+    app.include_router(gh.router, prefix="/api/github")
+    _wire_test_db(app, db_session, monkeypatch)
+    body = json.dumps({"action": "opened"}).encode()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
+        r = await ac.post("/api/github/webhook", content=body, headers={
+            "X-Hub-Signature-256": "sha256=deadbeef",
+            "X-GitHub-Event": "pull_request",
+            "X-GitHub-Delivery": "d-badsig",
+            "Content-Type": "application/json",
+        })
+    assert r.status_code == 401
+
+
+async def test_webhook_valid_signature_returns_202(db_session, monkeypatch):
+    import config
+    monkeypatch.setattr(config, "GITHUB_WEBHOOK_SECRET", "topsecret", raising=False)
+    import routers.github_webhook as gh
+    importlib.reload(gh)
+    app = FastAPI()
+    app.include_router(gh.router, prefix="/api/github")
+    _wire_test_db(app, db_session, monkeypatch)
+    body = json.dumps({"action": "opened",
+                       "repository": {"full_name": "org/repo"},
+                       "pull_request": {"number": 1, "title": "x", "body": "",
+                                        "head": {"ref": "f"}, "html_url": "u",
+                                        "merged": False}}).encode()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
+        r = await ac.post("/api/github/webhook", content=body, headers={
+            "X-Hub-Signature-256": _sign("topsecret", body),
+            "X-GitHub-Event": "pull_request",
+            "X-GitHub-Delivery": "d-valid-202",
+            "Content-Type": "application/json",
+        })
+    assert r.status_code == 202
