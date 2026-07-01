@@ -1,0 +1,189 @@
+@use 'sass:color';
+@use '../../variables' as *;
+
+.TaskGithubRefSection {
+  display: flex;
+  flex-direction: column;
+  gap: $space-2;
+
+  &__Header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  &__Label {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-semibold;
+    color: $color-text-secondary;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+
+  &__AddBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 26px;
+    padding: 0 $space-2;
+    border-radius: $radius-md;
+    color: $color-text-tertiary;
+    transition: all $transition-fast;
+
+    &:hover { background: $color-surface; color: $color-text; }
+  }
+
+  &__AddForm {
+    display: flex;
+    flex-direction: column;
+    gap: $space-2;
+    padding: $space-2;
+    border: 1px dashed $color-border;
+    border-radius: $radius-md;
+  }
+
+  &__Input {
+    padding: $space-2 $space-3;
+    font-size: $font-size-sm;
+    color: $color-text;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    outline: none;
+    background: $color-bg;
+
+    &:focus { border-color: $color-primary; box-shadow: $shadow-focus; }
+    &::placeholder { color: $color-text-tertiary; }
+  }
+
+  &__Error {
+    font-size: $font-size-xs;
+    color: $color-error;
+  }
+
+  &__AddActions {
+    display: flex;
+    gap: $space-2;
+  }
+
+  &__SubmitBtn {
+    padding: $space-2 $space-4;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-text-inverse;
+    background: $color-primary;
+    border-radius: $radius-md;
+    transition: background $transition-fast;
+
+    &:hover:not(:disabled) { background: $color-primary-hover; }
+    &:disabled { opacity: 0.6; cursor: not-allowed; }
+  }
+
+  &__CancelBtn {
+    padding: $space-2 $space-4;
+    font-size: $font-size-sm;
+    color: $color-text-secondary;
+    border-radius: $radius-md;
+    transition: all $transition-fast;
+
+    &:hover { background: $color-surface-hover; }
+  }
+
+  &__Empty {
+    padding: $space-2 $space-1;
+    font-size: $font-size-sm;
+    color: $color-text-tertiary;
+  }
+
+  &__List {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__Item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: 6px 8px;
+    border-radius: $radius-md;
+    cursor: pointer;
+    transition: background $transition-fast;
+    font-size: $font-size-sm;
+
+    &:hover {
+      background: $color-surface-hover;
+
+      .TaskGithubRefSection__UnlinkBtn { opacity: 1; }
+    }
+  }
+
+  &__ItemOverlay {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    border-radius: $radius-md;
+  }
+
+  &__Icon {
+    color: $color-text-secondary;
+    flex-shrink: 0;
+  }
+
+  &__PrTitle {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: $color-text;
+  }
+
+  &__PrNumber {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+    flex-shrink: 0;
+  }
+
+  &__State {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    padding: 1px 7px;
+    border-radius: 9999px;
+    flex-shrink: 0;
+
+    &--open {
+      color: $color-success;
+      background: $color-success-bg;
+    }
+    &--merged {
+      color: $color-ref-issue;
+      background: $color-ref-issue-bg;
+    }
+    &--closed {
+      color: $color-error;
+      background: $color-error-bg;
+    }
+    &--draft {
+      color: $color-text-secondary;
+      background: $color-surface;
+    }
+  }
+
+  &__UnlinkBtn {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: $radius-sm;
+    color: $color-text-tertiary;
+    opacity: 0;
+    transition: all $transition-fast;
+    flex-shrink: 0;
+
+    &:focus-visible { opacity: 1; }
+    &:hover { background: $color-surface; color: $color-text; }
+  }
+}
