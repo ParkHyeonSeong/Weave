@@ -57,6 +57,13 @@ const ERROR_TEXT = {
   PARENT_NOT_TOP_LEVEL: '하위 태스크는 부모가 될 수 없어요.',
   TARGET_HAS_SUBTASKS: '하위를 가진 태스크는 다른 태스크의 하위가 될 수 없어요.',
   MIGRATION_EXPIRED: '세션이 만료됐어요. CSV를 다시 업로드해 주세요.',
+
+  // --- GitHub 연동 ---
+  DUPLICATE_LINK: '이미 연결돼 있어요.',
+  REPO_NOT_CONNECTED: '이 브랜치에 연결되지 않은 repo예요. 먼저 설정에서 repo를 연결해 주세요.',
+  INVALID_GITHUB_URL: '올바른 GitHub PR URL이 아니에요. (예: https://github.com/org/repo/pull/123)',
+  GITHUB_FETCH_FAILED: 'GitHub PR 정보를 가져오지 못했어요. 잠시 후 다시 시도해 주세요.',
+  INTEGRATION_NOT_FOUND: '연결 정보를 찾을 수 없어요.',
 };
 
 // 코드 매핑이 없을 때 category(마이그레이션된 응답에만 존재)로 주는 일반 폴백.

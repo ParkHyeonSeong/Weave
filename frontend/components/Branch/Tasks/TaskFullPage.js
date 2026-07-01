@@ -19,6 +19,7 @@ import TaskSubtaskSection from './TaskSubtaskSection';
 import TaskCommentSection from './TaskCommentSection';
 import TaskDependencySection from './TaskDependencySection';
 import TaskPageLinkSection from './TaskPageLinkSection';
+import TaskGithubRefSection from './TaskGithubRefSection';
 import TaskDescriptionEditor from './TaskDescriptionEditor';
 import ConfirmModal from '@/components/modal/ConfirmModal';
 import ActivityTimeline from '@/components/common/ActivityTimeline';
@@ -267,6 +268,11 @@ export default function TaskFullPage() {
 
           {/* 이슈 */}
           <TaskIssueSection branchId={branchId} taskId={task.task_id} expanded />
+
+          <div className="TaskFullPage__Divider" />
+
+          {/* GitHub PR */}
+          <TaskGithubRefSection branchId={branchId} taskId={task.task_id} />
 
           <div className="TaskFullPage__Divider" />
 

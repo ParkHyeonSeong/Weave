@@ -14,12 +14,13 @@ export default function SettingsGithubIntegration({ branchId, isAdmin }) {
   const [err, setErr] = useState('');
 
   const fetchIntegrations = async () => {
-    if (!branchId) return;
+    if (!branchId) { setLoading(false); return; }
     try {
       const res = await axios.get(`/branches/${branchId}/github`);
       if (res.data.status) setIntegrations(res.data.integrations || []);
-    } catch {}
-    setLoading(false);
+    } catch {} finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { fetchIntegrations(); }, [branchId]);

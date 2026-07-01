@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Plus, GitPullRequest, X } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import { getErrorCode } from '@/library/errorCode';
@@ -18,13 +18,13 @@ export default function TaskGithubRefSection({ branchId, taskId }) {
   const [linking, setLinking] = useState(false);
   const [err, setErr] = useState('');
 
-  const fetchRefs = async () => {
+  const fetchRefs = useCallback(async () => {
     if (!branchId || !taskId) return;
     try {
       const res = await axios.get(`/branches/${branchId}/tasks/${taskId}/github-refs`);
       if (res.data.status) setRefs(res.data.refs || []);
     } catch {}
-  };
+  }, [branchId, taskId]);
 
   useEffect(() => {
     fetchRefs();
@@ -34,7 +34,7 @@ export default function TaskGithubRefSection({ branchId, taskId }) {
     const onTaskUpdated = () => { fetchRefs(); };
     window.addEventListener('task:updated', onTaskUpdated);
     return () => window.removeEventListener('task:updated', onTaskUpdated);
-  }, [branchId, taskId]);
+  }, [fetchRefs]);
 
   const handleLink = async () => {
     const value = url.trim();
