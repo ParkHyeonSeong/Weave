@@ -115,3 +115,50 @@ async def test_delete_integration_admin_and_branch_scoped(db_session):
                                             _req(admin), db_session)
     assert ok["status"] is True
     assert await ghi.find_by_branch(b, db_session) == []
+
+
+async def test_set_enabled_admin_and_branch_scoped(db_session):
+    admin = await _make_user(db_session, "ghadm3@gh.test", "ghadm3")
+    b = await _make_branch(db_session, admin, key="GADM3")
+    other = await _make_branch(db_session, admin, name="O3", key="GOT3")
+    await _add_member(db_session, b, admin, "admin")
+    await _add_member(db_session, other, admin, "admin")
+    created = await ghi.create(b, "org/repo", 11, admin, db_session)
+
+    # toggling via the OTHER branch's URL must not affect b's row
+    wrong = await int_ctrl.set_enabled(other, created["integration_id"],
+                                       schema.IntegrationToggle(enabled=False),
+                                       _req(admin), db_session)
+    assert wrong["status"] is False
+    assert wrong["code"] == "INTEGRATION_NOT_FOUND"
+    rows = await ghi.find_by_branch(b, db_session)
+    assert len(rows) == 1 and rows[0]["enabled"] is True
+
+    ok = await int_ctrl.set_enabled(b, created["integration_id"],
+                                    schema.IntegrationToggle(enabled=False),
+                                    _req(admin), db_session)
+    assert ok["status"] is True
+    assert "integration" in ok
+    rows_after = await ghi.find_by_branch(b, db_session)
+    assert len(rows_after) == 1 and rows_after[0]["enabled"] is False
+
+
+async def test_create_integration_duplicate_survives_outer_tx(db_session):
+    admin = await _make_user(db_session, "ghadm4@gh.test", "ghadm4")
+    b = await _make_branch(db_session, admin, key="GADM4")
+    await _add_member(db_session, b, admin, "admin")
+
+    body = schema.IntegrationCreate(repo_full_name="org/dup", installation_id=11)
+
+    first = await int_ctrl.create_integration(body, b, _req(admin), db_session)
+    assert first["status"] is True
+
+    second = await int_ctrl.create_integration(body, b, _req(admin), db_session)
+    assert second["status"] is False
+    assert second["code"] == "DUPLICATE_LINK"
+
+    # Prove the outer tx survived the IntegrityError (savepoint contained it):
+    # if the session were in a failed/aborted state, this query would raise
+    # PendingRollbackError / InFailedSqlTransaction instead of returning.
+    rows = await ghi.find_by_branch(b, db_session)
+    assert len(rows) == 1

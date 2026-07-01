@@ -1,4 +1,5 @@
 from fastapi import Request
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.errors import error_response, ErrorCode
@@ -29,7 +30,6 @@ async def create_integration(body, branch_id: int, request: Request, db: AsyncSe
     user_id, err = await _require_admin(branch_id, request, db)
     if err:
         return err
-    from sqlalchemy.exc import IntegrityError
     try:
         # UNIQUE 위반이 바깥 트랜잭션을 abort시키지 않게 savepoint 안에서 insert
         async with db.begin_nested():
