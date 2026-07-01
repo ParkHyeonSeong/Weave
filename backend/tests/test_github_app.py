@@ -204,3 +204,41 @@ async def test_installation_token_isolates_per_installation(monkeypatch, app_jwt
     await github_app.installation_token(2)
     # Different installation ids never share a cache entry.
     assert len(transport.calls) == 2
+
+
+# ── Task 5: fetch_pull_request ──────────────────────────────────────────
+def _async_return(value):
+    async def _f(*a, **k):
+        return value
+    return _f
+
+
+async def test_fetch_pull_request_returns_json(monkeypatch):
+    import httpx
+    from library import github_app
+    captured = {}
+
+    def handler(request):
+        captured["url"] = str(request.url)
+        captured["auth"] = request.headers.get("authorization")
+        return httpx.Response(200, json={"number": 9, "title": "Hi", "state": "open",
+                                         "merged": False, "merge_commit_sha": None,
+                                         "html_url": "https://github.com/o/r/pull/9"})
+
+    monkeypatch.setattr(github_app, "installation_token", _async_return("ghs_tok"))
+    monkeypatch.setattr(github_app, "_github_client",
+                        lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    pr = await github_app.fetch_pull_request("o", "r", 9, 123)
+    assert pr["title"] == "Hi" and pr["state"] == "open"
+    assert "/repos/o/r/pulls/9" in captured["url"]
+    assert captured["auth"] == "Bearer ghs_tok"
+
+
+async def test_fetch_pull_request_non_200_returns_none(monkeypatch):
+    import httpx
+    from library import github_app
+    monkeypatch.setattr(github_app, "installation_token", _async_return("ghs_tok"))
+    monkeypatch.setattr(github_app, "_github_client",
+                        lambda: httpx.AsyncClient(
+                            transport=httpx.MockTransport(lambda r: httpx.Response(404))))
+    assert await github_app.fetch_pull_request("o", "r", 1, 123) is None

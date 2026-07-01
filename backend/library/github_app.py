@@ -75,6 +75,21 @@ def _parse_expires_at(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
+async def fetch_pull_request(owner: str, repo: str, number: int, installation_id: int):
+    """수동 링크용 PR 메타 조회. installation token으로 GET /repos/{o}/{r}/pulls/{n}.
+    200이면 PR JSON(dict), 아니면 None. 자동 webhook 경로는 쓰지 않는다(payload 자기완결)."""
+    token = await installation_token(installation_id)
+    async with _github_client() as client:
+        resp = await client.get(
+            f"https://api.github.com/repos/{owner}/{repo}/pulls/{number}",
+            headers={"Authorization": f"Bearer {token}",
+                     "Accept": "application/vnd.github+json"},
+        )
+    if resp.status_code != 200:
+        return None
+    return resp.json()
+
+
 async def installation_token(installation_id: int) -> str:
     """installation access token을 발급/캐시한다.
 
