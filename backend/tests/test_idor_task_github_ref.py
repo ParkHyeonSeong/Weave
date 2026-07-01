@@ -13,6 +13,7 @@ Two concerns are locked in here:
 """
 from types import SimpleNamespace
 
+import pytest
 from sqlalchemy import text
 
 from core.controller import github_integration as int_ctrl
@@ -304,16 +305,25 @@ async def test_duplicate_link_conflict_keeps_session_usable(db_session, monkeypa
     assert listed["status"] is True and len(listed["refs"]) == 1
 
 
-async def test_link_rejects_non_github_url(db_session):
-    """P2: host가 정확히 github.com이 아니면 INVALID_GITHUB_URL (부분문자열 위장 차단).
+@pytest.mark.parametrize("spoof_url", [
+    "https://evil.example/?u=github.com/org/repo/pull/1",   # 부분문자열 위장
+    "https://github.com.evil.com/org/repo/pull/1",           # 서브도메인 위장
+    "https://user@github.com/org/repo/pull/1",               # userinfo 위장 (netloc = user@github.com)
+    "http://github.com.evil.com/org/repo/pull/2",            # http 스킴 + 서브도메인 위장
+])
+async def test_link_rejects_host_spoof_url(spoof_url, db_session):
+    """P2: host가 정확히 github.com이 아닌 모든 host-spoof 변형은 INVALID_GITHUB_URL.
 
-    integration 조회/fetch 이전(URL 검증 단계)에서 막히므로 시드/모킹이 필요 없다."""
-    alice = await _make_user(db_session, "idor_url@gh.test", "idor_url")
-    branch_a = await _make_branch(db_session, alice, name="A", key="IDRU")
+    integration 조회/fetch 이전(URL 검증 단계)에서 막히므로 시드/모킹이 필요 없다.
+    멤버십 게이트를 통과시켜 URL 검증이 실제 거부 원인임을 확인하기 위해 alice 시드는 유지한다."""
+    alice = await _make_user(db_session, f"idor_url_{abs(hash(spoof_url)) % 10000}@gh.test",
+                             f"idor_url_{abs(hash(spoof_url)) % 10000}")
+    branch_a = await _make_branch(db_session, alice, name="A",
+                                  key=f"IDU{abs(hash(spoof_url)) % 1000:03d}")
     await _add_member(db_session, branch_a, alice, "member")
     task_a = await _make_task(db_session, branch_a, alice, title="A task")
-    evil = schema.RefLinkCreate(html_url="https://evil.example/?u=github.com/org/repo/pull/1")
-    res = await ref_ctrl.link_ref(evil, branch_a, task_a, _req(alice), db_session)
+    body = schema.RefLinkCreate(html_url=spoof_url)
+    res = await ref_ctrl.link_ref(body, branch_a, task_a, _req(alice), db_session)
     assert res["status"] is False and res["code"] == "INVALID_GITHUB_URL"
 
 
