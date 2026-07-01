@@ -49,6 +49,7 @@ from routers import notification as notification_router
 from routers import activity_log as activity_log_router
 from routers import task_dependency as task_dependency_router
 from routers import task_page_link as task_page_link_router
+from routers import github as github_router
 from routers import url_meta as url_meta_router
 from routers import star as star_router
 from routers import push as push_router
@@ -243,6 +244,8 @@ app.include_router(notification_router.router, prefix="/api/notifications", tags
 app.include_router(activity_log_router.router, prefix="/api", tags=["activity-log"])
 app.include_router(task_dependency_router.router, prefix="/api/branches/{branch_id}/dependencies", tags=["dependencies"])
 app.include_router(task_page_link_router.router, prefix="/api/branches/{branch_id}/tasks/{task_id}/pages", tags=["task-pages"])
+app.include_router(github_router.admin_router, prefix="/api/branches/{branch_id}/github", tags=["github"])
+app.include_router(github_router.ref_router, prefix="/api/branches/{branch_id}/tasks/{task_id}/github-refs", tags=["github"])
 app.include_router(url_meta_router.router, prefix="/api/url-meta", tags=["url-meta"])
 app.include_router(star_router.router, prefix="/api/stars", tags=["stars"])
 app.include_router(push_router.router, prefix="/api/push", tags=["push"])
