@@ -102,3 +102,39 @@ async def test_transition_status_empty_allowed_is_noop(db_session):
     moved = await task_model.transition_status(t, "done", [], db_session)
     assert moved is None
     assert await _status(db_session, t) == "todo"
+
+
+async def test_find_by_display_returns_task(db_session):
+    """(branch_id, display_number)로 task를 찾고 display_id를 합성한다."""
+    u = await _make_user(db_session, "fd1@trans.test", "fd1")
+    b = await _make_branch(db_session, u, key="FDA")
+    t = await _make_task(db_session, b, u, status="todo")
+    dn_row = await db_session.execute(
+        text("SELECT display_number FROM task WHERE task_id = :t"), {"t": t})
+    dn = dn_row.scalar_one()
+
+    found = await task_model.find_by_display(b, dn, db_session)
+    assert found is not None
+    assert found["task_id"] == t
+    assert found["branch_id"] == b
+    assert found["display_id"] == f"FDA-{dn}"
+
+
+async def test_find_by_display_scoped_to_branch(db_session):
+    """다른 branch의 같은 display_number를 넘기면 None (cross-branch 미해석)."""
+    u = await _make_user(db_session, "fd2@trans.test", "fd2")
+    b1 = await _make_branch(db_session, u, key="FDB")
+    b2 = await _make_branch(db_session, u, key="FDC")
+    t1 = await _make_task(db_session, b1, u, status="todo")
+    dn_row = await db_session.execute(
+        text("SELECT display_number FROM task WHERE task_id = :t"), {"t": t1})
+    dn = dn_row.scalar_one()
+
+    # b2에는 dn번 task가 없음
+    assert await task_model.find_by_display(b2, dn, db_session) is None
+
+
+async def test_find_by_display_missing_returns_none(db_session):
+    u = await _make_user(db_session, "fd3@trans.test", "fd3")
+    b = await _make_branch(db_session, u, key="FDD")
+    assert await task_model.find_by_display(b, 999999, db_session) is None

@@ -1123,6 +1123,27 @@ async def remove_main_except(task_id: int, keep_user_id, db: AsyncSession):
     """), {'task_id': task_id, 'keep': keep_user_id})
 
 
+async def find_by_display(branch_id: int, display_number: int, db: AsyncSession):
+    """(branch_id, display_number)로 단일 task 조회 — GitHub 참조(WV-123) 해석용.
+
+    branch_key는 호출부가 이미 branch_id로 변환한 뒤이므로 여기선 숫자만 본다.
+    display_id를 합성해 반환한다. 미존재 시 None.
+    """
+    result = await db.execute(text("""
+        SELECT t.task_id, t.branch_id, t.display_number, t.title, t.status,
+               t.created_by, b.key AS branch_key
+        FROM task t
+        INNER JOIN branch b ON t.branch_id = b.branch_id
+        WHERE t.branch_id = :branch_id AND t.display_number = :display_number
+    """), {'branch_id': branch_id, 'display_number': display_number})
+    row = result.fetchone()
+    if not row:
+        return None
+    task = dict(row._mapping)
+    task['display_id'] = f"{task['branch_key']}-{task['display_number']}"
+    return task
+
+
 async def transition_status(task_id: int, target_key: str,
                             allowed_current_keys: list, db: AsyncSession):
     """원자적 조건부 전이(CAS): 현재 status가 allowed_current_keys에 있을 때만
