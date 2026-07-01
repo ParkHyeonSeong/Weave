@@ -121,7 +121,7 @@ export default function TaskGithubRefSection({ branchId, taskId }) {
             <div key={r.ref_id} className="TaskGithubRefSection__Item">
               <a
                 className="TaskGithubRefSection__ItemOverlay"
-                href={r.html_url}
+                href={typeof r.html_url === 'string' && r.html_url.startsWith('https://') ? r.html_url : undefined}
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label={r.title || `PR #${r.ref_number}`}

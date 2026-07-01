@@ -138,6 +138,14 @@ export default function SettingsGithubIntegration({ branchId, isAdmin }) {
               placeholder="installation_id (숫자)"
               inputMode="numeric"
             />
+            <a
+              className="SettingsGithub__Hint"
+              href="https://github.com/settings/installations"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              installation_id는 GitHub App 설치 페이지 URL의 숫자예요 →
+            </a>
             {err && <span className="SettingsGithub__Error">{err}</span>}
             <div className="SettingsGithub__AddActions">
               <button

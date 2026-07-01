@@ -267,6 +267,8 @@ async def test_own_branch_link_succeeds(db_session, monkeypatch):
     await _add_member(db_session, branch_a, alice, "member")
     task_a = await _make_task(db_session, branch_a, alice, title="A task")
     await ghi.create(branch_a, "org/repo", 123, alice, db_session)  # repo가 연결돼 있어야 함
+    monkeypatch.setattr(ref_ctrl.config, "GITHUB_APP_ID", "1")
+    monkeypatch.setattr(ref_ctrl.config, "GITHUB_APP_PRIVATE_KEY", "stub_key")
     monkeypatch.setattr(github_app, "fetch_pull_request",
                         _async_pr(number=9, title="Hi", state="open", merged=False,
                                   merge_commit_sha=None,
@@ -287,6 +289,8 @@ async def test_duplicate_link_conflict_keeps_session_usable(db_session, monkeypa
     await _add_member(db_session, branch_a, alice, "member")
     task_a = await _make_task(db_session, branch_a, alice, title="A task")
     await ghi.create(branch_a, "org/repo", 123, alice, db_session)
+    monkeypatch.setattr(ref_ctrl.config, "GITHUB_APP_ID", "1")
+    monkeypatch.setattr(ref_ctrl.config, "GITHUB_APP_PRIVATE_KEY", "stub_key")
     monkeypatch.setattr(github_app, "fetch_pull_request",
                         _async_pr(number=77, title="Dup", state="open", merged=False,
                                   merge_commit_sha=None,

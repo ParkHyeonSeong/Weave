@@ -5,6 +5,7 @@ from fastapi import Request
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import config
 from core.errors import error_response, ErrorCode
 from core.guard.branch_scope import find_resource_in_branch
 from core.model import github_integration as ghi_model
@@ -42,7 +43,7 @@ async def link_ref(body, branch_id: int, task_id: int, request: Request, db: Asy
         return err
     # P2: host가 정확히 github.com인지 검사(부분문자열 위장 URL 차단)
     parsed = urlparse(body.html_url)
-    m = re.match(r'^/([^/]+)/([^/]+)/pull/(\d{1,8})$', parsed.path or '')
+    m = re.match(r'^/([A-Za-z0-9._-]+)/([A-Za-z0-9._-]+)/pull/(\d{1,8})$', parsed.path or '')
     if parsed.scheme != 'https' or parsed.netloc.lower() != 'github.com' or not m:
         return error_response(ErrorCode.INVALID_GITHUB_URL)
     owner, repo = m.group(1), m.group(2)
@@ -51,6 +52,8 @@ async def link_ref(body, branch_id: int, task_id: int, request: Request, db: Asy
     integ = await ghi_model.find_enabled(branch_id, repo_full_name, db)
     if not integ:
         return error_response(ErrorCode.REPO_NOT_CONNECTED)
+    if not config.GITHUB_APP_ID or not config.GITHUB_APP_PRIVATE_KEY:
+        return error_response(ErrorCode.GITHUB_FETCH_FAILED)
     pr = await github_app.fetch_pull_request(owner, repo, ref_number, integ['installation_id'])
     if pr is None:
         return error_response(ErrorCode.GITHUB_FETCH_FAILED)
