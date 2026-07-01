@@ -64,12 +64,16 @@ from routers import scrum_retro as scrum_retro_router
 from routers import ws_scrum as ws_scrum_router
 from routers import ws_scrum_retro as ws_scrum_retro_router
 from routers import pat as pat_router
+from routers import github_webhook as github_webhook_router
 from core.controller import pat as pat_controller
 from core.controller import jira_migrate as jira_migrate_controller
+from core.controller import github as github_controller
 import db_engine as db
 
 # Jira 임시 CSV 정리 주기(초, SEC-24)
 JIRA_TEMP_CLEANUP_INTERVAL = int(os.getenv("JIRA_TEMP_CLEANUP_INTERVAL", "3600"))
+# GitHub webhook 재시도 드레인 주기(초) — 실패/죽은락 이벤트 회수.
+GITHUB_EVENT_RETRY_INTERVAL = int(os.getenv("GITHUB_EVENT_RETRY_INTERVAL", "60"))
 
 # -- Logging ---------------------------------------------------------------
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -95,19 +99,41 @@ async def _periodic_jira_temp_cleanup():
             logger.warning("Jira temp cleanup tick failed", exc_info=False)
 
 
+async def _periodic_github_event_retry():
+    """주기적으로 실패/죽은락 GitHub webhook 이벤트를 claim 드레인 재처리한다.
+
+    _periodic_jira_temp_cleanup 템플릿. drain_webhook_events가 claim_one으로
+    pending/failed/stale(>5분) 이벤트를 단일승자 처리하므로, BackgroundTask가
+    유실됐어도(재시작 등) 여기서 at-least-once로 회수한다.
+    """
+    while True:
+        try:
+            await asyncio.sleep(GITHUB_EVENT_RETRY_INTERVAL)
+            processed = await github_controller.drain_webhook_events()
+            if processed:
+                logger.info("Drained %d GitHub webhook event(s)", processed)
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            logger.warning("GitHub event retry tick failed", exc_info=False)
+
+
 @asynccontextmanager
 async def lifespan(app):
     # Startup: 시작 시 1회 고아 임시파일 청소 + 주기 청소 태스크 기동(SEC-24).
     # 동기 I/O라 to_thread로 위임해 스타트업 이벤트루프 블로킹을 피한다.
     await asyncio.to_thread(jira_migrate_controller.cleanup_temp_files)
     cleanup_task = asyncio.create_task(_periodic_jira_temp_cleanup())
+    github_retry_task = asyncio.create_task(_periodic_github_event_retry())
     yield
     # Graceful shutdown: 청소 태스크 정리(취소 완료 대기) + 활성 collaboration room 영속화
     cleanup_task.cancel()
-    try:
-        await cleanup_task
-    except asyncio.CancelledError:
-        pass
+    github_retry_task.cancel()
+    for _t in (cleanup_task, github_retry_task):
+        try:
+            await _t
+        except asyncio.CancelledError:
+            pass
     logger.info("Persisting active collaboration rooms...")
     await collab_manager.persist_all()
     await scrum_week_collab_manager.persist_all()
@@ -246,6 +272,7 @@ app.include_router(task_dependency_router.router, prefix="/api/branches/{branch_
 app.include_router(task_page_link_router.router, prefix="/api/branches/{branch_id}/tasks/{task_id}/pages", tags=["task-pages"])
 app.include_router(github_router.admin_router, prefix="/api/branches/{branch_id}/github", tags=["github"])
 app.include_router(github_router.ref_router, prefix="/api/branches/{branch_id}/tasks/{task_id}/github-refs", tags=["github"])
+app.include_router(github_webhook_router.router, prefix="/api/github", tags=["github"])
 app.include_router(url_meta_router.router, prefix="/api/url-meta", tags=["url-meta"])
 app.include_router(star_router.router, prefix="/api/stars", tags=["stars"])
 app.include_router(push_router.router, prefix="/api/push", tags=["push"])

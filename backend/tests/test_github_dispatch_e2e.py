@@ -258,3 +258,34 @@ async def test_webhook_valid_signature_returns_202(db_session, monkeypatch):
             "Content-Type": "application/json",
         })
     assert r.status_code == 202
+
+
+# --- idempotent-claim e2e tests -------------------------------------------
+from core.model import github_webhook_event as event_model
+
+
+async def test_duplicate_delivery_inserts_once(db_session):
+    payload = {"action": "opened", "repository": {"full_name": "org/dup"},
+               "pull_request": {"number": 1, "title": "x", "body": "",
+                                "head": {"ref": "f"}, "html_url": "u", "merged": False}}
+    first = await event_model.insert("dup-1", "pull_request", payload, db_session)
+    second = await event_model.insert("dup-1", "pull_request", payload, db_session)
+    assert first is not None
+    assert second is None  # duplicate delivery -> no second row
+    r = await db_session.execute(text(
+        "SELECT COUNT(*) FROM github_webhook_event WHERE delivery_id = 'dup-1'"))
+    assert r.scalar_one() == 1
+
+
+async def test_claim_one_then_done_drains_single_event(db_session):
+    # stage one event, claim it, mark done -> not claimable again
+    payload = {"action": "opened", "repository": {"full_name": "org/cl"},
+               "pull_request": {"number": 2, "title": "t", "body": "",
+                                "head": {"ref": "f"}, "html_url": "u", "merged": False}}
+    await event_model.insert("claim-1", "pull_request", payload, db_session)
+    claimed = await event_model.claim_one(db_session)
+    assert claimed is not None
+    assert claimed["delivery_id"] == "claim-1"
+    await event_model.mark_done(claimed["event_id"], db_session)
+    again = await event_model.claim_one(db_session)
+    assert again is None  # already done -> not re-claimed
