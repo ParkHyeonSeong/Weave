@@ -85,6 +85,22 @@ _INTEGRATION_COLLISION_SQL = """
     HAVING COUNT(*) > 1
 """
 
+_PR_REF_COLLISION_SQL = """
+    SELECT task_id, LOWER(repo_full_name) AS norm, ref_number, COUNT(*) AS cnt
+    FROM task_github_ref
+    WHERE ref_type = 'pull_request'
+    GROUP BY task_id, LOWER(repo_full_name), ref_number
+    HAVING COUNT(*) > 1
+"""
+
+_COMMIT_REF_COLLISION_SQL = """
+    SELECT task_id, LOWER(repo_full_name) AS norm, sha, COUNT(*) AS cnt
+    FROM task_github_ref
+    WHERE ref_type = 'commit'
+    GROUP BY task_id, LOWER(repo_full_name), sha
+    HAVING COUNT(*) > 1
+"""
+
 
 async def test_backfill_lowercases_mixed_case_integration(db_session):
     u = await _make_user(db_session, "mig_int@gh.test", "mig_int")
@@ -128,4 +144,45 @@ async def test_collision_group_is_detected(db_session):
     matching = [r for r in rows if r.branch_id == b]
     assert len(matching) == 1
     assert matching[0].norm == "org/repo"
+    assert matching[0].cnt == 2
+
+
+async def test_pr_ref_collision_group_is_detected(db_session):
+    u = await _make_user(db_session, "mig_prc@gh.test", "mig_prc")
+    b = await _make_branch(db_session, u, key="MIGP")
+    t = await _make_task(db_session, b, u)
+    # same task + same PR number, repo differs only by case → both rows insert
+    # under the case-sensitive uq_tgr_pr (task_id, repo_full_name, ref_number).
+    await _make_ref(db_session, t, "Org/Repo", "pull_request",
+                    "https://github.com/Org/Repo/pull/1", ref_number=1)
+    await _make_ref(db_session, t, "org/repo", "pull_request",
+                    "https://github.com/org/repo/pull/1", ref_number=1)
+
+    rows = (await db_session.execute(text(_PR_REF_COLLISION_SQL))).fetchall()
+
+    matching = [r for r in rows if r.task_id == t]
+    assert len(matching) == 1
+    assert matching[0].norm == "org/repo"
+    assert matching[0].ref_number == 1
+    assert matching[0].cnt == 2
+
+
+async def test_commit_ref_collision_group_is_detected(db_session):
+    u = await _make_user(db_session, "mig_cmc@gh.test", "mig_cmc")
+    b = await _make_branch(db_session, u, key="MIGM")
+    t = await _make_task(db_session, b, u)
+    # same task + same sha, repo differs only by case → both rows insert
+    # under the case-sensitive uq_tgr_commit (task_id, repo_full_name, sha).
+    sha = "a" * 40
+    await _make_ref(db_session, t, "Org/Repo", "commit",
+                    "https://github.com/Org/Repo/commit/" + sha, sha=sha)
+    await _make_ref(db_session, t, "org/repo", "commit",
+                    "https://github.com/org/repo/commit/" + sha, sha=sha)
+
+    rows = (await db_session.execute(text(_COMMIT_REF_COLLISION_SQL))).fetchall()
+
+    matching = [r for r in rows if r.task_id == t]
+    assert len(matching) == 1
+    assert matching[0].norm == "org/repo"
+    assert matching[0].sha == sha
     assert matching[0].cnt == 2
