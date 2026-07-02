@@ -72,3 +72,21 @@ async def test_list_branches_error_is_propagated():
     rid, err = await resolve_branch_ref("WV", client)
     assert rid is None
     assert err["error"]["category"] == "auth"
+
+
+async def test_unicode_digit_is_validation_not_server_error():
+    client = AsyncMock()
+    rid, err = await resolve_branch_ref("²", client)  # isdecimal()-false, int()-invalid
+    assert rid is None
+    assert err["error"]["code"] == "INVALID_BRANCH_REF"
+    assert err["error"]["category"] == "validation"
+    assert err["error"]["retryable"] is False
+    client.call_json.assert_not_awaited()
+
+
+async def test_matched_branch_missing_id_field_is_not_found():
+    client = AsyncMock()
+    client.call_json.return_value = {"status": True, "branches": [{"key": "WV"}]}
+    rid, err = await resolve_branch_ref("WV", client)
+    assert rid is None
+    assert err["error"]["code"] == "BRANCH_KEY_NOT_FOUND"

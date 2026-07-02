@@ -21,19 +21,16 @@ async def resolve_branch_ref(value, client):
     `client` must expose `async call_json(method, path)`. A list-branches transport
     failure (auth/network/...) is propagated unchanged.
     """
-    if isinstance(value, bool):  # bool is an int subclass — reject explicitly
+    # bool is an int subclass — reject it explicitly alongside other non-id/key types
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
         return None, E.make_error(
             "validation", code=E.INVALID_BRANCH_REF,
             message=f"branch_id must be a numeric id or a branch key, got {value!r}")
     if isinstance(value, int):
         return value, None
-    if not isinstance(value, str):
-        return None, E.make_error(
-            "validation", code=E.INVALID_BRANCH_REF,
-            message=f"branch_id must be a numeric id or a branch key, got {value!r}")
 
     s = value.strip()
-    if s.isdigit():
+    if s.isdecimal():
         return int(s), None
 
     key = s.upper()
@@ -51,7 +48,8 @@ async def resolve_branch_ref(value, client):
         items = []
     for b in items:
         if isinstance(b, dict) and str(b.get("key", "")).upper() == key:
-            return b["branch_id"], None
+            if b.get("branch_id") is not None:
+                return b["branch_id"], None
 
     return None, E.make_error(
         "not_found", code=E.BRANCH_KEY_NOT_FOUND,
