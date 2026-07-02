@@ -11,8 +11,13 @@ from . import errors as E
 
 BranchRef = int | str
 
-# Branch key format — identical to the backend constraint (^[A-Z][A-Z0-9]{1,9}$).
-_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]{1,9}$")
+# Both forms are validated against the ORIGINAL string, ASCII-only, so Unicode
+# quirks can't widen them: str.upper() maps non-ASCII into ASCII ("ß" -> "SS")
+# and int() accepts non-ASCII decimals ("１２" -> 12). The key pattern is the
+# backend constraint (^[A-Z][A-Z0-9]{1,9}$) made case-insensitive; the accepted
+# input is upper-normalized after validation.
+_ID_RE = re.compile(r"[0-9]+")
+_KEY_RE = re.compile(r"[A-Za-z][A-Za-z0-9]{1,9}")
 
 
 async def resolve_branch_ref(value, client):
@@ -30,14 +35,14 @@ async def resolve_branch_ref(value, client):
         return value, None
 
     s = value.strip()
-    if s.isdecimal():
+    if _ID_RE.fullmatch(s):
         return int(s), None
 
-    key = s.upper()
-    if not _KEY_RE.match(key):
+    if not _KEY_RE.fullmatch(s):
         return None, E.make_error(
             "validation", code=E.INVALID_BRANCH_REF,
             message=f"{value!r} is not a valid branch id or key")
+    key = s.upper()
 
     body = await client.call_json("GET", "/api/branches")
     if isinstance(body, dict) and "error" in body:

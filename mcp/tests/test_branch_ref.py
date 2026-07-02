@@ -90,3 +90,23 @@ async def test_matched_branch_missing_id_field_is_not_found():
     rid, err = await resolve_branch_ref("WV", client)
     assert rid is None
     assert err["error"]["code"] == "BRANCH_KEY_NOT_FOUND"
+
+
+async def test_non_ascii_ref_is_rejected_not_uppercased_into_a_key():
+    # "ß".upper() == "SS" — must NOT resolve to a real "SS" branch key
+    client = AsyncMock()
+    client.call_json.return_value = {"status": True, "branches": [{"branch_id": 77, "key": "SS"}]}
+    rid, err = await resolve_branch_ref("ß", client)
+    assert rid is None
+    assert err["error"]["code"] == "INVALID_BRANCH_REF"
+    client.call_json.assert_not_awaited()
+
+
+async def test_non_ascii_decimal_is_rejected_not_treated_as_id():
+    # int() accepts full-width/Arabic-Indic decimals — must NOT become a numeric id
+    client = AsyncMock()
+    for ref in ("１２", "١٢"):
+        rid, err = await resolve_branch_ref(ref, client)
+        assert rid is None
+        assert err["error"]["code"] == "INVALID_BRANCH_REF"
+    client.call_json.assert_not_awaited()

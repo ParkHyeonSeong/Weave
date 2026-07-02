@@ -11,7 +11,7 @@ modified. Each tool acts as the token's owner; `?` marks optional arguments.
 
 **Branches & your work**
 - `get_current_user()` — the account this token acts as (user_id, email, username, role); resolves "me"/"my"
-- `list_branches()` — list branches (projects); call first to get a `branch_id`
+- `list_branches()` — list branches (projects); usually optional — any `branch_id` argument also accepts a member branch's key directly (e.g. `branch_id="WV"`; a public branch you haven't joined still needs its numeric id)
 - `get_branch(branch_id)` — one branch's detail incl. your role
 - `create_branch(branch_name, key, description?, visibility?)` — `key`: 2-10 uppercase, starts with a letter
 - `update_branch(branch_id, branch_name?, key?, description?, visibility?, color?, icon?)` · `delete_branch(branch_id)` (archive) · `restore_branch(branch_id)` · `leave_branch(branch_id)` · `join_branch(branch_id)` · `list_archived_branches()` · `list_public_branches()` — container lifecycle (update/delete/restore admin-only)
@@ -19,6 +19,8 @@ modified. Each tool acts as the token's owner; `?` marks optional arguments.
 - `add_branch_member(branch_id, user_id, role?)` · `update_branch_member_role(branch_id, user_id, role)` · `remove_branch_member(branch_id, user_id)` — `role`: admin | member; invite/role-change/remove (admin-only)
 - `get_branch_home_stats()` — open / in-progress / due-this-week / active-sprint counts across your branches
 - `list_my_tasks(status?, priority?, branch_id?, status_category?, sort_by?, limit?, offset?)` — your assigned tasks across branches
+
+> **Branch references**: tools that take `branch_id` accept either a numeric id or a member branch key such as `"WV"`. Keys are validated as ASCII branch keys (`^[A-Za-z][A-Za-z0-9]{1,9}$`) and normalized to uppercase before lookup. Non-ASCII lookalikes and non-ASCII decimal digits are rejected instead of being coerced.
 
 > **Pagination**: the unbounded list/search tools (`list_my_tasks`, `list_branch_tasks`, `list_archived_tasks`,
 > `list_epic_tasks`, `list_track_items`, `search_tasks`/`docs`/`issues`) page client-side — they return the first

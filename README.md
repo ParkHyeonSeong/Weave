@@ -33,6 +33,7 @@ Organize work with a flexible task system inspired by Linear, scoped per project
 - **Flow View** — visualize tasks and their dependencies as an interactive node graph
 - **Custom Task Types, Fields & Statuses** — define your own per project
 - **Labels, Priorities & Dependencies** — categorize, prioritize, and link tasks (blocking/relates-to, even across projects)
+- **GitHub PR Sync** — link pull requests to tasks with `WV-123` references and auto-transition status when PRs open, merge, or close
 - **Issues** — track sub-issues/bugs under a task, each with its own thread
 - **Comments & Activity Log** — rich threaded comments plus a full audit trail of every change
 - **Filtering & My Tasks** — filter by status, assignee, label, priority, type; personal cross-project task view
@@ -101,14 +102,15 @@ A project calendar for planning and tracking.
 - **Setup Wizard** — guided first-run config (workspace name, registration policy, admin account)
 - **User Management** — approve/reject registrations, assign roles, force password resets
 - **Registration Policies** — open signup or invite-only (admin approval)
-- **Integrations** — configure the AI provider and SMTP email from admin settings
+- **Integrations** — configure the AI provider, SMTP email, and GitHub App repository links from admin settings
 
 ## Weave MCP Server
 
 Weave ships an optional **[MCP (Model Context Protocol)](https://modelcontextprotocol.io) server** so you can drive Weave from AI clients like Claude — manage tasks, sprints, epics, issues, dependencies, and docs straight from a chat session.
 
-- **175 tools** across branches, canvases, tracks & scrum boards — full container lifecycle (create/update/archive/restore/leave, plus join for public branches/canvases) and members (invite/role/remove) on every app — plus tasks (assignees, archive, page links), comments, issues (+ comments), dependencies (task & epic), sprints, epics, branch config CRUD (statuses, types, labels, custom fields), Canvas docs (pages & annotations), tracks (items & links), schedule (events, calendar tasks/epics, task links), scrum (daily/retro cells), activity feeds, recent views, search, stars, identity, home KPIs, and notifications — see [`mcp/README.md`](mcp/README.md) for the full list
+- **184 tools** across branches, canvases, tracks & scrum boards — full container lifecycle (create/update/archive/restore/leave, plus join for public branches/canvases) and members (invite/role/remove) on every app — plus tasks (assignees, archive, page links), comments, issues (+ comments), dependencies (task & epic), sprints, epics, branch config CRUD (statuses, types, labels, custom fields), Canvas docs (pages & annotations), tracks (items & links), schedule (events, calendar tasks/epics, task links), scrum (daily/retro cells), activity feeds, recent views, search, stars, identity, home KPIs, and notifications — see [`mcp/README.md`](mcp/README.md) for the full list
 - Ships a top-level usage guide (FastMCP `instructions`) so the model knows the entry points, per-branch enums, and error contract
+- Accepts branch keys directly for most `branch_id` arguments (`"WV"` works when the token is already a member of that branch)
 - Talks to Weave over its REST API only — **no backend changes required**
 - Runs locally over stdio; authenticates with a Weave Personal Access Token (Bearer)
 
@@ -182,6 +184,43 @@ make help           # Show all available commands
 
 > Ports are configurable via `.env`. API Docs (Swagger UI) is only available when `DEBUG=true`.
 
+### Optional: GitHub App Integration
+
+Weave can receive GitHub App webhooks and link pull requests to tasks automatically.
+
+- Reference tasks in a PR title, body, or branch name with a branch key and display number, for example `WV-123`.
+- PR opened/reopened/ready-for-review moves eligible tasks to the branch's `in_progress` status category.
+- PR merged moves eligible tasks to `done`.
+- PR closed without merge moves eligible tasks back to `todo`, unless another active PR is still linked.
+- Branch admins can also add repository links in Branch Settings -> GitHub and manually link PR URLs from a task panel.
+
+To enable it:
+
+1. Create a GitHub App for your organization.
+2. Give it **Metadata: read**, **Pull requests: read**, and **Contents: read** permissions.
+3. Subscribe it to **Pull request** events.
+4. Set its webhook URL to `https://<your-weave-host>/api/github/webhook`.
+5. Copy the App ID, webhook secret, and private key into `.env` or `.env.production`.
+6. Base64-encode the PEM private key as a single line:
+
+```bash
+# Linux
+base64 -w0 your-app.private-key.pem
+
+# macOS
+base64 -i your-app.private-key.pem | tr -d '\n'
+```
+
+Set:
+
+```env
+GITHUB_APP_ID=123456
+GITHUB_APP_PRIVATE_KEY=<base64 encoded PEM>
+GITHUB_WEBHOOK_SECRET=<webhook secret>
+```
+
+If these values are blank, the integration stays off safely: webhook requests fail closed and the backend logs a startup warning.
+
 ## Security
 
 Weave includes the following built-in security measures:
@@ -191,6 +230,7 @@ Weave includes the following built-in security measures:
 - **XSS Prevention** — user-generated HTML is sanitized before rendering; SVG uploads are sanitized
 - **File Upload Validation** — image uploads are verified by magic bytes, not just file extension
 - **Encrypted Secrets at Rest** — SMTP and AI provider credentials are encrypted (Fernet)
+- **GitHub Webhook Verification** — GitHub App webhooks require `X-Hub-Signature-256` HMAC validation and are staged idempotently before processing
 - **HTTP Security Headers** — `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, CSP via Nginx
 - **CORS Restriction** — production allows only the configured `ALLOWED_ORIGINS`; dev restricts to LAN
 
@@ -203,7 +243,8 @@ For deploying to a server (IDC, VPS, etc.) behind a reverse proxy:
 git clone https://github.com/your-org/Weave.git
 cd Weave
 cp .env.production.example .env.production
-# Edit .env.production — set DOMAIN, JWT_SECRET_KEY, POSTGRES_PASSWORD, ALLOWED_ORIGINS, ports, etc.
+# Edit .env.production — set JWT_SECRET_KEY, POSTGRES_PASSWORD, ALLOWED_ORIGINS, ports,
+# and optional integration secrets such as GITHUB_APP_*.
 
 # 2. Build and start (Nginx exposes a single port)
 make prod-build
@@ -246,6 +287,7 @@ make ssl-renew    # Renew the SSL certificate
 | Real-time    | WebSocket; collaborative editing via Yjs CRDT (pycrdt)  |
 | AI           | Anthropic / OpenAI (streaming)                          |
 | Notifications| Web Push (VAPID)                                        |
+| Integrations | GitHub App webhooks, Jira CSV import                    |
 | Infra        | Docker Compose, Nginx                                   |
 | AI access    | MCP server (stdio) — see [`mcp/`](mcp/)                 |
 
