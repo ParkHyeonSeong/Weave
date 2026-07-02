@@ -49,9 +49,11 @@ _OVERRIDES = {
     "PARENT_SELF": "validation", "PASSWORD_MISMATCH": "validation",
     "SELF_REFERENCE": "validation", "SELF_DEPENDENCY": "validation", "SELF_LINK": "validation",
     "SMTP_PASSWORD_REQUIRED": "validation", "VIEW_SCOPE_MISMATCH": "validation",
+    "REPO_NOT_CONNECTED": "validation",
     # --- conflict: ALREADY_*/DUPLICATE_*/COMMENT_DELETED/PARENT_DELETED/IN_USE ---
     "CIRCULAR_DEPENDENCY": "conflict", "DEPENDENCY_CYCLE": "conflict",
     "PARENT_CYCLE": "conflict",
+    "INVALID_STATUS_TRANSITION": "conflict",  # override the INVALID_ suffix rule (backend: conflict)
     "ALREADY_INITIALIZED": "conflict", "ALREADY_LINKED": "conflict",
     "ALREADY_MEMBER": "conflict", "COMMENT_DELETED": "conflict",
     "DUPLICATE_DEPENDENCY": "conflict", "DUPLICATE_LINK": "conflict",
@@ -62,6 +64,7 @@ _OVERRIDES = {
     "AI_NOT_CONFIGURED": "server", "MIGRATION_FAILED": "server",
     "SMTP_NOT_CONFIGURED": "server",
     "INTERNAL_SERVER_ERROR": "server",
+    "GITHUB_FETCH_FAILED": "server",
     "RATE_LIMIT_EXCEEDED": "rate_limited",
 }
 
