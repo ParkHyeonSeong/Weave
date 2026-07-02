@@ -1,6 +1,7 @@
 from fastmcp import FastMCP
 
 from .client import WeaveClient
+from ._branch_ref import BranchRef  # re-exported for tool annotations
 
 INSTRUCTIONS = """\
 Weave is a project-management app with 5 sub-apps: Branch (PM/tasks), Canvas (docs),

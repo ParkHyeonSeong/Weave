@@ -26,7 +26,12 @@ _RESERVED_BODY_KEYS = frozenset({"status", "message", "code", "category", "retry
 TOKEN_NOT_SET = "TOKEN_NOT_SET"            # missing/empty configured token (client.py)
 WEEKEND_NO_CELL = "WEEKEND_NO_CELL"        # scrum weekend guard (tools/scrum.py)
 MCP_TOOL_EXCEPTION = "MCP_TOOL_EXCEPTION"  # unexpected tool exception (_middleware.py)
-MCP_LOCAL_CODES = frozenset({TOKEN_NOT_SET, WEEKEND_NO_CELL, MCP_TOOL_EXCEPTION})
+BRANCH_KEY_NOT_FOUND = "BRANCH_KEY_NOT_FOUND"  # branch key didn't resolve (_branch_ref.py)
+INVALID_BRANCH_REF = "INVALID_BRANCH_REF"      # malformed branch id/key (_branch_ref.py)
+MCP_LOCAL_CODES = frozenset({
+    TOKEN_NOT_SET, WEEKEND_NO_CELL, MCP_TOOL_EXCEPTION,
+    BRANCH_KEY_NOT_FOUND, INVALID_BRANCH_REF,
+})
 
 
 # Irregular codes whose suffix/keyword rules don't classify correctly.
