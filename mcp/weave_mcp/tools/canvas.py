@@ -1,6 +1,6 @@
 from typing import Any
 
-from .._app import mcp, get_client
+from .._app import mcp, get_client, BranchRef
 
 
 @mcp.tool
@@ -76,7 +76,7 @@ async def create_canvas(
     key: str,
     description: str | None = None,
     visibility: str = "private",
-    branch_id: int | None = None,
+    branch_id: BranchRef | None = None,
 ) -> Any:
     """Create a new canvas (docs workspace).
 

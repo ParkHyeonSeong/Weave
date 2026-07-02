@@ -1,17 +1,17 @@
 from typing import Any
 
-from .._app import mcp, get_client
+from .._app import mcp, get_client, BranchRef
 from .._pagination import paginate
 
 
 @mcp.tool
-async def list_epics(branch_id: int) -> Any:
+async def list_epics(branch_id: BranchRef) -> Any:
     """List all epics in a branch."""
     return await get_client().call_json("GET", f"/api/branches/{branch_id}/epics")
 
 
 @mcp.tool
-async def get_epic(branch_id: int, epic_id: int) -> Any:
+async def get_epic(branch_id: BranchRef, epic_id: int) -> Any:
     """Get full details of a single epic within a branch."""
     return await get_client().call_json(
         "GET", f"/api/branches/{branch_id}/epics/{epic_id}"
@@ -20,7 +20,7 @@ async def get_epic(branch_id: int, epic_id: int) -> Any:
 
 @mcp.tool
 async def create_epic(
-    branch_id: int,
+    branch_id: BranchRef,
     epic_name: str,
     description: str | None = None,
     status: str | None = None,
@@ -50,7 +50,7 @@ async def create_epic(
 
 @mcp.tool
 async def update_epic(
-    branch_id: int,
+    branch_id: BranchRef,
     epic_id: int,
     epic_name: str | None = None,
     description: str | None = None,
@@ -77,7 +77,7 @@ async def update_epic(
 
 
 @mcp.tool
-async def delete_epic(branch_id: int, epic_id: int) -> Any:
+async def delete_epic(branch_id: BranchRef, epic_id: int) -> Any:
     """Delete an epic from a branch."""
     return await get_client().call_json(
         "DELETE", f"/api/branches/{branch_id}/epics/{epic_id}"
@@ -85,7 +85,7 @@ async def delete_epic(branch_id: int, epic_id: int) -> Any:
 
 
 @mcp.tool
-async def reorder_epics(branch_id: int, epic_ids: list[int]) -> Any:
+async def reorder_epics(branch_id: BranchRef, epic_ids: list[int]) -> Any:
     """Reorder a branch's epics. epic_ids is the full list in the desired order."""
     return await get_client().call_json(
         "POST", f"/api/branches/{branch_id}/epics/reorder", json={"epic_ids": epic_ids}
@@ -94,7 +94,7 @@ async def reorder_epics(branch_id: int, epic_ids: list[int]) -> Any:
 
 @mcp.tool
 async def list_epic_tasks(
-    branch_id: int,
+    branch_id: BranchRef,
     epic_id: int,
     limit: int | None = None,
     offset: int | None = None,

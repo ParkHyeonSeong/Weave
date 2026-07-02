@@ -1,6 +1,6 @@
 from typing import Any
 
-from .._app import mcp, get_client
+from .._app import mcp, get_client, BranchRef
 from .._pagination import paginate
 
 
@@ -43,7 +43,7 @@ async def get_branch_home_stats() -> Any:
 
 
 @mcp.tool
-async def get_branch(branch_id: int) -> Any:
+async def get_branch(branch_id: BranchRef) -> Any:
     """Get a single branch's detail, including your role in it."""
     return await get_client().call_json("GET", f"/api/branches/{branch_id}")
 
@@ -68,7 +68,7 @@ async def create_branch(
 
 @mcp.tool
 async def update_branch(
-    branch_id: int,
+    branch_id: BranchRef,
     branch_name: str | None = None,
     key: str | None = None,
     description: str | None = None,
@@ -94,19 +94,19 @@ async def update_branch(
 
 
 @mcp.tool
-async def delete_branch(branch_id: int) -> Any:
+async def delete_branch(branch_id: BranchRef) -> Any:
     """Archive (soft-delete) a branch. Reversible via restore_branch. Admin-only."""
     return await get_client().call_json("DELETE", f"/api/branches/{branch_id}")
 
 
 @mcp.tool
-async def restore_branch(branch_id: int) -> Any:
+async def restore_branch(branch_id: BranchRef) -> Any:
     """Restore an archived branch (see list_archived_branches). Admin-only."""
     return await get_client().call_json("POST", f"/api/branches/{branch_id}/restore")
 
 
 @mcp.tool
-async def leave_branch(branch_id: int) -> Any:
+async def leave_branch(branch_id: BranchRef) -> Any:
     """Leave a branch (remove yourself as a member); any member may leave.
 
     May return a category=business rejection (e.g. LAST_ADMIN / LAST_OWNER) if you are the branch's last admin.
@@ -115,7 +115,7 @@ async def leave_branch(branch_id: int) -> Any:
 
 
 @mcp.tool
-async def join_branch(branch_id: int) -> Any:
+async def join_branch(branch_id: BranchRef) -> Any:
     """Join a public branch as a member (discover candidates via list_public_branches)."""
     return await get_client().call_json("POST", f"/api/branches/{branch_id}/join")
 
@@ -133,7 +133,7 @@ async def list_public_branches() -> Any:
 
 
 @mcp.tool
-async def list_branch_members(branch_id: int) -> Any:
+async def list_branch_members(branch_id: BranchRef) -> Any:
     """List a branch's members (user_id, name, role).
 
     Use this to resolve a person's name to the user_id needed for task assignees
@@ -143,7 +143,7 @@ async def list_branch_members(branch_id: int) -> Any:
 
 
 @mcp.tool
-async def search_branch_non_members(branch_id: int, q: str = "") -> Any:
+async def search_branch_non_members(branch_id: BranchRef, q: str = "") -> Any:
     """Search users who are NOT yet members of a branch (candidates to invite).
 
     q matches name/email.
@@ -154,7 +154,7 @@ async def search_branch_non_members(branch_id: int, q: str = "") -> Any:
 
 
 @mcp.tool
-async def add_branch_member(branch_id: int, user_id: int, role: str = "member") -> Any:
+async def add_branch_member(branch_id: BranchRef, user_id: int, role: str = "member") -> Any:
     """Add (invite) a user to a branch. role is "admin" or "member" (default).
 
     Resolve user_id via search_branch_non_members(branch_id). Admin-only — a
@@ -167,7 +167,7 @@ async def add_branch_member(branch_id: int, user_id: int, role: str = "member") 
 
 
 @mcp.tool
-async def update_branch_member_role(branch_id: int, user_id: int, role: str) -> Any:
+async def update_branch_member_role(branch_id: BranchRef, user_id: int, role: str) -> Any:
     """Change a branch member's role. role is "admin" or "member". Admin-only."""
     return await get_client().call_json(
         "PATCH", f"/api/branches/{branch_id}/members/{user_id}", json={"role": role},
@@ -175,7 +175,7 @@ async def update_branch_member_role(branch_id: int, user_id: int, role: str) -> 
 
 
 @mcp.tool
-async def remove_branch_member(branch_id: int, user_id: int) -> Any:
+async def remove_branch_member(branch_id: BranchRef, user_id: int) -> Any:
     """Remove a member from a branch. Admin-only."""
     return await get_client().call_json(
         "DELETE", f"/api/branches/{branch_id}/members/{user_id}",
@@ -219,7 +219,7 @@ async def batch_ref_status(
 async def list_my_tasks(
     status: str | None = None,
     priority: str | None = None,
-    branch_id: int | None = None,
+    branch_id: BranchRef | None = None,
     status_category: str | None = None,
     sort_by: str | None = None,
     limit: int | None = None,

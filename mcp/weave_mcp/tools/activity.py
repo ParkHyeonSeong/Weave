@@ -1,6 +1,6 @@
 from typing import Any
 
-from .._app import mcp, get_client
+from .._app import mcp, get_client, BranchRef
 
 
 def _paging(limit: int | None, offset: int | None) -> dict:
@@ -9,7 +9,7 @@ def _paging(limit: int | None, offset: int | None) -> dict:
 
 @mcp.tool
 async def list_task_activity(
-    branch_id: int,
+    branch_id: BranchRef,
     task_id: int,
     limit: int | None = None,
     offset: int | None = None,
@@ -26,7 +26,7 @@ async def list_task_activity(
 
 @mcp.tool
 async def list_branch_activity(
-    branch_id: int,
+    branch_id: BranchRef,
     limit: int | None = None,
     offset: int | None = None,
 ) -> Any:

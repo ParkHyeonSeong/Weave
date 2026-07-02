@@ -1,6 +1,6 @@
 from typing import Any
 
-from .._app import mcp, get_client
+from .._app import mcp, get_client, BranchRef
 from .._pagination import paginate
 
 
@@ -118,7 +118,7 @@ async def delete_track(track_id: int) -> Any:
 
 
 @mcp.tool
-async def add_track_branch(track_id: int, branch_id: int) -> Any:
+async def add_track_branch(track_id: int, branch_id: BranchRef) -> Any:
     """Attach a participating branch to a track."""
     return await get_client().call_json(
         "POST", f"/api/tracks/{track_id}/branches", json={"branch_id": branch_id}
@@ -126,7 +126,7 @@ async def add_track_branch(track_id: int, branch_id: int) -> Any:
 
 
 @mcp.tool
-async def remove_track_branch(track_id: int, branch_id: int) -> Any:
+async def remove_track_branch(track_id: int, branch_id: BranchRef) -> Any:
     """Detach a participating branch from a track (may remove its sourced items)."""
     return await get_client().call_json(
         "DELETE", f"/api/tracks/{track_id}/branches/{branch_id}"
@@ -137,7 +137,7 @@ async def remove_track_branch(track_id: int, branch_id: int) -> Any:
 async def search_track_sources(
     track_id: int,
     q: str | None = None,
-    branch_id: int | None = None,
+    branch_id: BranchRef | None = None,
     sprint_id: int | None = None,
     epic_id: int | None = None,
     status: str | None = None,

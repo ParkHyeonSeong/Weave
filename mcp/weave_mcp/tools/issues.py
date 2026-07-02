@@ -1,10 +1,10 @@
 from typing import Any
 
-from .._app import mcp, get_client
+from .._app import mcp, get_client, BranchRef
 
 
 @mcp.tool
-async def list_task_issues(branch_id: int, task_id: int) -> Any:
+async def list_task_issues(branch_id: BranchRef, task_id: int) -> Any:
     """List all issues linked to a task."""
     return await get_client().call_json(
         "GET", f"/api/branches/{branch_id}/tasks/{task_id}/issues"
@@ -12,7 +12,7 @@ async def list_task_issues(branch_id: int, task_id: int) -> Any:
 
 
 @mcp.tool
-async def get_task_issue(branch_id: int, task_id: int, issue_id: int) -> Any:
+async def get_task_issue(branch_id: BranchRef, task_id: int, issue_id: int) -> Any:
     """Get full details of a single issue linked to a task."""
     return await get_client().call_json(
         "GET", f"/api/branches/{branch_id}/tasks/{task_id}/issues/{issue_id}"
@@ -21,7 +21,7 @@ async def get_task_issue(branch_id: int, task_id: int, issue_id: int) -> Any:
 
 @mcp.tool
 async def create_task_issue(
-    branch_id: int,
+    branch_id: BranchRef,
     task_id: int,
     title: str,
     body: str | None = None,
@@ -36,7 +36,7 @@ async def create_task_issue(
 
 @mcp.tool
 async def update_task_issue(
-    branch_id: int,
+    branch_id: BranchRef,
     task_id: int,
     issue_id: int,
     title: str | None = None,
@@ -57,7 +57,7 @@ async def update_task_issue(
 
 
 @mcp.tool
-async def delete_task_issue(branch_id: int, task_id: int, issue_id: int) -> Any:
+async def delete_task_issue(branch_id: BranchRef, task_id: int, issue_id: int) -> Any:
     """Delete an issue linked to a task."""
     return await get_client().call_json(
         "DELETE", f"/api/branches/{branch_id}/tasks/{task_id}/issues/{issue_id}"
@@ -66,7 +66,7 @@ async def delete_task_issue(branch_id: int, task_id: int, issue_id: int) -> Any:
 
 @mcp.tool
 async def add_issue_comment(
-    branch_id: int, task_id: int, issue_id: int, content: str
+    branch_id: BranchRef, task_id: int, issue_id: int, content: str
 ) -> Any:
     """Add a comment to a task issue. content is non-empty HTML (max 10000 chars).
 
@@ -82,7 +82,7 @@ async def add_issue_comment(
 
 @mcp.tool
 async def update_issue_comment(
-    branch_id: int, task_id: int, issue_id: int, comment_id: int, content: str
+    branch_id: BranchRef, task_id: int, issue_id: int, comment_id: int, content: str
 ) -> Any:
     """Edit an existing issue comment. content is non-empty HTML (max 10000 chars)."""
     return await get_client().call_json(
@@ -94,7 +94,7 @@ async def update_issue_comment(
 
 @mcp.tool
 async def delete_issue_comment(
-    branch_id: int, task_id: int, issue_id: int, comment_id: int
+    branch_id: BranchRef, task_id: int, issue_id: int, comment_id: int
 ) -> Any:
     """Delete a single comment from a task issue."""
     return await get_client().call_json(
@@ -105,7 +105,7 @@ async def delete_issue_comment(
 
 @mcp.tool
 async def close_task_issue(
-    branch_id: int, task_id: int, issue_id: int, comment: str | None = None
+    branch_id: BranchRef, task_id: int, issue_id: int, comment: str | None = None
 ) -> Any:
     """Close a task issue. Optionally post a comment in the same action (GitHub-style
     close-with-comment). comment is non-empty HTML (max 10000 chars) when given."""
@@ -118,7 +118,7 @@ async def close_task_issue(
 
 @mcp.tool
 async def reopen_task_issue(
-    branch_id: int, task_id: int, issue_id: int, comment: str | None = None
+    branch_id: BranchRef, task_id: int, issue_id: int, comment: str | None = None
 ) -> Any:
     """Reopen a closed task issue. Optionally post a comment in the same action.
     comment is non-empty HTML (max 10000 chars) when given."""

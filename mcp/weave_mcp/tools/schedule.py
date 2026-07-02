@@ -1,10 +1,10 @@
 from typing import Any
 
-from .._app import mcp, get_client
+from .._app import mcp, get_client, BranchRef
 
 
 @mcp.tool
-async def list_schedule_events(branch_id: int, range_start: str, range_end: str) -> Any:
+async def list_schedule_events(branch_id: BranchRef, range_start: str, range_end: str) -> Any:
     """List a branch's calendar events overlapping a date range.
 
     range_start and range_end are REQUIRED ISO dates (YYYY-MM-DD); the backend
@@ -18,7 +18,7 @@ async def list_schedule_events(branch_id: int, range_start: str, range_end: str)
 
 
 @mcp.tool
-async def list_calendar_tasks(branch_id: int, range_start: str, range_end: str) -> Any:
+async def list_calendar_tasks(branch_id: BranchRef, range_start: str, range_end: str) -> Any:
     """List a branch's due-dated tasks falling in a date range, for calendar display.
 
     range_start/range_end are REQUIRED ISO dates (YYYY-MM-DD). Complements
@@ -32,7 +32,7 @@ async def list_calendar_tasks(branch_id: int, range_start: str, range_end: str) 
 
 
 @mcp.tool
-async def list_calendar_epics(branch_id: int, range_start: str, range_end: str) -> Any:
+async def list_calendar_epics(branch_id: BranchRef, range_start: str, range_end: str) -> Any:
     """List a branch's epics spanning a date range, for calendar display.
 
     range_start/range_end are REQUIRED ISO dates (YYYY-MM-DD).
@@ -46,7 +46,7 @@ async def list_calendar_epics(branch_id: int, range_start: str, range_end: str) 
 
 @mcp.tool
 async def create_schedule_event(
-    branch_id: int,
+    branch_id: BranchRef,
     title: str,
     start_date: str,
     end_date: str | None = None,
@@ -79,7 +79,7 @@ async def create_schedule_event(
 
 @mcp.tool
 async def update_schedule_event(
-    branch_id: int,
+    branch_id: BranchRef,
     event_id: int,
     title: str | None = None,
     start_date: str | None = None,
@@ -107,7 +107,7 @@ async def update_schedule_event(
 
 
 @mcp.tool
-async def delete_schedule_event(branch_id: int, event_id: int) -> Any:
+async def delete_schedule_event(branch_id: BranchRef, event_id: int) -> Any:
     """Delete a calendar event."""
     return await get_client().call_json(
         "DELETE", f"/api/branches/{branch_id}/schedule-events/{event_id}"
@@ -115,7 +115,7 @@ async def delete_schedule_event(branch_id: int, event_id: int) -> Any:
 
 
 @mcp.tool
-async def list_event_tasks(branch_id: int, event_id: int) -> Any:
+async def list_event_tasks(branch_id: BranchRef, event_id: int) -> Any:
     """List the tasks linked to a calendar event.
 
     Each entry includes the link's own id (link_id), which unlink_event_task needs.
@@ -126,7 +126,7 @@ async def list_event_tasks(branch_id: int, event_id: int) -> Any:
 
 
 @mcp.tool
-async def link_event_task(branch_id: int, event_id: int, task_id: int) -> Any:
+async def link_event_task(branch_id: BranchRef, event_id: int, task_id: int) -> Any:
     """Link a task to a calendar event."""
     return await get_client().call_json(
         "POST",
@@ -136,7 +136,7 @@ async def link_event_task(branch_id: int, event_id: int, task_id: int) -> Any:
 
 
 @mcp.tool
-async def search_event_tasks(branch_id: int, event_id: int, q: str) -> Any:
+async def search_event_tasks(branch_id: BranchRef, event_id: int, q: str) -> Any:
     """Search tasks that can be linked to a calendar event (typeahead). q must be non-empty."""
     return await get_client().call_json(
         "GET",
@@ -146,7 +146,7 @@ async def search_event_tasks(branch_id: int, event_id: int, q: str) -> Any:
 
 
 @mcp.tool
-async def unlink_event_task(branch_id: int, event_id: int, link_id: int) -> Any:
+async def unlink_event_task(branch_id: BranchRef, event_id: int, link_id: int) -> Any:
     """Remove an event↔task link. link_id is the link's id from list_event_tasks (not the task_id)."""
     return await get_client().call_json(
         "DELETE",

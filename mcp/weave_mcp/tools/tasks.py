@@ -1,11 +1,11 @@
 from typing import Any
 
-from .._app import mcp, get_client
+from .._app import mcp, get_client, BranchRef
 from .._pagination import paginate
 
 
 @mcp.tool
-async def get_task(branch_id: int, task_id: int) -> Any:
+async def get_task(branch_id: BranchRef, task_id: int) -> Any:
     """Get full details of a single task within a branch."""
     return await get_client().call_json(
         "GET", f"/api/branches/{branch_id}/tasks/{task_id}"
@@ -14,7 +14,7 @@ async def get_task(branch_id: int, task_id: int) -> Any:
 
 @mcp.tool
 async def create_task(
-    branch_id: int,
+    branch_id: BranchRef,
     title: str,
     description: str | None = None,
     priority: str | None = None,
@@ -60,7 +60,7 @@ async def create_task(
 
 
 @mcp.tool
-async def add_task_comment(branch_id: int, task_id: int, content: str) -> Any:
+async def add_task_comment(branch_id: BranchRef, task_id: int, content: str) -> Any:
     """Add a comment to a task. `content` is the comment text."""
     return await get_client().call_json(
         "POST",
@@ -71,7 +71,7 @@ async def add_task_comment(branch_id: int, task_id: int, content: str) -> Any:
 
 @mcp.tool
 async def list_branch_tasks(
-    branch_id: int,
+    branch_id: BranchRef,
     sprint_id: int | None = None,
     limit: int | None = None,
     offset: int | None = None,
@@ -94,7 +94,7 @@ async def list_branch_tasks(
 
 @mcp.tool
 async def update_task(
-    branch_id: int,
+    branch_id: BranchRef,
     task_id: int,
     title: str | None = None,
     description: str | None = None,
@@ -169,7 +169,7 @@ async def update_task(
 
 @mcp.tool
 async def reorder_tasks(
-    branch_id: int,
+    branch_id: BranchRef,
     task_ids: list[int],
     sprint_id: int | None = None,
     after_task_id: int | None = None,
@@ -191,7 +191,7 @@ async def reorder_tasks(
 
 
 @mcp.tool
-async def delete_task(branch_id: int, task_id: int) -> Any:
+async def delete_task(branch_id: BranchRef, task_id: int) -> Any:
     """Delete a task from a branch."""
     return await get_client().call_json(
         "DELETE", f"/api/branches/{branch_id}/tasks/{task_id}"
@@ -199,7 +199,7 @@ async def delete_task(branch_id: int, task_id: int) -> Any:
 
 
 @mcp.tool
-async def list_task_comments(branch_id: int, task_id: int) -> Any:
+async def list_task_comments(branch_id: BranchRef, task_id: int) -> Any:
     """List all comments on a task."""
     return await get_client().call_json(
         "GET", f"/api/branches/{branch_id}/tasks/{task_id}/comments"
@@ -208,7 +208,7 @@ async def list_task_comments(branch_id: int, task_id: int) -> Any:
 
 @mcp.tool
 async def update_task_comment(
-    branch_id: int,
+    branch_id: BranchRef,
     task_id: int,
     comment_id: int,
     content: str,
@@ -222,7 +222,7 @@ async def update_task_comment(
 
 
 @mcp.tool
-async def delete_task_comment(branch_id: int, task_id: int, comment_id: int) -> Any:
+async def delete_task_comment(branch_id: BranchRef, task_id: int, comment_id: int) -> Any:
     """Delete a comment from a task."""
     return await get_client().call_json(
         "DELETE",
@@ -232,7 +232,7 @@ async def delete_task_comment(branch_id: int, task_id: int, comment_id: int) -> 
 
 @mcp.tool
 async def list_archived_tasks(
-    branch_id: int,
+    branch_id: BranchRef,
     limit: int | None = None,
     offset: int | None = None,
 ) -> Any:
@@ -251,7 +251,7 @@ async def list_archived_tasks(
 
 
 @mcp.tool
-async def list_task_pages(branch_id: int, task_id: int) -> Any:
+async def list_task_pages(branch_id: BranchRef, task_id: int) -> Any:
     """List the canvas pages (docs) linked to a task.
 
     Each entry includes the link's own id (link_id), which unlink_task_page needs.
@@ -262,7 +262,7 @@ async def list_task_pages(branch_id: int, task_id: int) -> Any:
 
 
 @mcp.tool
-async def link_task_page(branch_id: int, task_id: int, page_id: int) -> Any:
+async def link_task_page(branch_id: BranchRef, task_id: int, page_id: int) -> Any:
     """Link a canvas page (doc) to a task. page_id comes from Canvas tools or search_docs."""
     return await get_client().call_json(
         "POST",
@@ -272,7 +272,7 @@ async def link_task_page(branch_id: int, task_id: int, page_id: int) -> Any:
 
 
 @mcp.tool
-async def search_task_pages(branch_id: int, task_id: int, q: str) -> Any:
+async def search_task_pages(branch_id: BranchRef, task_id: int, q: str) -> Any:
     """Search canvas pages that can be linked to a task (typeahead). q must be non-empty."""
     return await get_client().call_json(
         "GET",
@@ -282,7 +282,7 @@ async def search_task_pages(branch_id: int, task_id: int, q: str) -> Any:
 
 
 @mcp.tool
-async def unlink_task_page(branch_id: int, task_id: int, link_id: int) -> Any:
+async def unlink_task_page(branch_id: BranchRef, task_id: int, link_id: int) -> Any:
     """Remove a task↔page link. link_id is the link's id from list_task_pages (not the page_id)."""
     return await get_client().call_json(
         "DELETE", f"/api/branches/{branch_id}/tasks/{task_id}/pages/{link_id}"
@@ -292,7 +292,7 @@ async def unlink_task_page(branch_id: int, task_id: int, link_id: int) -> Any:
 @mcp.tool
 async def query_tasks(
     filter: dict | None = None,
-    branch_id: int | None = None,
+    branch_id: BranchRef | None = None,
     scope: str = "my",
     group_by: str | None = None,
     sort: list | None = None,
@@ -349,7 +349,7 @@ async def list_saved_views(scope_branch_id: int | None = None) -> Any:
 
 
 @mcp.tool
-async def add_task_label(branch_id: int, task_id: int, label_id: int) -> Any:
+async def add_task_label(branch_id: BranchRef, task_id: int, label_id: int) -> Any:
     """Add one label to a task, keeping existing labels (no replace).
 
     Use this instead of update_task(label_ids=...) when you only want to ADD a
@@ -362,7 +362,7 @@ async def add_task_label(branch_id: int, task_id: int, label_id: int) -> Any:
 
 
 @mcp.tool
-async def remove_task_label(branch_id: int, task_id: int, label_id: int) -> Any:
+async def remove_task_label(branch_id: BranchRef, task_id: int, label_id: int) -> Any:
     """Remove one label from a task, keeping the others."""
     return await get_client().call_json(
         "DELETE", f"/api/branches/{branch_id}/tasks/{task_id}/labels/{label_id}",
@@ -370,7 +370,7 @@ async def remove_task_label(branch_id: int, task_id: int, label_id: int) -> Any:
 
 
 @mcp.tool
-async def add_task_assignee(branch_id: int, task_id: int, user_id: int, role: str = "sub") -> Any:
+async def add_task_assignee(branch_id: BranchRef, task_id: int, user_id: int, role: str = "sub") -> Any:
     """Add one assignee to a task without replacing the rest. role is "sub" (default) or "main".
 
     Use this instead of update_task(assignee_*) when you only want to ADD someone —
@@ -384,7 +384,7 @@ async def add_task_assignee(branch_id: int, task_id: int, user_id: int, role: st
 
 
 @mcp.tool
-async def remove_task_assignee(branch_id: int, task_id: int, user_id: int) -> Any:
+async def remove_task_assignee(branch_id: BranchRef, task_id: int, user_id: int) -> Any:
     """Remove one assignee (main or sub) from a task, keeping the others."""
     return await get_client().call_json(
         "DELETE", f"/api/branches/{branch_id}/tasks/{task_id}/assignees/{user_id}",
@@ -392,7 +392,7 @@ async def remove_task_assignee(branch_id: int, task_id: int, user_id: int) -> An
 
 
 @mcp.tool
-async def set_task_custom_field(branch_id: int, task_id: int, field_id: int,
+async def set_task_custom_field(branch_id: BranchRef, task_id: int, field_id: int,
                                 value: str | int | float | bool | None = None) -> Any:
     """Set ONE custom field value on a task, preserving the others (per-key merge).
 

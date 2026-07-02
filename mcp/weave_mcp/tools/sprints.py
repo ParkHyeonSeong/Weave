@@ -1,17 +1,17 @@
 from typing import Any
 
-from .._app import mcp, get_client
+from .._app import mcp, get_client, BranchRef
 
 
 @mcp.tool
-async def list_sprints(branch_id: int) -> Any:
+async def list_sprints(branch_id: BranchRef) -> Any:
     """List all sprints in a branch."""
     return await get_client().call_json("GET", f"/api/branches/{branch_id}/sprints")
 
 
 @mcp.tool
 async def create_sprint(
-    branch_id: int,
+    branch_id: BranchRef,
     sprint_name: str,
     goal: str | None = None,
     start_date: str | None = None,
@@ -36,7 +36,7 @@ async def create_sprint(
 
 @mcp.tool
 async def update_sprint(
-    branch_id: int,
+    branch_id: BranchRef,
     sprint_id: int,
     sprint_name: str | None = None,
     goal: str | None = None,
@@ -61,7 +61,7 @@ async def update_sprint(
 
 
 @mcp.tool
-async def delete_sprint(branch_id: int, sprint_id: int) -> Any:
+async def delete_sprint(branch_id: BranchRef, sprint_id: int) -> Any:
     """Delete a sprint from a branch."""
     return await get_client().call_json(
         "DELETE", f"/api/branches/{branch_id}/sprints/{sprint_id}"
@@ -69,7 +69,7 @@ async def delete_sprint(branch_id: int, sprint_id: int) -> Any:
 
 
 @mcp.tool
-async def start_sprint(branch_id: int, sprint_id: int) -> Any:
+async def start_sprint(branch_id: BranchRef, sprint_id: int) -> Any:
     """Start a sprint in a branch."""
     return await get_client().call_json(
         "POST", f"/api/branches/{branch_id}/sprints/{sprint_id}/start"
@@ -78,7 +78,7 @@ async def start_sprint(branch_id: int, sprint_id: int) -> Any:
 
 @mcp.tool
 async def complete_sprint(
-    branch_id: int,
+    branch_id: BranchRef,
     sprint_id: int,
     move_to: str = "backlog",
 ) -> Any:
@@ -95,7 +95,7 @@ async def complete_sprint(
 
 
 @mcp.tool
-async def reorder_sprints(branch_id: int, sprint_ids: list[int]) -> Any:
+async def reorder_sprints(branch_id: BranchRef, sprint_ids: list[int]) -> Any:
     """Reorder a branch's sprints. sprint_ids is the full list in the desired order."""
     return await get_client().call_json(
         "POST", f"/api/branches/{branch_id}/sprints/reorder", json={"sprint_ids": sprint_ids}
@@ -103,7 +103,7 @@ async def reorder_sprints(branch_id: int, sprint_ids: list[int]) -> Any:
 
 
 @mcp.tool
-async def get_sprint_task_counts(branch_id: int, sprint_id: int) -> Any:
+async def get_sprint_task_counts(branch_id: BranchRef, sprint_id: int) -> Any:
     """Get a sprint's task counts / progress summary without listing every task."""
     return await get_client().call_json(
         "GET", f"/api/branches/{branch_id}/sprints/{sprint_id}/task-counts"
