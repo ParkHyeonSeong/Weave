@@ -19,7 +19,8 @@ async def get_current_user() -> Any:
 async def list_branches() -> Any:
     """List all branches (projects) the account can access.
 
-    Call this first — other tools need a branch_id, which comes from here.
+    You usually don't need this first: tools accept a branch's key (e.g. "WV") directly.
+    Use it to discover branches, or when you only have a numeric id.
     Each branch includes:
     - progress_percent: completion of the current active sprint(s) (terminal/total),
       or null when the branch has no active sprint.

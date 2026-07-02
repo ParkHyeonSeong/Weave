@@ -10,8 +10,11 @@ tools drive it over Weave's REST API, acting as the token's owner.
 
 Getting oriented:
 - get_current_user() resolves "me"/"my" (the account the token acts as).
-- Most tools need a branch_id — call list_branches() first. Likewise list_canvases(),
-  list_tracks(), and list_scrum_boards() are the entry points for those apps.
+- Most tools need a branch_id. Pass either the numeric id OR the branch key of a branch
+  you're a member of (e.g. branch_id="WV") — the key is resolved automatically. Use
+  list_branches() to discover those branches. (Exception: to join a public branch you're
+  not in yet, pass join_branch a numeric id from list_public_branches.) Likewise
+  list_canvases(), list_tracks(), and list_scrum_boards() are the entry points for those apps.
 - To find something when you don't have its id, use search_tasks / search_docs /
   search_issues instead of listing every branch.
 
@@ -33,8 +36,9 @@ isn't allowed."""
 
 mcp = FastMCP("weave", instructions=INSTRUCTIONS)
 
-from ._middleware import WeaveDriftGuard  # noqa: E402
-mcp.add_middleware(WeaveDriftGuard())
+from ._middleware import WeaveDriftGuard, BranchRefResolver  # noqa: E402
+mcp.add_middleware(WeaveDriftGuard())       # outermost — validates/absorbs everything below
+mcp.add_middleware(BranchRefResolver())     # inner — rewrites branch_id before the tool
 
 _client: WeaveClient | None = None
 
