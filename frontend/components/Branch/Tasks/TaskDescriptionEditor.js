@@ -16,6 +16,7 @@ import { createImageUploadPlugin } from '@/components/Canvas/extensions/ImageUpl
 import { createMarkdownPastePlugin } from '@/components/Canvas/extensions/MarkdownPastePlugin';
 import { BookmarkPasteExtension } from '@/components/Canvas/extensions/BookmarkPastePlugin';
 import MermaidExtension from '@/components/Canvas/extensions/MermaidExtension';
+import { mathExtensions, mathEditPluginKey } from '@/components/Canvas/extensions/mathExtensions';
 import CanvasEditorToolbar from '@/components/Canvas/CanvasEditorToolbar';
 import { useEditorRefHydration } from '@/library/refHydration';
 
@@ -32,9 +33,10 @@ const baseExtensions = [
   ...checklistExtensions({ nested: true }),
   CalloutExtension,
   TaskRefNode,
-  SlashCommandsExtension.configure({ enabled: ['/t', '/ta'] }),
+  SlashCommandsExtension.configure({ enabled: ['/t', '/ta', '/m'] }),
   ResizableImage,
   MermaidExtension,
+  ...mathExtensions(),
 ];
 
 export default function TaskDescriptionEditor({ content, onSave, branchId }) {
@@ -83,7 +85,11 @@ export default function TaskDescriptionEditor({ content, onSave, branchId }) {
       // 포커스 이동이다 — 저장/종료 트리거가 아님. 팝업이 닫히면 에디터로
       // 포커스가 돌아오고, 이후의 진짜 blur에서 저장된다.
       const st = editor.state;
-      if (taskRefPluginKey.getState(st)?.active || slashCommandPluginKey.getState(st)?.active) return;
+      if (
+        taskRefPluginKey.getState(st)?.active ||
+        slashCommandPluginKey.getState(st)?.active ||
+        mathEditPluginKey.getState(st)?.active
+      ) return;
       if (savedRef.current) return;
       savedRef.current = true;
       if (editor.isEmpty) {
@@ -105,7 +111,10 @@ export default function TaskDescriptionEditor({ content, onSave, branchId }) {
     let wasRefActive = false;
     const handleTransaction = ({ editor: ed }) => {
       const st = ed.state;
-      const refActive = taskRefPluginKey.getState(st)?.active || slashCommandPluginKey.getState(st)?.active;
+      const refActive =
+        taskRefPluginKey.getState(st)?.active ||
+        slashCommandPluginKey.getState(st)?.active ||
+        mathEditPluginKey.getState(st)?.active;
       if (wasRefActive && !refActive) {
         setTimeout(() => {
           if (editor.isDestroyed || editor.isFocused || savedRef.current) return;

@@ -11,6 +11,8 @@ import { ResizableImage } from '@/components/Canvas/extensions/ResizableImageExt
 import { createImageUploadPlugin } from '@/components/Canvas/extensions/ImageUploadPlugin';
 import SlashCommandsExtension from '@/components/Canvas/extensions/SlashCommandsExtension';
 import { BookmarkPasteExtension } from '@/components/Canvas/extensions/BookmarkPastePlugin';
+import { mathExtensions } from '@/components/Canvas/extensions/mathExtensions';
+import { createMarkdownPastePlugin } from '@/components/Canvas/extensions/MarkdownPastePlugin';
 import { useEditorRefHydration } from '@/library/refHydration';
 
 const lowlight = createLowlight(common);
@@ -54,9 +56,16 @@ export default function CommentEditor({
       CodeBlockLowlight.configure({ lowlight }),
       MentionNode.configure({ branchId }),
       TaskRefNode,
-      SlashCommandsExtension.configure({ enabled: ['/t', '/ta'] }),
+      SlashCommandsExtension.configure({ enabled: ['/t', '/ta', '/m'] }),
       ResizableImage,
       BookmarkPasteExtension,
+      ...mathExtensions(),
+      Extension.create({
+        name: 'markdownPaste',
+        addProseMirrorPlugins() {
+          return [createMarkdownPastePlugin()];
+        },
+      }),
     ];
     if (branchId) {
       ext.push(

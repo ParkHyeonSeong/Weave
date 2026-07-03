@@ -12,6 +12,8 @@ import MentionNode from '@/components/Canvas/extensions/MentionExtension';
 import ScrumCellToolbar from './ScrumCellToolbar';
 import LinkHoverPopover from '@/components/shared/LinkHoverPopover';
 import SlashCommandsExtension from '@/components/Canvas/extensions/SlashCommandsExtension';
+import { mathExtensions } from '@/components/Canvas/extensions/mathExtensions';
+import { createMarkdownPastePlugin } from '@/components/Canvas/extensions/MarkdownPastePlugin';
 import { useEditorRefHydration } from '@/library/refHydration';
 
 // ydoc/provider가 준비된 뒤에만 마운트 (wrapper)
@@ -34,8 +36,15 @@ function ScrumCellInner({ ydoc, fragmentKey, placeholder, members }) {
       TaskRefNode,
       DocRefNode,
       MentionNode.configure({ members }),
-      SlashCommandsExtension.configure({ enabled: ['/t', '/ta', '/d'] }),
+      SlashCommandsExtension.configure({ enabled: ['/t', '/ta', '/d', '/m'] }),
       BookmarkPasteExtension,
+      ...mathExtensions(),
+      Extension.create({
+        name: 'markdownPaste',
+        addProseMirrorPlugins() {
+          return [createMarkdownPastePlugin()];
+        },
+      }),
       Yjs,
     ];
     // members는 보드 세션 내 정적(멤버는 셀 렌더 전 이미 로드됨)이라 deps에서 의도적으로

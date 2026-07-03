@@ -16,6 +16,7 @@ import { createImageUploadPlugin } from '@/components/Canvas/extensions/ImageUpl
 import { createMarkdownPastePlugin } from '@/components/Canvas/extensions/MarkdownPastePlugin';
 import { BookmarkPasteExtension } from '@/components/Canvas/extensions/BookmarkPastePlugin';
 import MermaidExtension from '@/components/Canvas/extensions/MermaidExtension';
+import { mathExtensions } from '@/components/Canvas/extensions/mathExtensions';
 import CanvasEditorToolbar from '@/components/Canvas/CanvasEditorToolbar';
 import { useEditorRefHydration } from '@/library/refHydration';
 
@@ -32,9 +33,10 @@ const makeBaseExtensions = (placeholder) => [
   ...checklistExtensions({ nested: true }),
   CalloutExtension,
   TaskRefNode,
-  SlashCommandsExtension.configure({ enabled: ['/t', '/ta'] }),
+  SlashCommandsExtension.configure({ enabled: ['/t', '/ta', '/m'] }),
   ResizableImage,
   MermaidExtension,
+  ...mathExtensions(),
 ];
 
 const IssueEditor = forwardRef(({ content, placeholder, minHeight = 150, branchId, onChange }, ref) => {
