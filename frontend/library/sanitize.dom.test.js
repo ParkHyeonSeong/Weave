@@ -68,4 +68,12 @@ describe('sanitizeHtml — 회귀(기존 동작 유지)', () => {
     expect(out).toContain('<p>hi</p>');
     expect(out).not.toContain('<script');
   });
+
+  it('수식 노드의 data-type/data-latex 보존', () => {
+    const inline = '<span data-type="inline-math" data-latex="E=mc^2"></span>';
+    const block = '<div data-type="block-math" data-latex="x &lt; y"></div>';
+    expect(sanitizeHtml(inline)).toContain('data-latex="E=mc^2"');
+    expect(sanitizeHtml(inline)).toContain('data-type="inline-math"');
+    expect(sanitizeHtml(block)).toContain('data-type="block-math"');
+  });
 });

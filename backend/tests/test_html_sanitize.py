@@ -40,6 +40,19 @@ def test_strips_xss_vectors():
     assert sanitize_html('<svg onload=alert(1)></svg>') == ''
 
 
+def test_preserves_math_nodes():
+    # 수식 노드: data-type/data-latex가 nh3 data-* 화이트리스트로 보존돼야 한다
+    exact = [
+        '<span data-type="inline-math" data-latex="E=mc^2"></span>',
+        '<div data-type="block-math" data-latex="\\int_a^b f(x)dx"></div>',
+    ]
+    for html in exact:
+        assert sanitize_html(html) == html, f"수식 노드가 변경됨: {html}"
+    # 속성값 특수문자는 이스케이프된 채 보존
+    out = sanitize_html('<span data-type="inline-math" data-latex="x &lt; y"></span>')
+    assert 'data-latex' in out and '<y' not in out
+
+
 def test_strips_css_url_fetch_and_layout():
     # url()을 가져오는 CSS 속성은 화이트리스트에 없어 제거 → 외부 요청/추적/exfiltration 차단
     assert 'url(' not in sanitize_html('<span style="background:url(javascript:alert(1))">x</span>')
