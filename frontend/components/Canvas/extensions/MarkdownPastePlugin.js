@@ -1,31 +1,6 @@
 import { Plugin } from '@tiptap/pm/state';
 import { DOMParser as ProseDOMParser } from '@tiptap/pm/model';
-import { marked } from 'marked';
-
-// 마크다운 문법 감지 패턴
-const MD_PATTERNS = [
-  /^#{1,6}\s/m,          // 헤더 (# ~ ######)
-  /^```/m,               // 코드 블록
-  /^\*\*[^*]+\*\*/m,     // 볼드
-  /^- \[[ x]\]/m,        // 체크리스트
-  /^[-*+]\s/m,           // 비정렬 리스트
-  /^\d+\.\s/m,           // 정렬 리스트
-  /^>\s/m,               // 인용
-  /^\|.+\|$/m,           // 테이블
-];
-
-function looksLikeMarkdown(text) {
-  // 최소 2개 이상의 패턴이 매치되거나, 헤더/코드블록이 있으면 마크다운으로 판단
-  const headerOrCode = MD_PATTERNS[0].test(text) || MD_PATTERNS[1].test(text);
-  if (headerOrCode) return true;
-
-  let matchCount = 0;
-  for (const pattern of MD_PATTERNS) {
-    if (pattern.test(text)) matchCount++;
-    if (matchCount >= 2) return true;
-  }
-  return false;
-}
+import { markdownToHtml, looksLikeMarkdown } from '@/library/markdownMath';
 
 export function createMarkdownPastePlugin() {
   return new Plugin({
@@ -35,13 +10,16 @@ export function createMarkdownPastePlugin() {
         const html = event.clipboardData?.getData('text/html');
         if (html) return false;
 
+        // 스키마 가드: 수식 노드가 없는 에디터에선 수식 변환·감지 비활성
+        // (ProseMirror parseSlice가 미지 노드를 드롭해 내용이 사라지는 것 방지)
+        const math = !!view.state.schema.nodes.inlineMath;
+
         const text = event.clipboardData?.getData('text/plain');
-        if (!text || !looksLikeMarkdown(text)) return false;
+        if (!text || !looksLikeMarkdown(text, { math })) return false;
 
         event.preventDefault();
 
-        // marked로 마크다운 → HTML 변환
-        const converted = marked.parse(text, { breaks: true });
+        const converted = markdownToHtml(text, { math });
 
         // HTML을 ProseMirror 노드로 파싱
         const wrapper = document.createElement('div');
