@@ -14,7 +14,7 @@ import PresenceBar from './PresenceBar';
 import AnnotationLayer from './AnnotationLayer';
 import AnnotationSidebar from './AnnotationSidebar';
 import ActivityTimeline from '@/components/common/ActivityTimeline';
-import { renderMathIn } from '@/library/mathRender';
+import { useMathHydration } from '@/library/mathRender';
 import { common, createLowlight } from 'lowlight';
 import { toHtml } from 'hast-util-to-html';
 import { compileToSvg, downloadPdf } from '@/library/typstCompiler';
@@ -147,10 +147,7 @@ export default function CanvasPageView({ onRefClick }) {
   }, [status, isEditing]);
 
   // 읽기 모드에서 수식 렌더링 (KaTeX 우선, 미지원 문법은 MathJax 폴백)
-  useEffect(() => {
-    if (isEditing || !contentRef.current || page?.type === 'typst') return;
-    renderMathIn(contentRef.current);
-  }, [isEditing, page?.content]);
+  useMathHydration(contentRef, [page?.content], !isEditing && page?.type !== 'typst');
 
   // 읽기 모드에서 코드 블록 구문 강조
   useEffect(() => {
