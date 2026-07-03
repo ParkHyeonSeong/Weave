@@ -1339,3 +1339,50 @@
     margin: 0 1px;
   }
 }
+
+// 수식 클릭 편집 팝오버 (MathEditExtension이 body에 fixed로 렌더)
+.MathEditPopover {
+  width: 320px;
+  padding: 10px;
+  background: $color-bg;
+  border: 1px solid $color-border;
+  border-radius: $radius-md;
+  box-shadow: $shadow-lg;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  &__Input {
+    width: 100%;
+    resize: vertical;
+    font-family: monospace;
+    font-size: 13px;
+    padding: 6px 8px;
+    border: 1px solid $color-border-hover;
+    border-radius: $radius-sm;
+  }
+  &__Preview {
+    min-height: 24px;
+    padding: 4px;
+    overflow-x: auto;
+  }
+  &__Actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+  &__Btn {
+    padding: 4px 10px;
+    font-size: 12px;
+    border: 1px solid $color-border-hover;
+    border-radius: $radius-sm;
+    background: $color-bg;
+    cursor: pointer;
+
+    &--primary {
+      background: $color-success;
+      border-color: $color-success;
+      color: $color-text-inverse;
+    }
+  }
+}

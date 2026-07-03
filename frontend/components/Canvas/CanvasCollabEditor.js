@@ -14,7 +14,7 @@ import Highlight from '@tiptap/extension-highlight';
 import Color from '@tiptap/extension-color';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { checklistExtensions } from './extensions/checklistExtension';
-import Mathematics from '@tiptap/extension-mathematics';
+import { mathExtensions } from './extensions/mathExtensions';
 import { ySyncPlugin, yCursorPlugin, yUndoPlugin } from 'y-prosemirror';
 import { common, createLowlight } from 'lowlight';
 import CalloutExtension from './extensions/CalloutExtension';
@@ -137,9 +137,7 @@ function CollabEditorInner({
       BookmarkNode,
       BookmarkPasteExtension,
       MarkdownPaste,
-      Mathematics.configure({
-        katexOptions: { throwOnError: false },
-      }),
+      ...mathExtensions(),
       MermaidExtension,
       ...(ImageUpload ? [ImageUpload] : []),
       YjsExtension,
