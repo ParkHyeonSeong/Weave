@@ -7,6 +7,7 @@ import { mapTokenBeforeCursor, scheduleTriggerActivation, slashCommandPluginKey 
 import { taskRefPluginKey } from './TaskRefExtension';
 import { docRefPluginKey } from './DocRefExtension';
 import { issueRefPluginKey } from './IssueRefExtension';
+import { mathEditPluginKey } from './mathExtensions';
 
 export { slashCommandPluginKey };
 const OFF = { active: false, query: '', from: 0, index: 0 };
@@ -23,6 +24,12 @@ function activateRef(command, from, view) {
     tr = tr.setMeta(docRefPluginKey, { active: true, from });
   } else if (command.kind === 'issue') {
     tr = tr.setMeta(issueRefPluginKey, { active: true, from });
+  } else if (command.kind === 'math') {
+    const mathType = state.schema.nodes.inlineMath;
+    if (mathType) {
+      tr = tr.insert(from, mathType.create({ latex: '' }));
+      tr = tr.setMeta(mathEditPluginKey, { active: true, pos: from, latex: '', kind: 'inline', isNew: true });
+    }
   }
   view.dispatch(tr);
 }

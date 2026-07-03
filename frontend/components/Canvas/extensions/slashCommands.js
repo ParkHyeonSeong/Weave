@@ -4,6 +4,7 @@ export const SLASH_COMMANDS = [
   { cmd: '/ta', label: 'Search all tasks', kind: 'task',  mode: 'all' },
   { cmd: '/d',  label: 'Search documents', kind: 'doc'  },
   { cmd: '/i',  label: 'Search issues',    kind: 'issue' },
+  { cmd: '/m',  label: 'Insert math',      kind: 'math' },
 ];
 
 function pool(enabled) {

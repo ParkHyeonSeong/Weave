@@ -133,7 +133,7 @@ function CollabEditorInner({
       MentionNode.configure({ canvasId }),
       DocRefNode,
       IssueRefNode,
-      SlashCommandsExtension.configure({ enabled: ['/t', '/ta', '/d', '/i'] }),
+      SlashCommandsExtension.configure({ enabled: ['/t', '/ta', '/d', '/i', '/m'] }),
       BookmarkNode,
       BookmarkPasteExtension,
       MarkdownPaste,

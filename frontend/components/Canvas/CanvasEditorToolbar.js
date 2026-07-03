@@ -430,10 +430,28 @@ export default function CanvasEditorToolbar({ editor }) {
           </Btn>
         </>
       )}
-      {editor.extensionManager.extensions.some(e => e.name === 'mathematics') && (
-        <Btn onClick={() => editor.chain().focus().insertContent({ type: 'inlineMath', attrs: { latex: 'E=mc^2' } }).run()} title="Math Equation">
-          <Sigma size={16} />
-        </Btn>
+      {!!editor.schema.nodes.inlineMath && (
+        <DropdownWrapper isOpen={openDropdown === 'math'} onClose={closeDropdown}>
+          <Btn onClick={() => toggleDropdown('math')} title="Math Equation">
+            <Sigma size={16} />
+          </Btn>
+          {openDropdown === 'math' && (
+            <div className="CanvasEditorToolbar__DropdownMenu">
+              <button
+                className="CanvasEditorToolbar__DropdownItem"
+                onClick={() => { editor.chain().focus().insertInlineMath({ latex: 'E=mc^2' }).run(); closeDropdown(); }}
+              >
+                Inline equation
+              </button>
+              <button
+                className="CanvasEditorToolbar__DropdownItem"
+                onClick={() => { editor.chain().focus().insertBlockMath({ latex: '\\int_a^b f(x)\\,dx' }).run(); closeDropdown(); }}
+              >
+                Block equation
+              </button>
+            </div>
+          )}
+        </DropdownWrapper>
       )}
       {editor.extensionManager.extensions.some(e => e.name === 'mermaid') && (
         <Btn onClick={() => editor.chain().focus().insertMermaid().run()} title="Mermaid Diagram">
