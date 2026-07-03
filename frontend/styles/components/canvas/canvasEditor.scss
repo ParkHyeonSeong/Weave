@@ -1346,7 +1346,7 @@
   padding: 10px;
   background: $color-bg;
   border: 1px solid $color-border;
-  border-radius: $radius-md;
+  border-radius: $radius-lg;
   box-shadow: $shadow-lg;
   display: flex;
   flex-direction: column;
@@ -1359,7 +1359,7 @@
     font-size: 13px;
     padding: 6px 8px;
     border: 1px solid $color-border-hover;
-    border-radius: $radius-sm;
+    border-radius: $radius-md;
   }
   &__Preview {
     min-height: 24px;
@@ -1375,7 +1375,7 @@
     padding: 4px 10px;
     font-size: 12px;
     border: 1px solid $color-border-hover;
-    border-radius: $radius-sm;
+    border-radius: $radius-md;
     background: $color-bg;
     cursor: pointer;
 
