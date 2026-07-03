@@ -5,6 +5,7 @@ import { axios } from '@/library/_axios';
 import { ensureHtml } from '@/library/ensureHtml';
 import { sanitizeHtml } from '@/library/sanitize';
 import { useRefHydration } from '@/library/refHydration';
+import { useMathHydration } from '@/library/mathRender';
 import Avatar from '@/components/common/Avatar';
 import IssueEditor from './IssueEditor';
 import ConfirmModal from '@/components/modal/ConfirmModal';
@@ -43,6 +44,7 @@ export default function TaskIssueDetail() {
   // 편집 취소 시 readonly가 stale 스냅샷으로 재마운트되므로 편집 플래그도 deps에 포함
   const timelineRef = useRef(null);
   useRefHydration(timelineRef, [issue?.body, comments, editingBody, editingCommentId]);
+  useMathHydration(timelineRef, [issue?.body, comments, editingBody, editingCommentId]);
 
   const myProfile = typeof window !== 'undefined'
     ? JSON.parse(sessionStorage.getItem('profile') || '{}')

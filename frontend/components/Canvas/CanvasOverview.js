@@ -6,6 +6,7 @@ import { axios } from '@/library/_axios';
 import useCollabProvider from '@/library/useCollabProvider';
 import { sanitizeHtml } from '@/library/sanitize';
 import { applyFallbackBadges, useRefHydration } from '@/library/refHydration';
+import { useMathHydration } from '@/library/mathRender';
 import PresenceBar from './PresenceBar';
 import EntityIcon from '@/components/common/EntityIcon';
 import EntityAppearancePopover from '@/components/common/EntityAppearancePopover';
@@ -139,6 +140,7 @@ export default function CanvasOverview() {
 
   // 배치 API로 최신 제목·상태 하이드레이션 + 탭 내 태스크/이슈 변경 이벤트 갱신
   useRefHydration(contentRef, [isEditing, overview?.content], !isEditing);
+  useMathHydration(contentRef, [isEditing, overview?.content], !isEditing);
 
   const handleHtmlChange = (html) => {
     htmlRef.current = html;

@@ -12,6 +12,7 @@ import { sanitizeHtml } from '@/library/sanitize';
 import { formatYMD, formatDateTime } from '@/library/formatTime';
 import { selectableEpics } from '@/library/epics';
 import { useRefHydration } from '@/library/refHydration';
+import { useMathHydration } from '@/library/mathRender';
 import { errorText } from '@/library/errorText';
 import Avatar from '@/components/common/Avatar';
 import TaskIssueSection from './TaskIssueSection';
@@ -57,6 +58,7 @@ export default function TaskFullPage() {
   // readonly 설명의 ref 칩 하이드레이션 (최신 제목·상태 + 탭 내 변경 이벤트)
   const descRef = useRef(null);
   useRefHydration(descRef, [task?.description, editingDesc], !editingDesc);
+  useMathHydration(descRef, [task?.description, editingDesc], !editingDesc);
 
   useEffect(() => {
     if (!branchId) return;

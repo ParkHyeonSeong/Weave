@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, memo } from 'react';
 import { Reply, Pencil, Trash2 } from 'lucide-react';
 import { sanitizeHtml } from '@/library/sanitize';
 import { useRefHydration } from '@/library/refHydration';
+import { useMathHydration } from '@/library/mathRender';
 import { formatRelative } from '@/library/formatTime';
 import Avatar from '@/components/common/Avatar';
 import { buildMentionHtml } from '@/components/Canvas/extensions/MentionExtension';
@@ -69,6 +70,7 @@ function CommentItem({
   // readonly 본문의 ref 칩 하이드레이션 (최신 제목·상태 + 탭 내 변경 이벤트)
   const contentRef = useRef(null);
   useRefHydration(contentRef, [comment.content, editing], !editing);
+  useMathHydration(contentRef, [comment.content, editing], !editing);
 
   const handleSubmitEdit = async (html) => {
     try {

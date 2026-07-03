@@ -4,6 +4,7 @@ import { X, ExternalLink, ArrowRight, Loader } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import { sanitizeHtml } from '@/library/sanitize';
 import { useRefHydration } from '@/library/refHydration';
+import { useMathHydration } from '@/library/mathRender';
 
 export default function RefPreviewPanel({ refType, refData, onClose }) {
   const router = useRouter();
@@ -39,6 +40,7 @@ export default function RefPreviewPanel({ refType, refData, onClose }) {
 
   // 프리뷰 본문의 ref 칩 하이드레이션 (최신 제목·상태 + 탭 내 변경 이벤트)
   useRefHydration(bodyRef, [data]);
+  useMathHydration(bodyRef, [data]);
 
   const getNavigateUrl = () => {
     if (refType === 'doc') return `/canvas/${refData.canvasId}/${refData.pageId}`;

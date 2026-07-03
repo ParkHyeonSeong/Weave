@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { X, CalendarDays, Flag, ExternalLink, Lock, Layers, MessageSquare, GitBranch } from 'lucide-react';
 import { sanitizeHtml } from '@/library/sanitize';
 import { useRefHydration } from '@/library/refHydration';
+import { useMathHydration } from '@/library/mathRender';
 import Avatar from '@/components/common/Avatar';
 import { PRIORITIES } from '../mockData';
 
@@ -21,6 +22,7 @@ export default function TrackItemDetail({ item, branch, workflowStatuses, onClos
   // readonly 설명의 ref 칩 하이드레이션 (최신 제목·상태 + 탭 내 변경 이벤트)
   const descRef = useRef(null);
   useRefHydration(descRef, [item?.description]);
+  useMathHydration(descRef, [item?.description]);
 
   if (!item) {
     return (
