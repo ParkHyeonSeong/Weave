@@ -14,7 +14,7 @@ import PresenceBar from './PresenceBar';
 import AnnotationLayer from './AnnotationLayer';
 import AnnotationSidebar from './AnnotationSidebar';
 import ActivityTimeline from '@/components/common/ActivityTimeline';
-import katex from 'katex';
+import { renderMathIn } from '@/library/mathRender';
 import { common, createLowlight } from 'lowlight';
 import { toHtml } from 'hast-util-to-html';
 import { compileToSvg, downloadPdf } from '@/library/typstCompiler';
@@ -146,19 +146,10 @@ export default function CanvasPageView({ onRefClick }) {
     else if (status === 'connected') setSaveStatus('saved');
   }, [status, isEditing]);
 
-  // 읽기 모드에서 KaTeX 수식 렌더링
+  // 읽기 모드에서 수식 렌더링 (KaTeX 우선, 미지원 문법은 MathJax 폴백)
   useEffect(() => {
     if (isEditing || !contentRef.current || page?.type === 'typst') return;
-    const mathNodes = contentRef.current.querySelectorAll('[data-type="block-math"], [data-type="inline-math"]');
-    mathNodes.forEach((el) => {
-      const latex = el.getAttribute('data-latex');
-      if (latex && !el.querySelector('.katex')) {
-        const isBlock = el.getAttribute('data-type') === 'block-math';
-        try {
-          katex.render(latex, el, { throwOnError: false, displayMode: isBlock });
-        } catch {}
-      }
-    });
+    renderMathIn(contentRef.current);
   }, [isEditing, page?.content]);
 
   // 읽기 모드에서 코드 블록 구문 강조
