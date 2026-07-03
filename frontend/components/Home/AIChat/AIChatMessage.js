@@ -1,7 +1,10 @@
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
 import { Bookmark } from 'lucide-react';
 import { useLightbox } from '@/components/common/LightboxProvider';
 import { deriveFilename } from '@/library/lightboxImages';
+import MarkdownMath from '@/components/common/MarkdownMath';
 
 export default function AIChatMessage({ message, onTogglePin, isStreaming }) {
   const { open: openLightbox } = useLightbox();
@@ -22,6 +25,7 @@ export default function AIChatMessage({ message, onTogglePin, isStreaming }) {
         ) : (
           <div className="AIChatMessage__Markdown">
             <ReactMarkdown
+              remarkPlugins={[remarkGfm, remarkMath]}
               components={{
                 img: ({ node, ...props }) => (
                   <img
@@ -32,6 +36,20 @@ export default function AIChatMessage({ message, onTogglePin, isStreaming }) {
                     }
                   />
                 ),
+                pre: ({ node, children, ...props }) => {
+                  const childCls = node?.children?.[0]?.properties?.className || [];
+                  if (Array.isArray(childCls) && childCls.includes('math-display')) {
+                    return <>{children}</>; // 블록 수식은 pre 래핑 제거
+                  }
+                  return <pre {...props}>{children}</pre>;
+                },
+                code: ({ node, className, children, ...props }) => {
+                  const cls = className || '';
+                  if (cls.includes('language-math')) {
+                    return <MarkdownMath latex={String(children)} display={cls.includes('math-display')} />;
+                  }
+                  return <code className={className} {...props}>{children}</code>;
+                },
               }}
             >
               {message.content}
