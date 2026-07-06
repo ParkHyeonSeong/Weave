@@ -5,6 +5,7 @@ import MathEditPopover from './MathEditPopover';
 
 export const mathEditPluginKey = new PluginKey('mathEdit');
 const OFF = { active: false, pos: null, latex: '', kind: 'inline', isNew: false };
+let openSeq = 0;
 
 const MathEditExtension = Extension.create({
   name: 'mathEdit',
@@ -34,6 +35,7 @@ const MathEditExtension = Extension.create({
               latex: node.attrs.latex || '',
               kind: node.type.name === 'blockMath' ? 'block' : 'inline',
               isNew: false,
+              seq: ++openSeq,
             }));
             return true;
           },
@@ -127,8 +129,19 @@ const MathEditExtension = Extension.create({
             update(view) {
               const ps = mathEditPluginKey.getState(view.state);
               if (ps === lastState) return;
+              const prev = lastState;
               lastState = ps;
-              if (ps.active) render(ps, view); else destroyPopup();
+              if (!ps.active) { destroyPopup(); return; }
+              // 이미 열린 팝오버의 pos-only 리매핑(원격 Yjs 편집): 리마운트하면 입력 중
+              // 드래프트가 초기화되므로 위치만 갱신한다. seq가 같으면 동일한 열림이다
+              // (다른 수식 노드 클릭은 handleClickOn이 seq를 올려 전체 렌더를 탄다).
+              if (prev?.active && prev.seq === ps.seq && renderer && popup) {
+                const coords = view.coordsAtPos(ps.pos);
+                popup.style.left = `${Math.min(coords.left, window.innerWidth - 340)}px`;
+                popup.style.top = `${coords.bottom + 6}px`;
+                return;
+              }
+              render(ps, view);
             },
             destroy() { destroyPopup(); },
           };
