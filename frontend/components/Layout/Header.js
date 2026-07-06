@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/router';
-import { Search, Bell, Settings, Shield, AtSign, UserPlus, AlertCircle, MessageSquare, CheckCircle2, CircleDot, Menu, User, LogOut } from 'lucide-react';
+import { Search, Bell, Settings, Shield, AtSign, UserPlus, AlertCircle, MessageSquare, CheckCircle2, CircleDot, Menu, User, LogOut, Reply } from 'lucide-react';
 import { formatMessageTime } from '@/library/formatTime';
 import { LOGIN_PATH } from '@/library/authRedirect';
 import AppSwitcher from './AppSwitcher';
@@ -10,6 +10,7 @@ import NavLink from '@/components/common/NavLink';
 const NOTI_ICONS = {
   mention: AtSign,
   chat_mention: AtSign,
+  comment_reply: Reply,
   task_assigned: UserPlus,
   issue_created: AlertCircle,
   issue_comment: MessageSquare,
@@ -24,6 +25,7 @@ const NOTI_ICONS = {
 const NOTI_TYPE_META = {
   mention:             { group: 'mention', label: '멘션' },
   chat_mention:        { group: 'mention', label: '멘션' },
+  comment_reply:       { group: 'task',    label: '답글' },
   task_assigned:       { group: 'task',    label: '배정' },
   task_status_changed: { group: 'task',    label: '상태' },
   issue_created:       { group: 'issue',   label: '이슈' },

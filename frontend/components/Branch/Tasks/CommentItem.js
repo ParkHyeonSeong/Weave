@@ -56,11 +56,11 @@ function CommentItem({
 
   const displayName = comment.author?.username ?? 'unknown';
 
-  // 답글 prefill: depth 1에서 Reply 클릭 시 대상의 author를 자동 멘션
+  // 답글 prefill: Reply 클릭 시 대상 댓글 작성자를 자동 멘션 (본인 댓글엔 안 넣음)
   const replyPrefill = useMemo(() => {
-    if (depth === 0 || !comment.author) return '<p></p>';
+    if (!comment.author || comment.author.user_id === currentUserId) return '<p></p>';
     return `<p>${buildMentionHtml(comment.author)}&nbsp;</p>`;
-  }, [depth, comment.author]);
+  }, [comment.author, currentUserId]);
 
   const sanitizedContent = useMemo(
     () => sanitizeHtml(comment.content || ''),
