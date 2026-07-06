@@ -11,6 +11,7 @@ import {
   Type, PaintBucket,
   AlignStartVertical, AlignCenterVertical, AlignEndVertical,
 } from 'lucide-react';
+import { TextSelection } from '@tiptap/pm/state';
 import { promptSetLink } from '@/library/editorLink';
 import { mathEditPluginKey } from './extensions/mathExtensions';
 
@@ -67,7 +68,17 @@ const insertMathWithPopover = (editor, kind, latex) => {
   const type = kind === 'block' ? state.schema.nodes.blockMath : state.schema.nodes.inlineMath;
   if (!type) return;
   const from = state.selection.from;
-  const insertTr = state.tr.replaceSelectionWith(type.create({ latex }), false);
+  // 기존 툴바 의미론 유지: 선택 영역이 있어도 지우지 않고 from에 삽입한다
+  // (replaceSelectionWith를 그대로 쓰면 선택 텍스트가 삭제되고, isNew 취소는
+  // 노드만 제거해 선택했던 텍스트가 유실됨) — 삽입 전 selection을 from으로 collapse.
+  // NodeSelection(테이블/블록 전체 선택 등)이면 from이 inline 콘텐츠를 갖지 않는
+  // 위치일 수 있어 TextSelection.create 대신 TextSelection.near로 가장 가까운
+  // 유효 위치를 찾는다(이 파일의 다른 확장인 refSuggestion.js도 동일 패턴 사용).
+  let insertTr = state.tr;
+  if (!state.selection.empty) {
+    insertTr = insertTr.setSelection(TextSelection.near(state.doc.resolve(from)));
+  }
+  insertTr = insertTr.replaceSelectionWith(type.create({ latex }), false);
   view.dispatch(insertTr);
 
   const doc = view.state.doc;
