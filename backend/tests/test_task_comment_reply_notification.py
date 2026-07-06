@@ -160,3 +160,19 @@ async def test_reply_to_ex_member_author_no_notification(db_session):
 
     notis = await noti_model.find_by_user(alice, db=db_session)
     assert len(_of_type(notis, "comment_reply")) == 0
+
+
+async def test_update_reply_does_not_resend_reply_notification(db_session):
+    alice, bob, branch, task, root_id = await _seed(db_session, "CR7")
+
+    res = await comment_ctrl.create_comment(
+        _body("<p>reply</p>", parent_comment_id=root_id), branch, task, _req(bob, "CR7_b"), db_session)
+    assert res["status"] is True
+    reply_id = res["comment"]["comment_id"]
+
+    res = await comment_ctrl.update_comment(
+        _body("<p>edited reply</p>"), branch, task, reply_id, _req(bob, "CR7_b"), db_session)
+    assert res["status"] is True
+
+    notis = _of_type(await noti_model.find_by_user(alice, db=db_session), "comment_reply")
+    assert len(notis) == 1  # create 시 1건만 — update로 재발송되지 않음
