@@ -66,6 +66,12 @@ def _mention_notification_title(username: str, task: dict) -> str:
     return f'{username}님이 {display_id} {title}의 댓글에서 회원님을 멘션했습니다'
 
 
+def _reply_notification_title(username: str, task: dict) -> str:
+    display_id = task.get('display_id', '')
+    title = task.get('title', '')
+    return f'{username}님이 {display_id} {title}에서 회원님의 댓글에 답글을 남겼습니다'
+
+
 def _comment_link(branch_id: int, task_id: int, comment_id: int) -> str:
     return f'/branch/{branch_id}/task/{task_id}?comment_id={comment_id}'
 
@@ -121,29 +127,43 @@ async def create_comment(body, branch_id: int, task_id: int, request: Request,
 
     # Reply normalize — silent
     parent_id = body.parent_comment_id
+    parent_author_id = None
     if parent_id is not None:
         parent = await comment_model.find_by_id(parent_id, db)
         if not parent or parent['task_id'] != task_id:
             return error_response(ErrorCode.INVALID_PARENT)
         if parent.get('deleted_at') is not None:
             return error_response(ErrorCode.PARENT_DELETED)
+        parent_author_id = parent['author_id']
         if parent['parent_comment_id'] is not None:
             # normalize to root, then re-verify root is alive
             parent_id = parent['parent_comment_id']
             root = await comment_model.find_by_id(parent_id, db)
             if not root or root.get('deleted_at') is not None:
                 return error_response(ErrorCode.PARENT_DELETED)
+            parent_author_id = root['author_id']
 
     comment_id = await comment_model.create(task_id, user_id, body.content, parent_id, db)
 
     raw_mentions = extract_mention_user_ids(body.content)
     mentions = await member_model.filter_users_in_branch(branch_id, raw_mentions, db)
+    username = request.state.payload.get('username', '')
     if mentions:
         await comment_model.add_mentions(comment_id, mentions, db)
-        username = request.state.payload.get('username', '')
         await _notify_mentions(
             sorted(mentions), user_id, username, task,
             branch_id, task_id, comment_id, db,
+        )
+
+    # 답글이면 root 댓글 작성자에게 알림 — 본인·멘션 중복·비멤버 제외
+    if (parent_author_id is not None and parent_author_id != user_id
+            and parent_author_id not in mentions
+            and await member_model.is_member(branch_id, parent_author_id, db)):
+        await notification_service.notify_bulk(
+            [parent_author_id], 'comment_reply', user_id,
+            _reply_notification_title(username, task),
+            _comment_link(branch_id, task_id, comment_id),
+            'task_comment', comment_id, db,
         )
 
     row = await comment_model.find_by_id(comment_id, db)
