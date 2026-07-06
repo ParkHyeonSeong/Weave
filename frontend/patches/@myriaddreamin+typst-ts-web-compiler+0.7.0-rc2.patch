@@ -1,0 +1,38 @@
+diff --git a/node_modules/@myriaddreamin/typst-ts-web-compiler/pkg/typst_ts_web_compiler.mjs b/node_modules/@myriaddreamin/typst-ts-web-compiler/pkg/typst_ts_web_compiler.mjs
+index e7e0221..9c8ca69 100644
+--- a/node_modules/@myriaddreamin/typst-ts-web-compiler/pkg/typst_ts_web_compiler.mjs
++++ b/node_modules/@myriaddreamin/typst-ts-web-compiler/pkg/typst_ts_web_compiler.mjs
+@@ -1405,12 +1405,31 @@ function __wbg_get_imports() {
+         const ret = new Uint8Array(getArrayU8FromWasm0(arg0, arg1));
+         return addHeapObject(ret);
+     };
++    // CSP fix (Weave): 'unsafe-eval' 없는 CSP에서는 new Function() 생성 자체가 EvalError로
++    // 차단된다. 이 wasm(TypstCompilerBuilder 생성자)이 넘기는 함수 몸체는 아래 상수들뿐임을
++    // 실측으로 확인했으므로 등가 클로저로 매핑하고, 미지의 문자열만 기존 new Function
++    // 경로로 남긴다(현상 유지 폴백 — CSP 하에서는 그 경우에만 기존처럼 터진다).
++    const cspSafeFunction = (params, body) => {
++        switch (body) {
++            case 'return 0': return function () { return 0; };
++            case 'return true': return function () { return true; };
++            case 'return path': return function (path) { return path; };
++            default: {
++                const m = /^throw new Error\('([^']*)'\)$/.exec(body);
++                if (m) {
++                    const msg = m[1];
++                    return function () { throw new Error(msg); };
++                }
++                return new Function(...params, body);
++            }
++        }
++    };
+     imports.wbg.__wbg_new_no_args_cb138f77cf6151ee = function(arg0, arg1) {
+-        const ret = new Function(getStringFromWasm0(arg0, arg1));
++        const ret = cspSafeFunction([], getStringFromWasm0(arg0, arg1));
+         return addHeapObject(ret);
+     };
+     imports.wbg.__wbg_new_with_args_df9e7125ffe55248 = function(arg0, arg1, arg2, arg3) {
+-        const ret = new Function(getStringFromWasm0(arg0, arg1), getStringFromWasm0(arg2, arg3));
++        const ret = cspSafeFunction([getStringFromWasm0(arg0, arg1)], getStringFromWasm0(arg2, arg3));
+         return addHeapObject(ret);
+     };
+     imports.wbg.__wbg_next_138a17bbf04e926c = function(arg0) {

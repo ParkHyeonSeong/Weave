@@ -1,0 +1,31 @@
+diff --git a/node_modules/@myriaddreamin/typst.ts/dist/cjs/init.cjs b/node_modules/@myriaddreamin/typst.ts/dist/cjs/init.cjs
+index 5753454..e7a76c7 100644
+--- a/node_modules/@myriaddreamin/typst.ts/dist/cjs/init.cjs
++++ b/node_modules/@myriaddreamin/typst.ts/dist/cjs/init.cjs
+@@ -28,7 +28,8 @@ class ComponentBuilder {
+     this.fetcher = fetcher;
+   }
+   async loadFonts(builder, fonts) {
+-    const escapeImport = new Function("m", "return import(m)");
++    // CSP fix (Weave): defer Function construction to the Node-only call site.
++    const escapeImport = (m) => new Function("m", "return import(m)")(m);
+     const fetcher = this.fetcher ||= await async function() {
+       const { fetchBuilder, FileSystemCache } = await escapeImport("node-fetch-cache");
+       const cache = new FileSystemCache({
+diff --git a/node_modules/@myriaddreamin/typst.ts/dist/esm/init.mjs b/node_modules/@myriaddreamin/typst.ts/dist/esm/init.mjs
+index 6a4f9bf..23b1cfa 100644
+--- a/node_modules/@myriaddreamin/typst.ts/dist/esm/init.mjs
++++ b/node_modules/@myriaddreamin/typst.ts/dist/esm/init.mjs
+@@ -5,7 +5,11 @@ class ComponentBuilder {
+         this.fetcher = fetcher;
+     }
+     async loadFonts(builder, fonts) {
+-        const escapeImport = new Function('m', 'return import(m)');
++        // CSP fix (Weave): new Function() 생성은 unsafe-eval 없는 CSP에서 생성 시점에
++        // EvalError를 던진다. 실제로 호출되는 Node 전용 경로(this.fetcher 부재로
++        // node-fetch-cache를 import할 때)까지 생성을 지연한다. 브라우저에서는
++        // this.fetcher가 전역 fetch로 초기화돼 있어 이 함수는 영원히 호출되지 않는다.
++        const escapeImport = (m) => new Function('m', 'return import(m)')(m);
+         const fetcher = (this.fetcher ||= await (async function () {
+             const { fetchBuilder, FileSystemCache } = await escapeImport('node-fetch-cache');
+             const cache = new FileSystemCache({
