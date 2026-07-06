@@ -12,6 +12,7 @@ import {
   AlignStartVertical, AlignCenterVertical, AlignEndVertical,
 } from 'lucide-react';
 import { promptSetLink } from '@/library/editorLink';
+import { mathEditPluginKey } from './extensions/mathExtensions';
 
 // 프리셋 컬러 팔레트
 const TEXT_COLORS = [
@@ -54,6 +55,35 @@ const CODE_LANGUAGES = [
   { value: 'yaml', label: 'YAML' },
   { value: 'xml', label: 'XML' },
 ];
+
+// 수식 삽입 + 편집 팝오버 즉시 오픈 (/m 슬래시와 동일한 첫 삽입 UX — isNew라 취소 시 노드 제거)
+// block 노드는 문단 중간/끝 커서에서 replaceSelectionWith 시 문단이 split되어 삽입된 노드의
+// 실제 pos가 삽입 전 커서 위치(from)와 어긋난다(실측 확인, 리스트/테이블/블록쿼트처럼 조상을
+// 더 거슬러 올라가는 경우도 있어 고정폭 근방 스캔은 못 찾을 수 있음) — 삽입 tr을 먼저
+// 디스패치하고, mapping으로 얻은 앵커에 문서 전체에서 가장 가까운 동일 타입 노드를 찾아
+// meta는 별도 tr로 디스패치한다.
+const insertMathWithPopover = (editor, kind, latex) => {
+  const { state, view } = editor;
+  const type = kind === 'block' ? state.schema.nodes.blockMath : state.schema.nodes.inlineMath;
+  if (!type) return;
+  const from = state.selection.from;
+  const insertTr = state.tr.replaceSelectionWith(type.create({ latex }), false);
+  view.dispatch(insertTr);
+
+  const doc = view.state.doc;
+  const anchor = insertTr.mapping.map(from, -1);
+  let pos = null;
+  let bestDist = Infinity;
+  doc.descendants((node, nodePos) => {
+    if (node.type !== type) return;
+    const dist = Math.abs(nodePos - anchor);
+    if (dist < bestDist) { bestDist = dist; pos = nodePos; }
+  });
+  if (pos == null) return; // 삽입된 노드를 못 찾으면 팝오버를 열지 않는다(침묵 오동작 방지)
+
+  view.dispatch(view.state.tr.setMeta(mathEditPluginKey, { active: true, pos, latex, kind, isNew: true }));
+  view.focus();
+};
 
 export default function CanvasEditorToolbar({ editor }) {
   const [openDropdown, setOpenDropdown] = useState(null);
@@ -439,13 +469,13 @@ export default function CanvasEditorToolbar({ editor }) {
             <div className="CanvasEditorToolbar__DropdownMenu">
               <button
                 className="CanvasEditorToolbar__DropdownItem"
-                onClick={() => { editor.chain().focus().insertInlineMath({ latex: 'E=mc^2' }).run(); closeDropdown(); }}
+                onClick={() => { insertMathWithPopover(editor, 'inline', 'E=mc^2'); closeDropdown(); }}
               >
                 Inline equation
               </button>
               <button
                 className="CanvasEditorToolbar__DropdownItem"
-                onClick={() => { editor.chain().focus().insertBlockMath({ latex: '\\int_a^b f(x)\\,dx' }).run(); closeDropdown(); }}
+                onClick={() => { insertMathWithPopover(editor, 'block', '\\int_a^b f(x)\\,dx'); closeDropdown(); }}
               >
                 Block equation
               </button>
