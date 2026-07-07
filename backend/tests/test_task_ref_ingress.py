@@ -256,3 +256,134 @@ async def test_create_with_long_config_key_succeeds(db_session):
     assert res["status"] is True
     saved = await _get_task_row(db_session, res["task_id"])
     assert saved == {"status": long_status, "task_type": long_type}
+
+
+# ---------------------------------------------------------------------------
+# Task 4: create() — defaults, alias, applied_* echo (_get_task_row는 Task 3에서 정의)
+# ---------------------------------------------------------------------------
+
+async def test_create_omitted_uses_seeded_defaults(db_session):
+    uid, bid = await _seed_standard(db_session, key="CR1")
+    body = schema.TaskCreate(title="T1")
+    res = await ctrl.create(body, bid, _req(uid), db_session)
+    assert res["status"] is True
+    assert res["applied_status"] == "todo"
+    assert res["applied_task_type"] == "task"
+    saved = await _get_task_row(db_session, res["task_id"])
+    assert saved == {"status": "todo", "task_type": "task"}
+
+
+async def test_create_omitted_status_follows_is_default(db_session):
+    uid = await _make_user(db_session, "cr2@tri.test", "cr2")
+    bid = await _make_branch(db_session, uid, key="CR2")
+    await _add_status(db_session, bid, "backlog", "Backlog", "todo", 0)
+    await _add_status(db_session, bid, "triage", "Triage", "todo", 1, is_default=True)
+    await _add_type(db_session, bid, "task", "Task", 0)
+    await _add_member(db_session, bid, uid)
+    await _make_task_sequence(db_session, bid)
+    res = await ctrl.create(schema.TaskCreate(title="T"), bid, _req(uid), db_session)
+    assert res["status"] is True
+    assert res["applied_status"] == "triage"
+
+
+async def test_create_omitted_status_without_todo_key_succeeds(db_session):
+    """현재 하드코딩('todo')에서는 실패하는 케이스 — branch에 todo가 없어도 생성 성공."""
+    uid = await _make_user(db_session, "cr3@tri.test", "cr3")
+    bid = await _make_branch(db_session, uid, key="CR3")
+    await _add_status(db_session, bid, "open", "Open", "todo", 0)
+    await _add_type(db_session, bid, "issue", "Issue", 0)
+    await _add_member(db_session, bid, uid)
+    await _make_task_sequence(db_session, bid)
+    res = await ctrl.create(schema.TaskCreate(title="T"), bid, _req(uid), db_session)
+    assert res["status"] is True
+    assert res["applied_status"] == "open"
+    assert res["applied_task_type"] == "issue"
+
+
+async def test_create_with_label_alias_stores_canonical_key(db_session):
+    uid, bid = await _seed_standard(db_session, key="CR4")
+    body = schema.TaskCreate(title="T", status="In Progress", task_type="Bug")
+    res = await ctrl.create(body, bid, _req(uid), db_session)
+    assert res["status"] is True
+    saved = await _get_task_row(db_session, res["task_id"])
+    assert saved == {"status": "in_progress", "task_type": "bug"}
+
+
+async def test_create_invalid_status_no_task_created(db_session):
+    uid, bid = await _seed_standard(db_session, key="CR5")
+    res = await ctrl.create(
+        schema.TaskCreate(title="T", status="nope"), bid, _req(uid), db_session)
+    assert res["status"] is False
+    assert res["code"] == "INVALID_STATUS"
+    assert len(res["valid_statuses"]) == 4
+    count = await db_session.execute(text(
+        "SELECT COUNT(*) FROM task WHERE branch_id = :b"), {"b": bid})
+    assert count.scalar_one() == 0
+
+
+async def test_create_ambiguous_status_label(db_session):
+    uid = await _make_user(db_session, "cr6@tri.test", "cr6")
+    bid = await _make_branch(db_session, uid, key="CR6")
+    await _add_status(db_session, bid, "rev_a", "Review", "in_progress", 0)
+    await _add_status(db_session, bid, "rev_b", "Review", "in_progress", 1)
+    await _add_type(db_session, bid, "task", "Task", 0)
+    await _add_member(db_session, bid, uid)
+    await _make_task_sequence(db_session, bid)
+    res = await ctrl.create(
+        schema.TaskCreate(title="T", status="Review"), bid, _req(uid), db_session)
+    assert res["status"] is False
+    assert res["code"] == "AMBIGUOUS_STATUS"
+
+
+async def test_create_omitted_status_on_branch_without_statuses_stays_200(db_session):
+    """실제 restore edge: 마이그레이션 024만 아카이브 branch를 workflow_status
+    시딩에서 제외했고(010의 task_type 시딩은 전 branch 무필터) restore는
+    재시딩하지 않으므로, status 0건 branch가 실존 가능하다. find_default가
+    None일 때 역참조 500이 아니라 기존과 동일한 200 에러 계약을 유지."""
+    uid = await _make_user(db_session, "cr8@tri.test", "cr8")
+    bid = await _make_branch(db_session, uid, key="CR8")
+    await _add_type(db_session, bid, "task", "Task", 0)
+    # workflow_status는 의도적으로 0건 — 024 당시 아카이브였다 복원된 branch 재현
+    await _add_member(db_session, bid, uid)
+    await _make_task_sequence(db_session, bid)
+    res = await ctrl.create(schema.TaskCreate(title="T"), bid, _req(uid), db_session)
+    assert res["status"] is False
+    assert res["code"] == "INVALID_STATUS"
+    assert res["valid_statuses"] == []
+
+
+async def test_create_omitted_type_on_branch_without_types_stays_200(db_session):
+    """type 0건은 마이그레이션 유래로는 발생하지 않지만(010이 전 branch 시딩)
+    find_first 가드의 200 계약을 대칭으로 고정하는 순수 방어 테스트."""
+    uid = await _make_user(db_session, "cr9@tri.test", "cr9")
+    bid = await _make_branch(db_session, uid, key="CR9")
+    await _add_status(db_session, bid, "todo", "To Do", "todo", 0, True)
+    # task_type은 의도적으로 0건
+    await _add_member(db_session, bid, uid)
+    await _make_task_sequence(db_session, bid)
+    res = await ctrl.create(schema.TaskCreate(title="T"), bid, _req(uid), db_session)
+    assert res["status"] is False
+    assert res["code"] == "INVALID_TASK_TYPE"
+    assert res["valid_task_types"] == []
+
+
+async def test_create_mention_prefix_uses_resolved_type(db_session):
+    """멘션 prefix가 raw alias가 아닌 canonical key 대문자를 쓰는지 (BUG-n 형식).
+
+    멘션 문법은 extract_mention_user_ids(library/mention_parser.py) 기준 —
+    HTML의 data-user-id 속성.
+    """
+    uid, bid = await _seed_standard(db_session, key="CR7")
+    other = await _make_user(db_session, "cr7b@tri.test", "cr7b")
+    await _add_member(db_session, bid, other)
+    body = schema.TaskCreate(
+        title="T", task_type="Bug",  # alias — canonical은 'bug'
+        description=f'<span data-user-id="{other}">@cr7b</span> 확인')
+    res = await ctrl.create(body, bid, _req(uid), db_session)
+    assert res["status"] is True
+    row = await db_session.execute(text("""
+        SELECT title FROM notification
+        WHERE user_id = :u ORDER BY notification_id DESC LIMIT 1
+    """), {"u": other})
+    title = row.scalar_one()
+    assert f"BUG-{res['display_number']}" in title

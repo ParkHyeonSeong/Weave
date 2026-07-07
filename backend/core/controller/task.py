@@ -120,15 +120,30 @@ async def create(body, branch_id: int, request: Request, db: AsyncSession):
     if not await member_model.is_member(branch_id, user_id, db):
         return error_response(ErrorCode.NOT_BRANCH_MEMBER)
 
-    # task_type 동적 검증
-    valid_type = await type_model.find_by_key(branch_id, body.task_type, db)
-    if not valid_type:
-        return error_response(ErrorCode.INVALID_TASK_TYPE)
+    # task_type 해석 — 생략 시 branch 기본값(sort_order 첫 번째), 문자열이면 key/label 해석.
+    if body.task_type is None:
+        valid_type = await type_model.find_first(branch_id, db)
+        if not valid_type:  # 0건 가드 — status 가드와 대칭 방어(마이그레이션 유래는 없음)
+            return error_response(ErrorCode.INVALID_TASK_TYPE, valid_task_types=[])
+    else:
+        valid_type, err = await _resolve_type_ref(branch_id, body.task_type, db)
+        if err:
+            return err
 
-    # status 동적 검증 (workflow_status)
-    valid_status = await ws_model.find_by_key(branch_id, body.status, db)
-    if not valid_status:
-        return error_response(ErrorCode.INVALID_STATUS)
+    # status 해석 — 생략 시 branch 기본값(is_default 우선), 문자열이면 key/label 해석.
+    # 0건 가드 필수: 마이그레이션 024가 아카이브 branch를 시딩에서 제외했고 restore는
+    # 재시딩하지 않아 status 0건 branch가 실존 — None 역참조 500 금지, 200 에러 유지.
+    if body.status is None:
+        valid_status = await ws_model.find_default(branch_id, db)
+        if not valid_status:
+            return error_response(ErrorCode.INVALID_STATUS, valid_statuses=[])
+    else:
+        valid_status, err = await _resolve_status_ref(branch_id, body.status, db)
+        if err:
+            return err
+
+    task_type_key = valid_type['type_key']
+    status_key = valid_status['key']
 
     # 날짜 순서 검증 (시작일 <= 마감일)
     if not is_valid_date_order(body.start_date, body.due_date):
@@ -165,8 +180,8 @@ async def create(body, branch_id: int, request: Request, db: AsyncSession):
         display_number=display_number,
         title=body.title,
         description=body.description,
-        task_type=body.task_type,
-        status=body.status,
+        task_type=task_type_key,
+        status=status_key,
         priority=body.priority,
         epic_id=body.epic_id,
         sprint_id=body.sprint_id,
@@ -190,7 +205,7 @@ async def create(body, branch_id: int, request: Request, db: AsyncSession):
     mentioned = extract_mention_user_ids(body.description)
     if mentioned:
         username = request.state.payload.get('username', '')
-        prefix = f'{body.task_type.upper()}-{display_number}'
+        prefix = f'{task_type_key.upper()}-{display_number}'
         link = f'/branch/{branch_id}/task/{task_id}'
         await notification_service.notify_bulk(
             mentioned, 'mention', user_id,
@@ -201,7 +216,8 @@ async def create(body, branch_id: int, request: Request, db: AsyncSession):
     # 활동 로그
     await activity_service.log_task_created(task_id, branch_id, user_id, db)
 
-    return {'status': True, 'task_id': task_id, 'display_number': display_number}
+    return {'status': True, 'task_id': task_id, 'display_number': display_number,
+            'applied_status': status_key, 'applied_task_type': task_type_key}
 
 
 async def get_detail(task_id: int, branch_id: int, request: Request, db: AsyncSession):

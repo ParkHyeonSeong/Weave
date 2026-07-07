@@ -33,8 +33,8 @@ class TaskQueryCross(TaskQuery):
 class TaskCreate(BaseModel):
     title: str
     description: Optional[str] = None
-    task_type: str = 'task'
-    status: str = 'todo'
+    task_type: Optional[str] = None   # None → branch 기본값 (sort_order 첫 번째)
+    status: Optional[str] = None      # None → branch 기본값 (is_default 우선)
     priority: str = 'medium'
     epic_id: Optional[int] = None
     sprint_id: Optional[int] = None
@@ -45,8 +45,7 @@ class TaskCreate(BaseModel):
     due_date: Optional[date] = None
     custom_fields: Optional[dict] = None
 
-    # task_type 검증은 controller에서 branch의 task_type_config로 동적 검증
-    # status 검증은 controller에서 branch의 workflow_status로 동적 검증
+    # 검증·해석은 controller에서 branch config로 동적 처리
 
     @field_validator('priority')
     @classmethod
