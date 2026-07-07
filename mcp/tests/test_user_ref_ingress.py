@@ -1,0 +1,128 @@
+"""User-ref ingress: resolve_user_refs 단위 + 미들웨어 통합 + 레지스트리↔스키마 sweep.
+See docs/superpowers/specs/2026-07-07-user-ref-ingress-design.md."""
+from unittest.mock import AsyncMock
+
+from weave_mcp import errors as E
+from weave_mcp._user_ref import USER_REF_PARAMS, resolve_user_refs
+
+MEMBERS_BODY = {"status": True, "members": [
+    {"user_id": 3, "username": "김철수", "email": "kim@x.com", "role": "member"},
+    {"user_id": 5, "username": "박영희", "email": "park@x.com", "role": "admin"},
+    {"user_id": 7, "username": "dup", "email": "dup1@x.com", "role": "member"},
+    {"user_id": 8, "username": "dup", "email": "dup2@x.com", "role": "member"},
+]}
+ME_BODY = {"status": True, "profile": {"user_id": 42, "email": "me@x.com",
+                                       "username": "나", "role": "member"}}
+
+
+def _client(*bodies):
+    c = AsyncMock()
+    c.call_json.side_effect = list(bodies)
+    return c
+
+
+async def test_all_int_args_make_no_http_calls():
+    client = AsyncMock()
+    args = {"branch_id": 1, "title": "x", "assignee_main": 3, "assignee_sub": [5, 8]}
+    assert await resolve_user_refs("create_task", args, client) is None
+    client.call_json.assert_not_awaited()
+    assert args["assignee_main"] == 3 and args["assignee_sub"] == [5, 8]
+
+
+async def test_digit_string_becomes_int_without_http():
+    client = AsyncMock()
+    args = {"branch_id": 1, "task_id": 9, "user_id": "12"}
+    assert await resolve_user_refs("add_task_assignee", args, client) is None
+    client.call_json.assert_not_awaited()
+    assert args["user_id"] == 12
+
+
+async def test_username_resolves_via_single_members_fetch():
+    client = _client(MEMBERS_BODY)
+    args = {"branch_id": 1, "assignee_main": "김철수", "assignee_sub": ["박영희"]}
+    assert await resolve_user_refs("create_task", args, client) is None
+    client.call_json.assert_awaited_once_with("GET", "/api/branches/1/members")
+    assert args["assignee_main"] == 3 and args["assignee_sub"] == [5]
+
+
+async def test_email_matches_case_insensitive():
+    client = _client(MEMBERS_BODY)
+    args = {"branch_id": 1, "assignee_main": "KIM@X.com"}
+    assert await resolve_user_refs("create_task", args, client) is None
+    assert args["assignee_main"] == 3
+
+
+async def test_me_and_dollar_me_resolve_via_auth_me():
+    client = _client(ME_BODY)
+    args = {"branch_id": 1, "participant_ids": ["me", "$me"]}
+    assert await resolve_user_refs("create_schedule_event", args, client) is None
+    client.call_json.assert_awaited_once_with("GET", "/api/auth/me")
+    assert args["participant_ids"] == [42, 42]
+
+
+async def test_mixed_list_fetches_members_then_me():
+    client = _client(MEMBERS_BODY, ME_BODY)
+    args = {"branch_id": 1, "task_id": 9, "assignee_sub": [3, "박영희", "me"]}
+    assert await resolve_user_refs("update_task", args, client) is None
+    calls = client.call_json.await_args_list
+    assert calls[0].args == ("GET", "/api/branches/1/members")
+    assert calls[1].args == ("GET", "/api/auth/me")
+    assert args["assignee_sub"] == [3, 5, 42]
+
+
+async def test_ambiguous_username_fails_with_candidates_and_no_mutation():
+    client = _client(MEMBERS_BODY)
+    args = {"branch_id": 1, "task_id": 9, "assignee_sub": [3, "dup"]}
+    err = await resolve_user_refs("update_task", args, client)
+    assert err["error"]["code"] == "USER_REF_AMBIGUOUS"
+    assert err["error"]["category"] == "validation"
+    assert {c["user_id"] for c in err["error"]["detail"]} == {7, 8}
+    assert "assignee_sub[1]" in err["error"]["message"]
+    assert args["assignee_sub"] == [3, "dup"]  # 원자성: 실패 시 무변경
+
+
+async def test_case_variant_duplicate_emails_are_ambiguous():
+    """email unique 제약은 case-sensitive(일반 String unique, 입력 lower-정규화 없음)라
+    Alice@x/alice@x가 별개 계정으로 공존 가능 — ci 매칭이 2건을 만나면 hard error."""
+    dup_email_body = {"status": True, "members": [
+        {"user_id": 11, "username": "a", "email": "Alice@x.com", "role": "member"},
+        {"user_id": 12, "username": "b", "email": "alice@x.com", "role": "member"},
+    ]}
+    client = _client(dup_email_body)
+    args = {"branch_id": 1, "assignee_main": "ALICE@x.com"}
+    err = await resolve_user_refs("create_task", args, client)
+    assert err["error"]["code"] == "USER_REF_AMBIGUOUS"
+    assert {c["user_id"] for c in err["error"]["detail"]} == {11, 12}
+    assert args["assignee_main"] == "ALICE@x.com"  # 원자성: 무변경
+
+
+async def test_unknown_ref_is_not_found():
+    client = _client(MEMBERS_BODY)
+    args = {"branch_id": 1, "assignee_main": "없는사람"}
+    err = await resolve_user_refs("create_task", args, client)
+    assert err["error"]["code"] == "USER_REF_NOT_FOUND"
+    assert err["error"]["category"] == "not_found"
+
+
+async def test_blank_string_is_invalid_without_http():
+    client = AsyncMock()
+    args = {"branch_id": 1, "assignee_main": "  "}
+    err = await resolve_user_refs("create_task", args, client)
+    assert err["error"]["code"] == "INVALID_USER_REF"
+    client.call_json.assert_not_awaited()
+
+
+async def test_members_fetch_error_propagates_unchanged():
+    boom = E.make_error("network", message="down")
+    client = _client(boom)
+    args = {"branch_id": 1, "assignee_main": "김철수"}
+    assert await resolve_user_refs("create_task", args, client) is boom
+    assert args["assignee_main"] == "김철수"
+
+
+async def test_unregistered_tool_is_untouched():
+    client = AsyncMock()
+    args = {"branch_id": 1, "user_id": "김철수"}
+    assert await resolve_user_refs("add_branch_member", args, client) is None
+    client.call_json.assert_not_awaited()
+    assert args["user_id"] == "김철수"

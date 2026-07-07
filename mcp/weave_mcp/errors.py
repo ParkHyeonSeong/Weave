@@ -28,9 +28,13 @@ WEEKEND_NO_CELL = "WEEKEND_NO_CELL"        # scrum weekend guard (tools/scrum.py
 MCP_TOOL_EXCEPTION = "MCP_TOOL_EXCEPTION"  # unexpected tool exception (_middleware.py)
 BRANCH_KEY_NOT_FOUND = "BRANCH_KEY_NOT_FOUND"  # branch key didn't resolve (_branch_ref.py)
 INVALID_BRANCH_REF = "INVALID_BRANCH_REF"      # malformed branch id/key (_branch_ref.py)
+USER_REF_NOT_FOUND = "USER_REF_NOT_FOUND"      # user ref matched no member (_user_ref.py)
+USER_REF_AMBIGUOUS = "USER_REF_AMBIGUOUS"      # user ref matched 2+ members (_user_ref.py)
+INVALID_USER_REF = "INVALID_USER_REF"          # malformed user ref (_user_ref.py)
 MCP_LOCAL_CODES = frozenset({
     TOKEN_NOT_SET, WEEKEND_NO_CELL, MCP_TOOL_EXCEPTION,
     BRANCH_KEY_NOT_FOUND, INVALID_BRANCH_REF,
+    USER_REF_NOT_FOUND, USER_REF_AMBIGUOUS, INVALID_USER_REF,
 })
 
 
