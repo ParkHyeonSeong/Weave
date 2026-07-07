@@ -30,10 +30,13 @@
 .ScrumGrid__Wd { margin-right:4px; }
 .ScrumGrid__Date { font-size:11px; opacity:.6; }
 .ScrumGrid__Person { margin-bottom:10px; }
-.ScrumGrid__PersonHead { display:flex; align-items:center; gap:6px; font-weight:800; padding:8px 4px 4px; }
+.ScrumGrid__PersonHead { display:flex; align-items:center; gap:6px; font-weight:800; padding:8px 4px 4px 0; }
 // 색/크기/폰트는 <Avatar>가 인라인으로 칠함(user_id 해시). 여기선 레이아웃만.
 .ScrumGrid__Avatar { flex-shrink:0; }
-.ScrumGrid__RowLabel { font-size:11px; opacity:.6; display:flex; align-items:center; font-weight:700; }
+// 셀이 여러 줄로 늘어나도 라벨은 셀 첫 줄 옆에 고정 — padding-top 12px는
+// 셀 첫 줄까지의 거리(래퍼 margin 2 + border 1 + 셀 padding 5 + 문단 margin 3)
+// + 라인높이 차(18px vs 16.5px) 보정.
+.ScrumGrid__RowLabel { font-size:11px; opacity:.6; padding-top:12px; font-weight:700; }
 .ScrumGrid__CellWrap { display:flex; flex-direction:column; background:$color-bg; border:1px solid $color-border; border-radius:6px; margin:2px; min-height:34px; box-shadow:$shadow-xs; transition:border-color 120ms, box-shadow 120ms; }
 .ScrumGrid__CellWrap:focus-within { border-color:#16A34A; box-shadow:0 0 0 3px rgba(#16A34A, 0.16); }
 .ScrumCell { display:flex; flex-direction:column; flex:1; padding:5px 7px; font-size:12px; min-height:24px; cursor:text; }
