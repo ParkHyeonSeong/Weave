@@ -228,6 +228,24 @@ async def test_resolve_type_ambiguous_name_hard_error(db_session):
     assert all(c["type_name"] == "Chore" for c in err["candidates"])
 
 
+async def test_resolve_type_empty_string_is_invalid(db_session):
+    uid, bid = await _seed_standard(db_session, key="RS7")
+    row, err = await ctrl._resolve_type_ref(bid, "   ", db_session)
+    assert row is None
+    assert err["code"] == "INVALID_TASK_TYPE"
+
+
+async def test_resolve_blank_label_never_matches_empty_input(db_session):
+    """admin이 label을 공백으로 만들어도 빈 입력이 그 status로 조용히
+    해석되면 안 된다 (최종 리뷰 finding — normalized 빈 값 선차단)."""
+    uid = await _make_user(db_session, "rs8@tri.test", "rs8")
+    bid = await _make_branch(db_session, uid, key="RS8")
+    await _add_status(db_session, bid, "ghost", "   ", "todo", 0)
+    row, err = await ctrl._resolve_status_ref(bid, "   ", db_session)
+    assert row is None
+    assert err["code"] == "INVALID_STATUS"
+
+
 # ---------------------------------------------------------------------------
 # Task 3: column width — config key(50자 유효)와 task 컬럼(20자) 정합
 # ---------------------------------------------------------------------------

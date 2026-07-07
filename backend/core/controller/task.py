@@ -71,9 +71,16 @@ async def _resolve_status_ref(branch_id: int, value: str, db: AsyncSession):
 
     key는 생성 후 불변·소문자 강제라 strip().lower() 후 exact 매칭이 canonical 경로
     (기존 호출자 쿼리 수 무변화). miss 시에만 label 대소문자 무시 매칭 — 다중 매치는
-    hard error, 0건은 유효값 목록 동봉.
+    hard error, 0건은 유효값 목록 동봉. key 공간이 label 공간보다 우선하므로 어떤
+    입력이 status A의 key이자 status B의 label이면 항상 A로 해석된다(결정적,
+    AMBIGUOUS는 label 공간 내에서만).
     """
     normalized = value.strip().lower()
+    if not normalized:  # 빈 입력이 공백 label에 조용히 매칭되는 것 차단 (별도 fetch로 유효값 동봉)
+        statuses = await ws_model.find_by_branch(branch_id, db)
+        return None, error_response(
+            ErrorCode.INVALID_STATUS,
+            valid_statuses=[{'key': s['key'], 'label': s['label']} for s in statuses])
     row = await ws_model.find_by_key(branch_id, normalized, db)
     if row:
         return row, None
@@ -96,6 +103,12 @@ async def _resolve_type_ref(branch_id: int, value: str, db: AsyncSession):
     규칙은 _resolve_status_ref와 동일.
     """
     normalized = value.strip().lower()
+    if not normalized:  # 빈 입력이 공백 type_name에 조용히 매칭되는 것 차단 (별도 fetch로 유효값 동봉)
+        types = await type_model.find_by_branch(branch_id, db)
+        return None, error_response(
+            ErrorCode.INVALID_TASK_TYPE,
+            valid_task_types=[{'type_key': t['type_key'], 'type_name': t['type_name']}
+                              for t in types])
     row = await type_model.find_by_key(branch_id, normalized, db)
     if row:
         return row, None
