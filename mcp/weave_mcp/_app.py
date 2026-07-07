@@ -2,6 +2,7 @@ from fastmcp import FastMCP
 
 from .client import WeaveClient
 from ._branch_ref import BranchRef  # re-exported for tool annotations
+from ._user_ref import UserRef  # re-exported for tool annotations
 
 INSTRUCTIONS = """\
 Weave is a project-management app with 5 sub-apps: Branch (PM/tasks), Canvas (docs),
@@ -21,8 +22,11 @@ Getting oriented:
 Before creating or updating tasks:
 - status and task_type are configured per branch — get valid values from
   list_workflow_statuses(branch_id) and list_task_types(branch_id).
-- assignees (assignee_main/assignee_sub) and event participants are user ids — resolve
-  names via list_branch_members(branch_id).
+- assignee and participant params (assignee_main/assignee_sub, add/remove_task_assignee
+  user_id, participant_ids) accept a user id, an exact username, an email, or "me" —
+  resolved against the branch's member list (ambiguous matches fail with candidates;
+  digit-only strings are treated as ids). Other user_id params (member management etc.)
+  still take numeric ids from list_branch_members(branch_id).
 
 Conventions: ids are integers and dates are ISO YYYY-MM-DD. Every tool returns the
 API's JSON on success, or {"error": {...}} on failure — a nested object with

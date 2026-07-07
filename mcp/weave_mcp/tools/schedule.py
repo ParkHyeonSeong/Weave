@@ -1,6 +1,6 @@
 from typing import Any
 
-from .._app import mcp, get_client, BranchRef
+from .._app import mcp, get_client, BranchRef, UserRef
 
 
 @mcp.tool
@@ -52,12 +52,12 @@ async def create_schedule_event(
     end_date: str | None = None,
     description: str | None = None,
     color: str | None = None,
-    participant_ids: list[int] | None = None,
+    participant_ids: list[UserRef] | None = None,
 ) -> Any:
     """Create a calendar event in a branch.
 
     Dates are ISO (YYYY-MM-DD). end_date, when given, must be >= start_date.
-    participant_ids are user ids (resolve names via list_branch_members once available).
+    Each participant_ids entry accepts a user id, an exact username, an email, or "me".
     """
     body = {"title": title, "start_date": start_date}
     body.update(
@@ -86,9 +86,10 @@ async def update_schedule_event(
     end_date: str | None = None,
     description: str | None = None,
     color: str | None = None,
-    participant_ids: list[int] | None = None,
+    participant_ids: list[UserRef] | None = None,
 ) -> Any:
-    """Update a calendar event; only the fields you pass change. Dates are ISO (YYYY-MM-DD)."""
+    """Update a calendar event; only the fields you pass change. Dates are ISO (YYYY-MM-DD).
+    Each participant_ids entry accepts a user id, an exact username, an email, or "me"."""
     body = {
         k: v
         for k, v in {

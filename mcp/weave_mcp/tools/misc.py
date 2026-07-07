@@ -134,10 +134,12 @@ async def list_public_branches() -> Any:
 
 @mcp.tool
 async def list_branch_members(branch_id: BranchRef) -> Any:
-    """List a branch's members (user_id, name, role).
+    """List a branch's members (user_id, username, email, role, joined_at).
 
-    Use this to resolve a person's name to the user_id needed for task assignees
-    or event participants.
+    Assignee/participant params accept usernames/emails/"me" directly, so you don't
+    need this to assign people — use it to browse who's in the branch, to pick the
+    right user_id after a USER_REF_AMBIGUOUS error, or to get numeric ids for
+    member-management tools (update_branch_member_role / remove_branch_member).
     """
     return await get_client().call_json("GET", f"/api/branches/{branch_id}/members")
 

@@ -1,6 +1,6 @@
 from typing import Any
 
-from .._app import mcp, get_client, BranchRef
+from .._app import mcp, get_client, BranchRef, UserRef
 from .._pagination import paginate
 
 
@@ -25,8 +25,8 @@ async def create_task(
     sprint_id: int | None = None,
     epic_id: int | None = None,
     parent_task_id: int | None = None,
-    assignee_main: int | None = None,
-    assignee_sub: list[int] | None = None,
+    assignee_main: UserRef | None = None,
+    assignee_sub: list[UserRef] | None = None,
     label_ids: list[int] | None = None,
     custom_fields: dict | None = None,
 ) -> Any:
@@ -35,8 +35,8 @@ async def create_task(
     Only title is required. priority is low/medium/high/urgent (default medium).
     status and task_type are validated against the branch's own config — get valid
     values from list_workflow_statuses(branch_id) and list_task_types(branch_id).
-    Dates are ISO YYYY-MM-DD. assignee_main/assignee_sub are user ids (resolve names
-    via list_branch_members / search_branch_non_members, or "me" via get_current_user).
+    Dates are ISO YYYY-MM-DD. assignee_main/assignee_sub accept a user id, an exact
+    username, an email, or "me" (ambiguous matches fail; digit-only strings are ids).
     parent_task_id makes this a subtask; custom_fields keys come from list_task_types.
     """
     body = {"title": title}
@@ -105,8 +105,8 @@ async def update_task(
     epic_id: int | None = None,
     start_date: str | None = None,
     due_date: str | None = None,
-    assignee_main: int | None = None,
-    assignee_sub: list[int] | None = None,
+    assignee_main: UserRef | None = None,
+    assignee_sub: list[UserRef] | None = None,
     label_ids: list[int] | None = None,
     custom_fields: dict | None = None,
     parent_task_id: int | None = None,
@@ -117,8 +117,8 @@ async def update_task(
     you pass change.
 
     status/task_type are validated against the branch's config (see
-    list_workflow_statuses / list_task_types). assignee_main/assignee_sub are user ids
-    (resolve via list_branch_members, or "me" via get_current_user). Dates are ISO.
+    list_workflow_statuses / list_task_types). assignee_main/assignee_sub accept a user
+    id, an exact username, an email, or "me" (ambiguous matches fail). Dates are ISO.
     NOTE: assignees REPLACE the whole set — pass assignee_main and assignee_sub together,
     since providing only one clears the other. label_ids and custom_fields are likewise
     REPLACE, not merge: pass the complete desired list/object (e.g. label_ids=[] clears all
@@ -370,8 +370,9 @@ async def remove_task_label(branch_id: BranchRef, task_id: int, label_id: int) -
 
 
 @mcp.tool
-async def add_task_assignee(branch_id: BranchRef, task_id: int, user_id: int, role: str = "sub") -> Any:
+async def add_task_assignee(branch_id: BranchRef, task_id: int, user_id: UserRef, role: str = "sub") -> Any:
     """Add one assignee to a task without replacing the rest. role is "sub" (default) or "main".
+    user_id accepts a user id, an exact username, an email, or "me".
 
     Use this instead of update_task(assignee_*) when you only want to ADD someone —
     update_task replaces the whole assignee set. role="main" replaces the current main;
@@ -384,8 +385,9 @@ async def add_task_assignee(branch_id: BranchRef, task_id: int, user_id: int, ro
 
 
 @mcp.tool
-async def remove_task_assignee(branch_id: BranchRef, task_id: int, user_id: int) -> Any:
-    """Remove one assignee (main or sub) from a task, keeping the others."""
+async def remove_task_assignee(branch_id: BranchRef, task_id: int, user_id: UserRef) -> Any:
+    """Remove one assignee (main or sub) from a task, keeping the others.
+    user_id accepts a user id, an exact username, an email, or "me"."""
     return await get_client().call_json(
         "DELETE", f"/api/branches/{branch_id}/tasks/{task_id}/assignees/{user_id}",
     )

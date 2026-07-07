@@ -228,3 +228,38 @@ async def test_branch_key_and_username_compose(fake_client):
     assert calls[0].args == ("GET", "/api/branches")
     assert calls[1].args == ("GET", "/api/branches/7/members")
     assert calls[2].args[:2] == ("POST", "/api/branches/7/tasks")
+
+
+def _accepted_types(prop):
+    """JSON-schema types a property accepts, flattening anyOf and array items."""
+    out = set()
+
+    def walk(s):
+        for sub in s.get("anyOf", []):
+            walk(sub)
+        t = s.get("type")
+        if t == "array":
+            walk(s.get("items", {}))
+        elif isinstance(t, str):
+            out.add(t)
+        elif isinstance(t, list):
+            out.update(t)
+
+    walk(prop)
+    return out
+
+
+async def test_registry_params_advertise_integer_and_string():
+    """USER_REF_PARAMS의 모든 (tool, param)이 integer+string을 광고해야 한다(리스트는
+    items 기준) — 레지스트리↔스키마 드리프트 방지. 새 도구를 레지스트리에 넣고
+    어노테이션 확장을 빠뜨리면 여기서 잡힌다."""
+    async with Client(_app.mcp) as client:
+        tools = {t.name: t for t in await client.list_tools()}
+    offenders = []
+    for tool_name, spec in USER_REF_PARAMS.items():
+        props = (tools[tool_name].inputSchema or {}).get("properties", {})
+        for param in (*spec.scalars, *spec.lists):
+            accepted = _accepted_types(props[param])
+            if not ({"integer", "string"} <= accepted):
+                offenders.append((tool_name, param, sorted(accepted)))
+    assert not offenders, f"user-ref params not widened to int|str: {offenders}"
