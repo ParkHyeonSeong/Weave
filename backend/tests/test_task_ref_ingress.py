@@ -226,3 +226,33 @@ async def test_resolve_type_ambiguous_name_hard_error(db_session):
     # {key, label}과 필드명이 다름에 주의
     assert {c["type_key"] for c in err["candidates"]} == {"chore_a", "chore_b"}
     assert all(c["type_name"] == "Chore" for c in err["candidates"])
+
+
+# ---------------------------------------------------------------------------
+# Task 3: column width — config key(50자 유효)와 task 컬럼(20자) 정합
+# ---------------------------------------------------------------------------
+
+async def _get_task_row(db, task_id):
+    row = await db.execute(text(
+        "SELECT status, task_type FROM task WHERE task_id = :t"), {"t": task_id})
+    return dict(row.fetchone()._mapping)
+
+
+async def test_create_with_long_config_key_succeeds(db_session):
+    """config key는 50자까지 유효한데 task.status/task_type이 String(20)이라
+    21자+ key가 현행도 DBAPIError 500으로 죽는 정합 버그 — widen 후 성공 고정.
+    (명시 경로·GitHub 전이 경로·이후 추가될 기본값 경로가 전부 같은 컬럼.)"""
+    long_status = "status_" + "x" * 18   # 25자
+    long_type = "type_" + "y" * 18       # 23자
+    uid = await _make_user(db_session, "lk1@tri.test", "lk1")
+    bid = await _make_branch(db_session, uid, key="LK1")
+    await _add_status(db_session, bid, long_status, "Long Status", "todo", 0, True)
+    await _add_type(db_session, bid, long_type, "Long Type", 0)
+    await _add_member(db_session, bid, uid)
+    await _make_task_sequence(db_session, bid)
+    res = await ctrl.create(
+        schema.TaskCreate(title="T", status=long_status, task_type=long_type),
+        bid, _req(uid), db_session)
+    assert res["status"] is True
+    saved = await _get_task_row(db_session, res["task_id"])
+    assert saved == {"status": long_status, "task_type": long_type}
