@@ -25,6 +25,19 @@ async def find_by_key(branch_id: int, key: str, db: AsyncSession):
     return dict(row._mapping) if row else None
 
 
+async def find_default(branch_id: int, db: AsyncSession):
+    """Branch 기본 status — is_default 우선, 없으면 sort_order 첫 번째"""
+    result = await db.execute(text("""
+        SELECT workflow_status_id, key, label, color, category, is_default
+        FROM workflow_status
+        WHERE branch_id = :branch_id
+        ORDER BY is_default DESC, sort_order, workflow_status_id
+        LIMIT 1
+    """), {'branch_id': branch_id})
+    row = result.fetchone()
+    return dict(row._mapping) if row else None
+
+
 async def create(branch_id: int, key: str, label: str, color: str,
                  category: str, sort_order: int, is_default: bool,
                  db: AsyncSession) -> int:

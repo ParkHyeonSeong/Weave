@@ -43,6 +43,19 @@ async def find_by_key(branch_id: int, type_key: str, db: AsyncSession):
     return dict(row._mapping) if row else None
 
 
+async def find_first(branch_id: int, db: AsyncSession):
+    """Branch 기본 task type — sort_order 첫 번째"""
+    result = await db.execute(text("""
+        SELECT type_id, type_key, type_name, icon, color
+        FROM task_type_config
+        WHERE branch_id = :branch_id
+        ORDER BY sort_order, type_id
+        LIMIT 1
+    """), {'branch_id': branch_id})
+    row = result.fetchone()
+    return dict(row._mapping) if row else None
+
+
 async def update(type_id: int, fields: dict, db: AsyncSession):
     """Task type 수정"""
     sets = ', '.join(f'{k} = :{k}' for k in fields)
