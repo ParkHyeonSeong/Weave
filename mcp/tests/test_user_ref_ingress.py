@@ -55,6 +55,14 @@ async def test_email_matches_case_insensitive():
     assert args["assignee_main"] == 3
 
 
+async def test_username_whitespace_is_stripped_before_match():
+    """스펙 §7: username 앞뒤 공백은 _classify에서 strip 후 매칭된다."""
+    client = _client(MEMBERS_BODY)
+    args = {"branch_id": 1, "assignee_main": " 김철수 "}
+    assert await resolve_user_refs("create_task", args, client) is None
+    assert args["assignee_main"] == 3
+
+
 async def test_me_and_dollar_me_resolve_via_auth_me():
     client = _client(ME_BODY)
     args = {"branch_id": 1, "participant_ids": ["me", "$me"]}
@@ -115,12 +123,44 @@ async def test_blank_string_is_invalid_without_http():
     client.call_json.assert_not_awaited()
 
 
+async def test_missing_branch_id_hits_fetch_members_guard():
+    """branch_id 키 자체가 없는 경우 _fetch_members의 `type(branch_id) is not int`
+    가드가 잡는다 — 프로덕션에서 실제로 도달 가능한 경로다: 미들웨어(UserRefResolver)가
+    pydantic 검증보다 먼저 돌므로, branch_id 누락 + 문자열 assignee 조합은 FastMCP의
+    "필수 인자 없음" 422가 뜨기 전에 여기 먼저 닿는다."""
+    client = AsyncMock()
+    args = {"assignee_main": "김철수"}
+    err = await resolve_user_refs("create_task", args, client)
+    assert err["error"]["code"] == "INVALID_USER_REF"
+    assert "branch_id" in err["error"]["message"]
+    client.call_json.assert_not_awaited()
+
+
 async def test_members_fetch_error_propagates_unchanged():
     boom = E.make_error("network", message="down")
     client = _client(boom)
     args = {"branch_id": 1, "assignee_main": "김철수"}
     assert await resolve_user_refs("create_task", args, client) is boom
     assert args["assignee_main"] == "김철수"
+
+
+async def test_fetch_me_error_propagates_unchanged():
+    boom = E.make_error("network", message="down")
+    client = _client(boom)
+    args = {"branch_id": 1, "participant_ids": ["me"]}
+    assert await resolve_user_refs("create_schedule_event", args, client) is boom
+    assert args["participant_ids"] == ["me"]
+
+
+async def test_fetch_me_malformed_body_yields_server_error():
+    """profile 키 자체가 없는 /api/auth/me 응답(예: 필드 누락된 legacy 응답)은
+    USER_REF_* 코드가 아니라 category="server"로 떨어진다 — 클라이언트 입력 문제가
+    아니라 백엔드 응답 계약 위반이기 때문."""
+    client = _client({"status": True})
+    args = {"branch_id": 1, "participant_ids": ["me"]}
+    err = await resolve_user_refs("create_schedule_event", args, client)
+    assert err["error"]["category"] == "server"
+    assert args["participant_ids"] == ["me"]
 
 
 async def test_unregistered_tool_is_untouched():
@@ -249,6 +289,20 @@ def _accepted_types(prop):
     return out
 
 
+def _accepts_array(prop):
+    """Whether a property's top-level anyOf carries an array-typed variant. Unlike
+    _accepted_types (which flattens array items into their element types), this does
+    NOT recurse into `items` — it only asks whether "array" itself appears as a
+    variant, to distinguish scalar params from list params."""
+
+    def walk(s):
+        if s.get("type") == "array":
+            return True
+        return any(walk(sub) for sub in s.get("anyOf", []))
+
+    return walk(prop)
+
+
 async def test_registry_params_advertise_integer_and_string():
     """USER_REF_PARAMS의 모든 (tool, param)이 integer+string을 광고해야 한다(리스트는
     items 기준) — 레지스트리↔스키마 드리프트 방지. 새 도구를 레지스트리에 넣고
@@ -263,3 +317,23 @@ async def test_registry_params_advertise_integer_and_string():
             if not ({"integer", "string"} <= accepted):
                 offenders.append((tool_name, param, sorted(accepted)))
     assert not offenders, f"user-ref params not widened to int|str: {offenders}"
+
+
+async def test_registry_params_scalar_list_shape_agrees_with_schema():
+    """USER_REF_PARAMS의 scalars/lists 분류가 실제 스키마 shape와 어긋나면 안 된다:
+    scalar 파라미터는 array 변형을 광고하면 안 되고, list 파라미터는 반드시 array
+    변형을 광고해야 한다. 위 sweep은 int|string 광고만 보고 array 유무는 보지
+    않으므로, 예를 들어 list 파라미터가 실수로 scalars에 등록돼도(또는 그 반대)
+    거기서는 안 잡힌다 — 여기서 잡는다."""
+    async with Client(_app.mcp) as client:
+        tools = {t.name: t for t in await client.list_tools()}
+    offenders = []
+    for tool_name, spec in USER_REF_PARAMS.items():
+        props = (tools[tool_name].inputSchema or {}).get("properties", {})
+        for param in spec.scalars:
+            if _accepts_array(props[param]):
+                offenders.append(("scalar-advertises-array", tool_name, param))
+        for param in spec.lists:
+            if not _accepts_array(props[param]):
+                offenders.append(("list-missing-array", tool_name, param))
+    assert not offenders, f"scalar/list shape disagreement: {offenders}"
