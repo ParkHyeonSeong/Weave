@@ -2,6 +2,9 @@
 See docs/superpowers/specs/2026-07-07-user-ref-ingress-design.md."""
 from unittest.mock import AsyncMock
 
+from fastmcp import Client
+
+from weave_mcp import _app
 from weave_mcp import errors as E
 from weave_mcp._user_ref import USER_REF_PARAMS, resolve_user_refs
 
@@ -126,3 +129,102 @@ async def test_unregistered_tool_is_untouched():
     assert await resolve_user_refs("add_branch_member", args, client) is None
     client.call_json.assert_not_awaited()
     assert args["user_id"] == "김철수"
+
+
+def test_middleware_relative_order_pinned():
+    """등록 순서가 곧 실행 순서(바깥→안)다 — FastMCP `_run_middleware`는
+    reversed(self.middleware)로 체인을 감싸므로 먼저 등록된 것이 outermost.
+    UserRefResolver가 BranchRefResolver보다 앞(바깥)에 오면 branch key("WV")가
+    numeric으로 해석되기 전에 /api/branches/WV/members 조회가 나간다.
+    기존 테스트는 존재만 확인하므로(any isinstance) 여기서 상대 순서를 고정한다."""
+    from weave_mcp._middleware import WeaveDriftGuard, BranchRefResolver, UserRefResolver
+    kinds = [type(m) for m in _app.mcp.middleware]
+    assert (kinds.index(WeaveDriftGuard)
+            < kinds.index(BranchRefResolver)
+            < kinds.index(UserRefResolver))
+
+
+async def test_create_task_username_resolved_before_post(fake_client):
+    fake_client.call_json.side_effect = [MEMBERS_BODY, {"task_id": 1}]
+    async with Client(_app.mcp) as client:
+        await client.call_tool(
+            "create_task", {"branch_id": 1, "title": "x", "assignee_main": "김철수"})
+    calls = fake_client.call_json.await_args_list
+    assert calls[0].args == ("GET", "/api/branches/1/members")
+    assert calls[1].args[:2] == ("POST", "/api/branches/1/tasks")
+    assert calls[1].kwargs["json"]["assignees"] == {"main": 3}
+
+
+async def test_create_task_int_assignees_skip_member_lookup(fake_client):
+    fake_client.call_json.return_value = {"task_id": 1}
+    async with Client(_app.mcp) as client:
+        await client.call_tool(
+            "create_task", {"branch_id": 1, "title": "x", "assignee_main": 3})
+    fake_client.call_json.assert_awaited_once()
+
+
+async def test_remove_task_assignee_resolves_into_url_path(fake_client):
+    fake_client.call_json.side_effect = [MEMBERS_BODY, {"status": True}]
+    async with Client(_app.mcp) as client:
+        await client.call_tool(
+            "remove_task_assignee", {"branch_id": 1, "task_id": 9, "user_id": "박영희"})
+    calls = fake_client.call_json.await_args_list
+    assert calls[1].args == ("DELETE", "/api/branches/1/tasks/9/assignees/5")
+
+
+async def test_ambiguous_username_short_circuits_without_post(fake_client):
+    fake_client.call_json.return_value = MEMBERS_BODY
+    async with Client(_app.mcp) as client:
+        result = await client.call_tool(
+            "update_task", {"branch_id": 1, "task_id": 9, "assignee_main": "dup"})
+    fake_client.call_json.assert_awaited_once_with("GET", "/api/branches/1/members")
+    assert result.structured_content["error"]["code"] == "USER_REF_AMBIGUOUS"
+
+
+async def test_schedule_me_participant(fake_client):
+    fake_client.call_json.side_effect = [ME_BODY, {"event_id": 1}]
+    async with Client(_app.mcp) as client:
+        await client.call_tool(
+            "create_schedule_event",
+            {"branch_id": 1, "title": "t", "start_date": "2026-07-07",
+             "participant_ids": ["me"]})
+    calls = fake_client.call_json.await_args_list
+    assert calls[0].args == ("GET", "/api/auth/me")
+    assert calls[1].kwargs["json"]["participant_ids"] == [42]
+
+
+async def test_add_task_assignee_username_in_body(fake_client):
+    fake_client.call_json.side_effect = [MEMBERS_BODY, {"status": True}]
+    async with Client(_app.mcp) as client:
+        await client.call_tool(
+            "add_task_assignee",
+            {"branch_id": 1, "task_id": 9, "user_id": "김철수", "role": "main"})
+    calls = fake_client.call_json.await_args_list
+    assert calls[1].args[:2] == ("POST", "/api/branches/1/tasks/9/assignees")
+    assert calls[1].kwargs["json"] == {"user_id": 3, "role": "main"}
+
+
+async def test_update_schedule_event_email_participant(fake_client):
+    fake_client.call_json.side_effect = [MEMBERS_BODY, {"status": True}]
+    async with Client(_app.mcp) as client:
+        await client.call_tool(
+            "update_schedule_event",
+            {"branch_id": 1, "event_id": 4, "participant_ids": ["park@x.com", 3]})
+    calls = fake_client.call_json.await_args_list
+    assert calls[1].args[:2] == ("PATCH", "/api/branches/1/schedule-events/4")
+    assert calls[1].kwargs["json"]["participant_ids"] == [5, 3]
+
+
+async def test_branch_key_and_username_compose(fake_client):
+    """BranchRefResolver가 먼저 실행돼 branch_id가 numeric이 된 뒤 멤버 조회가 일어난다."""
+    fake_client.call_json.side_effect = [
+        {"status": True, "branches": [{"branch_id": 7, "key": "WV"}]},
+        MEMBERS_BODY, {"task_id": 1},
+    ]
+    async with Client(_app.mcp) as client:
+        await client.call_tool(
+            "create_task", {"branch_id": "WV", "title": "x", "assignee_main": "김철수"})
+    calls = fake_client.call_json.await_args_list
+    assert calls[0].args == ("GET", "/api/branches")
+    assert calls[1].args == ("GET", "/api/branches/7/members")
+    assert calls[2].args[:2] == ("POST", "/api/branches/7/tasks")

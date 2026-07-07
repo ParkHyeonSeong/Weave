@@ -36,9 +36,10 @@ isn't allowed."""
 
 mcp = FastMCP("weave", instructions=INSTRUCTIONS)
 
-from ._middleware import WeaveDriftGuard, BranchRefResolver  # noqa: E402
+from ._middleware import WeaveDriftGuard, BranchRefResolver, UserRefResolver  # noqa: E402
 mcp.add_middleware(WeaveDriftGuard())       # outermost — validates/absorbs everything below
 mcp.add_middleware(BranchRefResolver())     # inner — rewrites branch_id before the tool
+mcp.add_middleware(UserRefResolver())       # innermost — rewrites user refs (branch_id already numeric)
 
 _client: WeaveClient | None = None
 

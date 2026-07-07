@@ -11,6 +11,7 @@ from fastmcp.tools.base import ToolResult
 import mcp.types as mt
 
 from . import errors as E
+from ._user_ref import USER_REF_PARAMS, resolve_user_refs
 
 # Single-source core keys from errors.py.
 _CORE_KEYS = E.CORE_KEYS
@@ -69,4 +70,25 @@ class BranchRefResolver(Middleware):
                         content=[mt.TextContent(type="text", text=json.dumps(err))],
                     )
                 args["branch_id"] = resolved
+        return await call_next(context)
+
+
+class UserRefResolver(Middleware):
+    """Resolve string user refs (digit string / "me" / email / username) to numeric
+    user ids before the tool runs — registry-driven (USER_REF_PARAMS), same in-place
+    arguments mutation as BranchRefResolver. Registered after (inside)
+    BranchRefResolver, so branch_id is already numeric when members are fetched;
+    resolution failures short-circuit without calling the tool.
+    """
+    async def on_call_tool(self, context, call_next):
+        args = getattr(context.message, "arguments", None)
+        tool = getattr(context.message, "name", None)
+        if isinstance(args, dict) and tool in USER_REF_PARAMS:
+            from ._app import get_client  # lazy import — avoids _app↔_middleware cycle
+            err = await resolve_user_refs(tool, args, get_client())
+            if err is not None:
+                return ToolResult(
+                    structured_content=err,
+                    content=[mt.TextContent(type="text", text=json.dumps(err))],
+                )
         return await call_next(context)
