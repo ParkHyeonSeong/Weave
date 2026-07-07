@@ -363,17 +363,23 @@ async def update(task_id: int, body, branch_id: int, request: Request, db: Async
 
     fields = body.model_dump(exclude_unset=True, exclude={'label_ids', 'assignees', 'dry_run'})
 
-    # status 동적 검증
-    if 'status' in fields and fields['status'] is not None:
-        valid_status = await ws_model.find_by_key(branch_id, fields['status'], db)
-        if not valid_status:
-            return error_response(ErrorCode.INVALID_STATUS)
+    # status 동적 검증 + alias 해석 — canonical key로 치환 후 저장.
+    # explicit null(NOT NULL 컬럼이라 통과 시 NULL UPDATE 500)은 ''로 흘려
+    # 빈 문자열과 동일하게 INVALID_STATUS + 유효값 동봉으로 거부한다.
+    if 'status' in fields:
+        status_row, err = await _resolve_status_ref(branch_id, fields['status'] or '', db)
+        if err:
+            return err
+        fields['status'] = status_row['key']
 
-    # task_type 동적 검증 (변경 시) — create와 동일 규칙
-    if 'task_type' in fields and fields['task_type'] is not None:
-        valid_type = await type_model.find_by_key(branch_id, fields['task_type'], db)
-        if not valid_type:
-            return error_response(ErrorCode.INVALID_TASK_TYPE)
+    # task_type 동적 검증 (변경 시) — create와 동일 규칙(explicit null 거부 포함).
+    # row는 custom_fields 검증에 재사용
+    resolved_type_row = None
+    if 'task_type' in fields:
+        resolved_type_row, err = await _resolve_type_ref(branch_id, fields['task_type'] or '', db)
+        if err:
+            return err
+        fields['task_type'] = resolved_type_row['type_key']
 
     # 날짜 순서 검증 (부분 PATCH는 기존 값과 병합)
     new_start = fields.get('start_date', task['start_date'])
@@ -391,8 +397,9 @@ async def update(task_id: int, body, branch_id: int, request: Request, db: Async
 
     # custom_fields lenient 검증 (첫 write 전; 최종 task_type 기준)
     if 'custom_fields' in fields and fields['custom_fields']:
-        final_type_key = fields.get('task_type') or task['task_type']
-        type_cfg = await type_model.find_by_key(branch_id, final_type_key, db)
+        type_cfg = resolved_type_row
+        if type_cfg is None:  # 이번 update가 type을 안 바꾸면 기존 task의 type으로
+            type_cfg = await type_model.find_by_key(branch_id, task['task_type'], db)
         if not type_cfg:  # 타입 미해석 시 무검증 통과 금지(조용한 skip 차단)
             return error_response(ErrorCode.INVALID_TASK_TYPE)
         verr = await validate_custom_field_values(

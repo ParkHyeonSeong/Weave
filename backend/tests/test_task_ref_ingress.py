@@ -387,3 +387,106 @@ async def test_create_mention_prefix_uses_resolved_type(db_session):
     """), {"u": other})
     title = row.scalar_one()
     assert f"BUG-{res['display_number']}" in title
+
+
+# ---------------------------------------------------------------------------
+# Task 5: update() — alias resolution
+# ---------------------------------------------------------------------------
+
+async def _create_task(db, uid, bid, **kwargs):
+    res = await ctrl.create(schema.TaskCreate(title="Seed", **kwargs), bid, _req(uid), db)
+    assert res["status"] is True
+    return res["task_id"]
+
+
+async def test_update_status_alias_stores_canonical(db_session):
+    uid, bid = await _seed_standard(db_session, key="UP1")
+    tid = await _create_task(db_session, uid, bid)
+    res = await ctrl.update(
+        tid, schema.TaskUpdate(status="DONE"), bid, _req(uid), db_session)
+    assert res["status"] is True
+    saved = await _get_task_row(db_session, tid)
+    assert saved["status"] == "done"
+
+
+async def test_update_type_label_alias_stores_canonical(db_session):
+    uid, bid = await _seed_standard(db_session, key="UP2")
+    tid = await _create_task(db_session, uid, bid)
+    res = await ctrl.update(
+        tid, schema.TaskUpdate(task_type="Bug"), bid, _req(uid), db_session)
+    assert res["status"] is True
+    saved = await _get_task_row(db_session, tid)
+    assert saved["task_type"] == "bug"
+
+
+async def test_update_invalid_status_returns_valid_set(db_session):
+    uid, bid = await _seed_standard(db_session, key="UP3")
+    tid = await _create_task(db_session, uid, bid)
+    res = await ctrl.update(
+        tid, schema.TaskUpdate(status="nope"), bid, _req(uid), db_session)
+    assert res["status"] is False
+    assert res["code"] == "INVALID_STATUS"
+    assert len(res["valid_statuses"]) == 4
+    saved = await _get_task_row(db_session, tid)
+    assert saved["status"] == "todo"  # 무변경
+
+
+async def test_update_dry_run_previews_canonical_key(db_session):
+    """dry_run diff shape은 _build_dry_run_preview 기준:
+    changes['fields'][k] = {'from': ..., 'to': ...}"""
+    uid, bid = await _seed_standard(db_session, key="UP4")
+    tid = await _create_task(db_session, uid, bid)
+    res = await ctrl.update(
+        tid, schema.TaskUpdate(status="In Progress", dry_run=True),
+        bid, _req(uid), db_session)
+    assert res["status"] is True and res["dry_run"] is True
+    assert res["changes"]["fields"]["status"] == {"from": "todo", "to": "in_progress"}
+    saved = await _get_task_row(db_session, tid)
+    assert saved["status"] == "todo"  # dry_run은 무저장
+
+
+async def test_update_type_alias_with_custom_fields_uses_resolved_row(db_session):
+    """task_type alias + custom_fields 동시 지정 — 검증이 resolved row(type_id)로
+    수행되는지. 재사용이 깨져 raw alias 'Bug'로 find_by_key 하면
+    INVALID_TASK_TYPE이 나와 버리므로, INVALID_CUSTOM_FIELD가 나오는 것이
+    resolved row 경유의 증거."""
+    uid, bid = await _seed_standard(db_session, key="UP5")
+    tid = await _create_task(db_session, uid, bid)
+    bug_type = await type_model.find_by_key(bid, "bug", db_session)
+    row = await db_session.execute(text("""
+        INSERT INTO custom_field (type_id, field_name, field_type, is_required, sort_order)
+        VALUES (:t, 'points', 'number', false, 0) RETURNING custom_field_id
+    """), {"t": bug_type["type_id"]})
+    fid = row.scalar_one()
+    res = await ctrl.update(
+        tid, schema.TaskUpdate(task_type="Bug",
+                               custom_fields={str(fid): "not-a-number"}),
+        bid, _req(uid), db_session)
+    assert res["status"] is False
+    assert res["code"] == "INVALID_CUSTOM_FIELD"
+
+
+async def test_update_explicit_null_status_rejected(db_session):
+    """explicit null은 검증 우회 후 NOT NULL 컬럼 UPDATE로 500이 나던 경로 —
+    빈 문자열과 동일하게 INVALID_STATUS로 거부한다.
+    (kwarg로 None을 넘기면 model_fields_set에 남아 exclude_unset을 통과.)"""
+    uid, bid = await _seed_standard(db_session, key="UP6")
+    tid = await _create_task(db_session, uid, bid)
+    res = await ctrl.update(
+        tid, schema.TaskUpdate(status=None), bid, _req(uid), db_session)
+    assert res["status"] is False
+    assert res["code"] == "INVALID_STATUS"
+    assert len(res["valid_statuses"]) == 4
+    saved = await _get_task_row(db_session, tid)
+    assert saved["status"] == "todo"  # 무변경
+
+
+async def test_update_explicit_null_task_type_rejected(db_session):
+    uid, bid = await _seed_standard(db_session, key="UP7")
+    tid = await _create_task(db_session, uid, bid)
+    res = await ctrl.update(
+        tid, schema.TaskUpdate(task_type=None), bid, _req(uid), db_session)
+    assert res["status"] is False
+    assert res["code"] == "INVALID_TASK_TYPE"
+    saved = await _get_task_row(db_session, tid)
+    assert saved["task_type"] == "task"  # 무변경
