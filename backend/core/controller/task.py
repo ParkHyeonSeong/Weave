@@ -66,6 +66,54 @@ async def _assignees_valid_for_branch(assignees, branch_id: int, db: AsyncSessio
     return assignee_ids == set(valid_ids)
 
 
+async def _resolve_status_ref(branch_id: int, value: str, db: AsyncSession):
+    """status 문자열(key 또는 label)을 workflow_status row로 해석. 반환 (row, error).
+
+    key는 생성 후 불변·소문자 강제라 strip().lower() 후 exact 매칭이 canonical 경로
+    (기존 호출자 쿼리 수 무변화). miss 시에만 label 대소문자 무시 매칭 — 다중 매치는
+    hard error, 0건은 유효값 목록 동봉.
+    """
+    normalized = value.strip().lower()
+    row = await ws_model.find_by_key(branch_id, normalized, db)
+    if row:
+        return row, None
+    statuses = await ws_model.find_by_branch(branch_id, db)
+    matches = [s for s in statuses if s['label'].strip().lower() == normalized]
+    if len(matches) == 1:
+        return matches[0], None
+    if len(matches) > 1:
+        return None, error_response(
+            ErrorCode.AMBIGUOUS_STATUS,
+            candidates=[{'key': s['key'], 'label': s['label']} for s in matches])
+    return None, error_response(
+        ErrorCode.INVALID_STATUS,
+        valid_statuses=[{'key': s['key'], 'label': s['label']} for s in statuses])
+
+
+async def _resolve_type_ref(branch_id: int, value: str, db: AsyncSession):
+    """task_type 문자열(type_key 또는 type_name)을 config row로 해석. 반환 (row, error).
+
+    규칙은 _resolve_status_ref와 동일.
+    """
+    normalized = value.strip().lower()
+    row = await type_model.find_by_key(branch_id, normalized, db)
+    if row:
+        return row, None
+    types = await type_model.find_by_branch(branch_id, db)
+    matches = [t for t in types if t['type_name'].strip().lower() == normalized]
+    if len(matches) == 1:
+        return matches[0], None
+    if len(matches) > 1:
+        return None, error_response(
+            ErrorCode.AMBIGUOUS_TASK_TYPE,
+            candidates=[{'type_key': t['type_key'], 'type_name': t['type_name']}
+                        for t in matches])
+    return None, error_response(
+        ErrorCode.INVALID_TASK_TYPE,
+        valid_task_types=[{'type_key': t['type_key'], 'type_name': t['type_name']}
+                          for t in types])
+
+
 async def create(body, branch_id: int, request: Request, db: AsyncSession):
     """Task 생성"""
     user_id = request.state.payload.get('user_id')

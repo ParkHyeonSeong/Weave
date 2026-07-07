@@ -128,3 +128,101 @@ async def test_find_first_type_empty_branch_returns_none(db_session):
     uid = await _make_user(db_session, "ff2@tri.test", "ff2")
     bid = await _make_branch(db_session, uid, key="FF2")
     assert await type_model.find_first(bid, db_session) is None
+
+
+# ---------------------------------------------------------------------------
+# Task 2: resolve helpers
+# ---------------------------------------------------------------------------
+
+async def test_resolve_status_canonical_key_passes(db_session):
+    uid, bid = await _seed_standard(db_session, key="RS1")
+    row, err = await ctrl._resolve_status_ref(bid, "in_progress", db_session)
+    assert err is None
+    assert row["key"] == "in_progress"
+
+
+async def test_resolve_status_key_case_and_whitespace_insensitive(db_session):
+    uid, bid = await _seed_standard(db_session, key="RS2")
+    row, err = await ctrl._resolve_status_ref(bid, "  In_Progress ", db_session)
+    assert err is None
+    assert row["key"] == "in_progress"
+
+
+async def test_resolve_status_label_alias(db_session):
+    uid, bid = await _seed_standard(db_session, key="RS3")
+    row, err = await ctrl._resolve_status_ref(bid, "In Progress", db_session)
+    assert err is None
+    assert row["key"] == "in_progress"
+
+
+async def test_resolve_status_ambiguous_label_hard_error(db_session):
+    uid = await _make_user(db_session, "rs4@tri.test", "rs4")
+    bid = await _make_branch(db_session, uid, key="RS4")
+    await _add_status(db_session, bid, "review_a", "Review", "in_progress", 0)
+    await _add_status(db_session, bid, "review_b", "Review", "in_progress", 1)
+    row, err = await ctrl._resolve_status_ref(bid, "review", db_session)
+    assert row is None
+    assert err["code"] == "AMBIGUOUS_STATUS"
+    assert err["category"] == "validation"
+    assert {c["key"] for c in err["candidates"]} == {"review_a", "review_b"}
+
+
+async def test_resolve_status_no_match_returns_valid_set(db_session):
+    uid, bid = await _seed_standard(db_session, key="RS5")
+    row, err = await ctrl._resolve_status_ref(bid, "nonexistent", db_session)
+    assert row is None
+    assert err["code"] == "INVALID_STATUS"
+    assert [s["key"] for s in err["valid_statuses"]] == [
+        "todo", "in_progress", "done", "cancelled"]  # sort_order 순
+    assert all("label" in s for s in err["valid_statuses"])
+
+
+async def test_resolve_status_empty_string_is_invalid(db_session):
+    uid, bid = await _seed_standard(db_session, key="RS6")
+    row, err = await ctrl._resolve_status_ref(bid, "   ", db_session)
+    assert row is None
+    assert err["code"] == "INVALID_STATUS"
+
+
+async def test_resolve_type_key_case_insensitive_and_valid_set(db_session):
+    """주의: "Bug"는 정규화("bug")가 key에 먼저 매칭되므로 key 경로다 —
+    type_name 경로는 아래 distinct-paths 테스트가 별도 검증."""
+    uid, bid = await _seed_standard(db_session, key="RT1")
+    row, err = await ctrl._resolve_type_ref(bid, "Bug", db_session)
+    assert err is None
+    assert row["type_key"] == "bug"
+    assert "type_id" in row
+
+    row, err = await ctrl._resolve_type_ref(bid, "nope", db_session)
+    assert row is None
+    assert err["code"] == "INVALID_TASK_TYPE"
+    assert [t["type_key"] for t in err["valid_task_types"]] == ["task", "bug"]
+    assert all("type_name" in t for t in err["valid_task_types"])
+
+
+async def test_resolve_type_key_ci_and_name_paths_are_distinct(db_session):
+    """key와 type_name이 대소문자만 다르면 두 경로가 합쳐져 커버리지가 착시를
+    일으킨다 — key에 underscore, name에 공백을 넣어 경로를 분리 검증."""
+    uid = await _make_user(db_session, "rt3@tri.test", "rt3")
+    bid = await _make_branch(db_session, uid, key="RT3")
+    await _add_type(db_session, bid, "qa_bug", "QA Bug", 0)
+    row, err = await ctrl._resolve_type_ref(bid, "QA_BUG", db_session)  # key ci 경로
+    assert err is None
+    assert row["type_key"] == "qa_bug"
+    row, err = await ctrl._resolve_type_ref(bid, "QA Bug", db_session)  # name 경로
+    assert err is None
+    assert row["type_key"] == "qa_bug"
+
+
+async def test_resolve_type_ambiguous_name_hard_error(db_session):
+    uid = await _make_user(db_session, "rt2@tri.test", "rt2")
+    bid = await _make_branch(db_session, uid, key="RT2")
+    await _add_type(db_session, bid, "chore_a", "Chore", 0)
+    await _add_type(db_session, bid, "chore_b", "Chore", 1)
+    row, err = await ctrl._resolve_type_ref(bid, "chore", db_session)
+    assert row is None
+    assert err["code"] == "AMBIGUOUS_TASK_TYPE"
+    # 후보 shape은 valid_task_types와 동일한 {type_key, type_name} — status의
+    # {key, label}과 필드명이 다름에 주의
+    assert {c["type_key"] for c in err["candidates"]} == {"chore_a", "chore_b"}
+    assert all(c["type_name"] == "Chore" for c in err["candidates"])

@@ -108,6 +108,8 @@ class ErrorCode(str, Enum):
     VIEW_NOT_FOUND = ("VIEW_NOT_FOUND", Category.NOT_FOUND)
 
     # --- validation ---------------------------------------------------------
+    AMBIGUOUS_STATUS = ("AMBIGUOUS_STATUS", Category.VALIDATION)  # label 다중 매치 (status ref ingress)
+    AMBIGUOUS_TASK_TYPE = ("AMBIGUOUS_TASK_TYPE", Category.VALIDATION)  # type_name 다중 매치
     CSV_FILE_REQUIRED = ("CSV_FILE_REQUIRED", Category.VALIDATION)
     CSV_PARSE_ERROR = ("CSV_PARSE_ERROR", Category.VALIDATION)
     DM_REQUIRES_ONE_MEMBER = ("DM_REQUIRES_ONE_MEMBER", Category.VALIDATION)

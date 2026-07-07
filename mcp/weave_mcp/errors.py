@@ -53,6 +53,7 @@ _OVERRIDES = {
     # --- not_found: NOT_FOUND_OR_NOT_OWNER starts with NOT_ so forbidden rule fires ---
     "NOT_FOUND_OR_NOT_OWNER": "not_found",
     # --- validation: codes that don't match INVALID_/TOO_LARGE/TOO_SHORT suffix rules ---
+    "AMBIGUOUS_STATUS": "validation", "AMBIGUOUS_TASK_TYPE": "validation",
     "CSV_FILE_REQUIRED": "validation", "CSV_PARSE_ERROR": "validation",
     "DM_REQUIRES_ONE_MEMBER": "validation", "NO_FILE": "validation",
     "PARENT_SELF": "validation", "PASSWORD_MISMATCH": "validation",
