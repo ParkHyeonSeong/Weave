@@ -33,11 +33,14 @@ async def create_task(
     """Create a new task in a branch.
 
     Only title is required. priority is low/medium/high/urgent (default medium).
-    status and task_type are validated against the branch's own config — get valid
-    values from list_workflow_statuses(branch_id) and list_task_types(branch_id).
-    Dates are ISO YYYY-MM-DD. assignee_main/assignee_sub accept a user id, an exact
-    username, an email, or "me" (ambiguous matches fail; digit-only strings are ids).
-    parent_task_id makes this a subtask; custom_fields keys come from list_task_types.
+    status and task_type accept the branch's key (case-insensitive) or display
+    label; omit them to use the branch defaults. Invalid values fail with the
+    valid set (valid_statuses/valid_task_types) in the error — no pre-check
+    needed. The response echoes the applied values as applied_status /
+    applied_task_type. Dates are ISO YYYY-MM-DD. assignee_main/assignee_sub
+    accept a user id, an exact username, an email, or "me" (ambiguous matches
+    fail; digit-only strings are ids). parent_task_id makes this a subtask;
+    custom_fields keys come from list_task_types.
     """
     body = {"title": title}
     body.update({
@@ -116,9 +119,10 @@ async def update_task(
     """Update fields of an existing task. All parameters are optional; only the ones
     you pass change.
 
-    status/task_type are validated against the branch's config (see
-    list_workflow_statuses / list_task_types). assignee_main/assignee_sub accept a user
-    id, an exact username, an email, or "me" (ambiguous matches fail). Dates are ISO.
+    status/task_type accept the branch's key (case-insensitive) or display label;
+    invalid values fail with the valid set in the error. assignee_main/assignee_sub
+    accept a user id, an exact username, an email, or "me" (ambiguous matches fail).
+    Dates are ISO.
     NOTE: assignees REPLACE the whole set — pass assignee_main and assignee_sub together,
     since providing only one clears the other. label_ids and custom_fields are likewise
     REPLACE, not merge: pass the complete desired list/object (e.g. label_ids=[] clears all

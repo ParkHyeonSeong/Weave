@@ -20,8 +20,11 @@ Getting oriented:
   search_issues instead of listing every branch.
 
 Before creating or updating tasks:
-- status and task_type are configured per branch — get valid values from
-  list_workflow_statuses(branch_id) and list_task_types(branch_id).
+- status and task_type accept the branch's key (case-insensitive) or display label;
+  omit them on create to use the branch's defaults. Invalid values fail with the
+  valid set in the error (valid_statuses / valid_task_types), so a pre-check via
+  list_workflow_statuses(branch_id) / list_task_types(branch_id) is only needed
+  for exploration.
 - assignee and participant params (assignee_main/assignee_sub, add/remove_task_assignee
   user_id, participant_ids) accept a user id, an exact username, an email, or "me" —
   resolved against the branch's member list (ambiguous matches fail with candidates;
