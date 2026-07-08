@@ -43,7 +43,7 @@
   &__Table {
     border: 1px solid $color-border;
     border-radius: $radius-xl;
-    overflow: hidden;
+    overflow-x: auto;
   }
 
   &__Row {
@@ -91,7 +91,10 @@
   &__Labels {
     display: flex;
     gap: 4px;
-    flex-shrink: 0;
+    flex-shrink: 1;        // 더 이상 밀지 않고 같이 줄어든다
+    min-width: 0;
+    max-width: 45%;        // 라벨군 상한
+    overflow: hidden;      // 넘치는 칩은 잘림
   }
 
   &__Label {

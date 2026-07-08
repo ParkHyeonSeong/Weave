@@ -1095,7 +1095,10 @@
     font-weight: $font-weight-medium;
     color: $color-text-tertiary;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     min-width: 60px;
+    flex-shrink: 0;
 
     @include mobile {
       min-width: auto;
@@ -1116,7 +1119,8 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    min-width: 0;
+    min-width: 72px; // 제목이 0px로 소멸하지 않는 바닥
+    flex-shrink: 1;
   }
 
   &__Issues {
@@ -1133,7 +1137,10 @@
   &__Labels {
     display: flex;
     gap: 4px;
-    flex-shrink: 0;
+    flex-shrink: 1;        // 더 이상 밀지 않고 같이 줄어든다
+    min-width: 0;
+    max-width: 45%;        // 라벨군 상한
+    overflow: hidden;      // 넘치는 칩은 잘림 (칩 단위 fade는 근본 전환에서)
 
     @include mobile {
       display: none;
@@ -1166,6 +1173,9 @@
   &__Epic {
     font-size: $font-size-xs;
     white-space: nowrap;
+    max-width: 160px;
+    // overflow:hidden 금지 — CustomSelect 드롭다운(absolute) anchor/조상이라 클립됨
+    // 잘림은 내부 CustomSelect__Value가 담당 (라벨 span에 ellipsis)
 
     &--empty {
       color: $color-text-tertiary;
@@ -1174,6 +1184,23 @@
 
   &__Cell--status {
     width: 92px;
+    // overflow:hidden 금지 — CustomSelect 드롭다운(absolute) anchor/조상이라 클립됨
+    // 긴 커스텀 상태명은 루트 폭 상한으로 차단 (내부 Value가 잘림 담당)
+
+    .CustomSelect {
+      max-width: 100%;
+      min-width: 0;
+    }
+  }
+
+  // __Epic·__Cell--status 공통: CustomSelect 라벨 span 잘림 처리
+  &__Epic,
+  &__Cell--status {
+    .CustomSelect__Value > span:last-child {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
+    }
   }
 
   &__Cell--dueDate {
