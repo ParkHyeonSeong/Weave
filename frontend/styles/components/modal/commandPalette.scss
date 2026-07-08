@@ -7,7 +7,7 @@
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding-top: 120px;
+  padding-top: clamp(24px, 15vh, 120px);
   z-index: 1000;
 
   @include mobile {
@@ -62,7 +62,7 @@
   }
 
   &__List {
-    max-height: 400px;
+    max-height: min(400px, calc(100vh - 200px));
     overflow-y: auto;
     padding: $space-2;
   }

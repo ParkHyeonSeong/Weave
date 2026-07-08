@@ -214,7 +214,8 @@
   }
 
   &__NotiList {
-    max-height: 420px;
+    // 150px = 헤더 48 + anchor 갭 4 + 메뉴 헤더 ~45 + 필터 ~37 + 하단 여유 (리스트 위 실제 크롬 합)
+    max-height: min(420px, calc(100vh - 150px));
     overflow-y: auto;
   }
 

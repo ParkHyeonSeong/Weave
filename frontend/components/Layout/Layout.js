@@ -24,6 +24,17 @@ const MESSENGER_MIN_WIDTH = 280;
 const MESSENGER_DEFAULT_WIDTH = 320;
 const SIDEBAR_MIN_WIDTH = 200;
 const SIDEBAR_DEFAULT_WIDTH = 240;
+// 드래그 클램프(handleSidebarResizeStart의 innerWidth/3, handleResizeStart의 innerWidth*0.5)와
+// 동일한 한계를 복원/리사이즈 시에도 재사용하기 위한 상수+헬퍼.
+const SIDEBAR_MAX_RATIO = 1 / 3;
+const MESSENGER_MAX_RATIO = 0.5;
+
+function clampPanelWidth(value, fallback, min, maxRatio) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  const max = Math.floor(window.innerWidth * maxRatio);
+  return Math.min(Math.max(n, min), max);
+}
 
 export default function Layout({ children }) {
   const { isMobile } = useMobile();
@@ -49,14 +60,18 @@ export default function Layout({ children }) {
   const [messengerWidth, setMessengerWidth] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('messenger_width');
-      return saved ? Number(saved) : MESSENGER_DEFAULT_WIDTH;
+      return saved
+        ? clampPanelWidth(saved, MESSENGER_DEFAULT_WIDTH, MESSENGER_MIN_WIDTH, MESSENGER_MAX_RATIO)
+        : MESSENGER_DEFAULT_WIDTH;
     }
     return MESSENGER_DEFAULT_WIDTH;
   });
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('sidebar_width');
-      return saved ? Number(saved) : SIDEBAR_DEFAULT_WIDTH;
+      return saved
+        ? clampPanelWidth(saved, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_RATIO)
+        : SIDEBAR_DEFAULT_WIDTH;
     }
     return SIDEBAR_DEFAULT_WIDTH;
   });
@@ -178,6 +193,25 @@ export default function Layout({ children }) {
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
   }, [messengerWidth]);
+
+  // 창 리사이즈 시 "저장된 선호 폭"을 현재 뷰포트 한계로 재클램프 (드래그 중에는 드래그 핸들러가 자체 클램프하므로 제외).
+  // 라이브 state가 아니라 localStorage 선호값에서 재계산해야 축소→복귀가 양방향으로 동작한다
+  // (state 기준이면 축소 때 줄어든 값이 그대로 남아 창을 되돌려도 회복 안 됨).
+  // 드래그 핸들러가 매 드래그 결과를 localStorage에 쓰므로 저장값 = 사용자의 최신 선호.
+  useEffect(() => {
+    const resyncWidth = (storageKey, min, maxRatio, setWidth) => {
+      let pref = null;
+      try { pref = localStorage.getItem(storageKey); } catch {}
+      setWidth((w) => clampPanelWidth(pref || w, w, min, maxRatio));
+    };
+    const handleWindowResize = () => {
+      if (isResizingRef.current) return;
+      resyncWidth('sidebar_width', SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_RATIO, setSidebarWidth);
+      resyncWidth('messenger_width', MESSENGER_MIN_WIDTH, MESSENGER_MAX_RATIO, setMessengerWidth);
+    };
+    window.addEventListener('resize', handleWindowResize);
+    return () => window.removeEventListener('resize', handleWindowResize);
+  }, []);
 
   // 글로벌 단축키
   useEffect(() => {
