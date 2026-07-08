@@ -11,6 +11,20 @@
   flex-shrink: 0;
   overflow: hidden;
 
+  // 컨테이너(가용폭) 820~1100px: 고정 420 대신 비례 축소 — 메인에 최소 ~480px 남김
+  @container panel-host (max-width: 1099px) {
+    width: clamp(340px, 40cqw, 420px);
+  }
+
+  // 가용폭 <820px: 인라인 공존 불가 → 우측 슬라이드 오버레이
+  @container panel-host (max-width: 819px) {
+    position: absolute;   // 호스트(panel-host) 기준 (fixed 아님 — 사이드바/메신저 위를 덮지 않게)
+    top: 0; right: 0; bottom: 0;
+    width: min(420px, 100%);
+    z-index: 120;
+    box-shadow: -8px 0 24px rgba(0, 0, 0, 0.12);
+  }
+
   // -- Mobile: 풀스크린 오버레이 --
   @include mobile {
     position: fixed;

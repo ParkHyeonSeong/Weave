@@ -117,3 +117,19 @@ $bp-desktop: 1024px;
   height: auto;
   border-radius: $radius-lg;
 }
+
+// -- Panel host container --------------------------------------------------
+// ref/task 참조 패널을 absolute로 띄우는 조상 컨테이너(panel-host)의 공용 계약.
+// position: relative는 그 absolute 오버레이의 기준.
+// containment는 ≥768px에서만: container-type의 layout containment이
+// position:fixed 자손(모바일 풀스크린 패널)의 containing block을 뷰포트→이 요소로
+// 바꿔버리므로, 모바일 구간은 비컨테인 상태로 남겨 문서-fixed를 유지한다.
+// (BranchDetail·RefPanelPageLayout·ScrumBoard__Body가 공유)
+@mixin panel-host-container {
+  position: relative;
+
+  @media (min-width: $bp-mobile) {
+    container-type: inline-size;
+    container-name: panel-host;
+  }
+}

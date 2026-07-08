@@ -5,6 +5,7 @@
   height: 100%;
   min-height: 0;
   overflow: hidden;
+  @include panel-host-container;
 
   // -- 메인 영역 --
   &__Main {
@@ -86,17 +87,33 @@
   }
 
   // -- 칩 참조 패널 래퍼 --
-  // 넓은 화면: 작업 패널 왼쪽에 나란히(flex 자식). 패널 2장(840px)이 본문을
-  // 짓누르는 좁은 화면에선 작업 패널 위로 띄운다 — 아래 편집 상태는 유지됨.
+  // 가용폭(호스트 기준) 넓을 때: 작업 패널 왼쪽에 나란히(flex 자식). 패널 2장이
+  // 본문을 짓누르는 좁은 가용폭에선 작업 패널 위로 띄운다 — 아래 편집 상태는 유지됨.
+  // z-순서 계약: 인라인 task 패널(정적) < task 패널 오버레이(120) <
+  // ref 패널 오버레이(130) < 모바일 풀스크린 task 패널(300) < 모바일 ref 패널(310).
   &__RefPanel {
     display: flex;
+    max-width: 100%;            // 폭은 내부 RefPreviewPanel(clamp)이 결정, 래퍼는 넘침만 방지
 
-    @media (max-width: 1439px) {
+    // 가용폭 <1160px(메인 최소 480 + task 패널 최소 340 + ref 패널 최소 340):
+    // task 패널 위로 오버레이 — 참조 패널이 더 최근 액션이므로 위
+    @container panel-host (max-width: 1159px) {
+      position: absolute;       // 호스트 기준 (fixed 금지 — 사이드바/메신저를 덮지 않게)
+      top: 0;
+      right: 0;
+      bottom: 0;
+      // 필수: <820px에선 내부 패널도 absolute라 shrink-wrap하면 폭 0으로 소멸
+      width: min(420px, 100%);
+      z-index: 130;             // task 패널 컨테이너 오버레이(z 120)보다 위
+      box-shadow: $shadow-lg;
+    }
+
+    // 뷰포트 <768: 기존 모바일 규약 유지 — 풀스크린 TaskDetailPanel(z 300) 위
+    @include mobile {
       position: fixed;
       top: 0;
       right: 0;
       bottom: 0;
-      // 모바일 TaskDetailPanel(z 300) 위에 떠야 함 — 참조 패널이 더 최근 액션
       z-index: 310;
       box-shadow: $shadow-lg;
     }

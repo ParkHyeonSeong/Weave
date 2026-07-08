@@ -82,7 +82,8 @@
   top: 0;
   right: 0;
   width: 380px;
-  height: 100vh;
+  // 100%: containment(panel-host) 아래선 호스트 높이, 밖에선 뷰포트 — 100vh는 헤더만큼 넘침
+  height: 100%;
   background: $color-bg;
   border-left: 1px solid $color-border;
   box-shadow: -4px 0 16px rgba(0, 0, 0, 0.06);

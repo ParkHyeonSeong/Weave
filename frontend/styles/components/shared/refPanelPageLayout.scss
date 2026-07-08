@@ -5,6 +5,7 @@
 .RefPanelPageLayout {
   display: flex;
   height: 100%;
+  @include panel-host-container;
 
   &__Main {
     flex: 1;
