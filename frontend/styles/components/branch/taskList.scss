@@ -7,10 +7,12 @@
     display: flex;
     align-items: center;
     gap: $space-3;
+    // 상시 wrap — 가용폭은 뷰포트가 아니라 패널 상태에 좌우되므로(넓은 모니터+패널에서도
+    // 절단 재현) 뷰포트 게이트 없이 허용. 콘텐츠가 실제로 넘칠 때만 줄바꿈된다.
+    flex-wrap: wrap;
     margin-bottom: $space-5;
 
     @include mobile {
-      flex-wrap: wrap;
       gap: $space-2;
       margin-bottom: $space-3;
     }
@@ -51,6 +53,10 @@
     background: $color-surface;
     color: $color-text-secondary;
     border: 1px solid $color-border;
+    // 폭이 모자라면 버튼이 찌그러지거나("+ Create / Sprint" 2줄) 텍스트가 쪼개지는 대신,
+    // Actions의 wrap으로 깔끔하게 줄바꿈되도록 자연폭을 고정.
+    flex-shrink: 0;
+    white-space: nowrap;
 
     &:hover {
       background: #F4F5F7;
@@ -383,9 +389,12 @@
   align-items: center;
   gap: $space-4;
   flex: 1;
+  // 상시 wrap — 한 줄 강제 시 min-content 폭이 가용폭(패널 상태에 좌우)을 넘으면
+  // 뒤쪽 컨트롤(Sort·고급필터 등)이 잘려나감. 실제로 넘칠 때만 줄바꿈된다.
+  flex-wrap: wrap;
+  row-gap: $space-2;
 
   @include mobile {
-    flex-wrap: wrap;
     gap: $space-2;
   }
 

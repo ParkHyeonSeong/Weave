@@ -30,6 +30,10 @@
     display: flex;
     align-items: center;
     gap: $space-4;
+    // 상시 wrap — 가용폭은 패널 상태에 좌우되므로 뷰포트 게이트 없이 허용.
+    // 넘치면 스프린트 탭 행과 필터 행이 자연 분리된다(실제로 넘칠 때만 발동).
+    flex-wrap: wrap;
+    row-gap: $space-2;
     margin-bottom: $space-4;
   }
 
@@ -137,7 +141,7 @@
   // -- Mobile --
   @include mobile {
     &__Header {
-      flex-wrap: wrap;
+      // flex-wrap은 이제 상시 적용(위 기본 규칙) — 여기선 gap만 좁힌다.
       gap: $space-2;
     }
 

@@ -2,12 +2,16 @@
 @use '../../variables' as *;
 
 .ScrumBoard { display:flex; flex-direction:column; height:100%; }
-.ScrumBoard__Head { display:flex; align-items:center; gap:16px; padding:14px 18px; border-bottom:1px solid $color-border; }
+// 상시 flex-wrap — 가용폭이 좁으면(패널·좁은 창) 헤더가 2줄로 자연 분리. 탭/제목의
+// white-space:nowrap과 한 쌍: nowrap이 CJK 글자단위 세로 스택을 막고, wrap이 수납을 맡는다.
+.ScrumBoard__Head { display:flex; align-items:center; flex-wrap:wrap; gap:16px; row-gap:8px; padding:14px 18px; border-bottom:1px solid $color-border; }
 // ref 칩 클릭 패널(RefPanelHost)을 우측 사이드로 붙이는 flex 레이아웃
 // panel-host: 패널 가용폭 기반 전환(container query)의 조상 컨테이너(계약은 panel-host-container mixin 참고)
 .ScrumBoard__Body { display:flex; flex:1; min-height:0; @include panel-host-container; }
 .ScrumBoard__BodyMain { flex:1; min-width:0; overflow-y:auto; }
-.ScrumBoard__Title { font-weight:800; font-size:16px; border-left:3px solid var(--accent,#16A34A); padding-left:10px; }
+// nowrap이 글자단위 세로 스택을 막는 대신, 아주 긴 이름이 좁은 화면(모바일)에서 헤더를
+// 수평으로 밀어내지 않도록 ellipsis 안전망(min-width:0이 flex 아이템의 축소를 허용).
+.ScrumBoard__Title { font-weight:800; font-size:16px; border-left:3px solid var(--accent,#16A34A); padding-left:10px; white-space:nowrap; min-width:0; overflow:hidden; text-overflow:ellipsis; }
 .ScrumBoard__WeekNav { display:flex; align-items:center; gap:8px; }
 .ScrumBoard__WeekNav > button { border:1px solid $color-border; border-radius:7px; padding:3px 6px; background:#fff; cursor:pointer; }
 // 라벨(주/회고 범위)을 클릭하면 캘린더로 임의 기간 점프 — 클릭 가능함을 hover로 암시
@@ -55,10 +59,11 @@
 }
 
 // 회고(Retro) 탭 + KPT 뷰
-.ScrumBoard__Tabs { display:flex; gap:4px; }
+.ScrumBoard__Tabs { display:flex; gap:4px; flex-shrink:0; }
 .ScrumBoard__Tabs button {
   border:1px solid $color-border; border-radius:8px; padding:4px 12px; font-size:13px; font-weight:700;
   background:#fff; color:color.adjust($color-border, $lightness:-45%); cursor:pointer;
+  white-space:nowrap; // CJK 글자단위 세로 스택 차단(Head가 flex-wrap:wrap이므로 넘치면 다음 줄로)
 }
 .ScrumBoard__Tabs button.is-on { border-color:#16A34A; color:#16A34A; background:color.adjust(#16A34A, $lightness:52%); }
 
