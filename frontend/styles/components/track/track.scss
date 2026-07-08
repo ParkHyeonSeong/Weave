@@ -1634,6 +1634,12 @@ $track-border-soft: color.adjust($color-border, $lightness: 5%);
     background: $track-paper;
     border-right: 1px solid $track-border;
     z-index: 2;
+    overflow: hidden; // LanesInner가 translateY로 움직일 때 밖으로 안 보이게
+  }
+
+  &__LanesInner {
+    position: relative;
+    will-change: transform;
   }
 
   &__LaneGroup {

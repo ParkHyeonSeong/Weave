@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { Bold, Italic, Strikethrough, ListChecks, List, Link as LinkIcon } from 'lucide-react';
 import { promptSetLink } from '@/library/editorLink';
 
@@ -19,6 +19,7 @@ const TBtn = ({ active, onClick, title, children }) => (
 export default function ScrumCellToolbar({ editor }) {
   const [pos, setPos] = useState(null);
   const [, force] = useState(0);
+  const toolbarRef = useRef(null);
 
   const update = useCallback(() => {
     if (!editor || !editor.isFocused) { setPos(null); return; }
@@ -47,11 +48,24 @@ export default function ScrumCellToolbar({ editor }) {
     };
   }, [editor, update]);
 
+  // 우측 클램프: 툴바 실측 폭(offsetWidth, 하드코딩 아님)이 렌더 후에만 알려지므로
+  // useLayoutEffect로 페인트 전에 좌표를 한 번 더 보정한다 — 금요일 등 우측 컬럼
+  // 셀에서 left=rect.left(에디터 좌측)가 뷰포트 우측을 넘어가지 않게 막는다.
+  useLayoutEffect(() => {
+    if (!pos || !toolbarRef.current) return;
+    const width = toolbarRef.current.offsetWidth;
+    const maxLeft = window.innerWidth - width - 8;
+    if (pos.left > maxLeft) {
+      setPos({ ...pos, left: maxLeft });
+    }
+  }, [pos]);
+
   if (!pos || !editor) return null;
 
   return (
     <div
       className="ScrumCellToolbar"
+      ref={toolbarRef}
       style={{ position: 'fixed', left: `${pos.left}px`, top: `${Math.max(8, pos.top - 38)}px`, zIndex: 600 }}
     >
       <TBtn title="굵게" active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()}><Bold size={14} /></TBtn>

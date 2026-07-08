@@ -100,16 +100,23 @@
   }
 
   // -- 스윔레인(그룹핑) 모드 --
+  // 가로 스크롤은 레인별 독립 스크롤러가 아니라 이 공통 부모가 담당 → 전 레인 동시 스크롤.
   &__Swimlanes {
     display: flex;
     flex-direction: column;
     gap: $space-5;
+    overflow-x: auto;
+    padding-bottom: $space-2;
   }
 
   &__Swimlane {
     // 스윔레인 안의 컬럼은 보드 전체 높이를 채우지 않고 내용에 맞게 줄인다.
+    // 컬럼 폭은 내용에 맞춰 고정(width: max-content)하고 자체 스크롤은 두지 않는다 —
+    // 넘치는 폭은 상위 __Swimlanes로 그대로 전달되어 모든 레인이 함께 스크롤된다.
     .BoardView__Columns {
       min-height: 0;
+      width: max-content;
+      overflow-x: visible;
     }
   }
 
@@ -119,6 +126,15 @@
     gap: $space-2;
     margin-bottom: $space-2;
     padding: $space-1 $space-1;
+    // __Swimlanes가 가로 스크롤을 담당하게 되면서 이 헤더도 함께 스크롤되는 조상 안에 들어감 —
+    // 레인 라벨은 좌측에 고정되어야 하므로 sticky로 붙잡는다.
+    // width: max-content 필수 — 기본 block 너비(부모 __Swimlane 폭 그대로)면 sticky가
+    // 이동할 여유 공간이 없어(이미 부모 폭을 꽉 채워) 고정 효과가 무력화된다.
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    width: max-content;
+    background: $color-bg;
   }
 
   &__SwimlaneLabel {
@@ -152,6 +168,15 @@
 
     &__Columns {
       gap: $space-3;
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    // 스윔레인 모드는 __Swimlanes가 실제 스크롤 컨테이너이므로(중첩된 __Columns는
+    // overflow-x:visible로 무력화됨) 스냅/터치 모멘텀도 여기로 옮겨야 동작한다.
+    // (중첩 __Columns는 스크롤 컨테이너가 아니라 위 &__Columns의 scroll-snap-type이
+    // 애초에 적용되지 않으므로 별도로 끌 필요가 없다.)
+    &__Swimlanes {
       scroll-snap-type: x mandatory;
       -webkit-overflow-scrolling: touch;
     }

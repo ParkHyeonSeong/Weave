@@ -170,11 +170,13 @@ export default function TrackTimeline({
   );
   const todayX = dayToX(TODAY);
 
-  // 가로 스크롤 동기화 (헤더 ↔ 본문)
+  // 가로 스크롤 동기화 (헤더 ↔ 본문) + 세로 스크롤 동기화 (좌측 레인 라벨)
   const headRef = useRef(null);
   const bodyRef = useRef(null);
+  const lanesInnerRef = useRef(null);
   const syncScroll = (e) => {
     if (headRef.current) headRef.current.scrollLeft = e.target.scrollLeft;
+    if (lanesInnerRef.current) lanesInnerRef.current.style.transform = `translateY(-${e.target.scrollTop}px)`;
   };
 
   // Today 위치로 자동 스크롤 (마운트 시 1회)
@@ -222,46 +224,48 @@ export default function TrackTimeline({
 
       {/* 본문: 좌측 라벨 + 가로 스크롤되는 캔버스 */}
       <div className="TrackTimeline__Body">
-        {/* 좌측 sticky lane labels */}
-        <div className="TrackTimeline__Lanes" style={{ height: totalHeight }}>
-          {(() => {
-            const out = [];
-            let y = 0;
-            groupedItems.forEach((grp) => {
-              out.push(
-                <div
-                  key={`g-${grp.branch.branch_id}`}
-                  className="TrackTimeline__LaneGroup"
-                  style={{ top: y, height: GROUP_HEAD_HEIGHT, borderLeftColor: grp.branch.color }}
-                >
-                  <EntityIcon
-                    icon={grp.branch.icon}
-                    color={grp.branch.color}
-                    size={14}
-                    entityType="branch"
-                  />
-                  <span className="TrackTimeline__LaneGroupName">{grp.branch.name}</span>
-                  <span className="TrackTimeline__LaneGroupCount">{grp.items.length}</span>
-                </div>
-              );
-              y += GROUP_HEAD_HEIGHT;
-              grp.items.forEach((it) => {
+        {/* 좌측 lane labels — 캔버스 세로 스크롤과 translateY로 동기화 */}
+        <div className="TrackTimeline__Lanes">
+          <div className="TrackTimeline__LanesInner" ref={lanesInnerRef} style={{ height: totalHeight }}>
+            {(() => {
+              const out = [];
+              let y = 0;
+              groupedItems.forEach((grp) => {
                 out.push(
                   <div
-                    key={`l-${it.item_id}`}
-                    className={`TrackTimeline__LaneRow ${selectedItemId === it.item_id ? 'TrackTimeline__LaneRow--selected' : ''}`}
-                    style={{ top: y, height: LANE_HEIGHT }}
-                    onClick={() => onSelectItem(it.item_id)}
+                    key={`g-${grp.branch.branch_id}`}
+                    className="TrackTimeline__LaneGroup"
+                    style={{ top: y, height: GROUP_HEAD_HEIGHT, borderLeftColor: grp.branch.color }}
                   >
-                    <span className="TrackTimeline__LaneTaskId">{it.display_id}</span>
-                    <span className="TrackTimeline__LaneTaskTitle">{it.title}</span>
+                    <EntityIcon
+                      icon={grp.branch.icon}
+                      color={grp.branch.color}
+                      size={14}
+                      entityType="branch"
+                    />
+                    <span className="TrackTimeline__LaneGroupName">{grp.branch.name}</span>
+                    <span className="TrackTimeline__LaneGroupCount">{grp.items.length}</span>
                   </div>
                 );
-                y += LANE_HEIGHT;
+                y += GROUP_HEAD_HEIGHT;
+                grp.items.forEach((it) => {
+                  out.push(
+                    <div
+                      key={`l-${it.item_id}`}
+                      className={`TrackTimeline__LaneRow ${selectedItemId === it.item_id ? 'TrackTimeline__LaneRow--selected' : ''}`}
+                      style={{ top: y, height: LANE_HEIGHT }}
+                      onClick={() => onSelectItem(it.item_id)}
+                    >
+                      <span className="TrackTimeline__LaneTaskId">{it.display_id}</span>
+                      <span className="TrackTimeline__LaneTaskTitle">{it.title}</span>
+                    </div>
+                  );
+                  y += LANE_HEIGHT;
+                });
               });
-            });
-            return out;
-          })()}
+              return out;
+            })()}
+          </div>
         </div>
 
         {/* 우측 canvas */}

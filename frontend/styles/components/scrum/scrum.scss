@@ -30,7 +30,15 @@
 .ScrumBoard__Error { padding:24px 18px; font-size:13px; opacity:.7; }
 
 .ScrumGrid { overflow:auto; padding:12px 18px; }
-.ScrumGrid__Row { display:grid; grid-template-columns:88px repeat(5,minmax(140px,1fr)); }
+// 1024 뷰포트(사이드바240 → 본문~784)에서 88+5*140=788이 748(패딩 제외) 가용폭을 넘어
+// 금요일 컬럼이 화면 밖으로 밀려나고, 가로 스크롤바는 .ScrumGrid 자체 높이가 짧아
+// 문제없어 보이지만 멤버가 많아 세로로 길어지면 스크롤바가 콘텐츠 맨 아래(수백px 밖)로
+// 파묻힌다. 트랙 바닥을 140→110px(가독 최소폭 실측)로 낮추면 1024에서 5일이 자연 수납
+// (88+5×132=748)되어 애초에 가로 스크롤이 없고, 그보다 좁으면 트랙 바닥이 유지되며
+// .ScrumGrid의 overflow:auto가 클린 가로 스크롤로 폴백한다. 바닥은 반드시 트랙(minmax)에
+// 둘 것 — 아이템 min-width는 트랙 base size를 못 올려 이웃 컬럼과 겹쳐 그려진다.
+// 넓은 화면(1440+)에서는 1fr 분배가 바닥보다 훨씬 커서 이 변경의 영향이 없다.
+.ScrumGrid__Row { display:grid; grid-template-columns:88px repeat(5,minmax(110px,1fr)); }
 .ScrumGrid__Row--head .ScrumGrid__ColHead { text-align:center; font-weight:700; opacity:.7; padding:6px; border-bottom:1px solid $color-border; }
 .ScrumGrid__Wd { margin-right:4px; }
 .ScrumGrid__Date { font-size:11px; opacity:.6; }
@@ -71,7 +79,11 @@
 .RetroView__Period { font-size:13px; font-weight:700; opacity:.75; }
 .RetroView__Loading,
 .RetroView__Empty { padding:24px 18px; font-size:13px; opacity:.7; }
-.RetroView__Cols { display:grid; grid-template-columns:repeat(3, minmax(180px, 1fr)); gap:12px; }
+// KPT 3열은 1024(가용폭 748)에서 이미 여유(3×180+2×12=564 필요)가 있지만, ScrumGrid와
+// 동일 패턴으로 트랙 바닥을 180→160px로 낮춰 패널 오픈 등으로 가용폭이 더 좁아져도
+// 3열이 더 오래 자연 수납되고, 그 아래에선 .RetroView의 overflow:auto가 클린 가로
+// 스크롤로 폴백한다(바닥은 트랙에 — 아이템 min-width는 이웃 컬럼과 겹침).
+.RetroView__Cols { display:grid; grid-template-columns:repeat(3, minmax(160px, 1fr)); gap:12px; }
 
 .RetroCol { display:flex; flex-direction:column; border:1px solid $color-border; border-radius:10px; overflow:hidden; background:$color-surface; }
 .RetroCol__Head { font-size:13px; font-weight:800; padding:8px 12px; border-bottom:1px solid $color-border; }
