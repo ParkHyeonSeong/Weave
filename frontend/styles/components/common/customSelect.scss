@@ -98,18 +98,15 @@
   }
 
   // -- 드롭다운 --
+  // 배치(position/top/left/min-width/z-index)는 DropdownPortal의 fixed 래퍼가 담당(body 포털,
+  // overflow:hidden 조상 클리핑 회피). 여기서는 내용 시각 스타일만 유지.
   &__Dropdown {
-    position: absolute;
-    top: calc(100% + 4px);
-    left: 0;
-    min-width: 100%;
     max-height: 240px;
     overflow-y: auto;
     background: $color-bg;
     border: 1px solid $color-border;
     border-radius: $radius-lg;
     box-shadow: $shadow-md;
-    z-index: 100;
     padding: $space-1 0;
     animation: customSelectFadeIn 120ms ease;
   }
@@ -142,7 +139,8 @@
     }
   }
 
-  &--sm &__Option {
+  // 옵션은 body 포털 안에 렌더돼 루트(.CustomSelect--sm)의 자손이 아님 — 드롭다운 모디파이어로 스코프
+  &__Dropdown--sm &__Option {
     padding: 4px $space-2;
     font-size: $font-size-xs;
   }

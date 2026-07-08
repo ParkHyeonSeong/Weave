@@ -1,8 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
 import { ChevronDown } from 'lucide-react';
+import DropdownPortal from './DropdownPortal';
 
 /**
  * CustomSelect - 네이티브 select 대체 커스텀 드롭다운
+ *
+ * 드롭다운 내용은 DropdownPortal을 통해 document.body에 포털된다(overflow:hidden 조상에
+ * 클리핑되지 않도록). 트리거는 제자리에 남는다.
  *
  * @param {string|number|null} value - 현재 선택된 값
  * @param {Array<{value: string|number, label: string, icon?: React.Element, color?: string}>} options
@@ -13,15 +17,16 @@ import { ChevronDown } from 'lucide-react';
  */
 export default function CustomSelect({ value, options, onChange, placeholder = 'Select...', size = 'md', className = '', hideArrow = false }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef(null);
+  const ref = useRef(null); // 트리거
+  const dropdownRef = useRef(null); // 포털된 드롭다운
 
-  // 외부 클릭 감지
+  // 외부 클릭 감지 (트리거 + 포털된 드롭다운 둘 다 "내부"로 취급)
   useEffect(() => {
     if (!open) return;
     const handleClick = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) {
-        setOpen(false);
-      }
+      if (ref.current?.contains(e.target)) return;
+      if (dropdownRef.current?.contains(e.target)) return; // 포털 내부 클릭은 외부 아님
+      setOpen(false);
     };
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
@@ -80,9 +85,9 @@ export default function CustomSelect({ value, options, onChange, placeholder = '
         {!hideArrow && <ChevronDown size={size === 'sm' ? 12 : 14} className="CustomSelect__Arrow" />}
       </button>
 
-      {/* 드롭다운 */}
-      {open && (
-        <div className="CustomSelect__Dropdown">
+      {/* 드롭다운 (body 포털) — 루트 밖에 렌더되므로 size 모디파이어를 드롭다운에 직접 부여 */}
+      <DropdownPortal anchorRef={ref} open={open} dropdownRef={dropdownRef}>
+        <div className={`CustomSelect__Dropdown CustomSelect__Dropdown--${size}`}>
           {options.map((opt) => (
             <button
               key={String(opt.value)}
@@ -101,7 +106,7 @@ export default function CustomSelect({ value, options, onChange, placeholder = '
             </button>
           ))}
         </div>
-      )}
+      </DropdownPortal>
     </div>
   );
 }

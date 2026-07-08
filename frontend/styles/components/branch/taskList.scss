@@ -1307,10 +1307,9 @@
     }
   }
 
+  // 배치(position/top/right/z-index)는 DropdownPortal의 fixed 래퍼가 담당(body 포털,
+  // overflow:hidden 조상 클리핑 회피). min-width는 최소 폭 보장을 위해 여기서 유지.
   &__AssigneeDropdown {
-    position: absolute;
-    top: calc(100% + 4px);
-    right: 0;
     min-width: 200px;
     max-height: 240px;
     overflow-y: auto;
@@ -1318,7 +1317,6 @@
     border: 1px solid $color-border;
     border-radius: $radius-lg;
     box-shadow: $shadow-md;
-    z-index: 100;
     padding: $space-1 0;
     animation: customSelectFadeIn 120ms ease;
   }

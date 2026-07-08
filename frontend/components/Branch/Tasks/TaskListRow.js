@@ -5,6 +5,7 @@ import { selectableEpics } from '@/library/epics';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import CustomSelect from '@/components/common/CustomSelect';
+import DropdownPortal from '@/components/common/DropdownPortal';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import Avatar from '@/components/common/Avatar';
 import { progressLabel, progressPercent } from '@/library/subtaskProgress';
@@ -29,7 +30,8 @@ export default function TaskListRow({ task, branchId, taskTypes, workflowStatuse
     : DEFAULT_STATUS_OPTIONS;
   const typeConfig = (taskTypes || []).find((t) => t.type_key === task.task_type);
   const [assigneeOpen, setAssigneeOpen] = useState(false);
-  const assigneeRef = useRef(null);
+  const assigneeRef = useRef(null); // 트리거
+  const assigneeDropdownRef = useRef(null); // 포털된 드롭다운
 
   // 행 전체를 드래그 핸들로 사용. 하위태스크(indent)·오버레이는 드래그 비활성(v1 정책).
   const draggable = !isOverlay && !indent;
@@ -69,9 +71,9 @@ export default function TaskListRow({ task, branchId, taskTypes, workflowStatuse
   useEffect(() => {
     if (!assigneeOpen) return;
     const handleClick = (e) => {
-      if (assigneeRef.current && !assigneeRef.current.contains(e.target)) {
-        setAssigneeOpen(false);
-      }
+      if (assigneeRef.current?.contains(e.target)) return;
+      if (assigneeDropdownRef.current?.contains(e.target)) return; // 포털 내부 클릭은 외부 아님
+      setAssigneeOpen(false);
     };
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
@@ -249,7 +251,7 @@ export default function TaskListRow({ task, branchId, taskTypes, workflowStatuse
           );
         })()}
 
-        {assigneeOpen && (
+        <DropdownPortal anchorRef={assigneeRef} open={assigneeOpen} align="right" dropdownRef={assigneeDropdownRef}>
           <div className="TaskListRow__AssigneeDropdown">
             <button
               type="button"
@@ -285,7 +287,7 @@ export default function TaskListRow({ task, branchId, taskTypes, workflowStatuse
               );
             })}
           </div>
-        )}
+        </DropdownPortal>
       </div>
     </div>
   );
