@@ -221,6 +221,7 @@
   },
   {
     "name": "breaks-bare-newline",
+    "regen": false,
     "markdown": "첫 줄\n둘째 줄",
     "html_tiptap": "<p>첫 줄<br>둘째 줄</p>",
     "html_ingress": null,
