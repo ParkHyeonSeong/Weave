@@ -1,73 +1,16 @@
 import { useEffect, useRef, useMemo } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
-import { Extension } from '@tiptap/core';
-import StarterKit from '@tiptap/starter-kit';
-import Placeholder from '@tiptap/extension-placeholder';
-import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
-import Highlight from '@tiptap/extension-highlight';
-import { checklistExtensions } from '@/components/Canvas/extensions/checklistExtension';
-import { common, createLowlight } from 'lowlight';
-import CalloutExtension from '@/components/Canvas/extensions/CalloutExtension';
-import TaskRefNode, { taskRefPluginKey } from '@/components/Canvas/extensions/TaskRefExtension';
-import MentionNode from '@/components/Canvas/extensions/MentionExtension';
-import SlashCommandsExtension, { slashCommandPluginKey } from '@/components/Canvas/extensions/SlashCommandsExtension';
-import { ResizableImage } from '@/components/Canvas/extensions/ResizableImageExtension';
-import { createImageUploadPlugin } from '@/components/Canvas/extensions/ImageUploadPlugin';
-import { createMarkdownPastePlugin } from '@/components/Canvas/extensions/MarkdownPastePlugin';
-import { BookmarkPasteExtension } from '@/components/Canvas/extensions/BookmarkPastePlugin';
-import MermaidExtension from '@/components/Canvas/extensions/MermaidExtension';
-import { mathExtensions, mathEditPluginKey } from '@/components/Canvas/extensions/mathExtensions';
+import { taskRefPluginKey } from '@/components/Canvas/extensions/TaskRefExtension';
+import { slashCommandPluginKey } from '@/components/Canvas/extensions/SlashCommandsExtension';
+import { mathEditPluginKey } from '@/components/Canvas/extensions/mathExtensions';
 import CanvasEditorToolbar from '@/components/Canvas/CanvasEditorToolbar';
 import { useEditorRefHydration } from '@/library/refHydration';
-import WeaveLink from '@/components/Canvas/extensions/WeaveLink';
-
-const lowlight = createLowlight(common);
-
-const baseExtensions = [
-  StarterKit.configure({
-    codeBlock: false,
-    link: false, // WeaveLink로 별도 등록(WEAVE-37 inclusive 분리) — StarterKit 번들 Link와 중복 방지
-  }),
-  WeaveLink.configure({ openOnClick: false, HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' } }),
-  Placeholder.configure({ placeholder: 'Add description...' }),
-  CodeBlockLowlight.configure({ lowlight }),
-  Highlight.configure({ multicolor: true }),
-  ...checklistExtensions({ nested: true }),
-  CalloutExtension,
-  TaskRefNode,
-  SlashCommandsExtension.configure({ enabled: ['/t', '/ta', '/m'] }),
-  ResizableImage,
-  MermaidExtension,
-  ...mathExtensions(),
-];
+import { buildTaskDescriptionExtensions } from './taskDescriptionExtensions';
 
 export default function TaskDescriptionEditor({ content, onSave, branchId }) {
   const savedRef = useRef(false);
 
-  const extensions = useMemo(() => {
-    const ext = [...baseExtensions];
-    ext.push(MentionNode.configure({ branchId }));
-    ext.push(BookmarkPasteExtension);
-    ext.push(
-      Extension.create({
-        name: 'markdownPaste',
-        addProseMirrorPlugins() {
-          return [createMarkdownPastePlugin()];
-        },
-      })
-    );
-    if (branchId) {
-      ext.push(
-        Extension.create({
-          name: 'imageUpload',
-          addProseMirrorPlugins() {
-            return [createImageUploadPlugin({ branchId })];
-          },
-        })
-      );
-    }
-    return ext;
-  }, [branchId]);
+  const extensions = useMemo(() => buildTaskDescriptionExtensions({ branchId }), [branchId]);
 
   const editor = useEditor({
     immediatelyRender: false,

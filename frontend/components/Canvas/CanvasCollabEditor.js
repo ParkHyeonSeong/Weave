@@ -1,41 +1,15 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import { Extension } from '@tiptap/core';
-import StarterKit from '@tiptap/starter-kit';
-import WeaveLink from './extensions/WeaveLink';
-import { ResizableImage } from './extensions/ResizableImageExtension';
-import Placeholder from '@tiptap/extension-placeholder';
-import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
-import { Table } from '@tiptap/extension-table';
-import { TableRow } from '@tiptap/extension-table-row';
-import { TableCellWithBgColor, TableHeaderWithBgColor } from './extensions/TableCellExtension';
-import TextAlign from '@tiptap/extension-text-align';
-import Highlight from '@tiptap/extension-highlight';
-import Color from '@tiptap/extension-color';
-import { TextStyle } from '@tiptap/extension-text-style';
-import { checklistExtensions } from './extensions/checklistExtension';
-import { mathExtensions } from './extensions/mathExtensions';
 import { ySyncPlugin, yCursorPlugin, yUndoPlugin } from 'y-prosemirror';
-import { common, createLowlight } from 'lowlight';
-import CalloutExtension from './extensions/CalloutExtension';
-import TaskRefNode from './extensions/TaskRefExtension';
-import MentionNode from './extensions/MentionExtension';
-import DocRefNode from './extensions/DocRefExtension';
-import IssueRefNode from './extensions/IssueRefExtension';
-import SlashCommandsExtension from './extensions/SlashCommandsExtension';
-import { createImageUploadPlugin } from './extensions/ImageUploadPlugin';
-import BookmarkNode from './extensions/BookmarkExtension';
-import { BookmarkPasteExtension } from './extensions/BookmarkPastePlugin';
-import { createMarkdownPastePlugin } from './extensions/MarkdownPastePlugin';
-import MermaidExtension from './extensions/MermaidExtension';
 import CanvasEditorToolbar from './CanvasEditorToolbar';
 import TableBubbleMenu from './TableBubbleMenu';
 import LinkHoverPopover from '@/components/shared/LinkHoverPopover';
 import { getBaseURL } from '@/library/_axios';
 import { buildAvatarDOM } from '@/library/userAvatar';
 import { useEditorRefHydration } from '@/library/refHydration';
+import { buildCanvasEditorExtensions } from './canvasEditorExtensions';
 
-const lowlight = createLowlight(common);
 const MAX_PLAIN_TEXT_LENGTH = 60000;
 
 // Wrapper: ydoc/provider가 준비되면 Inner를 마운트
@@ -58,22 +32,6 @@ function CollabEditorInner({
 
   const extensions = useMemo(() => {
     const fragment = ydoc.getXmlFragment('default');
-
-    const ImageUpload = canvasId
-      ? Extension.create({
-          name: 'imageUpload',
-          addProseMirrorPlugins() {
-            return [createImageUploadPlugin({ canvasId })];
-          },
-        })
-      : null;
-
-    const MarkdownPaste = Extension.create({
-      name: 'markdownPaste',
-      addProseMirrorPlugins() {
-        return [createMarkdownPastePlugin()];
-      },
-    });
 
     // 커스텀 커서 빌더: 볼드 캐럿 + 공용 아바타(buildAvatarDOM)
     const cursorBuilder = (user) => {
@@ -100,48 +58,7 @@ function CollabEditorInner({
       },
     });
 
-    return [
-      StarterKit.configure({
-        codeBlock: false,
-        history: false,
-        link: false, // WeaveLink로 별도 등록(WEAVE-37 inclusive 분리) — StarterKit 번들 Link와 중복 방지
-      }),
-      WeaveLink.configure({
-        openOnClick: false,
-        HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' },
-      }),
-      ResizableImage,
-      Placeholder.configure({
-        placeholder: 'Start writing...',
-      }),
-      CodeBlockLowlight.configure({ lowlight }),
-      Table.configure({ resizable: true }),
-      TableRow,
-      TableCellWithBgColor,
-      TableHeaderWithBgColor,
-      TextAlign.configure({
-        types: ['heading', 'paragraph', 'image'],
-      }),
-      Highlight.configure({
-        multicolor: true,
-      }),
-      TextStyle,
-      Color,
-      ...checklistExtensions({ nested: true }),
-      CalloutExtension,
-      TaskRefNode,
-      MentionNode.configure({ canvasId }),
-      DocRefNode,
-      IssueRefNode,
-      SlashCommandsExtension.configure({ enabled: ['/t', '/ta', '/d', '/i', '/m'] }),
-      BookmarkNode,
-      BookmarkPasteExtension,
-      MarkdownPaste,
-      ...mathExtensions(),
-      MermaidExtension,
-      ...(ImageUpload ? [ImageUpload] : []),
-      YjsExtension,
-    ];
+    return [...buildCanvasEditorExtensions({ canvasId }), YjsExtension];
   }, [ydoc, provider, canvasId]);
 
   const editor = useEditor({

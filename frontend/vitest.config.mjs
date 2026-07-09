@@ -9,8 +9,12 @@ export default defineConfig({
     alias: { '@': root },
   },
   // .js 안의 JSX(칩 Popup 등)를 파싱 — md 코덱/스키마 스윕 테스트가
-  // 에디터 확장 체인을 임포트하면서 필요해졌다
-  esbuild: { loader: 'jsx', include: /\.[jt]sx?$/, exclude: [] },
+  // 에디터 확장 체인을 임포트하면서 필요해졌다.
+  // jsx: 'automatic' — 이 레포는 어떤 파일도 `import React`를 하지 않는
+  // 관례(Next.js 기본 automatic 런타임)라 classic(기본값)로 두면 모듈
+  // 최상위에서 JSX를 평가하는 파일(예: Toast.js의 ICONS 맵)에서
+  // "React is not defined"로 깨진다.
+  esbuild: { loader: 'jsx', jsx: 'automatic', include: /\.[jt]sx?$/, exclude: [] },
   test: {
     environment: 'node',
     include: ['library/**/*.test.js'],

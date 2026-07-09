@@ -1,22 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
-import { Extension } from '@tiptap/core';
-import StarterKit from '@tiptap/starter-kit';
-import Placeholder from '@tiptap/extension-placeholder';
-import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
-import { common, createLowlight } from 'lowlight';
-import MentionNode from '@/components/Canvas/extensions/MentionExtension';
-import TaskRefNode from '@/components/Canvas/extensions/TaskRefExtension';
-import { ResizableImage } from '@/components/Canvas/extensions/ResizableImageExtension';
-import { createImageUploadPlugin } from '@/components/Canvas/extensions/ImageUploadPlugin';
-import SlashCommandsExtension from '@/components/Canvas/extensions/SlashCommandsExtension';
-import { BookmarkPasteExtension } from '@/components/Canvas/extensions/BookmarkPastePlugin';
-import { mathExtensions } from '@/components/Canvas/extensions/mathExtensions';
-import { createMarkdownPastePlugin } from '@/components/Canvas/extensions/MarkdownPastePlugin';
 import { useEditorRefHydration } from '@/library/refHydration';
-import WeaveLink from '@/components/Canvas/extensions/WeaveLink';
-
-const lowlight = createLowlight(common);
+import { buildCommentEditorExtensions } from './commentEditorExtensions';
 
 /**
  * Lightweight TipTap editor for task comments.
@@ -47,40 +32,10 @@ export default function CommentEditor({
   useEffect(() => { submitRef.current = onSubmit; }, [onSubmit]);
   useEffect(() => { cancelRef.current = onCancel; }, [onCancel]);
 
-  const extensions = useMemo(() => {
-    const ext = [
-      StarterKit.configure({
-        codeBlock: false,
-        link: false, // WeaveLink로 별도 등록(WEAVE-37 inclusive 분리) — StarterKit 번들 Link와 중복 방지
-      }),
-      WeaveLink.configure({ openOnClick: false, HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' } }),
-      Placeholder.configure({ placeholder }),
-      CodeBlockLowlight.configure({ lowlight }),
-      MentionNode.configure({ branchId }),
-      TaskRefNode,
-      SlashCommandsExtension.configure({ enabled: ['/t', '/ta', '/m'] }),
-      ResizableImage,
-      BookmarkPasteExtension,
-      ...mathExtensions(),
-      Extension.create({
-        name: 'markdownPaste',
-        addProseMirrorPlugins() {
-          return [createMarkdownPastePlugin()];
-        },
-      }),
-    ];
-    if (branchId) {
-      ext.push(
-        Extension.create({
-          name: 'imageUpload',
-          addProseMirrorPlugins() {
-            return [createImageUploadPlugin({ branchId })];
-          },
-        }),
-      );
-    }
-    return ext;
-  }, [placeholder, branchId]);
+  const extensions = useMemo(
+    () => buildCommentEditorExtensions({ placeholder, branchId }),
+    [placeholder, branchId]
+  );
 
   const editor = useEditor({
     immediatelyRender: false,
