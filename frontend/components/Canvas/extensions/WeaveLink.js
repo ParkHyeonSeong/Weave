@@ -8,7 +8,7 @@ import Link from '@tiptap/extension-link';
 // mark 이름은 'link' 그대로 — editorLink.js·LinkHoverPopover 등 이름 기반 소비자 무영향.
 // editorLink.js:82의 unsetMark('link')(삽입 트랜잭션의 stored mark 방어)와 상보적 — 둘 다 필요.
 const WeaveLink = Link.extend({
-  inclusive: () => false,
+  inclusive: false,
 });
 
 export default WeaveLink;

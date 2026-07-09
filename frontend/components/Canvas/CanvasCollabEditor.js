@@ -104,7 +104,7 @@ function CollabEditorInner({
       StarterKit.configure({
         codeBlock: false,
         history: false,
-        link: false, // 별도 Link.configure로 등록 → StarterKit 번들 Link와 중복 방지
+        link: false, // WeaveLink로 별도 등록(WEAVE-37 inclusive 분리) — StarterKit 번들 Link와 중복 방지
       }),
       WeaveLink.configure({
         openOnClick: false,
