@@ -93,8 +93,8 @@ async def _notify_mentions(recipients: list[int], actor_id: int, username: str,
 # ---- CRUD ----
 
 async def list_comments(branch_id: int, task_id: int, request: Request,
-                         db: AsyncSession):
-    """Task의 댓글 목록 (평면 배열, created_at ASC). 멘션 user_ids 포함."""
+                         db: AsyncSession, order: str = 'asc'):
+    """Task의 댓글 목록 (평면 배열, created_at asc|desc + comment_id tiebreak). 멘션 user_ids 포함."""
     _, err = await _check_member(branch_id, request, db)
     if err:
         return err
@@ -102,7 +102,7 @@ async def list_comments(branch_id: int, task_id: int, request: Request,
     if err:
         return err
 
-    rows = await comment_model.find_by_task(task_id, db)
+    rows = await comment_model.find_by_task(task_id, db, order=order)
     comments = [_hydrate(r) for r in rows]
 
     if comments:

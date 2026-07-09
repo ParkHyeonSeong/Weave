@@ -38,16 +38,19 @@ async def find_by_id(comment_id: int, db: AsyncSession):
     return dict(row._mapping) if row else None
 
 
-async def find_by_task(task_id: int, db: AsyncSession):
+async def find_by_task(task_id: int, db: AsyncSession, order: str = 'asc'):
     """Task의 전체 댓글 — soft delete 규칙 적용 후 평면 배열 반환.
 
     - deleted_at IS NULL → 그대로
     - deleted_at IS NOT NULL + 답글 있음 → tombstone (UI에서 content 빈 문자열로 노출)
     - deleted_at IS NOT NULL + 답글 없음 → 제외
+    - order: 'asc'(기본) | 'desc' — created_at 방향, comment_id 동방향 tiebreak
     """
+    # 화이트리스트 매핑 — 밖의 값은 KeyError, SQL 문자열 조립 안전
+    direction = {'asc': 'ASC', 'desc': 'DESC'}[order]
     # NOTE: idx_task_comment_task is partial (WHERE deleted_at IS NULL).
     # Tombstone rows (deleted_at NOT NULL with live children) fall outside that index — full scan at high volume.
-    result = await db.execute(text("""
+    result = await db.execute(text(f"""
         WITH child_count AS (
             SELECT parent_comment_id, COUNT(*) AS n
             FROM task_comment
@@ -68,7 +71,7 @@ async def find_by_task(task_id: int, db: AsyncSession):
               c.deleted_at IS NULL
               OR COALESCE(cc.n, 0) > 0
           )
-        ORDER BY c.created_at ASC
+        ORDER BY c.created_at {direction}, c.comment_id {direction}
     """), {'task_id': task_id})
     return [dict(r._mapping) for r in result.fetchall()]
 

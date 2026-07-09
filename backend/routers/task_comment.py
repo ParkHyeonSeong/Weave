@@ -1,3 +1,5 @@
+from typing import Literal
+
 from fastapi import APIRouter, Request, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,8 +13,9 @@ router = APIRouter()
 
 @router.get("", summary="댓글 목록", dependencies=[Depends(require_login)])
 async def list_comments(branch_id: int, task_id: int, request: Request,
+                         order: Literal['asc', 'desc'] = 'asc',
                          session: AsyncSession = Depends(db.session)):
-    return await comment_controller.list_comments(branch_id, task_id, request, session)
+    return await comment_controller.list_comments(branch_id, task_id, request, session, order=order)
 
 
 @router.post("", summary="댓글 작성", dependencies=[Depends(require_login)])
