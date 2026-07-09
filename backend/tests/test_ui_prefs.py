@@ -1,4 +1,6 @@
 """통합 ui_prefs(per-user 뷰 상태) 모델 테스트."""
+import pytest
+from pydantic import ValidationError
 from sqlalchemy import text
 
 from core.model import user as user_model
@@ -49,3 +51,15 @@ async def test_ui_prefs_saved_view_pins_merge(db_session):
     got = await user_model.get_ui_prefs(uid, db_session)
     assert got["saved_view_pins"]["7"] == [1, 2]
     assert got["sidebar_order"]["branches"] == [1]  # 기존 네임스페이스 보존
+
+
+def test_update_ui_prefs_schema_allows_comment_sort():
+    from routers.schema.profile import UpdateUiPrefs
+    body = UpdateUiPrefs(comment_sort="newest")
+    assert body.model_dump(exclude_none=True) == {"comment_sort": "newest"}
+
+
+def test_update_ui_prefs_schema_rejects_invalid_comment_sort():
+    from routers.schema.profile import UpdateUiPrefs
+    with pytest.raises(ValidationError):
+        UpdateUiPrefs(comment_sort="popular")

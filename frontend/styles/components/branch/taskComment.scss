@@ -65,11 +65,35 @@
   gap: $space-3;
 
   &__Header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     font-size: $font-size-xs;
     font-weight: $font-weight-semibold;
     color: $color-text-secondary;
     text-transform: uppercase;
     letter-spacing: 0.04em;
+  }
+
+  &__SortBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    background: transparent;
+    border: none;
+    border-radius: $radius-sm;
+    color: $color-text-secondary;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    text-transform: none;
+    letter-spacing: normal;
+    cursor: pointer;
+
+    &:hover {
+      background: $color-surface;
+      color: $color-text;
+    }
   }
 
   &__Composer {

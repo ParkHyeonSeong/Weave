@@ -64,3 +64,13 @@ class UpdateUiPrefs(BaseModel):
     widget_layout: Optional[List[str]] = None
     home_controls: Optional[dict] = None
     saved_view_pins: Optional[dict] = None  # { "<branchId>|global": [view_id, ...] } per-user 핀 순서
+    comment_sort: Optional[str] = None  # 'newest' | 'oldest' — 태스크 댓글 정렬 선호
+
+    @field_validator('comment_sort')
+    @classmethod
+    def validate_comment_sort(cls, v):
+        if v is None:
+            return None
+        if v not in ('newest', 'oldest'):
+            raise ValueError("comment_sort must be 'newest' or 'oldest'")
+        return v

@@ -4,10 +4,12 @@ import { getErrorCode } from '@/library/errorCode';
 
 /**
  * Task 댓글 데이터 hook.
- * - 마운트 시 자동 fetch (unmount race guard 포함)
+ * - 마운트/order 변경 시 자동 fetch (unmount race guard 포함)
  * - create/update/delete 후 단순 refetch (optimistic 아님)
+ * - order: 'asc' | 'desc' | null — 서버 정렬 방향. null이면 (선호 로드 전) fetch를 미룬다.
+ *   렌더 순서의 최종 결정은 library/taskCommentTree.buildTree.
  */
-export default function useTaskComments(branchId, taskId) {
+export default function useTaskComments(branchId, taskId, order = 'asc') {
   const [comments, setComments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -20,10 +22,10 @@ export default function useTaskComments(branchId, taskId) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!base) return;
+      if (!base || order == null) return;
       setLoading(true);
       try {
-        const res = await axios.get(base);
+        const res = await axios.get(base, { params: { order } });
         if (cancelled) return;
         if (res.data?.status) {
           setComments(res.data.comments || []);
@@ -39,14 +41,14 @@ export default function useTaskComments(branchId, taskId) {
       }
     })();
     return () => { cancelled = true; };
-  }, [base]);
+  }, [base, order]);
 
   // explicit refetch — callers can call this after external changes
   const fetchComments = useCallback(async () => {
-    if (!base) return;
+    if (!base || order == null) return;
     setLoading(true);
     try {
-      const res = await axios.get(base);
+      const res = await axios.get(base, { params: { order } });
       if (res.data?.status) {
         setComments(res.data.comments || []);
         setError(null);
@@ -58,7 +60,7 @@ export default function useTaskComments(branchId, taskId) {
     } finally {
       setLoading(false);
     }
-  }, [base]);
+  }, [base, order]);
 
   // private helper: run a mutator fn, validate response, then refetch
   const _mutate = useCallback(async (fn, fallback) => {
