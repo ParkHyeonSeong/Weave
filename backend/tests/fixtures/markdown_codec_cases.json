@@ -1,0 +1,252 @@
+[
+  {
+    "name": "paragraph-plain",
+    "markdown": "안녕하세요.",
+    "html_tiptap": "<p>안녕하세요.</p>",
+    "html_ingress": null,
+    "directions": [
+      "md->html",
+      "html->md",
+      "roundtrip"
+    ]
+  },
+  {
+    "name": "heading-levels",
+    "markdown": "# 제목1\n\n## 제목2\n\n### 제목3",
+    "html_tiptap": "<h1>제목1</h1><h2>제목2</h2><h3>제목3</h3>",
+    "html_ingress": null,
+    "directions": [
+      "md->html",
+      "html->md",
+      "roundtrip"
+    ]
+  },
+  {
+    "name": "bold-italic-strike",
+    "markdown": "**굵게** *기울임* ~~취소~~",
+    "html_tiptap": "<p><strong>굵게</strong> <em>기울임</em> <s>취소</s></p>",
+    "html_ingress": null,
+    "directions": [
+      "md->html",
+      "html->md",
+      "roundtrip"
+    ]
+  },
+  {
+    "name": "bullet-list-nested",
+    "markdown": "- 하나\n- 둘\n  - 둘의 하위",
+    "html_tiptap": "<ul><li><p>하나</p></li><li><p>둘</p><ul><li><p>둘의 하위</p></li></ul></li></ul>",
+    "html_ingress": null,
+    "directions": [
+      "md->html",
+      "html->md",
+      "roundtrip"
+    ]
+  },
+  {
+    "name": "ordered-list",
+    "markdown": "1. 첫째\n2. 둘째",
+    "html_tiptap": "<ol><li><p>첫째</p></li><li><p>둘째</p></li></ol>",
+    "html_ingress": null,
+    "directions": [
+      "md->html",
+      "html->md",
+      "roundtrip"
+    ]
+  },
+  {
+    "name": "task-list",
+    "markdown": "- [ ] 할 일\n- [x] 끝난 일",
+    "html_tiptap": "<ul data-type=\"taskList\"><li data-type=\"taskItem\" data-checked=\"false\"><label><input type=\"checkbox\"><span></span></label><div><p>할 일</p></div></li><li data-type=\"taskItem\" data-checked=\"true\"><label><input type=\"checkbox\" checked=\"checked\"><span></span></label><div><p>끝난 일</p></div></li></ul>",
+    "html_ingress": null,
+    "directions": [
+      "md->html",
+      "html->md",
+      "roundtrip"
+    ]
+  },
+  {
+    "name": "code-block-lang",
+    "markdown": "```js\nconst a = 1;\n```",
+    "html_tiptap": "<pre><code class=\"language-js\">const a = 1;</code></pre>",
+    "html_ingress": null,
+    "directions": [
+      "md->html",
+      "html->md",
+      "roundtrip"
+    ]
+  },
+  {
+    "name": "blockquote",
+    "markdown": "> 인용문",
+    "html_tiptap": "<blockquote><p>인용문</p></blockquote>",
+    "html_ingress": null,
+    "directions": [
+      "md->html",
+      "html->md",
+      "roundtrip"
+    ]
+  },
+  {
+    "name": "link-external",
+    "markdown": "[Weave](https://example.com)",
+    "html_tiptap": "<p><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://example.com\">Weave</a></p>",
+    "html_ingress": null,
+    "directions": [
+      "md->html",
+      "html->md",
+      "roundtrip"
+    ]
+  },
+  {
+    "name": "image",
+    "markdown": "![스크린샷](https://example.com/shot.png)",
+    "html_tiptap": "<img src=\"https://example.com/shot.png\" alt=\"스크린샷\">",
+    "html_ingress": null,
+    "directions": [
+      "md->html",
+      "html->md",
+      "roundtrip"
+    ]
+  },
+  {
+    "name": "table-gfm",
+    "markdown": "\n| 이름  | 값   |\n| --- | --- |\n| a   | 1   |\n",
+    "html_tiptap": "<table style=\"min-width: 50px;\"><colgroup><col style=\"min-width: 25px;\"><col style=\"min-width: 25px;\"></colgroup><tbody><tr><th colspan=\"1\" rowspan=\"1\"><p>이름</p></th><th colspan=\"1\" rowspan=\"1\"><p>값</p></th></tr><tr><td colspan=\"1\" rowspan=\"1\"><p>a</p></td><td colspan=\"1\" rowspan=\"1\"><p>1</p></td></tr></tbody></table>",
+    "html_ingress": null,
+    "directions": [
+      "md->html",
+      "html->md",
+      "roundtrip"
+    ]
+  },
+  {
+    "name": "math-inline",
+    "markdown": "에너지는 $E=mc^2$ 이다",
+    "html_tiptap": "<p>에너지는 <span data-latex=\"E=mc^2\" data-type=\"inline-math\"></span> 이다</p>",
+    "html_ingress": null,
+    "directions": [
+      "md->html",
+      "html->md",
+      "roundtrip"
+    ]
+  },
+  {
+    "name": "math-block",
+    "markdown": "$$\nE = mc^2\n$$",
+    "html_tiptap": "<div data-latex=\"E = mc^2\" data-type=\"block-math\"></div>",
+    "html_ingress": null,
+    "directions": [
+      "md->html",
+      "html->md",
+      "roundtrip"
+    ]
+  },
+  {
+    "name": "mermaid-fence",
+    "markdown": "```mermaid\ngraph TD\n  A --> B\n```",
+    "html_tiptap": "<div data-source=\"graph TD\n  A --> B\" data-mermaid=\"true\" class=\"mermaid-block\"></div>",
+    "html_ingress": null,
+    "directions": [
+      "md->html",
+      "html->md",
+      "roundtrip"
+    ]
+  },
+  {
+    "name": "callout-directive",
+    "markdown": ":::callout {type=\"warning\"}\n\n주의하세요\n\n:::",
+    "html_tiptap": "<div data-callout=\"warning\" class=\"callout\"><p>주의하세요</p></div>",
+    "html_ingress": null,
+    "directions": [
+      "md->html",
+      "html->md",
+      "roundtrip"
+    ]
+  },
+  {
+    "name": "taskref-chip",
+    "markdown": "[WV-12 로그인 버그 수정](https://weave.test/branch/3/task/12)",
+    "html_tiptap": "<p><span data-task-ref=\"true\" data-task-id=\"12\" data-branch-id=\"3\" data-display-id=\"WV-12\" data-title=\"로그인 버그 수정\" data-status=\"todo\" data-priority=\"medium\" data-status-label=\"\" data-status-color=\"\" data-status-category=\"\" class=\"task-ref\">WV-12 로그인 버그 수정<span class=\"ref-chip__badge ref-chip__badge--todo\" data-ref-badge=\"true\">Todo</span></span></p>",
+    "html_ingress": null,
+    "directions": [
+      "md->html",
+      "html->md",
+      "roundtrip"
+    ]
+  },
+  {
+    "name": "issueref-chip",
+    "markdown": "[WV-7 재현 절차](https://weave.test/branch/3/task/12/issue/7)",
+    "html_tiptap": "<p><span data-issue-ref=\"true\" data-issue-id=\"7\" data-task-id=\"12\" data-branch-id=\"3\" data-display-id=\"WV-7\" data-title=\"재현 절차\" data-status=\"open\" class=\"issue-ref\">WV-7 재현 절차<span class=\"ref-chip__badge ref-chip__badge--open\" data-ref-badge=\"true\">Open</span></span></p>",
+    "html_ingress": null,
+    "directions": [
+      "md->html",
+      "html->md",
+      "roundtrip"
+    ]
+  },
+  {
+    "name": "docref-chip",
+    "markdown": "[설계 문서](https://weave.test/canvas/5/77)",
+    "html_tiptap": "<p><span data-doc-ref=\"true\" data-page-id=\"77\" data-canvas-id=\"5\" data-title=\"설계 문서\" data-canvas-name=\"\" class=\"doc-ref\">설계 문서</span></p>",
+    "html_ingress": null,
+    "directions": [
+      "md->html",
+      "html->md",
+      "roundtrip"
+    ]
+  },
+  {
+    "name": "underline-nonstandard",
+    "markdown": "++밑줄++",
+    "html_tiptap": "<p><u>밑줄</u></p>",
+    "html_ingress": null,
+    "directions": [
+      "md->html",
+      "html->md",
+      "roundtrip"
+    ]
+  },
+  {
+    "name": "breaks-soft-newline",
+    "markdown": "첫 줄  \n둘째 줄",
+    "html_tiptap": "<p>첫 줄<br>둘째 줄</p>",
+    "html_ingress": null,
+    "directions": [
+      "md->html",
+      "html->md",
+      "roundtrip"
+    ]
+  },
+  {
+    "name": "mention-degrade",
+    "regen": false,
+    "markdown": "안녕 @alice",
+    "html_tiptap": "<p>안녕 <span data-mention=\"true\" data-user-id=\"7\" data-username=\"alice\" class=\"mention\">@alice</span></p>",
+    "html_ingress": null,
+    "directions": [
+      "html->md"
+    ]
+  },
+  {
+    "name": "highlight-color-loss",
+    "regen": false,
+    "markdown": "==형광==",
+    "html_tiptap": "<p><mark data-color=\"#fef08a\">형광</mark></p>",
+    "html_ingress": null,
+    "directions": [
+      "html->md"
+    ]
+  },
+  {
+    "name": "unknown-inline-tag",
+    "regen": false,
+    "markdown": "그냥 텍스트",
+    "html_tiptap": "<p><span class=\"weird\">그냥 텍스트</span></p>",
+    "html_ingress": null,
+    "directions": [
+      "html->md"
+    ]
+  }
+]
