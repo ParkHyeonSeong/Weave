@@ -6,6 +6,8 @@ import ScrumCellToolbar from './ScrumCellToolbar';
 import LinkHoverPopover from '@/components/shared/LinkHoverPopover';
 import { useEditorRefHydration } from '@/library/refHydration';
 import { buildScrumCellExtensions } from './scrumCellExtensions';
+import { buildMarkdownExtensions } from '@/library/markdownCodec';
+import { MarkdownClipboardExtension } from '@/components/Canvas/extensions/MarkdownClipboardExtension';
 
 // ydoc/provider가 준비된 뒤에만 마운트 (wrapper)
 export default function ScrumCell(props) {
@@ -20,7 +22,11 @@ function ScrumCellInner({ ydoc, fragmentKey, placeholder, members }) {
       name: 'yjs',
       addProseMirrorPlugins() { return [ySyncPlugin(fragment), yUndoPlugin()]; },
     });
-    return [...buildScrumCellExtensions({ placeholder, members }), Yjs];
+    return buildMarkdownExtensions([
+      ...buildScrumCellExtensions({ placeholder, members }),
+      MarkdownClipboardExtension,
+      Yjs,
+    ]);
     // members는 보드 세션 내 정적(멤버는 셀 렌더 전 이미 로드됨)이라 deps에서 의도적으로
     // 제외 — 추가하면 멤버 목록 참조가 바뀔 때마다 에디터/ yjs 바인딩이 재생성되어 churn 발생.
   }, [ydoc, fragmentKey]);

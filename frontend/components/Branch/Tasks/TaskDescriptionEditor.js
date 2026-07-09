@@ -6,11 +6,16 @@ import { mathEditPluginKey } from '@/components/Canvas/extensions/mathExtensions
 import CanvasEditorToolbar from '@/components/Canvas/CanvasEditorToolbar';
 import { useEditorRefHydration } from '@/library/refHydration';
 import { buildTaskDescriptionExtensions } from './taskDescriptionExtensions';
+import { buildMarkdownExtensions } from '@/library/markdownCodec';
+import { MarkdownClipboardExtension } from '@/components/Canvas/extensions/MarkdownClipboardExtension';
 
 export default function TaskDescriptionEditor({ content, onSave, branchId }) {
   const savedRef = useRef(false);
 
-  const extensions = useMemo(() => buildTaskDescriptionExtensions({ branchId }), [branchId]);
+  const extensions = useMemo(
+    () => buildMarkdownExtensions([...buildTaskDescriptionExtensions({ branchId }), MarkdownClipboardExtension]),
+    [branchId]
+  );
 
   const editor = useEditor({
     immediatelyRender: false,

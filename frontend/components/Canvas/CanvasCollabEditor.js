@@ -9,6 +9,8 @@ import { getBaseURL } from '@/library/_axios';
 import { buildAvatarDOM } from '@/library/userAvatar';
 import { useEditorRefHydration } from '@/library/refHydration';
 import { buildCanvasEditorExtensions } from './canvasEditorExtensions';
+import { buildMarkdownExtensions } from '@/library/markdownCodec';
+import { MarkdownClipboardExtension } from './extensions/MarkdownClipboardExtension';
 
 const MAX_PLAIN_TEXT_LENGTH = 60000;
 
@@ -58,7 +60,11 @@ function CollabEditorInner({
       },
     });
 
-    return [...buildCanvasEditorExtensions({ canvasId }), YjsExtension];
+    return buildMarkdownExtensions([
+      ...buildCanvasEditorExtensions({ canvasId }),
+      MarkdownClipboardExtension,
+      YjsExtension,
+    ]);
   }, [ydoc, provider, canvasId]);
 
   const editor = useEditor({

@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import { useEditorRefHydration } from '@/library/refHydration';
 import { buildCommentEditorExtensions } from './commentEditorExtensions';
+import { buildMarkdownExtensions } from '@/library/markdownCodec';
+import { MarkdownClipboardExtension } from '@/components/Canvas/extensions/MarkdownClipboardExtension';
 
 /**
  * Lightweight TipTap editor for task comments.
@@ -33,7 +35,7 @@ export default function CommentEditor({
   useEffect(() => { cancelRef.current = onCancel; }, [onCancel]);
 
   const extensions = useMemo(
-    () => buildCommentEditorExtensions({ placeholder, branchId }),
+    () => buildMarkdownExtensions([...buildCommentEditorExtensions({ placeholder, branchId }), MarkdownClipboardExtension]),
     [placeholder, branchId]
   );
 

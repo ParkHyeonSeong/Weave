@@ -3,10 +3,12 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import CanvasEditorToolbar from '@/components/Canvas/CanvasEditorToolbar';
 import { useEditorRefHydration } from '@/library/refHydration';
 import { buildIssueEditorExtensions } from './issueEditorExtensions';
+import { buildMarkdownExtensions } from '@/library/markdownCodec';
+import { MarkdownClipboardExtension } from '@/components/Canvas/extensions/MarkdownClipboardExtension';
 
 const IssueEditor = forwardRef(({ content, placeholder, minHeight = 150, branchId, onChange }, ref) => {
   const extensions = useMemo(
-    () => buildIssueEditorExtensions({ placeholder, branchId }),
+    () => buildMarkdownExtensions([...buildIssueEditorExtensions({ placeholder, branchId }), MarkdownClipboardExtension]),
     [placeholder, branchId]
   );
 
