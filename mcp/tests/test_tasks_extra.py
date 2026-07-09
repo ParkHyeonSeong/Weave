@@ -145,7 +145,18 @@ async def test_list_task_comments(fake_client):
     async with Client(_app.mcp) as client:
         await client.call_tool("list_task_comments", {"branch_id": 3, "task_id": 5})
     fake_client.call_json.assert_awaited_once_with(
-        "GET", "/api/branches/3/tasks/5/comments"
+        "GET", "/api/branches/3/tasks/5/comments", params={"order": "asc"}
+    )
+
+
+async def test_list_task_comments_desc(fake_client):
+    fake_client.call_json.return_value = []
+    async with Client(_app.mcp) as client:
+        await client.call_tool(
+            "list_task_comments", {"branch_id": 3, "task_id": 5, "order": "desc"}
+        )
+    fake_client.call_json.assert_awaited_once_with(
+        "GET", "/api/branches/3/tasks/5/comments", params={"order": "desc"}
     )
 
 

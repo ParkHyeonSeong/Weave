@@ -52,7 +52,7 @@ modified. Each tool acts as the token's owner; `?` marks optional arguments.
 - `list_task_pages(branch_id, task_id)` · `link_task_page(branch_id, task_id, page_id)` · `search_task_pages(branch_id, task_id, q)` · `unlink_task_page(branch_id, task_id, link_id)` — task ↔ Canvas page links
 
 **Task comments**
-- `list_task_comments(branch_id, task_id)`
+- `list_task_comments(branch_id, task_id, order?)` — `order`: asc (default, oldest first) | desc
 - `add_task_comment(branch_id, task_id, content)`
 - `update_task_comment(branch_id, task_id, comment_id, content)`
 - `delete_task_comment(branch_id, task_id, comment_id)`

@@ -203,10 +203,14 @@ async def delete_task(branch_id: BranchRef, task_id: int) -> Any:
 
 
 @mcp.tool
-async def list_task_comments(branch_id: BranchRef, task_id: int) -> Any:
-    """List all comments on a task."""
+async def list_task_comments(branch_id: BranchRef, task_id: int, order: str = "asc") -> Any:
+    """List all comments on a task.
+
+    order: "asc" (default, oldest first) or "desc" (newest first) by created_at.
+    Replies reference their root via parent_comment_id regardless of order.
+    """
     return await get_client().call_json(
-        "GET", f"/api/branches/{branch_id}/tasks/{task_id}/comments"
+        "GET", f"/api/branches/{branch_id}/tasks/{task_id}/comments", params={"order": order}
     )
 
 
