@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, memo } from 'react';
-import { Reply, Pencil, Trash2 } from 'lucide-react';
+import { Reply, Pencil, Copy, Trash2 } from 'lucide-react';
 import { sanitizeHtml } from '@/library/sanitize';
 import { useRefHydration } from '@/library/refHydration';
 import { useMathHydration } from '@/library/mathRender';
@@ -8,6 +8,10 @@ import Avatar from '@/components/common/Avatar';
 import { buildMentionHtml } from '@/components/Canvas/extensions/MentionExtension';
 import ConfirmModal from '@/components/modal/ConfirmModal';
 import CommentEditor from './CommentEditor';
+import { buildCommentEditorExtensions } from './commentEditorExtensions';
+import { showToast } from '@/components/Layout/Toast';
+import { htmlToMarkdown } from '@/library/markdownCodec';
+import { ensureRenderableHtml } from '@/library/ensureHtml';
 
 /**
  * 단일 댓글 컴포넌트. 본인/타인 공용.
@@ -93,6 +97,16 @@ function CommentItem({
     } catch (e) { logError('Delete comment', e); }
   };
 
+  const handleCopyMarkdown = async () => {
+    try {
+      const md = htmlToMarkdown(ensureRenderableHtml(comment.content) || '', buildCommentEditorExtensions());
+      await navigator.clipboard.writeText(md);
+      showToast('Markdown이 복사되었습니다');
+    } catch {
+      showToast('Markdown 복사에 실패했습니다', 'error');
+    }
+  };
+
   return (
     <div
       id={`comment-${comment.comment_id}`}
@@ -117,6 +131,14 @@ function CommentItem({
                 title="Reply"
               >
                 <Reply size={12} />
+              </button>
+              <button
+                type="button"
+                className="CommentItem__ActionBtn"
+                onClick={handleCopyMarkdown}
+                title="Copy as Markdown"
+              >
+                <Copy size={12} />
               </button>
               {isMine && (
                 <>

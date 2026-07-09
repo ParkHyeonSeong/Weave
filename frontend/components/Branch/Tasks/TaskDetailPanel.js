@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
-import { X, Maximize2, Trash2, ChevronDown, Star, Pencil, ArrowUp } from 'lucide-react';
+import { X, Maximize2, Trash2, ChevronDown, Star, Pencil, Copy, ArrowUp } from 'lucide-react';
 import useStar from '@/hooks/useStar';
 import LabelTagInput from '@/components/common/LabelTagInput';
 import CustomSelect from '@/components/common/CustomSelect';
@@ -24,6 +24,10 @@ import ConfirmModal from '@/components/modal/ConfirmModal';
 import ActivityTimeline from '@/components/common/ActivityTimeline';
 import NavLink from '@/components/common/NavLink';
 import { taskDeleteMessage } from '@/library/taskDeleteMessage';
+import { buildTaskDescriptionExtensions } from './taskDescriptionExtensions';
+import { showToast } from '@/components/Layout/Toast';
+import { htmlToMarkdown } from '@/library/markdownCodec';
+import { ensureRenderableHtml } from '@/library/ensureHtml';
 
 export default function TaskDetailPanel({ branchId, branchKey, taskTypes: externalTaskTypes, workflowStatuses: externalStatuses, taskSummary, onClose, onSelectTask }) {
   const router = useRouter();
@@ -82,6 +86,18 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
     }
     setEditingDesc(false);
   }, [task?.description, updateField]);
+
+  // 설명을 markdown으로 클립보드 복사 (읽기 뷰 headless 변환 — 전부 클라이언트 사이드)
+  const copyDescMarkdown = useCallback(async () => {
+    if (!task?.description) return;
+    try {
+      const md = htmlToMarkdown(ensureRenderableHtml(task.description), buildTaskDescriptionExtensions());
+      await navigator.clipboard.writeText(md);
+      showToast('Markdown이 복사되었습니다');
+    } catch {
+      showToast('Markdown 복사에 실패했습니다', 'error');
+    }
+  }, [task?.description]);
 
   // 삭제
   const onDelete = async () => {
@@ -196,9 +212,14 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
           <div className="TaskDetailPanel__SectionLabel">
             Description
             {!editingDesc && task.description && (
-              <button className="TaskDetailPanel__DescEditBtn" onClick={() => setEditingDesc(true)}>
-                <Pencil size={11} />
-              </button>
+              <>
+                <button className="TaskDetailPanel__DescEditBtn" onClick={() => setEditingDesc(true)} title="Edit description">
+                  <Pencil size={11} />
+                </button>
+                <button className="TaskDetailPanel__DescEditBtn" onClick={copyDescMarkdown} title="Copy as Markdown">
+                  <Copy size={11} />
+                </button>
+              </>
             )}
           </div>
           {editingDesc ? (

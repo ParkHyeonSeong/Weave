@@ -1,14 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
-import { ArrowLeft, CircleDot, MoreHorizontal, Pencil, Trash2, XCircle, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, CircleDot, MoreHorizontal, Pencil, Copy, Trash2, XCircle, CheckCircle2 } from 'lucide-react';
 import { axios } from '@/library/_axios';
-import { ensureHtml } from '@/library/ensureHtml';
+import { ensureHtml, ensureRenderableHtml } from '@/library/ensureHtml';
 import { sanitizeHtml } from '@/library/sanitize';
 import { useRefHydration } from '@/library/refHydration';
 import { useMathHydration } from '@/library/mathRender';
 import Avatar from '@/components/common/Avatar';
 import IssueEditor from './IssueEditor';
 import ConfirmModal from '@/components/modal/ConfirmModal';
+import { buildIssueEditorExtensions } from './issueEditorExtensions';
+import { showToast } from '@/components/Layout/Toast';
+import { htmlToMarkdown } from '@/library/markdownCodec';
 
 export default function TaskIssueDetail() {
   const router = useRouter();
@@ -183,6 +186,18 @@ export default function TaskIssueDetail() {
     } catch {}
   };
 
+  // 본문/댓글을 markdown으로 복사 — 읽기 뷰 렌더(:328,:402)와 동일하게 ensureHtml 폴백 적용
+  const copyAsMarkdown = async (html) => {
+    if (!html) return;
+    try {
+      const md = htmlToMarkdown(ensureRenderableHtml(html), buildIssueEditorExtensions());
+      await navigator.clipboard.writeText(md);
+      showToast('Markdown이 복사되었습니다');
+    } catch {
+      showToast('Markdown 복사에 실패했습니다', 'error');
+    }
+  };
+
   // 이슈 삭제
   const deleteIssue = async () => {
     setShowDeleteConfirm(false);
@@ -297,13 +312,14 @@ export default function TaskIssueDetail() {
                 {isEdited(issue) && <span className="IssueDetail__Edited"> &middot; edited</span>}
               </span>
               <span className="IssueDetail__OpBadge">Author</span>
-              {isAuthor && (
+              {(isAuthor || issue.body) && (
                 <DropdownMenu
                   id="issue-body"
                   openMenuId={openMenuId}
                   setOpenMenuId={setOpenMenuId}
-                  onEdit={() => setEditingBody(true)}
-                  onDelete={() => setShowDeleteConfirm(true)}
+                  onCopyMarkdown={issue.body ? () => copyAsMarkdown(issue.body) : undefined}
+                  onEdit={isAuthor ? () => setEditingBody(true) : undefined}
+                  onDelete={isAuthor ? () => setShowDeleteConfirm(true) : undefined}
                   deleteLabel="Delete issue"
                 />
               )}
@@ -372,13 +388,14 @@ export default function TaskIssueDetail() {
                     {isEdited(comment) && <span className="IssueDetail__Edited"> &middot; edited</span>}
                   </span>
                   {isIssueAuthor && <span className="IssueDetail__OpBadge">Author</span>}
-                  {isCommentAuthor && !isEditingThis && (
+                  {!isEditingThis && (
                     <DropdownMenu
                       id={`comment-${comment.comment_id}`}
                       openMenuId={openMenuId}
                       setOpenMenuId={setOpenMenuId}
-                      onEdit={() => setEditingCommentId(comment.comment_id)}
-                      onDelete={() => deleteComment(comment.comment_id)}
+                      onCopyMarkdown={() => copyAsMarkdown(comment.content)}
+                      onEdit={isCommentAuthor ? () => setEditingCommentId(comment.comment_id) : undefined}
+                      onDelete={isCommentAuthor ? () => deleteComment(comment.comment_id) : undefined}
                       deleteLabel="Delete"
                     />
                   )}
@@ -461,7 +478,7 @@ export default function TaskIssueDetail() {
 }
 
 // --- 드롭다운 메뉴 ---
-function DropdownMenu({ id, openMenuId, setOpenMenuId, onEdit, onDelete, deleteLabel }) {
+function DropdownMenu({ id, openMenuId, setOpenMenuId, onCopyMarkdown, onEdit, onDelete, deleteLabel }) {
   const ref = useRef(null);
   const isOpen = openMenuId === id;
 
@@ -484,20 +501,33 @@ function DropdownMenu({ id, openMenuId, setOpenMenuId, onEdit, onDelete, deleteL
       </button>
       {isOpen && (
         <div className="IssueDetail__MenuDropdown">
-          <button
-            className="IssueDetail__MenuItem"
-            onClick={() => { setOpenMenuId(null); onEdit(); }}
-          >
-            <Pencil size={12} />
-            Edit
-          </button>
-          <button
-            className="IssueDetail__MenuItem IssueDetail__MenuItem--danger"
-            onClick={() => { setOpenMenuId(null); onDelete(); }}
-          >
-            <Trash2 size={12} />
-            {deleteLabel}
-          </button>
+          {onCopyMarkdown && (
+            <button
+              className="IssueDetail__MenuItem"
+              onClick={() => { setOpenMenuId(null); onCopyMarkdown(); }}
+            >
+              <Copy size={12} />
+              Copy as Markdown
+            </button>
+          )}
+          {onEdit && (
+            <button
+              className="IssueDetail__MenuItem"
+              onClick={() => { setOpenMenuId(null); onEdit(); }}
+            >
+              <Pencil size={12} />
+              Edit
+            </button>
+          )}
+          {onDelete && (
+            <button
+              className="IssueDetail__MenuItem IssueDetail__MenuItem--danger"
+              onClick={() => { setOpenMenuId(null); onDelete(); }}
+            >
+              <Trash2 size={12} />
+              {deleteLabel}
+            </button>
+          )}
         </div>
       )}
     </div>

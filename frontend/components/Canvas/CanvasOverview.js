@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import dynamic from 'next/dynamic';
-import { Pencil, X, Wifi, WifiOff, Loader } from 'lucide-react';
+import { Pencil, X, Wifi, WifiOff, Loader, Copy } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import useCollabProvider from '@/library/useCollabProvider';
 import { sanitizeHtml } from '@/library/sanitize';
@@ -10,6 +10,10 @@ import { useMathHydration } from '@/library/mathRender';
 import PresenceBar from './PresenceBar';
 import EntityIcon from '@/components/common/EntityIcon';
 import EntityAppearancePopover from '@/components/common/EntityAppearancePopover';
+import { showToast } from '@/components/Layout/Toast';
+import { htmlToMarkdown } from '@/library/markdownCodec';
+import { ensureRenderableHtml } from '@/library/ensureHtml';
+import { buildCanvasEditorExtensions } from './canvasEditorExtensions';
 
 const CanvasCollabEditor = dynamic(() => import('./CanvasCollabEditor'), { ssr: false });
 
@@ -159,6 +163,17 @@ export default function CanvasOverview() {
     }, 5000);
   };
 
+  // overview 본문(저장 HTML)을 markdown으로 클립보드 복사 — CanvasPageView와 동일 패턴
+  const handleCopyMarkdown = async () => {
+    try {
+      const md = htmlToMarkdown(ensureRenderableHtml(overview.content) || '', buildCanvasEditorExtensions());
+      await navigator.clipboard.writeText(md);
+      showToast('Markdown이 복사되었습니다');
+    } catch {
+      showToast('Markdown 복사에 실패했습니다', 'error');
+    }
+  };
+
   const handleCloseEdit = async () => {
     if (htmlRef.current) {
       try {
@@ -236,7 +251,14 @@ export default function CanvasOverview() {
               </>
             ) : (
               <>
-                <div />
+                {overview.content ? (
+                  <button className="CanvasOverview__OverviewBtn" onClick={handleCopyMarkdown}>
+                    <Copy size={15} />
+                    Copy as Markdown
+                  </button>
+                ) : (
+                  <div />
+                )}
                 <button className="CanvasOverview__OverviewBtn" onClick={() => setIsEditing(true)}>
                   <Pencil size={15} />
                   Edit
