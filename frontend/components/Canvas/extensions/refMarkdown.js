@@ -47,3 +47,9 @@ export function splitRefLinkText(text) {
   if (m) return { displayId: m[1], title: m[2] };
   return { displayId: '', title: text };
 }
+
+// { displayId: 'WV-12', title: '로그인 버그' } → 'WV-12 로그인 버그' (이스케이프 포함) — splitRefLinkText의 역함수.
+// taskRef/issueRef가 renderMarkdown 링크 텍스트를 만들 때 공유한다.
+export function formatRefLabel(displayId, title) {
+  return escapeLinkText([displayId, title].filter(Boolean).join(' '));
+}

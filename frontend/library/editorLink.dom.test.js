@@ -256,7 +256,7 @@ describe('Edge cases - 같은 href·다른 attrs 인접 링크(전체 attrs 스�
 
 describe('WeaveLink - inclusive를 autolink에서 분리 (WEAVE-37)', () => {
   // 프로덕션 4표면(TaskDesc·Comment·Issue·Canvas)과 동일 구성:
-  // StarterKit link:false + WeaveLink 별도 등록 (CanvasCollabEditor.js:104-112 패턴)
+  // StarterKit link:false + WeaveLink 별도 등록 (canvasEditorExtensions.js:36-44 패턴)
   function makeWeaveLinkEditor(content = '<p></p>') {
     return new Editor({
       extensions: [

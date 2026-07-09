@@ -36,7 +36,7 @@ export function buildCanvasEditorExtensions({ canvasId } = {}) {
     StarterKit.configure({
       codeBlock: false,
       history: false,
-      link: false, // WeaveLink로 별도 등록 (S4 — inclusive 분리 상태를 이관)
+      link: false, // WeaveLink로 별도 등록(WEAVE-37 inclusive 분리) — StarterKit 번들 Link와 중복 방지
     }),
     WeaveLink.configure({
       openOnClick: false,
