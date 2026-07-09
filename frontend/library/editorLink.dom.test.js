@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { applyLinkValue, isEditingLink, editingLinkMark } from './editorLink.js';
+import WeaveLink from '../components/Canvas/extensions/WeaveLink.js';
 
 // Canvas의 최악 케이스(autolink:true → Link.inclusive:true)로 에디터를 만들어
 // "삽입 직후 다음 입력이 링크로 이어짐"까지 잡는다. Scrum(autolink:false)은 더 안전한 부분집합.
@@ -250,5 +251,55 @@ describe('Edge cases - 같은 href·다른 attrs 인접 링크(전체 attrs 스�
     expect(html).toContain('href="https://new.com"');                          // 오른쪽만 변경
     expect((html.match(/href="https:\/\/same\.com"/g) || []).length).toBe(1);  // 왼쪽 유지
     expect((html.match(/<a /g) || []).length).toBe(2);                          // 병합 안 됨
+  });
+});
+
+describe('WeaveLink - inclusive를 autolink에서 분리 (WEAVE-37)', () => {
+  // 프로덕션 4표면(TaskDesc·Comment·Issue·Canvas)과 동일 구성:
+  // StarterKit link:false + WeaveLink 별도 등록 (CanvasCollabEditor.js:104-112 패턴)
+  function makeWeaveLinkEditor(content = '<p></p>') {
+    return new Editor({
+      extensions: [
+        StarterKit.configure({ codeBlock: false, link: false }),
+        WeaveLink.configure({
+          openOnClick: false,
+          HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' },
+        }),
+      ],
+      content,
+    });
+  }
+
+  it('업스트림 Link(autolink:true)는 끝 글자 삭제 후 재입력 시 link를 상속한다 — 버그 재현 핀', () => {
+    // 이 테스트가 tiptap 업그레이드 후 깨지면 업스트림이 inclusive를 분리한 것 → WeaveLink 제거 검토 신호
+    editor = makeEditor('<p><a href="https://a.com">one</a></p>'); // 기존 팩토리 = inclusive:true
+    editor.commands.setTextSelection(4);                    // 'one' 끝
+    editor.view.dispatch(editor.state.tr.delete(3, 4));     // 'e' 삭제 → 커서가 링크 오른쪽 경계(3)
+    editor.view.dispatch(editor.state.tr.insertText('X'));  // 재입력
+    expect(editor.getHTML()).toMatch(/onX<\/a>/);           // X가 링크 안으로 상속(잔존 버그)
+  });
+
+  it('WeaveLink: 링크 끝 글자 삭제 후 재입력 시 link mark를 상속하지 않는다', () => {
+    editor = makeWeaveLinkEditor('<p><a href="https://a.com">one</a></p>');
+    editor.commands.setTextSelection(4);
+    editor.view.dispatch(editor.state.tr.delete(3, 4));
+    editor.view.dispatch(editor.state.tr.insertText('X'));
+    const html = editor.getHTML();
+    expect(html).toMatch(/<\/a>X/);                          // X가 링크 밖
+    expect(html).toContain('href="https://a.com"');          // 기존 링크는 유지
+  });
+
+  it('WeaveLink: autolink는 유지된다 (URL 타이핑 + 공백 → 자동 링크)', () => {
+    editor = makeWeaveLinkEditor();
+    editor.view.dispatch(editor.state.tr.insertText('visit example.com '));
+    expect(editor.getHTML()).toMatch(/href="http:\/\/example\.com\/?"/);
+  });
+
+  it('WeaveLink 에디터에서도 applyLinkValue 삽입 직후 연속 입력이 차단된다 (editorLink.js:82와 상보)', () => {
+    editor = makeWeaveLinkEditor();
+    editor.commands.focus();
+    applyLinkValue(editor, 'example.com');
+    editor.view.dispatch(editor.state.tr.insertText('X'));
+    expect(editor.getHTML()).toMatch(/<\/a>X/);
   });
 });
