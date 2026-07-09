@@ -123,6 +123,9 @@
     color: $color-primary;
     white-space: nowrap;
     min-width: 56px;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   &__TaskTitle {
@@ -202,6 +205,9 @@
     color: $color-primary;
     white-space: nowrap;
     min-width: 56px;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   &__TaskTitle {

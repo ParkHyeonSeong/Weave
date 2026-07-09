@@ -12,6 +12,14 @@
     flex: 1;
     overflow: hidden;
     min-height: 0;
+
+    // Admin: 모바일에서 사이드바가 오버레이 드로어가 아니라 상단 스택으로 전환
+    &:has(.AdminSidebar) {
+      @include mobile {
+        flex-direction: column;
+        overflow-y: auto;
+      }
+    }
   }
 
   &__Content {

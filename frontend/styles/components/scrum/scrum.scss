@@ -216,11 +216,18 @@
 // 색/크기/폰트는 <Avatar>가 인라인으로 칠함(user_id 해시). 여기선 레이아웃만.
 .ScrumMembers__Avatar { flex-shrink:0; }
 .ScrumMembers__Info { display:flex; flex-direction:column; gap:1px; flex:1; min-width:0; }
+// flex 컨테이너(__Name)에 직접 ellipsis를 걸면 혼합 자식(텍스트 노드+뱃지)에서 잘림이
+// 불안정 — 말줄임은 안쪽 __NameText가 담당, __Name은 min-width:0으로 수축만 허용.
 .ScrumMembers__Name {
   display:inline-flex; align-items:center; gap:6px;
   font-size:13px; font-weight:600; color:$color-text;
+  min-width:0;
+}
+.ScrumMembers__NameText {
+  min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
 .ScrumMembers__You {
+  flex-shrink:0;
   font-style:normal; font-size:11px; font-weight:600; color:$color-text-tertiary;
   background:$color-surface-hover; border-radius:4px; padding:0 5px;
 }

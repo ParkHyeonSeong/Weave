@@ -1,10 +1,11 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
 import { axios } from '@/library/_axios';
 import { Plus } from 'lucide-react';
 import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import EpicBar from './EpicBar';
 import EpicModal from '@/components/modal/EpicModal';
+import DropdownPortal from '@/components/common/DropdownPortal';
 
 import { formatSprintRange } from '@/library/formatTime';
 
@@ -56,11 +57,34 @@ export default function EpicTimeline({ branchId, onSelectEpic }) {
   const scrollRef = useRef(null);
   const didScroll = useRef(false);
   const resizeRef = useRef(null);
+  const didInitColWidth = useRef(false);
+  const [hoveredSprintId, setHoveredSprintId] = useState(null);
+  const sprintAnchorRef = useRef(null);
+  const sprintTooltipRef = useRef(null);
 
   // DnD 센서: 5px 이동 후 드래그 시작 (클릭과 구분)
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
+
+  // 스크롤포트(가로 스크롤 뷰포트) 폭 기준 자동 이름 컬럼 폭 — 넓은 컨테이너에서 400px 고정폭이
+  // 캘린더 영역을 다 잡아먹지 않도록 40%를 상한(400px)으로 캡. 단, 매우 좁은 컨테이너에서는
+  // MIN_nameColWidth(200px) 바닥이 우선이라 결과 폭이 스크롤포트의 40%를 넘을 수 있다.
+  const computeAutoWidth = useCallback(() => {
+    const scrollportWidth = scrollRef.current?.clientWidth || 0;
+    if (scrollportWidth <= 0) return DEFAULT_nameColWidth;
+    return Math.min(DEFAULT_nameColWidth, Math.max(MIN_nameColWidth, scrollportWidth * 0.4));
+  }, []);
+
+  // 최초로 ScrollWrap이 DOM에 붙는 시점 1회만 자동폭 적용 — 이후 수동 리사이즈는 건드리지 않음.
+  // filteredEpics는 아래에서 useMemo로 선언되므로 여기서 참조할 수 없어 loading/epics.length를 대리
+  // 트리거로 사용: 최초 로드(loading false 전환)뿐 아니라 "에픽 0개 브랜치에서 첫 에픽 생성" 같은
+  // 뒤늦은 마운트도 잡아야 하므로 둘 다 의존성에 둔다.
+  useLayoutEffect(() => {
+    if (didInitColWidth.current || !scrollRef.current) return;
+    didInitColWidth.current = true;
+    setNameColWidth(computeAutoWidth());
+  }, [loading, epics.length, computeAutoWidth]);
 
   // 컬럼 리사이즈 핸들러
   const handleResizeStart = useCallback((e) => {
@@ -79,6 +103,11 @@ export default function EpicTimeline({ branchId, onSelectEpic }) {
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
   }, [nameColWidth]);
+
+  // 더블클릭: 스크롤포트 기준 자동폭으로 리셋
+  const handleResizeReset = useCallback(() => {
+    setNameColWidth(computeAutoWidth());
+  }, [computeAutoWidth]);
 
   useEffect(() => {
     fetchData();
@@ -277,7 +306,12 @@ export default function EpicTimeline({ branchId, onSelectEpic }) {
               {/* 월 헤더 */}
               <div className="EpicTimeline__Header">
                 <div className="EpicTimeline__NameCol" style={{ width: nameColWidth, minWidth: nameColWidth }}>
-                  <div className="EpicTimeline__ResizeHandle" onMouseDown={handleResizeStart} />
+                  <div
+                    className="EpicTimeline__ResizeHandle"
+                    onMouseDown={handleResizeStart}
+                    onDoubleClick={handleResizeReset}
+                    title="더블클릭: 폭 자동 맞춤"
+                  />
                 </div>
                 <div className="EpicTimeline__TimelineCol" style={{ width: timelineWidth }}>
                   {headerLabels.map((m, i) => (
@@ -316,13 +350,20 @@ export default function EpicTimeline({ branchId, onSelectEpic }) {
                             top: s.lane * 24 + 4,
                           }}
                           onClick={() => setSprintPopover(isOpen ? null : s.sprint_id)}
+                          onMouseEnter={(e) => { sprintAnchorRef.current = e.currentTarget; setHoveredSprintId(s.sprint_id); }}
+                          onMouseLeave={() => setHoveredSprintId(null)}
                         >
                           <span className="EpicTimeline__SprintLabelText">{s.sprint_name}</span>
-                          <span className="EpicTimeline__SprintTooltip">
-                            {s.sprint_name}
-                            <br />
-                            {formatSprintRange(s.start_date, s.end_date)}
-                          </span>
+                          {/* __ScrollWrap이 overflow-y:hidden이라 앵커 기준 fixed 포털로 클리핑 회피 (DropdownPortal 재사용) */}
+                          {hoveredSprintId === s.sprint_id && (
+                            <DropdownPortal anchorRef={sprintAnchorRef} open dropdownRef={sprintTooltipRef}>
+                              <div className="EpicTimeline__SprintTooltip">
+                                {s.sprint_name}
+                                <br />
+                                {formatSprintRange(s.start_date, s.end_date)}
+                              </div>
+                            </DropdownPortal>
+                          )}
                           {isOpen && (
                             <div className="EpicTimeline__SprintPopover" ref={popoverRef} onClick={(e) => e.stopPropagation()}>
                               <div className="EpicTimeline__SprintPopoverName">{s.sprint_name}</div>

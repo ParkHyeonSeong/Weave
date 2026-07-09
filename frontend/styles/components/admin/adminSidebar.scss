@@ -5,6 +5,11 @@
   flex-shrink: 0;
   padding: $space-4;
 
+  @include mobile {
+    width: 100%;
+    position: static;
+  }
+
   &__Inner {
     height: 100%;
     background: $color-bg;

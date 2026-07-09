@@ -101,6 +101,9 @@
   &__Confirm {
     font-size: $font-size-xs;
     color: $color-text-tertiary;
+    flex-wrap: wrap;
+    flex-shrink: 1;
+    min-width: 0;
 
     strong { color: $color-text; }
 
@@ -111,6 +114,13 @@
       border-radius: $radius-md;
       font-size: $font-size-xs;
     }
+  }
+
+  &__ConfirmText {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
   }
 
   &__RestoreBtn,

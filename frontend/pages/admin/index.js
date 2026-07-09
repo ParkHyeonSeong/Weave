@@ -197,7 +197,8 @@ export default function AdminPage() {
               <h3 className="Admin__SubsectionTitle">
                 Pending Approval ({pendingUsers.length})
               </h3>
-              <table className="Admin__Table">
+              <div className="Admin__TableWrap">
+                <table className="Admin__Table">
                 <thead>
                   <tr>
                     <th>Name</th>
@@ -236,14 +237,16 @@ export default function AdminPage() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+                </table>
+              </div>
             </div>
           )}
 
           {/* 전체 멤버 섹션 */}
           <div className="Admin__Subsection">
             <h3 className="Admin__SubsectionTitle">All Members ({activeUsers.length})</h3>
-            <table className="Admin__Table">
+            <div className="Admin__TableWrap">
+              <table className="Admin__Table">
               <thead>
                 <tr>
                   <th>Name</th>
@@ -321,7 +324,8 @@ export default function AdminPage() {
                   );
                 })}
               </tbody>
-            </table>
+              </table>
+            </div>
           </div>
         </div>
       </div>

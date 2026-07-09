@@ -96,6 +96,22 @@
     width: 100vw;
   }
 
+  // <1440px: 380px 오버레이가 800px 중앙정렬 본문(CanvasPageView, max-width:800px)과
+  // 겹친다. 본문에 조건부 padding-right를 주려면 CanvasPageView.js가 sidebarOpen을
+  // body class로 노출해야 하는데 현재 미노출(JS 변경 필요) — 반면 AnnotationSidebar는
+  // isOpen일 때만 마운트되므로 이 블록 자체가 항상 "열린" 상태라 오버레이+딤은 SCSS만으로
+  // 가능. JS 무변경으로 최소 변경 원칙에 맞아 이 쪽을 채택(모바일 구간은 이미 100vw라 제외).
+  @media (min-width: $bp-mobile) and (max-width: 1439px) {
+    &::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.32);
+      z-index: -1;
+      pointer-events: none; // 딤은 시각 신호만 — 본문 인터랙션(앵커 클릭·스레드 전환) 통과
+    }
+  }
+
   &__Header {
     display: flex;
     align-items: center;

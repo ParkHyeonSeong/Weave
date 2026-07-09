@@ -241,7 +241,7 @@ export default function ScrumMembersPanel({ boardId, myRole, onChanged, onLeave 
                   <Avatar user={member} size={30} className="ScrumMembers__Avatar" />
                   <div className="ScrumMembers__Info">
                     <span className="ScrumMembers__Name">
-                      {member.username}
+                      <span className="ScrumMembers__NameText">{member.username}</span>
                       {isSelf && <em className="ScrumMembers__You">나</em>}
                     </span>
                     <span className="ScrumMembers__Email">{member.email}</span>

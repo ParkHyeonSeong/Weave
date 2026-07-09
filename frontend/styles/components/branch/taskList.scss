@@ -125,6 +125,14 @@
     font-size: $font-size-sm;
     font-weight: $font-weight-semibold;
     color: $color-text;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    // 0으로 두면 같은 행의 Badge/Date/Count(모두 auto 최소폭=내용폭)가 수축을 거부해
+    // 그 몫까지 Name이 떠안아 폭 0으로 완전히 사라진다(375 실측 확인) — 읽을 수 있는
+    // 바닥을 둬 ellipsis가 최소한 몇 글자는 남기도록 한다.
+    min-width: 44px;
+    flex-shrink: 1;
   }
 
   &__SprintBadge {
@@ -1119,7 +1127,7 @@
     display: flex;
     align-items: center;
     gap: $space-2;
-    min-width: 0;
+    min-width: 96px; // 제목 72px + gap + 아이콘 여유 — 부모가 이 바닥을 보장해야 __Title이 밖으로 튀어나가지 않는다
   }
 
   &__Title {
@@ -1128,7 +1136,7 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    min-width: 72px; // 제목이 0px로 소멸하지 않는 바닥
+    min-width: 0; // 바닥은 부모(TitleWrap)가 담당 — ellipsis가 wrap 안에서 정상 동작
     flex-shrink: 1;
   }
 

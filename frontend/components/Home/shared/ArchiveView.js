@@ -76,7 +76,7 @@ export default function ArchiveView({ title, backHref, fetchItems, onRestore, on
               </div>
               {confirmId === item.id ? (
                 <div className="ArchiveView__Confirm">
-                  <span>되돌릴 수 없음 · <strong>{item.name}</strong> 입력</span>
+                  <span className="ArchiveView__ConfirmText">되돌릴 수 없음 · <strong>{item.name}</strong> 입력</span>
                   <input
                     value={confirmInput}
                     onChange={(e) => setConfirmInput(e.target.value)}

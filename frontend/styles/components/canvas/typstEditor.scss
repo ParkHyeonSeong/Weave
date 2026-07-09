@@ -74,10 +74,15 @@
     display: flex;
     flex: 1;
     min-height: 0;
+
+    @include mobile-tablet {
+      flex-direction: column;
+    }
   }
 
   &__Code {
     flex: 1;
+    min-width: 280px;
     overflow: auto;
     border-right: 1px solid $color-border;
 
@@ -136,6 +141,7 @@
 
   &__Preview {
     flex: 1;
+    min-width: 280px;
     overflow: auto;
     padding: $space-4;
     background: $color-surface;

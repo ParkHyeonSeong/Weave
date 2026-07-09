@@ -1111,6 +1111,23 @@ $track-border-soft: color.adjust($color-border, $lightness: 5%);
   overflow-y: auto;
   position: relative;
 
+  // 모바일: 항상 DOM에 있는 패널(빈 상태 포함)이 flex 폭을 잠식 → fixed 오버레이로 전환.
+  // 빈 상태는 오버레이할 내용이 없어 트리/캔버스를 영구히 가리므로 숨김.
+  @include mobile {
+    &--empty { display: none; }
+
+    &:not(&--empty) {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      width: 100vw;
+      z-index: 300;
+      border-left: none;
+    }
+  }
+
   &--empty {
     align-items: center;
     justify-content: center;
@@ -1301,8 +1318,15 @@ $track-border-soft: color.adjust($color-border, $lightness: 5%);
     line-height: 1.55;
     color: $track-ink;
     margin: 0;
+    overflow-wrap: anywhere;
 
     img { @include rich-content-img; }
+
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow-wrap: break-word;
+    }
   }
 
   &__TrackChips {
@@ -1887,18 +1911,27 @@ $track-border-soft: color.adjust($color-border, $lightness: 5%);
   min-width: 0;
   min-height: 0;
   background: $track-paper;
-  overflow: hidden;
+  // 헤더+행 고정폭 합이 가용폭을 넘으면(분할뷰 등) 클립 대신 헤더/행이 함께
+  // 가로 스크롤되도록 한다 — 세로 스크롤은 하위 __Body가 전담.
+  overflow-x: auto;
+  overflow-y: hidden;
 
+  // grid-template-columns와 동일한 좌→우 순서로 나열(title이 첫 컬럼).
+  $col-title-min: 180px;
   $col-status: 130px;
   $col-prio: 80px;
   $col-assignee: 160px;
   $col-due: 80px;
   $col-narrow: 70px;
+  // 컨테이너가 좁아 각 트랙이 자기 최소폭(minmax 하한)으로 눌리면 Head/Row/Body가
+  // 각자 다른 실제 폭으로 눌릴 수 있어 컬럼 x가 어긋난다 — 최소폭 합계(+좌우 padding
+  // 24px×2) 하나를 셋 다에 동일한 min-width로 못박아 셋의 폭을 항상 통일한다.
+  $tree-min-width: $col-title-min + $col-status + $col-prio + $col-assignee + $col-due + $col-narrow + 48px;
 
   &__Head {
     display: grid;
     grid-template-columns:
-      minmax(0, 1fr)
+      minmax($col-title-min, 1fr)
       $col-status
       $col-prio
       $col-assignee
@@ -1907,6 +1940,7 @@ $track-border-soft: color.adjust($color-border, $lightness: 5%);
     align-items: center;
     padding: 0 24px;
     height: 38px;
+    min-width: $tree-min-width;
     border-bottom: 1px solid $track-border;
     background: color.adjust($track-paper, $lightness: 0.5%);
     position: sticky;
@@ -1927,6 +1961,8 @@ $track-border-soft: color.adjust($color-border, $lightness: 5%);
   &__Body {
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden; // 가로 스크롤은 __Head와 공유하는 상위 .TrackTree 하나가 전담(독립 스크롤 금지)
+    min-width: $tree-min-width; // __Head·__Row와 동일한 고정폭 — 행별 max-content로 벌어지지 않게
     padding-bottom: 60px;
   }
 
@@ -1994,7 +2030,7 @@ $track-border-soft: color.adjust($color-border, $lightness: 5%);
     --branch-color: #9CA3AF;
     display: grid;
     grid-template-columns:
-      minmax(0, 1fr)
+      minmax($col-title-min, 1fr)
       $col-status
       $col-prio
       $col-assignee
@@ -2002,6 +2038,7 @@ $track-border-soft: color.adjust($color-border, $lightness: 5%);
       $col-narrow;
     align-items: center;
     padding: 0 24px;
+    min-width: $tree-min-width; // __Head와 동일 — 자기 제목 길이로 벌어지지 않고 모든 행이 같은 폭
     height: 40px;
     border-bottom: 1px solid $track-border-soft;
     cursor: pointer;
@@ -2175,6 +2212,36 @@ $track-border-soft: color.adjust($color-border, $lightness: 5%);
   &__Empty {
     color: $track-ink-mute;
     font-size: 12px;
+  }
+
+  // 좁은 화면: Due/Links 컬럼을 숨기고 title/status/prio/assignee 4열로 재정의.
+  // 컨테이너 쿼리 대상(panel-host)이 아니라 뷰포트 기준 — 분할뷰(SourcePicker+TrackDetail
+  // 동시 오픈)처럼 뷰포트는 넓어도 실제 트리 컬럼이 좁은 경우는 못 잡는 한계가 있음.
+  @include mobile-tablet {
+    // due/narrow 두 트랙이 빠지므로 바닥폭도 그만큼 줄여 재계산(748px 그대로 두면
+    // 4열만으로 채울 수 있는 폭에서도 불필요하게 가로 스크롤이 걸린다).
+    $tree-min-width-narrow: $col-title-min + $col-status + $col-prio + $col-assignee + 48px;
+
+    &__Head,
+    &__Row {
+      grid-template-columns:
+        minmax($col-title-min, 1fr)
+        $col-status
+        $col-prio
+        $col-assignee;
+      min-width: $tree-min-width-narrow;
+    }
+
+    &__Body {
+      min-width: $tree-min-width-narrow;
+    }
+
+    &__HeadCell:nth-child(5),
+    &__HeadCell:last-child,
+    &__Cell:nth-child(5),
+    &__Cell:last-child {
+      display: none;
+    }
   }
 }
 

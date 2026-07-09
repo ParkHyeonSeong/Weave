@@ -47,7 +47,7 @@ export default function RecentItems() {
 
   if (loading) {
     return (
-      <div className="Widget">
+      <div className="Widget RecentItems">
         <div className="Widget__Header">
           <Clock size={16} />
           <span className="Widget__Title">Recent Items</span>
@@ -60,7 +60,7 @@ export default function RecentItems() {
   }
 
   return (
-    <div className="Widget">
+    <div className="Widget RecentItems">
       <div className="Widget__Header">
         <Clock size={16} />
         <span className="Widget__Title">Recent Items</span>

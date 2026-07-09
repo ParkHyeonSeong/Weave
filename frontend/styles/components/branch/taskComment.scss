@@ -172,7 +172,12 @@
 
     p { margin: 0; }
     p + p { margin-top: 4px; }
-    pre { margin: 6px 0; }
+    pre {
+      margin: 6px 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow-wrap: break-word;
+    }
     code { font-size: $font-size-xs; }
     img { @include rich-content-img; }
 

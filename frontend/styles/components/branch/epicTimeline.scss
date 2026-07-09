@@ -231,11 +231,6 @@
       border-color: $color-primary;
     }
 
-    &:hover > .EpicTimeline__SprintTooltip {
-      opacity: 1;
-      visibility: visible;
-    }
-
     &--active {
       background: rgba(#2563EB, 0.1);
       border-color: rgba(#2563EB, 0.3);
@@ -265,11 +260,9 @@
     text-overflow: ellipsis;
   }
 
+  // DropdownPortal이 fixed 좌표를 인라인 스타일로 부여 — 여기선 시각 스타일만.
+  // __ScrollWrap이 overflow-y:hidden이라 예전 position:absolute 방식은 위로 클리핑됐음.
   &__SprintTooltip {
-    position: absolute;
-    bottom: calc(100% + 6px);
-    left: 50%;
-    transform: translateX(-50%);
     background: $color-text;
     color: $color-text-inverse;
     font-size: 11px;
@@ -277,11 +270,7 @@
     padding: 4px 8px;
     border-radius: $radius-sm;
     white-space: nowrap;
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity $transition-fast;
     pointer-events: none;
-    z-index: 10;
   }
 
   &__SprintPopover {
