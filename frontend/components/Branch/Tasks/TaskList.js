@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { axios } from '@/library/_axios';
 import { Plus } from 'lucide-react';
 import {
@@ -1049,7 +1050,8 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
         confirmLabel="Delete"
         variant="danger"
       />
-      {taskMenu.parentPicker && (
+      {taskMenu.parentPicker && createPortal(
+        // containment(panel-host) 밖으로 탈출: fixed 백드롭이 .BranchDetail에 갇히지 않도록 body에 포탈
         <div className="ParentPickerPopup__Backdrop" onMouseDown={taskMenu.closeParentPicker}>
           <ParentPickerPopup
             branchId={branchId}
@@ -1057,7 +1059,8 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
             onPick={taskMenu.handlePickParent}
             onClose={taskMenu.closeParentPicker}
           />
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

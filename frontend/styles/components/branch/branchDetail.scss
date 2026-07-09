@@ -102,8 +102,10 @@
       top: 0;
       right: 0;
       bottom: 0;
-      // 필수: <820px에선 내부 패널도 absolute라 shrink-wrap하면 폭 0으로 소멸
-      width: min(420px, 100%);
+      // 내부 TaskDetailPanel/RefPreviewPanel의 폭 규칙(820~1099: clamp 비례축소,
+      // <820: min(420,100%))과 반드시 일치시켜야 함 — 안 그러면 래퍼(우측 고정+그림자)가
+      // 내부보다 넓어져 오른쪽에 투명한 틈+떠있는 그림자가 생김
+      width: clamp(340px, 40cqw, 420px);
       z-index: 130;             // task 패널 컨테이너 오버레이(z 120)보다 위
       box-shadow: $shadow-lg;
     }
