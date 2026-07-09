@@ -220,6 +220,16 @@
     ]
   },
   {
+    "name": "breaks-bare-newline",
+    "markdown": "첫 줄\n둘째 줄",
+    "html_tiptap": "<p>첫 줄<br>둘째 줄</p>",
+    "html_ingress": null,
+    "directions": [
+      "md->html"
+    ],
+    "note": "breaks:true 보호 전용 — 맨 \\n이 <br>가 되는지. roundtrip 불가(직렬화는 canonical hard-break로 정규화)"
+  },
+  {
     "name": "mention-degrade",
     "regen": false,
     "markdown": "안녕 @alice",
