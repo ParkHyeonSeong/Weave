@@ -3,6 +3,7 @@ import { PluginKey } from '@tiptap/pm/state';
 import IssueRefPopup from './IssueRefPopup';
 import { createRefSuggestionPlugin } from './refSuggestion';
 import { numAttr, strAttr } from './refAttr';
+import { internalOrigin, escapeLinkText, matchInternalLink, splitRefLinkText, ISSUE_PATH } from './refMarkdown';
 
 export const issueRefPluginKey = new PluginKey('issueRefSuggestion');
 
@@ -26,6 +27,31 @@ const IssueRefNode = Node.create({
 
   parseHTML() {
     return [{ tag: 'span[data-issue-ref]' }];
+  },
+
+  // === raw markdown 코덱 (스펙 §3.2) ===
+  renderMarkdown(node) {
+    const { branchId, taskId, issueId, displayId, title } = node.attrs || {};
+    const label = escapeLinkText([displayId, title].filter(Boolean).join(' '));
+    return `[${label}](${internalOrigin()}/branch/${branchId}/task/${taskId}/issue/${issueId})`;
+  },
+  markdownTokenizer: {
+    name: 'issueRef',
+    level: 'inline',
+    start: (src) => src.indexOf('['),
+    tokenize(src) {
+      const link = matchInternalLink(src);
+      if (!link) return undefined;
+      const m = link.pathname.match(ISSUE_PATH);
+      if (!m) return undefined;
+      const { displayId, title } = splitRefLinkText(link.text);
+      return { type: 'issueRef', raw: link.raw, branchId: Number(m[1]), taskId: Number(m[2]), issueId: Number(m[3]), displayId, title };
+    },
+  },
+  parseMarkdown(token, h) {
+    return h.createNode('issueRef', {
+      issueId: token.issueId, taskId: token.taskId, branchId: token.branchId, displayId: token.displayId, title: token.title,
+    });
   },
 
   renderHTML({ node, HTMLAttributes }) {

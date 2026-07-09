@@ -44,6 +44,11 @@ const MentionNode = Node.create({
     return [{ tag: 'span[data-mention]' }];
   },
 
+  // md 직렬화: @username 평문 강등 — 복원 없음, 재멘션은 @ 재입력 (스펙 §3.2)
+  renderMarkdown(node) {
+    return `@${node.attrs?.username || ''}`;
+  },
+
   renderHTML({ node, HTMLAttributes }) {
     return [
       'span',

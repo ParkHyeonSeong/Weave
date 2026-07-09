@@ -4,10 +4,10 @@ import { axios } from '@/library/_axios';
 
 const URL_PATTERN = /^https?:\/\/[^\s]+$/;
 
-// 내부 URL 경로 패턴
-const ISSUE_PATH = /^\/branch\/(\d+)\/task\/(\d+)\/issue\/(\d+)/;
-const TASK_PATH = /^\/branch\/(\d+)\/task\/(\d+)/;
-const DOC_PATH = /^\/canvas\/(\d+)\/(\d+)/;
+// 내부 URL 경로 패턴 — 붙여넣기 판별과 md 코덱(refMarkdown)이 공유하는 단일 정의
+export const ISSUE_PATH = /^\/branch\/(\d+)\/task\/(\d+)\/issue\/(\d+)/;
+export const TASK_PATH = /^\/branch\/(\d+)\/task\/(\d+)/;
+export const DOC_PATH = /^\/canvas\/(\d+)\/(\d+)/;
 
 export function createBookmarkPastePlugin() {
   return new Plugin({

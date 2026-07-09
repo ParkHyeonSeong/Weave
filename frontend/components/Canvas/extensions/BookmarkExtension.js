@@ -1,4 +1,5 @@
 import { Node, mergeAttributes } from '@tiptap/core';
+import { escapeLinkText } from './refMarkdown';
 
 // URL Bookmark 블록 노드 (Notion 스타일 bookmark 카드)
 const BookmarkNode = Node.create({
@@ -30,6 +31,12 @@ const BookmarkNode = Node.create({
         domain: el.getAttribute('data-domain') || '',
       }),
     }];
+  },
+
+  // md 직렬화: URL 링크 한 줄 강등 — 복원 없음, 붙여넣기 시 BookmarkPaste가 카드화 (스펙 §3.2)
+  renderMarkdown(node) {
+    const url = node.attrs?.url || '';
+    return `[${escapeLinkText(node.attrs?.title || url)}](${url})`;
   },
 
   renderHTML({ node, HTMLAttributes }) {

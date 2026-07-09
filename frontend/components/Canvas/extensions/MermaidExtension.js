@@ -193,6 +193,24 @@ const MermaidExtension = Node.create({
     ];
   },
 
+  // === raw markdown 코덱 (스펙 §3.2): data-source 원문 ↔ ```mermaid 펜스 ===
+  renderMarkdown(node) {
+    return '```mermaid\n' + (node.attrs?.source || '') + '\n```';
+  },
+  markdownTokenizer: {
+    name: 'mermaid',
+    level: 'block',
+    start: (src) => src.indexOf('```mermaid'),
+    tokenize(src) {
+      const m = /^```mermaid[ \t]*\n([\s\S]*?)\n```[ \t]*(?:\n+|$)/.exec(src);
+      if (!m) return undefined;
+      return { type: 'mermaid', raw: m[0], source: m[1] };
+    },
+  },
+  parseMarkdown(token, h) {
+    return h.createNode('mermaid', { source: token.source });
+  },
+
   renderHTML({ HTMLAttributes }) {
     return [
       'div',

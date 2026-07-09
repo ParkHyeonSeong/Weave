@@ -3,6 +3,7 @@ import { PluginKey } from '@tiptap/pm/state';
 import TaskRefPopup from './TaskRefPopup';
 import { createRefSuggestionPlugin } from './refSuggestion';
 import { numAttr, strAttr } from './refAttr';
+import { internalOrigin, escapeLinkText, matchInternalLink, splitRefLinkText, ISSUE_PATH, TASK_PATH } from './refMarkdown';
 
 export const taskRefPluginKey = new PluginKey('taskRefSuggestion');
 
@@ -33,6 +34,33 @@ const TaskRefNode = Node.create({
 
   parseHTML() {
     return [{ tag: 'span[data-task-ref]' }];
+  },
+
+  // === raw markdown 코덱 (스펙 §3.2): 칩 ↔ 내부 URL 링크 ===
+  renderMarkdown(node) {
+    const { branchId, taskId, displayId, title } = node.attrs || {};
+    const label = escapeLinkText([displayId, title].filter(Boolean).join(' '));
+    return `[${label}](${internalOrigin()}/branch/${branchId}/task/${taskId})`;
+  },
+  markdownTokenizer: {
+    name: 'taskRef',
+    level: 'inline',
+    start: (src) => src.indexOf('['),
+    tokenize(src) {
+      const link = matchInternalLink(src);
+      if (!link) return undefined;
+      // issue 경로가 더 구체적 — issueRef 토크나이저 몫 (스키마에 없으면 일반 링크로 강등)
+      if (ISSUE_PATH.test(link.pathname)) return undefined;
+      const m = link.pathname.match(TASK_PATH);
+      if (!m) return undefined;
+      const { displayId, title } = splitRefLinkText(link.text);
+      return { type: 'taskRef', raw: link.raw, branchId: Number(m[1]), taskId: Number(m[2]), displayId, title };
+    },
+  },
+  parseMarkdown(token, h) {
+    return h.createNode('taskRef', {
+      taskId: token.taskId, branchId: token.branchId, displayId: token.displayId, title: token.title,
+    });
   },
 
   renderHTML({ node, HTMLAttributes }) {
