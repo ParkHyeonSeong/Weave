@@ -14,6 +14,7 @@ import { BookmarkPasteExtension } from '@/components/Canvas/extensions/BookmarkP
 import { mathExtensions } from '@/components/Canvas/extensions/mathExtensions';
 import { createMarkdownPastePlugin } from '@/components/Canvas/extensions/MarkdownPastePlugin';
 import { useEditorRefHydration } from '@/library/refHydration';
+import WeaveLink from '@/components/Canvas/extensions/WeaveLink';
 
 const lowlight = createLowlight(common);
 
@@ -50,8 +51,9 @@ export default function CommentEditor({
     const ext = [
       StarterKit.configure({
         codeBlock: false,
-        link: { openOnClick: false, HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' } },
+        link: false, // WeaveLink로 별도 등록(WEAVE-37 inclusive 분리) — StarterKit 번들 Link와 중복 방지
       }),
+      WeaveLink.configure({ openOnClick: false, HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' } }),
       Placeholder.configure({ placeholder }),
       CodeBlockLowlight.configure({ lowlight }),
       MentionNode.configure({ branchId }),

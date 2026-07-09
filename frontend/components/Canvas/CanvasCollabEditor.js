@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import { Extension } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
-import Link from '@tiptap/extension-link';
+import WeaveLink from './extensions/WeaveLink';
 import { ResizableImage } from './extensions/ResizableImageExtension';
 import Placeholder from '@tiptap/extension-placeholder';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
@@ -106,7 +106,7 @@ function CollabEditorInner({
         history: false,
         link: false, // 별도 Link.configure로 등록 → StarterKit 번들 Link와 중복 방지
       }),
-      Link.configure({
+      WeaveLink.configure({
         openOnClick: false,
         HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' },
       }),
