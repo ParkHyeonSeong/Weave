@@ -3,7 +3,11 @@
 egress(html_to_markdown): markdownify 기반 + Weave 커스텀 노드 규칙 —
   ref 칩→내부 URL 링크, mention→@username 평문, data-latex→$..$/$$..$$,
   mermaid data-source→펜스, callout→`:::callout {type=".."}` 디렉티브(공백·따옴표 포함 — JS 실측 기준),
-  bookmark→[title](url) 한 줄, 미커버 태그→텍스트 강등.
+  bookmark→[title||url](url) 한 줄(제목 공백 시 url 폴백 — JS와 동일), 미커버 태그→텍스트 강등.
+  이 외 markdownify 기본값과 JS(golden fixture) 사이 실측 드리프트를 메운 규칙
+  (전부 test_markdown_codec_parity.py로 강제): li 내부 문단은 tight list로 좁힘,
+  taskItem li→`- [ ]`/`- [x]`, GFM 테이블 컬럼 패딩, `<u>`→`++..++`, `<mark>`→`==..==`,
+  `<pre><code class="language-x">`→펜스 info string.
 ingress(markdown_to_html): markdown-it-py(commonmark)+GFM(table/strikethrough/
   tasklists). breaks=True 필수 — frontend `new Marked({breaks:true})`
   (markdownMath.js:64)와 dialect 일치. 수식은 dollarmath로 frontend와 동일한
@@ -25,7 +29,7 @@ mdit-py-plugins 0.6.1) — 상세는 .superpowers/sdd/task-S2.1-report.md:
 import re
 
 from markdown_it import MarkdownIt
-from markdownify import MarkdownConverter
+from markdownify import MarkdownConverter, abstract_inline_conversion
 from mdit_py_plugins.dollarmath import dollarmath_plugin
 from mdit_py_plugins.tasklists import tasklists_plugin
 
@@ -89,19 +93,96 @@ class _WeaveConverter(MarkdownConverter):
             # canonical = JS createBlockMarkdownSpec 실측 출력(공백·따옴표·빈 줄 — S0.3에서 확정)
             return f'\n:::callout {{type="{el.get("data-callout")}"}}\n\n{text.strip()}\n\n:::\n\n'
         if el.get('data-bookmark') is not None:
-            return f"\n[{_esc_link_text(el.get('data-title', ''))}]({el.get('data-url', '')})\n\n"
+            # JS 폴백(BookmarkExtension.js:39)과 동일 — title 공백 시 url을 라벨로.
+            label = el.get('data-title') or el.get('data-url', '')
+            return f"\n[{_esc_link_text(label)}]({el.get('data-url', '')})\n\n"
         return text  # 미커버 div — 텍스트 강등
+
+    # Tiptap 리스트 아이템은 항상 자식을 <p>로 감싼다. markdownify 기본값은
+    # p를 앞뒤 빈 줄(\n\n)로 감싸 li 안에 중첩 리스트가 있으면 그 사이에
+    # 빈 줄이 끼어든다 — JS(@tiptap/markdown, tight list)는 빈 줄 없이
+    # 붙여 렌더링(golden fixture 실측: bullet-list-nested). li 내부의
+    # p만 단일 개행으로 좁힌다.
+    def convert_p(self, el, text, *args, **kwargs):
+        parent_tags = kwargs.get('parent_tags') or (args[0] if args else set())
+        if '_inline' in parent_tags:
+            return ' ' + text.strip(' \t\r\n') + ' '
+        text = text.strip(' \t\r\n')
+        if not text:
+            return ''
+        if 'li' in parent_tags:
+            return text + '\n'
+        return '\n\n%s\n\n' % text
+
+    # taskList 노드(data-type="taskItem" + data-checked) → GFM `- [ ]`/`- [x]`.
+    # markdownify는 checkbox 마크업을 모르므로 기본 bullet 뒤에 박스를 꽂아준다.
+    def convert_li(self, el, text, *args, **kwargs):
+        result = super().convert_li(el, text, *args, **kwargs)
+        if el.get('data-type') == 'taskItem':
+            box = '[x] ' if el.get('data-checked') == 'true' else '[ ] '
+            m = re.match(r'^(\s*(?:[-*+]|\d+\.)\s)', result)
+            if m:
+                result = result[:m.end()] + box + result[m.end():]
+        return result
+
+    # GFM 테이블 컬럼 정렬 — markdownify 기본은 셀 폭을 패딩하지 않지만
+    # JS(markdown-table 계열) 산출물은 컬럼별 최대 폭(문자수 기준, 구분선
+    # 최소 3)으로 좌측정렬 패딩한다(golden fixture 실측: table-gfm).
+    # 또한 JS 산출물은 테이블 단독 콘텐츠일 때도 앞뒤 개행 1개씩을 남긴다
+    # (다른 블록의 이중개행과 달리 전역 strip 대상이 아님) — NUL 보초로
+    # 감싸 html_to_markdown()의 strip()을 통과시킨 뒤 최종 제거한다.
+    def convert_table(self, el, text, *args, **kwargs):
+        lines = [ln for ln in text.strip('\n').split('\n') if ln.strip()]
+        if len(lines) < 2:
+            return text
+        grid = [[cell.strip() for cell in ln.strip().strip('|').split('|')] for ln in lines]
+        ncols = max(len(row) for row in grid)
+        widths = [3] * ncols
+        for idx, row in enumerate(grid):
+            if idx == 1:  # 구분선(---) 행은 폭 계산에서 제외
+                continue
+            for c, cell in enumerate(row):
+                widths[c] = max(widths[c], len(cell))
+        out_lines = []
+        for idx, row in enumerate(grid):
+            if idx == 1:
+                out_lines.append('|' + '|'.join(' ' + '-' * widths[c] + ' ' for c in range(ncols)) + '|')
+            else:
+                cells = row + [''] * (ncols - len(row))
+                out_lines.append('|' + '|'.join(' ' + cells[c].ljust(widths[c]) + ' ' for c in range(ncols)) + '|')
+        return _TABLE_GUARD + '\n' + '\n'.join(out_lines) + '\n' + _TABLE_GUARD
+
+    # 비표준 마크(에디터 커스텀 확장) — JS 직렬화 문법과 동일(golden fixture 실측).
+    convert_u = abstract_inline_conversion(lambda self: '++')
+    convert_mark = abstract_inline_conversion(lambda self: '==')
+
+
+_TABLE_GUARD = '\x00'
+
+
+def _code_language(el):
+    # <pre><code class="language-js"> → 펜스 info string "js" (Prism/highlight.js 관례).
+    code_el = el.find('code')
+    if not code_el:
+        return ''
+    for cls in code_el.get('class') or []:
+        if cls.startswith('language-'):
+            return cls[len('language-'):]
+    return ''
 
 
 # bullets/heading 스타일은 golden fixture(S0의 JS 코덱 출력)가 최종 심판 —
 # fixture 불일치 시 여기 옵션을 fixture에 맞춰 조정한다 (코드가 아니라 옵션으로).
-_CONVERTER_OPTIONS = dict(heading_style='atx', bullets='-', strong_em_symbol='*')
+_CONVERTER_OPTIONS = dict(
+    heading_style='atx', bullets='-', strong_em_symbol='*',
+    code_language_callback=_code_language,
+)
 
 
 def html_to_markdown(html: str) -> str:
     if not html:
         return ''
-    return _WeaveConverter(**_CONVERTER_OPTIONS).convert(html).strip()
+    return _WeaveConverter(**_CONVERTER_OPTIONS).convert(html).strip().replace(_TABLE_GUARD, '')
 
 
 # ---------------------------------------------------------------------------
