@@ -51,6 +51,9 @@ function normalizeItem(raw) {
     })),
     description: raw.description || '',
     other_tracks: raw.other_tracks || [],
+    parent: raw.parent || null,
+    subtask_total: raw.subtask_total || 0,
+    subtask_done: raw.subtask_done || 0,
   };
 }
 

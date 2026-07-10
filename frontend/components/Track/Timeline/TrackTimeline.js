@@ -258,6 +258,11 @@ export default function TrackTimeline({
                     >
                       <span className="TrackTimeline__LaneTaskId">{it.display_id}</span>
                       <span className="TrackTimeline__LaneTaskTitle">{it.title}</span>
+                      {it.parent && (
+                        <span className="TrackTimeline__LaneParentChip" title={it.parent.title}>
+                          └ {it.parent.display_id}
+                        </span>
+                      )}
                     </div>
                   );
                   y += LANE_HEIGHT;

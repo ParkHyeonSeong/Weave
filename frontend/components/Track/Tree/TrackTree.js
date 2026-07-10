@@ -135,6 +135,11 @@ export default function TrackTree({
                       <span className="TrackTree__BranchBar" />
                       <span className="TrackTree__TaskId">{it.display_id}</span>
                       <span className="TrackTree__TaskTitle">{it.title}</span>
+                      {it.parent && (
+                        <span className="TrackTree__ParentChip" title={it.parent.title}>
+                          └ {it.parent.display_id}
+                        </span>
+                      )}
                       {it.priority === 'urgent' && (
                         <span className="TrackTree__UrgentFlag" title="Urgent">
                           <AlertCircle size={11} />

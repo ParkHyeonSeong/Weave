@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
-import { CalendarDays, Layers, X } from 'lucide-react';
+import { CalendarDays, Layers, X, ListTree } from 'lucide-react';
 import EntityIcon from '@/components/common/EntityIcon';
 import Avatar from '@/components/common/Avatar';
 
@@ -17,6 +17,7 @@ const CrossBranchTaskNode = memo(function CrossBranchTaskNode({ data, selected }
     displayId, title, status, statusLabel, statusColor,
     priority, branchKey, branchName, branchColor, branchIcon,
     assignees, dueDate, otherTracksCount,
+    parent, subtaskTotal, subtaskDone,
     itemId, onDelete,
   } = data;
 
@@ -60,11 +61,23 @@ const CrossBranchTaskNode = memo(function CrossBranchTaskNode({ data, selected }
 
       <div className="TrackNode__Title">{title}</div>
 
+      {parent && (
+        <div className="TrackNode__ParentChip" title={parent.title}>
+          └ {parent.display_id}
+        </div>
+      )}
+
       <div className="TrackNode__Footer">
         <span className="TrackNode__Status">
           <span className="TrackNode__StatusDot" style={{ background: statusColor }} />
           <span className="TrackNode__StatusLabel">{statusLabel}</span>
         </span>
+        {subtaskTotal > 0 && (
+          <span className="TrackNode__SubProgress" title={`하위 ${subtaskDone}/${subtaskTotal} 완료`}>
+            <ListTree size={10} />
+            {subtaskDone}/{subtaskTotal}
+          </span>
+        )}
         <span className="TrackNode__Spacer" />
         {dueDate && (
           <span className="TrackNode__Due">

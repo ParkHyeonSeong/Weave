@@ -72,6 +72,23 @@ export default function TrackItemDetail({ item, branch, workflowStatuses, onClos
             {branch.name}
           </span>
           <span className="TrackDetail__BcSep">/</span>
+          {item.parent && (
+            <>
+              <span
+                className="TrackDetail__ParentCrumb"
+                role="link"
+                tabIndex={0}
+                title={item.parent.title}
+                onClick={() => router.push(`/branch/${item.branch_id}?task=${item.parent.task_id}`)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') router.push(`/branch/${item.branch_id}?task=${item.parent.task_id}`);
+                }}
+              >
+                {item.parent.display_id}
+              </span>
+              <span className="TrackDetail__BcSep">/</span>
+            </>
+          )}
           <span className="TrackDetail__DisplayId">{item.display_id}</span>
         </div>
         <button className="TrackDetail__Close" onClick={onClose} aria-label="Close"><X size={14} /></button>

@@ -51,6 +51,9 @@ function buildNodes(items, branchById, workflowStatuses, onItemDelete) {
         assignees: it.assignees || [],
         dueDate: it.due_date,
         otherTracksCount: (it.other_tracks || []).length,
+        parent: it.parent || null,
+        subtaskTotal: it.subtask_total || 0,
+        subtaskDone: it.subtask_done || 0,
         onDelete: onItemDelete,
       },
     };
