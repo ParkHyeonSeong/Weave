@@ -258,7 +258,7 @@ async function hydrateDom(root) {
 }
 
 // 에디터 표면용: NodeView DOM을 같은 패처로 패치
-async function hydrateEditor(editor) {
+export async function hydrateEditor(editor) {
   if (!editor || editor.isDestroyed) return;
   return hydrateDom(editor.view.dom);
 }
