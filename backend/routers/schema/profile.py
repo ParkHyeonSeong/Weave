@@ -65,6 +65,7 @@ class UpdateUiPrefs(BaseModel):
     home_controls: Optional[dict] = None
     saved_view_pins: Optional[dict] = None  # { "<branchId>|global": [view_id, ...] } per-user 핀 순서
     comment_sort: Optional[str] = None  # 'newest' | 'oldest' — 태스크 댓글 정렬 선호
+    editor_raw_mode: Optional[bool] = None  # 비협업 에디터 raw markdown 토글 선호 — 전 표면 공통 1개
 
     @field_validator('comment_sort')
     @classmethod

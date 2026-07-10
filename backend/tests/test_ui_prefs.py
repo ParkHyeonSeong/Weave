@@ -63,3 +63,18 @@ def test_update_ui_prefs_schema_rejects_invalid_comment_sort():
     from routers.schema.profile import UpdateUiPrefs
     with pytest.raises(ValidationError):
         UpdateUiPrefs(comment_sort="popular")
+
+
+def test_update_ui_prefs_schema_allows_editor_raw_mode():
+    from routers.schema.profile import UpdateUiPrefs
+    body = UpdateUiPrefs(editor_raw_mode=True)
+    assert body.model_dump(exclude_none=True) == {"editor_raw_mode": True}
+    # False도 exclude_none에 남아야 한다 (off 저장 가능)
+    body_off = UpdateUiPrefs(editor_raw_mode=False)
+    assert body_off.model_dump(exclude_none=True) == {"editor_raw_mode": False}
+
+
+def test_update_ui_prefs_schema_rejects_non_bool_editor_raw_mode():
+    from routers.schema.profile import UpdateUiPrefs
+    with pytest.raises(ValidationError):
+        UpdateUiPrefs(editor_raw_mode="always")
