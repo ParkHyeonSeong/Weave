@@ -170,3 +170,126 @@ async def test_tree_subtask_done_rule_follows_parent_sprint(db_session):
     tree = await track_scope_model.find_tree(track, user, db_session)
     subs = tree[0]["sprints"][0]["tasks"][0]["subtasks"]
     assert [s["task_id"] for s in subs] == [sub_todo]
+
+
+# ---------------------------------------------------------------------------
+# Task 2: search_sources subtask support
+# ---------------------------------------------------------------------------
+
+async def test_search_sources_sprint_mode_attaches_subtasks(db_session):
+    """sprint_id 지정 검색: 상위에 subtasks 동봉. parent_only=True면 부착 생략."""
+    user, branch, track = await _seed_base(db_session)
+    sprint = await _make_sprint(db_session, branch, user, status="active")
+    parent = await _make_task(db_session, branch, user, sprint_id=sprint, title="Parent")
+    sub = await _make_task(db_session, branch, user, parent_task_id=parent, title="Sub")
+
+    rows = await track_item_model.search_sources(
+        track, user, '', None, 50, db_session, sprint_id=sprint)
+    assert [r["task_id"] for r in rows] == [parent]
+    assert [s["task_id"] for s in rows[0]["subtasks"]] == [sub]
+    assert rows[0]["subtasks"][0]["in_track"] is False
+
+    rows_po = await track_item_model.search_sources(
+        track, user, '', None, 50, db_session, sprint_id=sprint, parent_only=True)
+    assert "subtasks" not in rows_po[0]
+
+
+async def test_search_sources_filter_mode_includes_subtasks_flat(db_session):
+    """필터/키워드 모드: 하위가 독립 매칭 + 부모 컨텍스트 필드. parent_only는 제외."""
+    user, branch, track = await _seed_base(db_session)
+    parent = await _make_task(db_session, branch, user, title="Parent task")
+    sub = await _make_task(db_session, branch, user, parent_task_id=parent,
+                           title="OAuth sub work")
+
+    rows = await track_item_model.search_sources(
+        track, user, 'OAuth', None, 50, db_session)
+    assert [r["task_id"] for r in rows] == [sub]
+    assert rows[0]["parent_task_id"] == parent
+    assert rows[0]["parent_title"] == "Parent task"
+    assert rows[0]["parent_display_id"].startswith("KEY-")
+
+    rows_po = await track_item_model.search_sources(
+        track, user, 'OAuth', None, 50, db_session, parent_only=True)
+    assert rows_po == []
+
+
+async def test_search_sources_subtask_exclude_done_applies(db_session):
+    """sprint 모드 동봉 하위에도 exclude_done 파라미터가 적용된다."""
+    user, branch, track = await _seed_base(db_session)
+    sprint = await _make_sprint(db_session, branch, user, status="planned")
+    parent = await _make_task(db_session, branch, user, sprint_id=sprint, title="Parent")
+    sub_todo = await _make_task(db_session, branch, user, parent_task_id=parent)
+    await _make_task(db_session, branch, user, parent_task_id=parent, status="done")
+
+    rows = await track_item_model.search_sources(
+        track, user, '', None, 50, db_session, sprint_id=sprint, exclude_done=True)
+    assert [s["task_id"] for s in rows[0]["subtasks"]] == [sub_todo]
+
+
+async def test_search_sources_sprint_child_only_match_stays_flat(db_session):
+    """sprint 모드에서 q가 하위만 매칭하면(부모 미매칭) 하위가 부모 컨텍스트를 단
+    플랫 row로 나온다 — 부모 우선(CASE WHEN) 매칭 계약 (스펙 §2)."""
+    user, branch, track = await _seed_base(db_session)
+    sprint = await _make_sprint(db_session, branch, user, status="active")
+    parent = await _make_task(db_session, branch, user, sprint_id=sprint, title="Parent")
+    sub = await _make_task(db_session, branch, user, parent_task_id=parent,
+                           title="OAuth sub")
+
+    rows = await track_item_model.search_sources(
+        track, user, 'OAuth', None, 50, db_session, sprint_id=sprint)
+    assert [r["task_id"] for r in rows] == [sub]
+    assert rows[0]["parent_task_id"] == parent
+    assert rows[0]["parent_display_id"].startswith("KEY-")
+
+
+async def test_search_sources_epic_mode_nests_without_duplicates(db_session):
+    """epic 모드: 부모 우선 epic 매칭 + 부모+하위 동시 매칭 시 하위는 중첩으로만
+    나오고 플랫 row로 중복되지 않는다 (dedup 고정)."""
+    user, branch, track = await _seed_base(db_session)
+    epic = await _make_epic(db_session, branch, user)
+    parent = await _make_task(db_session, branch, user, epic_id=epic, title="Parent")
+    sub = await _make_task(db_session, branch, user, parent_task_id=parent, title="Sub")
+
+    rows = await track_item_model.search_sources(
+        track, user, '', None, 50, db_session, epic_id=epic)
+    # 플랫 레벨엔 부모 한 건만 — 하위가 flat+nested로 이중 등장하지 않는다.
+    assert [r["task_id"] for r in rows] == [parent]
+    assert [s["task_id"] for s in rows[0]["subtasks"]] == [sub]
+
+
+async def test_search_sources_limit_cut_parent_child_stays_flat(db_session):
+    """부모가 limit에 잘려 결과에 없으면 하위는 부모 컨텍스트를 단 플랫 row로
+    유지된다. 같은 트랜잭션 시딩은 created_at이 동일해 정렬이 비결정적이므로
+    하위의 updated_at을 명시해 정렬(updated_at DESC NULLS LAST) 1순위로 고정."""
+    user, branch, track = await _seed_base(db_session)
+    sprint = await _make_sprint(db_session, branch, user, status="active")
+    parent = await _make_task(db_session, branch, user, sprint_id=sprint, title="Parent")
+    sub = await _make_task(db_session, branch, user, parent_task_id=parent, title="Sub")
+    await db_session.execute(text(
+        "UPDATE task SET updated_at = NOW() WHERE task_id = :t"), {"t": sub})
+
+    rows = await track_item_model.search_sources(
+        track, user, '', None, 1, db_session, sprint_id=sprint)
+    assert [r["task_id"] for r in rows] == [sub]
+    assert rows[0]["parent_task_id"] == parent
+    assert "subtasks" not in rows[0]
+
+
+async def test_search_sources_child_stale_sprint_ignored(db_session):
+    """레거시 stale 데이터: 하위가 자기 sprint_id를 갖고 있어도(과거 전환이 NULL을
+    강제하지 않던 잔재) 부모의 sprint로만 매칭된다 — 부모 우선(CASE WHEN) 읽기 계약."""
+    user, branch, track = await _seed_base(db_session)
+    stale_sprint = await _make_sprint(db_session, branch, user, name="Stale", status="active")
+    real_sprint = await _make_sprint(db_session, branch, user, name="Real", status="active")
+    parent = await _make_task(db_session, branch, user, sprint_id=real_sprint, title="Parent")
+    sub = await _make_task(db_session, branch, user, parent_task_id=parent, title="Sub")
+    await db_session.execute(text(
+        "UPDATE task SET sprint_id = :s WHERE task_id = :t"),
+        {"s": stale_sprint, "t": sub})
+
+    stale_rows = await track_item_model.search_sources(
+        track, user, '', None, 50, db_session, sprint_id=stale_sprint)
+    assert stale_rows == []
+    real_rows = await track_item_model.search_sources(
+        track, user, '', None, 50, db_session, sprint_id=real_sprint)
+    assert [s["task_id"] for s in real_rows[0]["subtasks"]] == [sub]

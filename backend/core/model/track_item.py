@@ -275,6 +275,9 @@ async def search_sources(track_id: int, user_id: int, q: str, branch_id,
         SELECT
             t.task_id, t.title, t.display_number,
             t.status, t.priority,
+            t.parent_task_id,
+            pt.display_number AS parent_display_number,
+            pt.title AS parent_title,
             b.branch_id, b.branch_name, b.key AS branch_key, b.color AS branch_color,
             ws.label AS status_label, ws.color AS status_color, ws.category AS status_category,
             EXISTS (
@@ -285,6 +288,7 @@ async def search_sources(track_id: int, user_id: int, q: str, branch_id,
             ) AS in_track
         FROM task t
         INNER JOIN branch b ON t.branch_id = b.branch_id
+        LEFT JOIN task pt ON t.parent_task_id = pt.task_id
         {participating_join}
         INNER JOIN branch_member bm
             ON bm.branch_id = t.branch_id AND bm.user_id = :user_id
@@ -293,8 +297,12 @@ async def search_sources(track_id: int, user_id: int, q: str, branch_id,
         WHERE (t.title ILIKE :q OR (b.key || '-' || t.display_number) ILIKE :q)
           AND b.is_archived = FALSE
           AND (CAST(:branch_id AS INTEGER) IS NULL OR t.branch_id = CAST(:branch_id AS INTEGER))
-          AND (CAST(:epic_id AS INTEGER) IS NULL OR t.epic_id = CAST(:epic_id AS INTEGER))
-          AND (CAST(:sprint_id AS INTEGER) IS NULL OR t.sprint_id = CAST(:sprint_id AS INTEGER))
+          AND (CAST(:epic_id AS INTEGER) IS NULL
+               OR CASE WHEN t.parent_task_id IS NOT NULL THEN pt.epic_id
+                       ELSE t.epic_id END = CAST(:epic_id AS INTEGER))
+          AND (CAST(:sprint_id AS INTEGER) IS NULL
+               OR CASE WHEN t.parent_task_id IS NOT NULL THEN pt.sprint_id
+                       ELSE t.sprint_id END = CAST(:sprint_id AS INTEGER))
           AND (CAST(:status AS TEXT) IS NULL OR t.status = CAST(:status AS TEXT))
           AND (CAST(:status_category AS TEXT) IS NULL OR ws.category = CAST(:status_category AS TEXT))
           AND (CAST(:priority AS TEXT) IS NULL OR t.priority = CAST(:priority AS TEXT))
@@ -331,5 +339,25 @@ async def search_sources(track_id: int, user_id: int, q: str, branch_id,
     for r in result.fetchall():
         d = dict(r._mapping)
         d['display_id'] = f"{d['branch_key']}-{d['display_number']}"
+        d['parent_display_id'] = (
+            f"{d['branch_key']}-{d.pop('parent_display_number')}"
+            if d['parent_task_id'] else d.pop('parent_display_number')
+        )
         rows.append(d)
+
+    # 스프린트/에픽 모드: 부모가 결과에 함께 있는 하위는 부모 밑으로 중첩(subtasks[]),
+    # 부모가 필터/limit에 잘린 하위는 부모 컨텍스트 필드를 단 플랫 row로 유지.
+    # 필터/키워드 모드는 플랫 그대로 (BulkAdd가 부모 칩으로 표시).
+    if not parent_only and (sprint_id is not None or epic_id is not None):
+        top_by_id = {r['task_id']: r for r in rows if r['parent_task_id'] is None}
+        for r in top_by_id.values():
+            r['subtasks'] = []
+        grouped = []
+        for r in rows:
+            pid = r['parent_task_id']
+            if pid is not None and pid in top_by_id:
+                top_by_id[pid]['subtasks'].append(r)
+            else:
+                grouped.append(r)
+        rows = grouped
     return rows
