@@ -390,9 +390,15 @@ async def update(task_id: int, body, branch_id: int, request: Request, db: Async
     if fields.get('description'):
         fields['description'] = ensure_html(fields['description'])
 
-    # 하위 전환 시 자기 sprint/epic을 NULL로 강제 — 부모 라이브 파생 불변식(§4).
-    # (남겨두면 stale 값이 Track 등 sprint 연관 쿼리에 매칭됨)
-    if 'parent_task_id' in body.model_fields_set and body.parent_task_id is not None:
+    # 하위로 되는/남는 task엔 sprint/epic 자기 값을 저장하지 않는다 — 부모 라이브
+    # 파생 불변식(§4). 전환이면 stale 일괄 소거, 이미 하위인데 sprint/epic만 온
+    # PATCH는 무시(전환 경로 밖 stale 재유입 차단). 승격(명시적 parent=null)은
+    # 최상위가 되므로 같은 PATCH의 sprint/epic 저장을 허용한다.
+    effective_parent = (body.parent_task_id if 'parent_task_id' in body.model_fields_set
+                        else task['parent_task_id'])
+    if effective_parent is not None and (
+            'parent_task_id' in body.model_fields_set
+            or 'sprint_id' in fields or 'epic_id' in fields):
         fields['sprint_id'] = None
         fields['epic_id'] = None
 

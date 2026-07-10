@@ -257,3 +257,46 @@ async def test_create_subtask_ignores_explicit_sprint_epic(db_session):
     new_id = res["task_id"]
     assert await _task_col(db_session, new_id, "sprint_id") is None
     assert await _task_col(db_session, new_id, "epic_id") is None
+
+
+# ---------------------------------------------------------------------------
+# already-subtask must NOT accept standalone sprint/epic PATCH
+# ---------------------------------------------------------------------------
+
+async def test_patch_sprint_epic_on_existing_subtask_is_ignored(db_session):
+    """이미 하위인 task에 parent_task_id 없이 sprint/epic만 PATCH해도 저장되지
+    않는다(§4 쓰기 불변식 — 전환 경로 밖에서의 stale 재유입 차단)."""
+    alice = await _make_user(db_session, "alice_subsp@sub.test", "alice_subsp")
+    branch = await _make_branch(db_session, alice, key="SPSSP")
+    await _add_member(db_session, branch, alice, "member")
+    await _make_status(db_session, branch, "todo", "todo")
+    sprint = await _make_sprint(db_session, branch, alice)
+    epic = await _make_epic(db_session, branch, alice)
+    parent = await _make_task(db_session, branch, alice, title="Parent")
+    child = await _make_task(db_session, branch, alice, parent_task_id=parent,
+                             title="Child")
+
+    body = schema.TaskUpdate(sprint_id=sprint, epic_id=epic)
+    res = await ctrl.update(child, body, branch, _req(alice), db_session)
+    assert res["status"] is True
+    assert await _task_col(db_session, child, "sprint_id") is None
+    assert await _task_col(db_session, child, "epic_id") is None
+
+
+async def test_promote_with_sprint_in_same_patch_keeps_sprint(db_session):
+    """승격(parent=null 명시)과 동시에 sprint를 지정하면 저장된다 — 최상위가
+    되므로 자기 sprint 소유가 정상(가드가 승격 경로를 막으면 안 됨)."""
+    alice = await _make_user(db_session, "alice_prsp@sub.test", "alice_prsp")
+    branch = await _make_branch(db_session, alice, key="SPPRS")
+    await _add_member(db_session, branch, alice, "member")
+    await _make_status(db_session, branch, "todo", "todo")
+    sprint = await _make_sprint(db_session, branch, alice)
+    parent = await _make_task(db_session, branch, alice, title="Parent")
+    child = await _make_task(db_session, branch, alice, parent_task_id=parent,
+                             title="Child")
+
+    body = schema.TaskUpdate(parent_task_id=None, sprint_id=sprint)
+    res = await ctrl.update(child, body, branch, _req(alice), db_session)
+    assert res["status"] is True
+    assert await _task_col(db_session, child, "parent_task_id") is None
+    assert await _task_col(db_session, child, "sprint_id") == sprint
