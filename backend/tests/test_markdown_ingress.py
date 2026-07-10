@@ -189,6 +189,37 @@ async def test_issue_body_and_comments_convert_markdown(db_session):
     assert any("<strong>닫으며</strong>" in c["content"] for c in comments)
 
 
+async def test_issue_comment_update_converts_markdown_and_passthrough(db_session):
+    # update_comment(이슈 댓글 수정) 경로 — md 변환 + HTML 무변환 통과 둘 다 검증.
+    user, branch = await _seed_branch(db_session, "ING_F")
+    tid = await _make_task(db_session, branch, user)
+    res = await issue_ctrl.create_issue(
+        issue_schema.IssueCreate(title="이슈"), branch, tid, _req(user), db_session)
+    iid = res["issue_id"]
+    cres = await issue_ctrl.create_comment(
+        issue_schema.CommentCreate(content="원본 댓글"), branch, tid, iid,
+        _req(user), db_session)
+    assert cres["status"] is True
+    cid = cres["comment_id"]
+
+    res2 = await issue_ctrl.update_comment(
+        issue_schema.CommentUpdate(content="**수정된** 댓글"), branch, tid, iid, cid,
+        _req(user), db_session)
+    assert res2["status"] is True
+    comments = await issue_model.find_comments(iid, db_session)
+    target = next(c for c in comments if c["comment_id"] == cid)
+    assert "<strong>수정된</strong>" in target["content"]
+
+    html = '<p>그대로 <em>HTML</em></p>'
+    res3 = await issue_ctrl.update_comment(
+        issue_schema.CommentUpdate(content=html), branch, tid, iid, cid,
+        _req(user), db_session)
+    assert res3["status"] is True
+    comments = await issue_model.find_comments(iid, db_session)
+    target = next(c for c in comments if c["comment_id"] == cid)
+    assert target["content"] == html
+
+
 # ---- canvas_page.content (ensure_html이 sanitize_html보다 먼저) ----
 
 async def test_canvas_page_create_and_update_convert_markdown(db_session):
@@ -226,3 +257,22 @@ async def test_canvas_typst_page_content_untouched(db_session):
         _req(user), db_session)
     page = await page_model.find_by_id(res["page_id"], db_session)
     assert page["content"] == src2
+
+
+async def test_canvas_overview_page_update_converts_markdown(db_session):
+    # update의 'overview' 분기도 document와 동일하게 변환+정화 대상.
+    # overview 페이지는 page_ctrl.create로 못 만들므로(canvas 생성 시에만 시딩) 직접 INSERT.
+    user = await _make_user(db_session, "ov@ing.test", "ov_ing")
+    canvas = await _make_canvas(db_session, user, name="O", key="INGO")
+    row = await db_session.execute(text("""
+        INSERT INTO canvas_page (canvas_id, title, content, position, created_by, updated_by, type)
+        VALUES (:c, 'Overview', '', 0, :u, :u, 'overview') RETURNING page_id
+    """), {"c": canvas, "u": user})
+    pid = row.scalar_one()
+
+    res = await page_ctrl.update(
+        canvas, pid, page_schema.CanvasPageUpdate(content="## 개요"),
+        _req(user), db_session)
+    assert res["status"] is True
+    page = await page_model.find_by_id(pid, db_session)
+    assert "<h2>개요</h2>" in page["content"]
