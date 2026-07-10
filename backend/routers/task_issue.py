@@ -1,3 +1,5 @@
+from typing import Literal
+
 from fastapi import APIRouter, Request, Depends, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,8 +27,10 @@ async def list_issues(branch_id: int, task_id: int,
 
 @router.get("/{issue_id}", summary="이슈 상세", dependencies=[Depends(require_login)])
 async def get_issue(branch_id: int, task_id: int, issue_id: int,
-                    request: Request, session: AsyncSession = Depends(db.session)):
-    return await controller.get_issue(branch_id, task_id, issue_id, request, session)
+                    request: Request,
+                    format: Literal['html', 'markdown'] = 'html',
+                    session: AsyncSession = Depends(db.session)):
+    return await controller.get_issue(branch_id, task_id, issue_id, request, session, fmt=format)
 
 
 @router.patch("/{issue_id}", summary="이슈 수정", dependencies=[Depends(require_login)])

@@ -6,7 +6,7 @@ from core.model import task_comment as comment_model
 from core.model import branch_member as member_model
 from core.model import task as task_model
 from library import notification_service
-from library.html_markdown import ensure_html
+from library.html_markdown import ensure_html, html_to_markdown
 from library.mention_parser import extract_mention_user_ids
 
 
@@ -94,7 +94,7 @@ async def _notify_mentions(recipients: list[int], actor_id: int, username: str,
 # ---- CRUD ----
 
 async def list_comments(branch_id: int, task_id: int, request: Request,
-                         db: AsyncSession, order: str = 'asc'):
+                         db: AsyncSession, order: str = 'asc', fmt: str = 'html'):
     """Task의 댓글 목록 (평면 배열, created_at asc|desc + comment_id tiebreak). 멘션 user_ids 포함."""
     _, err = await _check_member(branch_id, request, db)
     if err:
@@ -112,6 +112,11 @@ async def list_comments(branch_id: int, task_id: int, request: Request,
         )
         for c in comments:
             c['mentioned_user_ids'] = bucket.get(c['comment_id'], [])
+
+    if fmt == 'markdown':
+        for c in comments:
+            if c['content']:
+                c['content'] = html_to_markdown(c['content'])
 
     return {'status': True, 'comments': comments}
 

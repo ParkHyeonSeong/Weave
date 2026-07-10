@@ -7,7 +7,7 @@ from core.model import canvas_member as member_model
 from core.model import recent_view
 from library import notification_service
 from library import activity_service
-from library.html_markdown import ensure_html
+from library.html_markdown import ensure_html, html_to_markdown
 from library.html_sanitize import sanitize_html
 from library.mention_parser import extract_mention_user_ids
 
@@ -75,7 +75,8 @@ async def get_tree(canvas_id: int, request: Request, db: AsyncSession):
     return {'status': True, 'pages': pages}
 
 
-async def get_detail(canvas_id: int, page_id: int, request: Request, db: AsyncSession):
+async def get_detail(canvas_id: int, page_id: int, request: Request, db: AsyncSession,
+                     fmt: str = 'html'):
     """페이지 상세 (content 포함)"""
     user_id = request.state.payload.get('user_id')
     if not await member_model.is_member(canvas_id, user_id, db):
@@ -84,6 +85,10 @@ async def get_detail(canvas_id: int, page_id: int, request: Request, db: AsyncSe
     page = await page_model.find_by_id(page_id, db)
     if not page or page['canvas_id'] != canvas_id:
         return error_response(ErrorCode.PAGE_NOT_FOUND)
+
+    # typst 페이지 content는 Typst 소스 — HTML 아님, 변환 제외
+    if fmt == 'markdown' and page.get('content') and page.get('type') != 'typst':
+        page['content'] = html_to_markdown(page['content'])
 
     # 조회 기록
     await recent_view.upsert(user_id, 'doc', page_id, db)

@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Literal, Optional
 from fastapi import APIRouter, Request, Depends, Query, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -58,8 +58,9 @@ async def upload_task_image(branch_id: int, request: Request,
 
 @router.get("/{task_id}", summary="Task 상세", dependencies=[Depends(require_login)])
 async def get_task(branch_id: int, task_id: int, request: Request,
+                   format: Literal['html', 'markdown'] = 'html',
                    session: AsyncSession = Depends(db.session)):
-    return await task_controller.get_detail(task_id, branch_id, request, session)
+    return await task_controller.get_detail(task_id, branch_id, request, session, fmt=format)
 
 
 @router.patch("/{task_id}", summary="Task 수정", dependencies=[Depends(require_login)])

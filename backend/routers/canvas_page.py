@@ -1,3 +1,5 @@
+from typing import Literal
+
 from fastapi import APIRouter, Request, Depends, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,8 +27,9 @@ async def get_page_tree(canvas_id: int, request: Request,
 
 @router.get("/{page_id}", summary="페이지 상세", dependencies=[Depends(require_login)])
 async def get_page(canvas_id: int, page_id: int, request: Request,
+                   format: Literal['html', 'markdown'] = 'html',
                    session: AsyncSession = Depends(db.session)):
-    return await page_controller.get_detail(canvas_id, page_id, request, session)
+    return await page_controller.get_detail(canvas_id, page_id, request, session, fmt=format)
 
 
 @router.patch("/{page_id}", summary="페이지 수정", dependencies=[Depends(require_login)])

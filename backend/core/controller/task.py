@@ -19,7 +19,7 @@ from library import activity_service
 from library.custom_field_validator import validate_custom_field_values
 from library.mention_parser import extract_mention_user_ids
 from library.date_validator import is_valid_date_order
-from library.html_markdown import ensure_html
+from library.html_markdown import ensure_html, html_to_markdown
 
 
 def _collect_assignee_ids(assignees) -> set[int]:
@@ -240,7 +240,8 @@ async def create(body, branch_id: int, request: Request, db: AsyncSession):
             'applied_status': status_key, 'applied_task_type': task_type_key}
 
 
-async def get_detail(task_id: int, branch_id: int, request: Request, db: AsyncSession):
+async def get_detail(task_id: int, branch_id: int, request: Request, db: AsyncSession,
+                     fmt: str = 'html'):
     """Task 상세"""
     user_id = request.state.payload.get('user_id')
     if not await member_model.is_member(branch_id, user_id, db):
@@ -259,6 +260,9 @@ async def get_detail(task_id: int, branch_id: int, request: Request, db: AsyncSe
         await task_model.find_parent_summary(task_id, db)
         if task.get('parent_task_id') else None
     )
+
+    if fmt == 'markdown' and task.get('description'):
+        task['description'] = html_to_markdown(task['description'])
 
     # 조회 기록
     await recent_view.upsert(user_id, 'task', task_id, db)

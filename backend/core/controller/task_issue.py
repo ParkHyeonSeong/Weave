@@ -6,7 +6,7 @@ from core.model import task_issue as issue_model
 from core.model import branch_member as member_model
 from core.model import task as task_model
 from library import notification_service
-from library.html_markdown import ensure_html
+from library.html_markdown import ensure_html, html_to_markdown
 from library.mention_parser import extract_mention_user_ids
 
 
@@ -111,7 +111,8 @@ def _build_timeline(comments, events):
     return [it[3] for it in items]
 
 
-async def get_issue(branch_id: int, task_id: int, issue_id: int, request: Request, db: AsyncSession):
+async def get_issue(branch_id: int, task_id: int, issue_id: int, request: Request, db: AsyncSession,
+                    fmt: str = 'html'):
     """이슈 상세 + 댓글"""
     _, err = await _check_member(branch_id, request, db)
     if err:
@@ -126,6 +127,14 @@ async def get_issue(branch_id: int, task_id: int, issue_id: int, request: Reques
         return error_response(ErrorCode.ISSUE_NOT_FOUND)
 
     comments = await issue_model.find_comments(issue_id, db)
+
+    if fmt == 'markdown':
+        if issue.get('body'):
+            issue['body'] = html_to_markdown(issue['body'])
+        for c in comments:
+            if c.get('content'):
+                c['content'] = html_to_markdown(c['content'])
+
     events = await issue_model.find_events(issue_id, db)
     timeline = _build_timeline(comments, events)
     return {'status': True, 'issue': issue, 'comments': comments, 'timeline': timeline}
