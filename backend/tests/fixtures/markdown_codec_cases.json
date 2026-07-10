@@ -270,5 +270,16 @@
       "html->md"
     ],
     "note": "title 폴백 정렬(JS BookmarkExtension.js:39 title||url) — title 공란 시 url이 라벨. html_tiptap 손입력 케이스라 regen 도구(markdown→html round-trip)로 재생성 불가"
+  },
+  {
+    "name": "table-pipe-in-cell",
+    "regen": false,
+    "markdown": "\n| 이름  | 값   |\n| --- | --- |\n| a|b | 1   |\n",
+    "html_tiptap": "<table><tbody><tr><th colspan=\"1\" rowspan=\"1\"><p>이름</p></th><th colspan=\"1\" rowspan=\"1\"><p>값</p></th></tr><tr><td colspan=\"1\" rowspan=\"1\"><p>a|b</p></td><td colspan=\"1\" rowspan=\"1\"><p>1</p></td></tr></tbody></table>",
+    "html_ingress": null,
+    "directions": [
+      "html->md"
+    ],
+    "note": "셀 안 리터럴 | — JS 실측: escape 없이 raw 직렬화(a|b), 유령 컬럼/셀 밀림 없어야 함. 그 md의 재파싱은 셀을 쪼개므로(JS도 동일하게 lossy) md->html/roundtrip 불가, html_tiptap 손입력이라 regen도 불가"
   }
 ]

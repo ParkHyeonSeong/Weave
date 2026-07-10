@@ -125,32 +125,64 @@ class _WeaveConverter(MarkdownConverter):
                 result = result[:m.end()] + box + result[m.end():]
         return result
 
-    # GFM 테이블 컬럼 정렬 — markdownify 기본은 셀 폭을 패딩하지 않지만
-    # JS(markdown-table 계열) 산출물은 컬럼별 최대 폭(문자수 기준, 구분선
-    # 최소 3)으로 좌측정렬 패딩한다(golden fixture 실측: table-gfm).
-    # 또한 JS 산출물은 테이블 단독 콘텐츠일 때도 앞뒤 개행 1개씩을 남긴다
-    # (다른 블록의 이중개행과 달리 전역 strip 대상이 아님) — NUL 보초로
-    # 감싸 html_to_markdown()의 strip()을 통과시킨 뒤 최종 제거한다.
+    # GFM 테이블 — markdownify 기본(convert_td/tr이 셀을 '|' 구분 텍스트로
+    # 이어붙임)은 셀 안 리터럴 `|`("a|b" 텍스트, 인라인 코드 등)와 구분자를
+    # 사후에 분간할 수 없어, 렌더 텍스트 재분할 방식은 유령 컬럼을 만든다.
+    # → 셀 markdown을 태그에 스태시해 두고(convert_th/td) 행 조립은
+    # convert_table이 DOM(tr/th·td) 구조 기준으로 직접 수행한다.
+    # dialect는 JS(@tiptap/markdown) 실측(golden fixture: table-gfm,
+    # table-pipe-in-cell): 컬럼별 최대 폭(문자수, 최소 3) 좌측정렬 패딩,
+    # 리터럴 `|`는 escape하지 않음 — JS도 raw로 내보내며 그 md의 재파싱이
+    # 셀을 쪼개는 lossy함까지 양쪽 동일한 계약.
+    def convert_th(self, el, text, *args, **kwargs):
+        # 셀 markdown 스태시 — 자식이 부모보다 먼저 변환되므로(process_tag
+        # bottom-up) convert_table 시점엔 항상 채워져 있다. soup 트리는
+        # convert() 호출마다 새로 만들어져 상태 누수 없음.
+        el._weave_cell = text.strip().replace('\n', ' ')
+        return ''
+
+    convert_td = convert_th
+
+    def convert_tr(self, el, text, *args, **kwargs):
+        return ''  # 행 조립은 convert_table에서 DOM 기준으로 수행
+
     def convert_table(self, el, text, *args, **kwargs):
-        lines = [ln for ln in text.strip('\n').split('\n') if ln.strip()]
-        if len(lines) < 2:
-            return text
-        grid = [[cell.strip() for cell in ln.strip().strip('|').split('|')] for ln in lines]
-        ncols = max(len(row) for row in grid)
-        widths = [3] * ncols
-        for idx, row in enumerate(grid):
-            if idx == 1:  # 구분선(---) 행은 폭 계산에서 제외
+        # 에디터 스키마엔 중첩 테이블이 없어 el.find_all('tr')로 충분.
+        rows, header_flags = [], []
+        for tr in el.find_all('tr'):
+            cells = tr.find_all(['td', 'th'], recursive=False)
+            if not cells:
                 continue
+            row = []
+            for cell in cells:
+                row.append(getattr(cell, '_weave_cell', ''))
+                colspan = cell.get('colspan', '')
+                span = max(1, min(1000, int(colspan))) if str(colspan).isdigit() else 1
+                row.extend([''] * (span - 1))  # colspan>1 → 빈 셀 (stock convert_td와 동일)
+            rows.append(row)
+            header_flags.append(all(c.name == 'th' for c in cells))
+        if not rows:
+            return ''
+        ncols = max(len(r) for r in rows)
+        widths = [3] * ncols
+        for row in rows:
             for c, cell in enumerate(row):
                 widths[c] = max(widths[c], len(cell))
-        out_lines = []
-        for idx, row in enumerate(grid):
-            if idx == 1:
-                out_lines.append('|' + '|'.join(' ' + '-' * widths[c] + ' ' for c in range(ncols)) + '|')
-            else:
-                cells = row + [''] * (ncols - len(row))
-                out_lines.append('|' + '|'.join(' ' + cells[c].ljust(widths[c]) + ' ' for c in range(ncols)) + '|')
-        return _TABLE_GUARD + '\n' + '\n'.join(out_lines) + '\n' + _TABLE_GUARD
+
+        def fmt(row):
+            cells = row + [''] * (ncols - len(row))
+            return '|' + '|'.join(f' {cells[c].ljust(widths[c])} ' for c in range(ncols)) + '|'
+
+        sep = '|' + '|'.join(' ' + '-' * w + ' ' for w in widths) + '|'
+        if header_flags[0]:
+            lines = [fmt(rows[0]), sep] + [fmt(r) for r in rows[1:]]
+        else:
+            # 헤더 없는 표 — stock markdownify(table_infer_header=False)처럼 빈 헤더행
+            lines = [fmt([''] * ncols), sep] + [fmt(r) for r in rows]
+        # JS 산출물은 테이블 앞뒤 개행 1개씩을 남긴다(문서 경계에서도 — 다른
+        # 블록의 이중개행과 달리 전역 strip 대상이 아님). NUL 보초로 감싸
+        # html_to_markdown()의 strip()을 통과시킨 뒤 최종 제거한다.
+        return _TABLE_GUARD + '\n' + '\n'.join(lines) + '\n' + _TABLE_GUARD
 
     # 비표준 마크(에디터 커스텀 확장) — JS 직렬화 문법과 동일(golden fixture 실측).
     convert_u = abstract_inline_conversion(lambda self: '++')
@@ -182,7 +214,13 @@ _CONVERTER_OPTIONS = dict(
 def html_to_markdown(html: str) -> str:
     if not html:
         return ''
-    return _WeaveConverter(**_CONVERTER_OPTIONS).convert(html).strip().replace(_TABLE_GUARD, '')
+    # U+0000은 HTML 무효 문자(파서 단계에서 U+FFFD 치환/드롭 대상) — 입력에서
+    # 선제 제거해 아래 _TABLE_GUARD 보초와 절대 충돌하지 않게 한다.
+    html = html.replace(_TABLE_GUARD, '')
+    md = _WeaveConverter(**_CONVERTER_OPTIONS).convert(html).strip()
+    # blockquote 안 테이블은 보초 줄이 '> \x00'로 프리픽스된다 — JS 실측은
+    # 빈 '>' 줄이므로 공백까지 함께 걷어낸다. 문서 경계 보초는 두 번째 replace.
+    return md.replace('> ' + _TABLE_GUARD, '>').replace(_TABLE_GUARD, '')
 
 
 # ---------------------------------------------------------------------------
