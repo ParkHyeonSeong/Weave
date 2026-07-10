@@ -127,6 +127,18 @@ export default function TrackDetail() {
     return () => window.removeEventListener('track:updated', handler);
   }, [trackId, fetchTrack]);
 
+  // task:updated 수신 — Branch에서 하위 전환/승격 등 task 변경 시 items·트리 재동기화.
+  // (같은 탭 이벤트 — Branch 목록들의 기존 구독과 동일 패턴)
+  useEffect(() => {
+    if (!trackId) return;
+    const handler = () => {
+      fetchTrack();
+      setSourceReloadKey((k) => k + 1);
+    };
+    window.addEventListener('task:updated', handler);
+    return () => window.removeEventListener('task:updated', handler);
+  }, [trackId, fetchTrack]);
+
   // trackId가 결정되면 마지막으로 본 view를 localStorage에서 복원
   useEffect(() => {
     if (!trackId) return;
@@ -258,7 +270,7 @@ export default function TrackDetail() {
         });
         if (!res.data.status) {
           const err = getError(res.data);
-          const msg = errorText(err.code, err.category) ?? '이 task의 branch 멤버가 아니에요';
+          const msg = errorText(err.code, err.category) ?? 'Task 추가 실패';
           window.dispatchEvent(new CustomEvent('toast', {
             detail: {
               message: msg,
