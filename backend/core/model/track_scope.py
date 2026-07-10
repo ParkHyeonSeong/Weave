@@ -78,6 +78,53 @@ _SCOPE_TASK_QUERY = """
 """
 
 
+# 트리 상위 task들의 하위태스크 배치 조회 — SELECT 모양은 _SCOPE_TASK_QUERY와 동일 필드
+# + parent_task_id/branch_id. done 규칙도 동일하되 "부모의 스프린트" 기준
+# (하위는 자기 sprint_id가 NULL인 불변식 — 부모에서 라이브 파생).
+_SCOPE_SUBTASK_QUERY = """
+    SELECT t.task_id, t.parent_task_id, t.branch_id,
+           t.title, t.display_number, t.status, t.priority,
+           b.key AS branch_key,
+           ws.label AS status_label, ws.color AS status_color,
+           ws.category AS status_category,
+           EXISTS (
+               SELECT 1 FROM track_item ti
+               WHERE ti.track_id = :track_id
+                 AND ti.source_type = 'task'
+                 AND ti.source_task_id = t.task_id
+           ) AS in_track
+    FROM task t
+    INNER JOIN task p ON t.parent_task_id = p.task_id
+    INNER JOIN branch b ON t.branch_id = b.branch_id
+    LEFT JOIN sprint sp ON sp.sprint_id = p.sprint_id
+    LEFT JOIN workflow_status ws
+        ON ws.branch_id = t.branch_id AND ws.key = t.status
+    WHERE t.parent_task_id = ANY(:parent_ids)
+      AND (COALESCE(sp.status, '') = 'active'
+           OR ws.category IS NULL
+           OR ws.category NOT IN ('done', 'cancelled'))
+    ORDER BY t.sort_order, t.created_at, t.task_id
+"""
+
+
+async def _attach_scope_subtasks(track_id: int, tasks: list, db: AsyncSession):
+    """스코프 트리의 상위 task 목록에 subtasks[]를 배치 부착 (per-parent 조회 = N+1 금지)."""
+    for t in tasks:
+        t['subtasks'] = []
+    if not tasks:
+        return
+    parent_ids = [t['task_id'] for t in tasks]
+    rows = await db.execute(text(_SCOPE_SUBTASK_QUERY),
+                            {'track_id': track_id, 'parent_ids': parent_ids})
+    groups = {}
+    for r in rows.fetchall():
+        d = dict(r._mapping)
+        d['display_id'] = f"{d['branch_key']}-{d['display_number']}"
+        groups.setdefault(d['parent_task_id'], []).append(d)
+    for t in tasks:
+        t['subtasks'] = groups.get(t['task_id'], [])
+
+
 async def _fetch_scope_tasks(track_id: int, filter_col: str, ids: list,
                               db: AsyncSession):
     """filter_col ('sprint_id' or 'epic_id') 기준으로 task 묶음 조회.
@@ -89,11 +136,14 @@ async def _fetch_scope_tasks(track_id: int, filter_col: str, ids: list,
         {'track_id': track_id, 'ids': ids},
     )
     bucket = {}
+    all_tasks = []
     for r in rows.fetchall():
         d = dict(r._mapping)
         d['display_id'] = f"{d['branch_key']}-{d['display_number']}"
         key = d[filter_col]
         bucket.setdefault(key, []).append(d)
+        all_tasks.append(d)
+    await _attach_scope_subtasks(track_id, all_tasks, db)
     return bucket
 
 
