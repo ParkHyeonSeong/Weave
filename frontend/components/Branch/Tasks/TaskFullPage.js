@@ -9,6 +9,7 @@ import DatePicker from '@/components/common/DatePicker';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import useTaskDetail from '@/hooks/useTaskDetail';
 import { sanitizeHtml } from '@/library/sanitize';
+import { ensureRenderableHtml } from '@/library/ensureHtml';
 import { formatYMD, formatDateTime } from '@/library/formatTime';
 import { selectableEpics } from '@/library/epics';
 import { useRefHydration } from '@/library/refHydration';
@@ -233,7 +234,7 @@ export default function TaskFullPage() {
                   <div
                     ref={descRef}
                     className="TaskDescReadonly"
-                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(task.description) }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(ensureRenderableHtml(task.description)) }}
                     onClick={(e) => {
                       const ref = e.target.closest('.task-ref');
                       if (ref) {

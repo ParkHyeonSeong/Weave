@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { ArrowLeft, CircleDot, MoreHorizontal, Pencil, Copy, Trash2, XCircle, CheckCircle2 } from 'lucide-react';
 import { axios } from '@/library/_axios';
-import { ensureHtml } from '@/library/ensureHtml';
+import { ensureRenderableHtml } from '@/library/ensureHtml';
 import { sanitizeHtml } from '@/library/sanitize';
 import { useRefHydration } from '@/library/refHydration';
 import { useMathHydration } from '@/library/mathRender';
@@ -185,7 +185,7 @@ export default function TaskIssueDetail() {
     } catch {}
   };
 
-  // 본문/댓글을 markdown으로 복사 — 읽기 뷰 렌더(:328,:402)와 동일하게 ensureHtml 폴백 적용
+  // 본문/댓글을 markdown으로 복사 — 읽기 뷰 렌더(:337,:412)와 동일하게 ensureRenderableHtml 폴백 적용
   const handleCopyMarkdown = (html) => {
     if (!html) return;
     copyAsMarkdown(html, buildIssueEditorExtensions());
@@ -334,7 +334,7 @@ export default function TaskIssueDetail() {
             ) : (
               <div className={`IssueDetail__CardBody ${!issue.body ? 'IssueDetail__CardBody--empty' : ''}`}>
                 {issue.body ? (
-                  <div className="TaskDescReadonly" dangerouslySetInnerHTML={{ __html: sanitizeHtml(ensureHtml(issue.body)) }} />
+                  <div className="TaskDescReadonly" dangerouslySetInnerHTML={{ __html: sanitizeHtml(ensureRenderableHtml(issue.body)) }} />
                 ) : (
                   isAuthor ? 'No description provided yet.' : 'No description provided.'
                 )}
@@ -409,7 +409,7 @@ export default function TaskIssueDetail() {
                   </div>
                 ) : (
                   <div className="IssueDetail__CardBody">
-                    <div className="TaskDescReadonly" dangerouslySetInnerHTML={{ __html: sanitizeHtml(ensureHtml(comment.content)) }} />
+                    <div className="TaskDescReadonly" dangerouslySetInnerHTML={{ __html: sanitizeHtml(ensureRenderableHtml(comment.content)) }} />
                   </div>
                 )}
               </div>

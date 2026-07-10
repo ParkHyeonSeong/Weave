@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, memo } from 'react';
 import { Reply, Pencil, Copy, Trash2 } from 'lucide-react';
 import { sanitizeHtml } from '@/library/sanitize';
+import { ensureRenderableHtml } from '@/library/ensureHtml';
 import { useRefHydration } from '@/library/refHydration';
 import { useMathHydration } from '@/library/mathRender';
 import { formatRelative } from '@/library/formatTime';
@@ -65,7 +66,7 @@ function CommentItem({
   }, [comment.author, currentUserId]);
 
   const sanitizedContent = useMemo(
-    () => sanitizeHtml(comment.content || ''),
+    () => sanitizeHtml(ensureRenderableHtml(comment.content) || ''),
     [comment.content],
   );
 
