@@ -9,9 +9,11 @@ from types import SimpleNamespace
 from sqlalchemy import text
 
 from core.controller import track as ctrl
+from core.controller import task as task_ctrl
 from core.model import track_scope as track_scope_model
 from core.model import track_item as track_item_model
 from routers.schema.track import TrackItemAdd, TrackItemsBulkAdd
+from routers.schema.task import TaskUpdate
 
 
 def _req(user_id: int):
@@ -386,3 +388,24 @@ async def test_find_by_track_restricted_hides_parent(db_session):
     items = await track_item_model.find_by_track(track, outsider, db_session)
     assert items[0]['restricted'] is True
     assert 'parent' not in items[0] and 'subtask_total' not in items[0]
+
+
+# ---------------------------------------------------------------------------
+# Task 8: converting an already-tracked task registers parent sprint scope
+# ---------------------------------------------------------------------------
+
+async def test_convert_tracked_task_registers_parent_sprint_scope(db_session):
+    """이미 track에 올라간 최상위 task를 sprint 부모 밑으로 전환하면, 그 task를
+    참조하는 track에 부모 sprint scope가 자동 등록된다 — 전환 후 트리에서
+    아이템이 사라지는 것 방지."""
+    user, branch, track = await _seed_base(db_session)
+    sprint = await _make_sprint(db_session, branch, user, status="active")
+    parent = await _make_task(db_session, branch, user, sprint_id=sprint, title="Parent")
+    orphan = await _make_task(db_session, branch, user, title="Backlog task")
+    await _make_track_item(db_session, track, orphan)
+
+    body = TaskUpdate(parent_task_id=parent)
+    res = await task_ctrl.update(orphan, body, branch, _req(user), db_session)
+    assert res["status"] is True
+    scopes = await _scope_rows(db_session, track)
+    assert scopes == [{'branch_id': branch, 'scope_type': 'sprint', 'scope_id': sprint}]

@@ -207,3 +207,53 @@ async def test_create_subtask_does_not_copy_sprint_epic(db_session):
     assert await _task_col(db_session, new_id, "sprint_id") is None
     assert await _task_col(db_session, new_id, "epic_id") is None
     assert await _task_col(db_session, new_id, "parent_task_id") == parent
+
+
+# ---------------------------------------------------------------------------
+# Task 8: write invariant — transition/creation must NULL own sprint/epic
+# ---------------------------------------------------------------------------
+
+async def test_move_to_subtask_nulls_own_sprint_epic(db_session):
+    """상위→하위 전환 시 자기 sprint/epic을 NULL로 강제한다(§4 쓰기 불변식).
+    남겨두면 stale 값이 Track 등 sprint 연관 쿼리에 잘못 매칭된다."""
+    alice = await _make_user(db_session, "alice_null@sub.test", "alice_null")
+    branch = await _make_branch(db_session, alice, key="SPNUL")
+    await _add_member(db_session, branch, alice, "member")
+    await _make_status(db_session, branch, "todo", "todo")
+    sprint = await _make_sprint(db_session, branch, alice)
+    epic = await _make_epic(db_session, branch, alice)
+    parent = await _make_task(db_session, branch, alice, title="Parent")
+    target = await _make_task(db_session, branch, alice, sprint_id=sprint, title="Target")
+    await db_session.execute(text("UPDATE task SET epic_id = :e WHERE task_id = :t"),
+                             {"e": epic, "t": target})
+
+    body = schema.TaskUpdate(parent_task_id=parent)
+    res = await ctrl.update(target, body, branch, _req(alice), db_session)
+    assert res["status"] is True
+    assert await _task_col(db_session, target, "sprint_id") is None
+    assert await _task_col(db_session, target, "epic_id") is None
+
+
+async def test_create_subtask_ignores_explicit_sprint_epic(db_session):
+    """하위 생성 시 명시적으로 보낸 sprint/epic도 저장하지 않는다(§4 쓰기 불변식)."""
+    alice = await _make_user(db_session, "alice_igsp@sub.test", "alice_igsp")
+    branch = await _make_branch(db_session, alice, key="SPIGS")
+    await _add_member(db_session, branch, alice, "member")
+    await _make_status(db_session, branch, "todo", "todo")
+    await _make_task_type(db_session, branch, "task")
+    sprint = await _make_sprint(db_session, branch, alice)
+    epic = await _make_epic(db_session, branch, alice)
+    parent = await _make_task(db_session, branch, alice, title="Parent")
+    await db_session.execute(text("""
+        INSERT INTO task_sequence (branch_id, last_number)
+        VALUES (:b, (SELECT MAX(display_number) FROM task WHERE branch_id = :b))
+        ON CONFLICT (branch_id) DO UPDATE SET last_number = EXCLUDED.last_number
+    """), {"b": branch})
+
+    body = schema.TaskCreate(title="Sub", parent_task_id=parent,
+                             sprint_id=sprint, epic_id=epic)
+    res = await ctrl.create(body, branch, _req(alice), db_session)
+    assert res["status"] is True
+    new_id = res["task_id"]
+    assert await _task_col(db_session, new_id, "sprint_id") is None
+    assert await _task_col(db_session, new_id, "epic_id") is None

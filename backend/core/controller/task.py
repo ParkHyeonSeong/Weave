@@ -10,6 +10,7 @@ from core.model import saved_view as sv_model
 from core.model import task_type_config as type_model
 from core.model import workflow_status as ws_model
 from core.model import recent_view
+from core.model import track_scope as track_scope_model
 from core.guard.branch_scope import find_resource_in_branch
 from core.query.filter_spec import validate_filter, FilterError
 from core.query.filter_db import validate_custom_fields
@@ -196,8 +197,9 @@ async def create(body, branch_id: int, request: Request, db: AsyncSession):
         task_type=task_type_key,
         status=status_key,
         priority=body.priority,
-        epic_id=body.epic_id,
-        sprint_id=body.sprint_id,
+        # 하위로 생성 시 sprint/epic은 저장하지 않는다 — 부모 라이브 파생 불변식(§4)
+        epic_id=None if body.parent_task_id is not None else body.epic_id,
+        sprint_id=None if body.parent_task_id is not None else body.sprint_id,
         parent_task_id=body.parent_task_id,
         start_date=body.start_date,
         due_date=body.due_date,
@@ -376,6 +378,12 @@ async def update(task_id: int, body, branch_id: int, request: Request, db: Async
 
     fields = body.model_dump(exclude_unset=True, exclude={'label_ids', 'assignees', 'dry_run'})
 
+    # 하위 전환 시 자기 sprint/epic을 NULL로 강제 — 부모 라이브 파생 불변식(§4).
+    # (남겨두면 stale 값이 Track 등 sprint 연관 쿼리에 매칭됨)
+    if 'parent_task_id' in body.model_fields_set and body.parent_task_id is not None:
+        fields['sprint_id'] = None
+        fields['epic_id'] = None
+
     # status 동적 검증 + alias 해석 — canonical key로 치환 후 저장.
     # explicit null(NOT NULL 컬럼이라 통과 시 NULL UPDATE 500)은 ''로 흘려
     # 빈 문자열과 동일하게 INVALID_STATUS + 유효값 동봉으로 거부한다.
@@ -429,6 +437,11 @@ async def update(task_id: int, body, branch_id: int, request: Request, db: Async
         # 필드 변경 활동 로그 (update 후 새 task 조회하여 new_label 보강)
         updated = await task_model.find_by_id(task_id, db)
         await activity_service.log_task_change(task_id, branch_id, user_id, task, fields, updated, db)
+
+        # 하위 전환이면, 이 task가 올라간 모든 track에 부모 sprint scope 보강
+        if fields.get('parent_task_id') is not None:
+            await track_scope_model.register_parent_sprint_scope_for_task_tracks(
+                task_id, db)
 
     # description 멘션 알림 (새로 추가된 멘션만)
     if 'description' in fields and fields['description']:

@@ -36,6 +36,24 @@ async def add_sprints_for_tasks(track_id: int, task_ids: list, db: AsyncSession)
     """), {'track_id': track_id, 'task_ids': task_ids})
 
 
+async def register_parent_sprint_scope_for_task_tracks(task_id: int, db: AsyncSession):
+    """task가 하위로 전환된 직후, 이 task를 참조하는 모든 track에 부모의 sprint
+    scope를 등록한다 — 전환 전에 이미 캔버스에 있던 아이템이 사이드바 트리에서
+    사라지는 것 방지. 부모가 백로그(sprint 없음)면 skip.
+    sprint 전용 — epic scope는 명시적 Bulk Add by Epic으로만 생성(자동 scope 정책)."""
+    await db.execute(text("""
+        INSERT INTO track_scope (track_id, branch_id, scope_type, scope_id)
+        SELECT DISTINCT ti.track_id, t.branch_id, 'sprint', p.sprint_id
+        FROM track_item ti
+        INNER JOIN task t ON t.task_id = ti.source_task_id
+        INNER JOIN task p ON t.parent_task_id = p.task_id
+        WHERE ti.source_type = 'task'
+          AND ti.source_task_id = :task_id
+          AND p.sprint_id IS NOT NULL
+        ON CONFLICT (track_id, branch_id, scope_type, scope_id) DO NOTHING
+    """), {'task_id': task_id})
+
+
 async def resolve_scope_branch(scope_type: str, scope_id: int,
                                 db: AsyncSession):
     """sprint/epic id의 canonical branch_id를 조회. 존재하지 않으면 None."""
