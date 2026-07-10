@@ -6,6 +6,7 @@ from core.model import task_comment as comment_model
 from core.model import branch_member as member_model
 from core.model import task as task_model
 from library import notification_service
+from library.html_markdown import ensure_html
 from library.mention_parser import extract_mention_user_ids
 
 
@@ -125,6 +126,8 @@ async def create_comment(body, branch_id: int, task_id: int, request: Request,
     if err:
         return err
 
+    body.content = ensure_html(body.content)
+
     # Reply normalize — silent
     parent_id = body.parent_comment_id
     parent_author_id = None
@@ -186,6 +189,8 @@ async def update_comment(body, branch_id: int, task_id: int, comment_id: int,
         return err
     if comment.get('deleted_at') is not None:
         return error_response(ErrorCode.COMMENT_DELETED)
+
+    body.content = ensure_html(body.content)
 
     raw_new = extract_mention_user_ids(body.content)
     old_list = await comment_model.get_mentions(comment_id, db)

@@ -19,6 +19,7 @@ from library import activity_service
 from library.custom_field_validator import validate_custom_field_values
 from library.mention_parser import extract_mention_user_ids
 from library.date_validator import is_valid_date_order
+from library.html_markdown import ensure_html
 
 
 def _collect_assignee_ids(assignees) -> set[int]:
@@ -133,6 +134,10 @@ async def create(body, branch_id: int, request: Request, db: AsyncSession):
     user_id = request.state.payload.get('user_id')
     if not await member_model.is_member(branch_id, user_id, db):
         return error_response(ErrorCode.NOT_BRANCH_MEMBER)
+
+    # markdown ingress 휴리스틱 (§3.4) — 태그 없으면 md→HTML 변환 후 저장
+    if body.description:
+        body.description = ensure_html(body.description)
 
     # task_type 해석 — 생략 시 branch 기본값(sort_order 첫 번째), 문자열이면 key/label 해석.
     if body.task_type is None:
@@ -377,6 +382,9 @@ async def update(task_id: int, body, branch_id: int, request: Request, db: Async
             return err
 
     fields = body.model_dump(exclude_unset=True, exclude={'label_ids', 'assignees', 'dry_run'})
+
+    if fields.get('description'):
+        fields['description'] = ensure_html(fields['description'])
 
     # 하위 전환 시 자기 sprint/epic을 NULL로 강제 — 부모 라이브 파생 불변식(§4).
     # (남겨두면 stale 값이 Track 등 sprint 연관 쿼리에 매칭됨)

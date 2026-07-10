@@ -7,6 +7,7 @@ from core.model import canvas_member as member_model
 from core.model import recent_view
 from library import notification_service
 from library import activity_service
+from library.html_markdown import ensure_html
 from library.html_sanitize import sanitize_html
 from library.mention_parser import extract_mention_user_ids
 
@@ -38,10 +39,19 @@ async def create(canvas_id: int, body, request: Request, db: AsyncSession):
 
     position = await page_model.get_next_position(canvas_id, body.parent_page_id, db)
 
+    if body.type == 'typst':
+        # Typst raw 소스 — HTML로 렌더되지 않으므로(typst.ts SVG 컴파일 전용) md 변환·정화 모두 우회.
+        # nh3는 <intro> 같은 Typst 라벨을 미지 태그로 제거해 소스를 훼손한다.
+        stored_content = body.content or ''
+    elif body.type == 'document':
+        stored_content = sanitize_html(ensure_html(body.content)) or ''  # SEC-17 + md ingress
+    else:  # folder — content 비어있는 관례, 기존대로 정화만
+        stored_content = sanitize_html(body.content) or ''
+
     page_id = await page_model.create(
         canvas_id=canvas_id,
         title=body.title,
-        content=sanitize_html(body.content) or '',  # SEC-17: 서버측 정화
+        content=stored_content,
         parent_page_id=body.parent_page_id,
         position=position,
         created_by=user_id,
@@ -96,8 +106,15 @@ async def update(canvas_id: int, page_id: int, body, request: Request, db: Async
         return {'status': True}
 
     # SEC-17: 저장 전 서버측 HTML 정화(프론트 DOMPurify 우회 경로 방어)
+    # type 가드: content 컬럼은 typst 페이지의 raw 소스도 담는다 — 그 경우 md 변환도
+    # 정화도 우회한다(생성 시와 동일 근거, page['type']은 CanvasPageUpdate에 없어 우회 불가).
     if 'content' in fields:
-        fields['content'] = sanitize_html(fields['content'])
+        if page['type'] == 'typst':
+            pass  # Typst raw 소스 보존 — 변환·정화 모두 금지 (위 create 주석 참고)
+        elif page['type'] in ('document', 'overview'):
+            fields['content'] = sanitize_html(ensure_html(fields['content']))
+        else:  # folder
+            fields['content'] = sanitize_html(fields['content'])
 
     await page_model.update(page_id, fields, user_id, db)
 

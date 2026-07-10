@@ -6,6 +6,7 @@ from core.model import task_issue as issue_model
 from core.model import branch_member as member_model
 from core.model import task as task_model
 from library import notification_service
+from library.html_markdown import ensure_html
 from library.mention_parser import extract_mention_user_ids
 
 
@@ -55,6 +56,9 @@ async def create_issue(body, branch_id: int, task_id: int, request: Request, db:
     task_err = await _check_task(task_id, branch_id, db)
     if task_err:
         return task_err
+
+    if body.body:
+        body.body = ensure_html(body.body)
 
     issue_id = await issue_model.create_issue(task_id, body.title, body.body, user_id, db)
 
@@ -144,6 +148,9 @@ async def update_issue(body, branch_id: int, task_id: int, issue_id: int, reques
     fields = body.model_dump(exclude_unset=True)
     target_status = fields.pop('status', None)          # status는 분리 — 모델 update로 절대 안 씀
 
+    if fields.get('body'):
+        fields['body'] = ensure_html(fields['body'])
+
     username = request.state.payload.get('username', '')
     effective_title = fields.get('title', issue['title'])   # title도 같이 바뀌면 새 제목(멘션·전환 알림 공용)
 
@@ -215,6 +222,9 @@ async def _notify_transition(issue, target_status, status_changed, comment, bran
 async def _apply_status_transition(issue, target_status, comment, effective_title,
                                    branch_id, task_id, issue_id, user_id, username, db):
     """(검증 끝난) 이슈에 대해: (댓글) → 조건부 status → 이벤트 → 알림. close/reopen·update_issue 공용."""
+    if comment is not None:
+        comment = ensure_html(comment)
+
     comment_id = None
     if comment is not None:
         comment_id = await issue_model.create_comment(issue_id, user_id, comment, db)
@@ -294,6 +304,8 @@ async def create_comment(body, branch_id: int, task_id: int, issue_id: int, requ
     if not issue or issue['task_id'] != task_id:
         return error_response(ErrorCode.ISSUE_NOT_FOUND)
 
+    body.content = ensure_html(body.content)
+
     comment_id = await issue_model.create_comment(issue_id, user_id, body.content, db)
 
     # 이슈 작성자 + 기존 코멘터에게 알림 (중복 제거, 본인 제외)
@@ -341,6 +353,8 @@ async def update_comment(body, branch_id: int, task_id: int, issue_id: int, comm
 
     if comment['author_id'] != user_id:
         return error_response(ErrorCode.NOT_COMMENT_AUTHOR)
+
+    body.content = ensure_html(body.content)
 
     await issue_model.update_comment(comment_id, body.content, db)
     return {'status': True}
