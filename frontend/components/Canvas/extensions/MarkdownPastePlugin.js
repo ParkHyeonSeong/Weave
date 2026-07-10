@@ -6,9 +6,35 @@ export function createMarkdownPastePlugin() {
   return new Plugin({
     props: {
       handlePaste(view, event) {
-        // Cmd/Ctrl+Shift+V 탈출구: md 변환을 건너뛰어 raw 텍스트 그대로 붙인다
-        // (PM 기본 동작이 shift 붙여넣기를 plain text로 처리하므로 false 위임이면 충분)
-        if (view.input.shiftKey) return false;
+        // Cmd/Ctrl+Shift+V 탈출구: md 변환을 건너뛰어 raw 텍스트 그대로 붙인다.
+        // false를 위임(PM 기본 doPaste)하면 PM이 plain 텍스트 슬라이스는 만들어주지만,
+        // 그 트랜잭션에 uiEvent=paste 메타를 무조건 붙여버려서 Tiptap의 Bold/Italic/
+        // Strike/Code 마크 pasteRules(별도 appendTransaction)가 붙여넣은 텍스트를 다시
+        // 스캔해 **/`` 같은 인라인 문법을 마크로 변환해버린다(헤딩 같은 블록 문법은
+        // addPasteRules가 없어 안 걸리지만 인라인 마크는 새는 구멍). 그래서 여기서 직접
+        // 이스케이프한 문단/줄바꿈만으로 슬라이스를 만들어 uiEvent 메타 없이 디스패치한다.
+        if (view.input.shiftKey) {
+          const text = event.clipboardData?.getData('text/plain');
+          if (!text) return false;
+
+          event.preventDefault();
+
+          const escapeHtml = (s) =>
+            s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          const html = text
+            .replace(/\r\n?/g, '\n') // CRLF 정규화 — \n{2,} 문단 분리가 Windows 클립보드에서도 성립
+            .split(/\n{2,}/)
+            .map((para) => `<p>${escapeHtml(para).replace(/\n/g, '<br>')}</p>`)
+            .join('');
+
+          const wrapper = document.createElement('div');
+          wrapper.innerHTML = html;
+          const slice = ProseDOMParser.fromSchema(view.state.schema).parseSlice(wrapper);
+
+          const tr = view.state.tr.replaceSelection(slice);
+          view.dispatch(tr);
+          return true;
+        }
 
         // HTML이 있으면 리치 콘텐츠 우선 (다른 에디터에서 복사한 경우)
         const html = event.clipboardData?.getData('text/html');
