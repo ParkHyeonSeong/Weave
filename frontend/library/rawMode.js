@@ -15,20 +15,20 @@ import { mentionPluginKey, MENTION_OFF } from '@/components/Canvas/extensions/Me
 // 고아로 남아 raw CodeMirror 위에 계속 떠 있는다(실측·스크린샷으로 확인된 버그).
 // 표면마다 등록 확장이 다를 수 있어 getState()로 방어 체크한다.
 // (export는 rawMode.dom.test.js의 팝업 생명주기 검증용 — 실사용 진입점은 enterRaw뿐)
+const POPUP_PLUGINS = [
+  [slashCommandPluginKey, SLASH_OFF],
+  [taskRefPluginKey, REF_OFF],
+  [mathEditPluginKey, MATH_EDIT_OFF],
+  [mentionPluginKey, MENTION_OFF],
+];
+
 export function closeEditorPopups(editor) {
   const st = editor.state;
   let tr = null;
-  if (slashCommandPluginKey.getState(st)?.active) {
-    tr = (tr || st.tr).setMeta(slashCommandPluginKey, SLASH_OFF);
-  }
-  if (taskRefPluginKey.getState(st)?.active) {
-    tr = (tr || st.tr).setMeta(taskRefPluginKey, REF_OFF);
-  }
-  if (mathEditPluginKey.getState(st)?.active) {
-    tr = (tr || st.tr).setMeta(mathEditPluginKey, MATH_EDIT_OFF);
-  }
-  if (mentionPluginKey.getState(st)?.active) {
-    tr = (tr || st.tr).setMeta(mentionPluginKey, MENTION_OFF);
+  for (const [pluginKey, offMeta] of POPUP_PLUGINS) {
+    if (pluginKey.getState(st)?.active) {
+      tr = (tr || st.tr).setMeta(pluginKey, offMeta);
+    }
   }
   if (tr) editor.view.dispatch(tr);
 }
@@ -80,9 +80,12 @@ export function useRawMode(editor, extensions, enabled = true) {
   const [warnings, setWarnings] = useState([]);
   const [parseError, setParseError] = useState(false);
 
+  // 키 입력마다 ref만 갱신한다 — rawText(state)는 RawMarkdownEditor의 마운트
+  // 초기값으로만 읽히는 uncontrolled 값이라, 타이핑 중 갱신해도 그 값을 아무도
+  // 읽지 않고 표면 전체의 리렌더만 유발한다. state는 enterRaw/resetRaw(세션
+  // 경계, 곧 리마운트)에서만 맞춰준다.
   const handleRawChange = useCallback((text) => {
     rawTextRef.current = text;
-    setRawText(text);
   }, []);
 
   // raw 세션 텍스트 교체 + 강제 리마운트 (imperative clearContent용)
