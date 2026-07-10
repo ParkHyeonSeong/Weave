@@ -112,7 +112,6 @@ export default function BulkAddModal({
     const params = {
       limit: 200,
       include_non_participating: 'true',
-      parent_only: 'true',
     };
     if (branchId) params.branch_id = branchId;
     if (mode === 'epic' && epicId) {
@@ -146,15 +145,21 @@ export default function BulkAddModal({
     else if (mode === 'filter' && branchId) fetchTasks();
   }, [mode, epicId, sprintId, branchId, filterStatusCat, filterPriority, fetchTasks]);
 
+  // 서버는 sprint/epic 모드에서 상위 row에 subtasks[]를 동봉 — 선택/카운트는 평탄화 기준.
+  const flatTasks = useMemo(
+    () => tasks.flatMap((t) => [t, ...(t.subtasks || [])]),
+    [tasks]
+  );
+
   // 결과 받아왔을 때 in_track 아닌 task 자동 선택 — 사용자가 빨리 적용하게
   useEffect(() => {
-    if (tasks.length === 0) return;
+    if (flatTasks.length === 0) return;
     const next = new Set();
-    tasks.forEach((t) => {
+    flatTasks.forEach((t) => {
       if (!t.in_track) next.add(t.task_id);
     });
     setSelectedIds(next);
-  }, [tasks]);
+  }, [flatTasks]);
 
   const toggleTask = (taskId) => {
     setSelectedIds((prev) => {
@@ -166,7 +171,7 @@ export default function BulkAddModal({
   };
 
   const toggleAll = () => {
-    const addable = tasks.filter((t) => !t.in_track);
+    const addable = flatTasks.filter((t) => !t.in_track);
     if (selectedIds.size === addable.length) {
       setSelectedIds(new Set());
     } else {
@@ -174,7 +179,7 @@ export default function BulkAddModal({
     }
   };
 
-  const addableTasks = useMemo(() => tasks.filter((t) => !t.in_track), [tasks]);
+  const addableTasks = useMemo(() => flatTasks.filter((t) => !t.in_track), [flatTasks]);
   const allSelected = addableTasks.length > 0 && selectedIds.size === addableTasks.length;
 
   const handleSubmit = async () => {
@@ -318,36 +323,51 @@ export default function BulkAddModal({
                   />
                   <span>
                     {selectedIds.size} of {addableTasks.length} selected
-                    {tasks.length - addableTasks.length > 0 && (
-                      <em> · {tasks.length - addableTasks.length} already on canvas</em>
+                    {flatTasks.length - addableTasks.length > 0 && (
+                      <em> · {flatTasks.length - addableTasks.length} already on canvas</em>
                     )}
                   </span>
                 </label>
               </div>
               <ul className="BulkAdd__TaskList">
-                {tasks.map((t) => {
-                  const checked = selectedIds.has(t.task_id);
-                  return (
-                    <li key={t.task_id}>
-                      <label className={`BulkAdd__Task ${t.in_track ? 'BulkAdd__Task--used' : ''}`}>
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggleTask(t.task_id)}
-                          disabled={t.in_track}
-                        />
-                        <span
-                          className="BulkAdd__TaskBranchBar"
-                          style={{ background: t.branch_color || '#9CA3AF' }}
-                        />
-                        <span className="BulkAdd__TaskId">
-                          {t.branch_key}-{t.display_number}
-                        </span>
-                        <span className="BulkAdd__TaskTitle">{t.title}</span>
-                        {t.in_track && <span className="BulkAdd__TaskBadge">on canvas</span>}
-                      </label>
-                    </li>
-                  );
+                {tasks.flatMap((t) => {
+                  const renderRow = (row, isSub) => {
+                    const checked = selectedIds.has(row.task_id);
+                    return (
+                      <li key={row.task_id}>
+                        <label className={[
+                          'BulkAdd__Task',
+                          row.in_track ? 'BulkAdd__Task--used' : '',
+                          isSub ? 'BulkAdd__Task--sub' : '',
+                        ].filter(Boolean).join(' ')}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleTask(row.task_id)}
+                            disabled={row.in_track}
+                          />
+                          <span
+                            className="BulkAdd__TaskBranchBar"
+                            style={{ background: row.branch_color || t.branch_color || '#9CA3AF' }}
+                          />
+                          <span className="BulkAdd__TaskId">
+                            {row.branch_key}-{row.display_number}
+                          </span>
+                          <span className="BulkAdd__TaskTitle">{row.title}</span>
+                          {!isSub && row.parent_display_id && (
+                            <span className="BulkAdd__TaskParentChip" title={row.parent_title}>
+                              └ {row.parent_display_id}
+                            </span>
+                          )}
+                          {row.in_track && <span className="BulkAdd__TaskBadge">on canvas</span>}
+                        </label>
+                      </li>
+                    );
+                  };
+                  return [
+                    renderRow(t, false),
+                    ...(t.subtasks || []).map((s) => renderRow(s, true)),
+                  ];
                 })}
               </ul>
             </>

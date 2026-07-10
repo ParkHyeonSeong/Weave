@@ -2662,6 +2662,16 @@ $track-border-soft: color.adjust($color-border, $lightness: 5%);
     flex-shrink: 0;
   }
 
+  &__Task--sub {
+    padding-left: 34px; // 기존 &__Task 좌측 padding(10px) + 한 단계 들여쓰기
+  }
+
+  &__TaskParentChip {
+    flex-shrink: 0;
+    font-size: 11px;
+    color: var(--text-tertiary, #9ca3af);
+  }
+
   &__Foot {
     display: flex;
     justify-content: flex-end;
