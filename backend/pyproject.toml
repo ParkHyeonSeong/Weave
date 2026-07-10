@@ -23,6 +23,9 @@ dependencies = [
     "slowapi>=0.1.9",
     "defusedxml>=0.7.1",
     "nh3>=0.2.18",  # 서버측 HTML sanitize(SEC-17) — Rust ammonia 바인딩
+    "markdownify>=1.1.0",     # HTML→Markdown egress (WEAVE-36)
+    "markdown-it-py>=3.0.0",  # Markdown→HTML ingress — breaks=True로 frontend marked dialect 일치
+    "mdit-py-plugins>=0.4.2", # tasklists + dollarmath($..$/$$..$$ 수식)
     "cryptography>=43.0.0",  # crypto.py Fernet의 런타임 의존(그간 pywebpush 통한 전이적 설치)을 직접 선언 + GitHub App RS256 JWT
 ]
 
