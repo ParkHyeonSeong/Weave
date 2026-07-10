@@ -663,9 +663,6 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
       const draggedTaskId = Number(active.id);
       // Cmd/Ctrl 선택엔 하위태스크도 섞일 수 있는데, 하위는 컨테이너 위치가
       // 없으므로(sprint는 부모 파생, 드래그 비활성 v1 정책) 배치에서 제외한다.
-      const topLevelIds = new Set(
-        [...sprints.flatMap((s) => s.tasks || []), ...backlogTasks].map((t) => t.task_id)
-      );
       const movingIds = (selectedTaskIds.has(draggedTaskId)
         ? [...selectedTaskIds]
         : [draggedTaskId]
@@ -812,9 +809,23 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
     }
   };
 
-  // 드래그 중 프리뷰 데이터
+  // 최상위 task id 집합 — 드래그 배치·배지에서 하위태스크 제외용
+  const topLevelIds = useMemo(
+    () => new Set(
+      [...sprints.flatMap((s) => s.tasks || []), ...backlogTasks].map((t) => t.task_id)
+    ),
+    [sprints, backlogTasks]
+  );
+
+  // 드래그 중 프리뷰 데이터 — 배지 수는 실제 이동 대상 수와 일치
+  // (선택에 하위가 섞여도 이동에서 제외되고, 선택 밖 행 드래그는 1개만 이동)
   const activeTask = activeId && activeType === 'task' ? findTask(Number(activeId)) : null;
-  const dragCount = activeType === 'task' ? Math.max(selectedTaskIds.size, 1) : 0;
+  const dragCount = useMemo(() => {
+    if (activeType !== 'task' || !activeId) return 0;
+    const draggedTaskId = Number(activeId);
+    const ids = selectedTaskIds.has(draggedTaskId) ? [...selectedTaskIds] : [draggedTaskId];
+    return Math.max(ids.filter((id) => topLevelIds.has(id)).length, 1);
+  }, [activeType, activeId, selectedTaskIds, topLevelIds]);
 
   // ── 그룹핑 모드 (groupBy !== 'none') ──────────────────────────────
   // 스프린트 섹션·DnD를 숨기고, 모든 태스크(부모+하위)를 평탄화→필터→다중정렬→버킷화한다.

@@ -317,6 +317,29 @@ async def test_reorder_with_subtask_ids_skips_subtasks(db_session):
     assert await _task_col(db_session, child, "sort_order") == child_sort_before
 
 
+async def test_backlog_reorder_leaves_unselected_subtask_sort_order(db_session):
+    """일반 백로그 재정렬(최상위만 이동, 하위는 선택조차 안 됨)이 하위의
+    sort_order를 건드리지 않는다 — 컨테이너 조회의 parent 필터를 단독으로
+    고정하는 회귀. 하위는 sprint_id가 NULL이라 필터가 없으면 백로그 컨테이너에
+    섞여 0..N 인덱스로 재배열된다(부모 내 순서 오염)."""
+    alice = await _make_user(db_session, "alice_blog@sub.test", "alice_blog")
+    branch = await _make_branch(db_session, alice, key="SPBLG")
+    await _add_member(db_session, branch, alice, "member")
+    await _make_status(db_session, branch, "todo", "todo")
+    parent = await _make_task(db_session, branch, alice, title="Parent")
+    child = await _make_task(db_session, branch, alice, parent_task_id=parent,
+                             title="Child")
+    other = await _make_task(db_session, branch, alice, title="Other")
+    # 센티널 — 컨테이너 재배열에 섞이면 작은 인덱스 값으로 덮인다
+    await db_session.execute(text(
+        "UPDATE task SET sort_order = 999 WHERE task_id = :t"), {"t": child})
+
+    body = schema.TaskReorder(task_ids=[other], sprint_id=None)
+    res = await ctrl.reorder(body, branch, _req(alice), db_session)
+    assert res["status"] is True
+    assert await _task_col(db_session, child, "sort_order") == 999
+
+
 async def test_promote_with_sprint_in_same_patch_keeps_sprint(db_session):
     """승격(parent=null 명시)과 동시에 sprint를 지정하면 저장된다 — 최상위가
     되므로 자기 sprint 소유가 정상(가드가 승격 경로를 막으면 안 됨)."""
