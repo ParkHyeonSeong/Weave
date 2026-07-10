@@ -75,6 +75,7 @@ export default function CreateIssuePage() {
         <label className="CreateIssuePage__Label">Description</label>
         <IssueEditor
           ref={editorRef}
+          rawModeEnabled
           placeholder="Describe the issue..."
           minHeight={200}
           branchId={branchId}

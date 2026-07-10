@@ -256,13 +256,31 @@
     &.ProseMirror-selectednode { border-color: $color-primary; box-shadow: 0 0 0 2px rgba($color-primary, 0.2); }
   }
 
-  &--submitting .ProseMirror {
+  &--submitting .ProseMirror,
+  &--submitting .RawMarkdownEditor {
     opacity: 0.6;
   }
 
   &__Hint {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $space-2;
     font-size: 11px;
     color: $color-text-secondary;
     margin-top: $space-1;
+  }
+
+  &__RawToggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: $radius-md;
+    color: $color-text-secondary;
+
+    &:hover { background: $color-surface; color: $color-text; }
+    &--active { background: $color-primary-subtle; color: $color-primary; }
   }
 }

@@ -52,6 +52,17 @@ export default function TaskIssueDetail() {
     ? JSON.parse(sessionStorage.getItem('profile') || '{}')
     : {};
 
+  // IssueEditor.getHTML()은 raw 파싱 실패(방어) 시 throw한다 — 4개 호출부(전환/본문/댓글
+  // 추가/댓글 수정) 공용으로 여기서 흡수해 null 반환. 호출부는 null이면 저장/전송하지 않는다
+  // (RawModeBadge가 이미 편집기 안에서 실패를 안내하므로 여기선 조용히 중단).
+  const safeGetHTML = (ref) => {
+    try {
+      return ref.current?.getHTML() || '';
+    } catch {
+      return null;
+    }
+  };
+
   const fetchIssue = async () => {
     if (!branchId || !taskId || !issueId) return;
     setLoading(true);
@@ -75,7 +86,11 @@ export default function TaskIssueDetail() {
     if (submitting) return;
     // 클릭 시점에 에디터를 직접 읽어 composerEmpty stale state 리스크 제거
     const isEmpty = newCommentRef.current?.isEmpty() ?? true;
-    const html = isEmpty ? null : newCommentRef.current?.getHTML();
+    let html = null;
+    if (!isEmpty) {
+      html = safeGetHTML(newCommentRef);
+      if (html === null) return; // 파싱 실패 — 전환도 댓글도 진행하지 않음
+    }
     setSubmitting(true);
     try {
       const res = await axios.post(
@@ -112,8 +127,12 @@ export default function TaskIssueDetail() {
 
   // 본문 저장
   const saveBody = async () => {
-    const html = bodyEditorRef.current?.getHTML() || '';
     const isEmpty = bodyEditorRef.current?.isEmpty();
+    let html = '';
+    if (!isEmpty) {
+      html = safeGetHTML(bodyEditorRef);
+      if (html === null) return; // 파싱 실패 — 편집 상태 유지(저장 안 함)
+    }
     const val = isEmpty ? null : html;
     if (val === (issue.body || null)) {
       setEditingBody(false);
@@ -132,9 +151,10 @@ export default function TaskIssueDetail() {
 
   // 댓글 추가
   const handleAddComment = async () => {
-    const html = newCommentRef.current?.getHTML() || '';
     const isEmpty = newCommentRef.current?.isEmpty();
     if (isEmpty || submitting) return;
+    const html = safeGetHTML(newCommentRef);
+    if (html === null) return; // 파싱 실패 — 제출하지 않음
     setSubmitting(true);
     try {
       const res = await axios.post(`/branches/${branchId}/tasks/${taskId}/issues/${issueId}/comments`, {
@@ -151,9 +171,10 @@ export default function TaskIssueDetail() {
 
   // 댓글 수정
   const saveComment = async (commentId) => {
-    const html = commentEditorRef.current?.getHTML() || '';
     const isEmpty = commentEditorRef.current?.isEmpty();
     if (isEmpty) return;
+    const html = safeGetHTML(commentEditorRef);
+    if (html === null) return; // 파싱 실패 — 편집 상태 유지(저장 안 함)
     try {
       const res = await axios.patch(
         `/branches/${branchId}/tasks/${taskId}/issues/${issueId}/comments/${commentId}`,
@@ -321,6 +342,7 @@ export default function TaskIssueDetail() {
               <div className="IssueDetail__CardEditBody">
                 <IssueEditor
                   ref={bodyEditorRef}
+                  rawModeEnabled
                   content={issue.body || ''}
                   placeholder="Describe the issue..."
                   minHeight={150}
@@ -397,6 +419,7 @@ export default function TaskIssueDetail() {
                   <div className="IssueDetail__CardEditBody">
                     <IssueEditor
                       ref={commentEditorRef}
+                      rawModeEnabled
                       content={comment.content}
                       placeholder="Edit comment..."
                       minHeight={100}
@@ -428,6 +451,7 @@ export default function TaskIssueDetail() {
         <div className="IssueDetail__ReplyForm">
           <IssueEditor
             ref={newCommentRef}
+            rawModeEnabled
             placeholder="Leave a comment..."
             minHeight={100}
             branchId={branchId}
