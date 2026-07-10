@@ -155,9 +155,18 @@ async def search_track_sources(
     Returns source_task_id values for add_track_item / add_track_items_bulk. Filters
     are optional; results are capped (limit defaults to 50, max 200).
     assignee_user_id / label_id narrow to a specific assignee or label.
-    status_category groups statuses ("todo"/"in_progress"/"done"). parent_only=true
-    excludes subtasks. include_non_participating=true also searches branches not yet
-    attached to the track.
+    status_category groups statuses ("todo"/"in_progress"/"done").
+    Subtasks are first-class. sprint_id / epic_id match subtasks through their
+    PARENT's sprint/epic (subtasks inherit scope from the parent); all other filters
+    (q, status, assignee, label, exclude_done) apply to each row itself. A matched
+    subtask is nested in its parent row's "subtasks" array when the parent is in the
+    same result page; if the parent was not matched (or was cut by limit) the subtask
+    is returned as a flat row. Every row carries parent_task_id / parent_display_id /
+    parent_title (null for top-level). Without sprint_id/epic_id, subtasks match
+    independently as flat rows with the same parent_* fields. parent_only=true
+    restricts results to top-level tasks (no nesting, no subtask rows).
+    include_non_participating=true also searches branches not yet attached to the
+    track.
     """
     params = {k: v for k, v in {
         "q": q,
