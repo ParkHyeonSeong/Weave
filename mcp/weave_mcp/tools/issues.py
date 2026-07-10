@@ -1,6 +1,7 @@
 from typing import Any
 
 from .._app import mcp, get_client, BranchRef
+from .._format import format_params
 
 
 @mcp.tool
@@ -18,9 +19,9 @@ async def get_task_issue(branch_id: BranchRef, task_id: int, issue_id: int, form
     format: "html" (default) or "markdown" — rich-text fields (issue body and
     comments) are returned converted to that format.
     """
-    params = {"format": format} if format != "html" else {}
     return await get_client().call_json(
-        "GET", f"/api/branches/{branch_id}/tasks/{task_id}/issues/{issue_id}", params=params
+        "GET", f"/api/branches/{branch_id}/tasks/{task_id}/issues/{issue_id}",
+        params=format_params(format)
     )
 
 

@@ -1,6 +1,7 @@
 from typing import Any
 
 from .._app import mcp, get_client, BranchRef
+from .._format import format_params
 
 
 @mcp.tool
@@ -180,9 +181,8 @@ async def get_canvas_page(canvas_id: int, page_id: int, format: str = "html") ->
     format: "html" (default) or "markdown" — the page content is returned
     converted to that format.
     """
-    params = {"format": format} if format != "html" else {}
     return await get_client().call_json(
-        "GET", f"/api/canvases/{canvas_id}/pages/{page_id}", params=params
+        "GET", f"/api/canvases/{canvas_id}/pages/{page_id}", params=format_params(format)
     )
 
 

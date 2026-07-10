@@ -1,6 +1,7 @@
 from typing import Any
 
 from .._app import mcp, get_client, BranchRef, UserRef
+from .._format import format_params
 from .._pagination import paginate
 
 
@@ -11,9 +12,8 @@ async def get_task(branch_id: BranchRef, task_id: int, format: str = "html") -> 
     format: "html" (default) or "markdown" — rich-text fields (description)
     are returned converted to that format under the same field names.
     """
-    params = {"format": format} if format != "html" else {}
     return await get_client().call_json(
-        "GET", f"/api/branches/{branch_id}/tasks/{task_id}", params=params
+        "GET", f"/api/branches/{branch_id}/tasks/{task_id}", params=format_params(format)
     )
 
 
@@ -221,11 +221,9 @@ async def list_task_comments(
     format: "html" (default) or "markdown" — each comment's content is returned
     converted to that format.
     """
-    params = {"order": order}
-    if format != "html":
-        params["format"] = format
     return await get_client().call_json(
-        "GET", f"/api/branches/{branch_id}/tasks/{task_id}/comments", params=params
+        "GET", f"/api/branches/{branch_id}/tasks/{task_id}/comments",
+        params=format_params(format, order=order)
     )
 
 

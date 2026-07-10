@@ -55,6 +55,11 @@ def _esc_link_text(text) -> str:
     return _LINK_TEXT_ESC_RE.sub(r'\\\1', str(text if text is not None else ''))
 
 
+def _chip_link(label: str, path: str) -> str:
+    """[esc(label)](base_url + path) — ref 칩 3종(task/issue/doc) 공용 링크 조립."""
+    return f"[{_esc_link_text(label)}]({_base_url()}{path})"
+
+
 # ---------------------------------------------------------------------------
 # egress: HTML → Markdown
 # ---------------------------------------------------------------------------
@@ -67,15 +72,15 @@ class _WeaveConverter(MarkdownConverter):
     def convert_span(self, el, text, *args, **kwargs):
         if el.get('data-task-ref'):
             # JS formatRefLabel(refMarkdown.js:53-55)과 동일 — 라벨 전체 escape
-            label = _esc_link_text(f"{el.get('data-display-id', '')} {el.get('data-title', '')}".strip())
-            return f"[{label}]({_base_url()}/branch/{el.get('data-branch-id')}/task/{el.get('data-task-id')})"
+            label = f"{el.get('data-display-id', '')} {el.get('data-title', '')}".strip()
+            return _chip_link(label, f"/branch/{el.get('data-branch-id')}/task/{el.get('data-task-id')}")
         if el.get('data-issue-ref'):
-            label = _esc_link_text(f"{el.get('data-display-id', '')} {el.get('data-title', '')}".strip())
-            return (f"[{label}]({_base_url()}/branch/{el.get('data-branch-id')}"
-                    f"/task/{el.get('data-task-id')}/issue/{el.get('data-issue-id')})")
+            label = f"{el.get('data-display-id', '')} {el.get('data-title', '')}".strip()
+            return _chip_link(label, f"/branch/{el.get('data-branch-id')}"
+                               f"/task/{el.get('data-task-id')}/issue/{el.get('data-issue-id')}")
         if el.get('data-doc-ref'):
-            return (f"[{_esc_link_text(el.get('data-title', ''))}]"
-                    f"({_base_url()}/canvas/{el.get('data-canvas-id')}/{el.get('data-page-id')})")
+            return _chip_link(el.get('data-title', ''),
+                               f"/canvas/{el.get('data-canvas-id')}/{el.get('data-page-id')}")
         if el.get('data-mention'):
             return f"@{el.get('data-username', '')}"
         if el.get('data-type') == 'inline-math':
