@@ -41,6 +41,16 @@ def _base_url() -> str:
     return config.FRONTEND_URL or ''
 
 
+# frontend refMarkdown.js:13-15 escapeLinkText와 동일(단일 패스, 동일 문자셋) —
+# md 링크 텍스트 문법을 깨는 \ [ ]를 백슬래시 escape. 미적용 시 unbalanced
+# bracket title이 링크 문법을 닫아버려 markdown_to_html 왕복에서 링크가 소실된다.
+_LINK_TEXT_ESC_RE = re.compile(r'([\\\[\]])')
+
+
+def _esc_link_text(text) -> str:
+    return _LINK_TEXT_ESC_RE.sub(r'\\\1', str(text if text is not None else ''))
+
+
 # ---------------------------------------------------------------------------
 # egress: HTML → Markdown
 # ---------------------------------------------------------------------------
@@ -52,14 +62,15 @@ class _WeaveConverter(MarkdownConverter):
 
     def convert_span(self, el, text, *args, **kwargs):
         if el.get('data-task-ref'):
-            label = f"{el.get('data-display-id', '')} {el.get('data-title', '')}".strip()
+            # JS formatRefLabel(refMarkdown.js:53-55)과 동일 — 라벨 전체 escape
+            label = _esc_link_text(f"{el.get('data-display-id', '')} {el.get('data-title', '')}".strip())
             return f"[{label}]({_base_url()}/branch/{el.get('data-branch-id')}/task/{el.get('data-task-id')})"
         if el.get('data-issue-ref'):
-            label = f"{el.get('data-display-id', '')} {el.get('data-title', '')}".strip()
+            label = _esc_link_text(f"{el.get('data-display-id', '')} {el.get('data-title', '')}".strip())
             return (f"[{label}]({_base_url()}/branch/{el.get('data-branch-id')}"
                     f"/task/{el.get('data-task-id')}/issue/{el.get('data-issue-id')})")
         if el.get('data-doc-ref'):
-            return (f"[{el.get('data-title', '')}]"
+            return (f"[{_esc_link_text(el.get('data-title', ''))}]"
                     f"({_base_url()}/canvas/{el.get('data-canvas-id')}/{el.get('data-page-id')})")
         if el.get('data-mention'):
             return f"@{el.get('data-username', '')}"
@@ -78,7 +89,7 @@ class _WeaveConverter(MarkdownConverter):
             # canonical = JS createBlockMarkdownSpec 실측 출력(공백·따옴표·빈 줄 — S0.3에서 확정)
             return f'\n:::callout {{type="{el.get("data-callout")}"}}\n\n{text.strip()}\n\n:::\n\n'
         if el.get('data-bookmark') is not None:
-            return f"\n[{el.get('data-title', '')}]({el.get('data-url', '')})\n\n"
+            return f"\n[{_esc_link_text(el.get('data-title', ''))}]({el.get('data-url', '')})\n\n"
         return text  # 미커버 div — 텍스트 강등
 
 

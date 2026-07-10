@@ -3,8 +3,6 @@
 정확한 문자열 동치는 golden fixture(test_markdown_codec_parity.py)가 담당,
 여기서는 커스텀 규칙별 핵심 산출물을 containment로 검증한다.
 """
-import pytest
-
 import config
 from library.html_markdown import (
     ensure_html, html_to_markdown, is_html, markdown_to_html,
@@ -110,6 +108,26 @@ def test_bookmark_one_line_link():
     html = ('<div data-bookmark="true" data-url="https://example.com" '
             'data-title="예시 사이트" data-domain="example.com"></div>')
     assert html_to_markdown(html) == '[예시 사이트](https://example.com)'
+
+
+def test_link_label_bracket_escape_roundtrip():
+    # escapeLinkText(frontend refMarkdown.js:13-15) 패리티 — 라벨의 \·[·]를
+    # 백슬래시 escape하지 않으면 unbalanced bracket이 링크 문법을 깨서
+    # markdown_to_html 왕복 시 링크가 소실되거나 앵커 경계가 어긋난다.
+    for title in ('end bracket ]', 'open [ bracket'):
+        html = (f'<p><span data-task-ref="true" data-task-id="12" data-branch-id="3" '
+                f'data-display-id="WV-12" data-title="{title}">x</span></p>')
+        out = markdown_to_html(html_to_markdown(html))
+        assert '<a href="/branch/3/task/12"' in out
+        assert f'WV-12 {title}' in out
+
+
+def test_bookmark_label_bracket_escape_roundtrip():
+    html = ('<div data-bookmark="true" data-url="https://example.com" '
+            'data-title="예시 ] 사이트"></div>')
+    out = markdown_to_html(html_to_markdown(html))
+    assert '<a href="https://example.com"' in out
+    assert '예시 ] 사이트' in out
 
 
 def test_unknown_tag_degrades_to_text():
