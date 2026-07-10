@@ -17,14 +17,21 @@ async def add(track_id: int, branch_id: int, scope_type: str, scope_id: int,
 
 async def add_sprints_for_tasks(track_id: int, task_ids: list, db: AsyncSession):
     """task들의 distinct (branch_id, sprint_id) 조합을 sprint scope로 자동 등록.
-    sprint_id IS NULL인 task는 skip (백로그는 scope 없음)."""
+    하위태스크의 유효 sprint는 무조건 부모의 것 — 자기 sprint_id는 전환 잔재
+    stale일 수 있어 무시(부모 라이브 파생 불변식). 유효 sprint가 NULL인 task는
+    skip (백로그는 scope 없음)."""
     if not task_ids:
         return
     await db.execute(text("""
         INSERT INTO track_scope (track_id, branch_id, scope_type, scope_id)
-        SELECT DISTINCT CAST(:track_id AS bigint), t.branch_id, 'sprint', t.sprint_id
+        SELECT DISTINCT CAST(:track_id AS bigint), t.branch_id, 'sprint',
+               CASE WHEN t.parent_task_id IS NOT NULL THEN p.sprint_id
+                    ELSE t.sprint_id END
         FROM task t
-        WHERE t.task_id = ANY(:task_ids) AND t.sprint_id IS NOT NULL
+        LEFT JOIN task p ON t.parent_task_id = p.task_id
+        WHERE t.task_id = ANY(:task_ids)
+          AND CASE WHEN t.parent_task_id IS NOT NULL THEN p.sprint_id
+                   ELSE t.sprint_id END IS NOT NULL
         ON CONFLICT (track_id, branch_id, scope_type, scope_id) DO NOTHING
     """), {'track_id': track_id, 'task_ids': task_ids})
 

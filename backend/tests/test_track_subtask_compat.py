@@ -11,7 +11,7 @@ from sqlalchemy import text
 from core.controller import track as ctrl
 from core.model import track_scope as track_scope_model
 from core.model import track_item as track_item_model
-from routers.schema.track import TrackItemsBulkAdd
+from routers.schema.track import TrackItemAdd, TrackItemsBulkAdd
 
 
 def _req(user_id: int):
@@ -293,3 +293,56 @@ async def test_search_sources_child_stale_sprint_ignored(db_session):
     real_rows = await track_item_model.search_sources(
         track, user, '', None, 50, db_session, sprint_id=real_sprint)
     assert [s["task_id"] for s in real_rows[0]["subtasks"]] == [sub]
+
+
+# ---------------------------------------------------------------------------
+# Task 3: auto sprint scope falls back to parent's sprint
+# ---------------------------------------------------------------------------
+
+async def _scope_rows(db, track_id):
+    res = await db.execute(text("""
+        SELECT branch_id, scope_type, scope_id FROM track_scope
+        WHERE track_id = :t ORDER BY scope_id
+    """), {"t": track_id})
+    return [dict(r._mapping) for r in res.fetchall()]
+
+
+async def test_bulk_add_subtask_registers_parent_sprint_scope(db_session):
+    """하위태스크만 bulk add해도 부모의 sprint가 자동 scope 등록된다."""
+    user, branch, track = await _seed_base(db_session)
+    sprint = await _make_sprint(db_session, branch, user, status="active")
+    parent = await _make_task(db_session, branch, user, sprint_id=sprint, title="Parent")
+    sub = await _make_task(db_session, branch, user, parent_task_id=parent)
+
+    body = TrackItemsBulkAdd(source_task_ids=[sub], scope_mode='filter')
+    res = await ctrl.add_items_bulk(track, body, _req(user), db_session)
+    assert res['status'] is True and res['added'] == 1
+    scopes = await _scope_rows(db_session, track)
+    assert scopes == [{'branch_id': branch, 'scope_type': 'sprint', 'scope_id': sprint}]
+
+
+async def test_bulk_add_subtask_of_backlog_parent_skips_scope(db_session):
+    """부모가 백로그(sprint 없음)인 하위는 scope 등록을 스킵한다 (기존 백로그 규칙)."""
+    user, branch, track = await _seed_base(db_session)
+    parent = await _make_task(db_session, branch, user, title="Backlog parent")
+    sub = await _make_task(db_session, branch, user, parent_task_id=parent)
+
+    body = TrackItemsBulkAdd(source_task_ids=[sub], scope_mode='filter')
+    res = await ctrl.add_items_bulk(track, body, _req(user), db_session)
+    assert res['status'] is True and res['added'] == 1
+    assert await _scope_rows(db_session, track) == []
+
+
+async def test_drag_add_item_registers_parent_sprint_scope(db_session):
+    """단일 드래그/MCP 경로(add_item)도 bulk와 동일하게 sprint scope 자동 등록 —
+    하위는 부모의 sprint로 매칭(부모 우선) (add_item은 기존에 scope 등록 자체가 누락)."""
+    user, branch, track = await _seed_base(db_session)
+    sprint = await _make_sprint(db_session, branch, user, status="active")
+    parent = await _make_task(db_session, branch, user, sprint_id=sprint, title="Parent")
+    sub = await _make_task(db_session, branch, user, parent_task_id=parent)
+
+    body = TrackItemAdd(source_task_id=sub, position_x=10, position_y=20)
+    res = await ctrl.add_item(track, body, _req(user), db_session)
+    assert res['status'] is True
+    scopes = await _scope_rows(db_session, track)
+    assert scopes == [{'branch_id': branch, 'scope_type': 'sprint', 'scope_id': sprint}]

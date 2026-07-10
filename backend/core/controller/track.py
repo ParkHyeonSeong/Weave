@@ -489,6 +489,13 @@ async def add_item(track_id: int, body, request: Request, db: AsyncSession):
         body.position_x or 0, body.position_y or 0,
         db,
     )
+
+    # bulk add(filter 모드)와 동일 규칙 — 단일 추가도 sprint scope 자동 등록.
+    # 하위태스크는 부모의 sprint 사용(부모 우선), 백로그(유효 sprint 없음)는 skip.
+    # 트리에서 끌어온 경우는 이미 있는 scope라 idempotent no-op.
+    await track_scope_model.add_sprints_for_tasks(
+        track_id, [body.source_task_id], db)
+
     return {'status': True, 'item_id': item_id}
 
 
