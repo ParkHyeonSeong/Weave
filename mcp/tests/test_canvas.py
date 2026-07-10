@@ -28,7 +28,7 @@ async def test_get_canvas_page(fake_client):
     fake_client.call_json.return_value = {"status": True}
     async with Client(_app.mcp) as client:
         await client.call_tool("get_canvas_page", {"canvas_id": 1, "page_id": 2})
-    fake_client.call_json.assert_awaited_once_with("GET", "/api/canvases/1/pages/2")
+    fake_client.call_json.assert_awaited_once_with("GET", "/api/canvases/1/pages/2", params={})
 
 
 async def test_create_canvas_page(fake_client):

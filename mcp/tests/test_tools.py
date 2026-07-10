@@ -82,7 +82,7 @@ async def test_get_task(fake_client):
     fake_client.call_json.return_value = {"id": 5}
     async with Client(_app.mcp) as client:
         await client.call_tool("get_task", {"branch_id": 3, "task_id": 5})
-    fake_client.call_json.assert_awaited_once_with("GET", "/api/branches/3/tasks/5")
+    fake_client.call_json.assert_awaited_once_with("GET", "/api/branches/3/tasks/5", params={})
 
 
 async def test_create_task_sends_body(fake_client):

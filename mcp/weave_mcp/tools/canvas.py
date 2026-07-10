@@ -174,10 +174,15 @@ async def get_canvas_page_tree(canvas_id: int) -> Any:
 
 
 @mcp.tool
-async def get_canvas_page(canvas_id: int, page_id: int) -> Any:
-    """Get a single canvas page including its content."""
+async def get_canvas_page(canvas_id: int, page_id: int, format: str = "html") -> Any:
+    """Get a single canvas page including its content.
+
+    format: "html" (default) or "markdown" — the page content is returned
+    converted to that format.
+    """
+    params = {"format": format} if format != "html" else {}
     return await get_client().call_json(
-        "GET", f"/api/canvases/{canvas_id}/pages/{page_id}"
+        "GET", f"/api/canvases/{canvas_id}/pages/{page_id}", params=params
     )
 
 
@@ -191,7 +196,8 @@ async def create_canvas_page(
 ) -> Any:
     """Create a new page in a canvas.
 
-    Only title is required. content sets the initial page body (max 300k chars).
+    Only title is required. content sets the initial page body (max 300k chars);
+    accepts markdown or HTML, and strings without HTML tags are treated as markdown.
     parent_page_id nests the new page under an existing page. type is one of
     "document" (default), "folder", or "typst".
     """
@@ -219,7 +225,8 @@ async def update_canvas_page(
     """Update a canvas page's title, content, or wide_mode layout.
 
     WARNING: providing `content` replaces the entire page body (max 300k chars) —
-    partial updates are not supported; pass the full desired content. To change a
+    partial updates are not supported; pass the full desired content. content accepts
+    markdown or HTML; strings without HTML tags are treated as markdown. To change a
     page's parent or order use move_canvas_page instead.
     """
     body = {k: v for k, v in {

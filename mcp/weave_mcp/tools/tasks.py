@@ -5,10 +5,15 @@ from .._pagination import paginate
 
 
 @mcp.tool
-async def get_task(branch_id: BranchRef, task_id: int) -> Any:
-    """Get full details of a single task within a branch."""
+async def get_task(branch_id: BranchRef, task_id: int, format: str = "html") -> Any:
+    """Get full details of a single task within a branch.
+
+    format: "html" (default) or "markdown" — rich-text fields (description)
+    are returned converted to that format under the same field names.
+    """
+    params = {"format": format} if format != "html" else {}
     return await get_client().call_json(
-        "GET", f"/api/branches/{branch_id}/tasks/{task_id}"
+        "GET", f"/api/branches/{branch_id}/tasks/{task_id}", params=params
     )
 
 
@@ -40,7 +45,8 @@ async def create_task(
     applied_task_type. Dates are ISO YYYY-MM-DD. assignee_main/assignee_sub
     accept a user id, an exact username, an email, or "me" (ambiguous matches
     fail; digit-only strings are ids). parent_task_id makes this a subtask;
-    custom_fields keys come from list_task_types.
+    custom_fields keys come from list_task_types. description accepts markdown or
+    HTML; strings without HTML tags are treated as markdown.
     """
     body = {"title": title}
     body.update({
@@ -64,7 +70,8 @@ async def create_task(
 
 @mcp.tool
 async def add_task_comment(branch_id: BranchRef, task_id: int, content: str) -> Any:
-    """Add a comment to a task. `content` is the comment text."""
+    """Add a comment to a task. content accepts markdown or HTML; strings without
+    HTML tags are treated as markdown."""
     return await get_client().call_json(
         "POST",
         f"/api/branches/{branch_id}/tasks/{task_id}/comments",
@@ -119,6 +126,7 @@ async def update_task(
     """Update fields of an existing task. All parameters are optional; only the ones
     you pass change.
 
+    description accepts markdown or HTML; strings without HTML tags are treated as markdown.
     status/task_type accept the branch's key (case-insensitive) or display label;
     invalid values fail with the valid set in the error. assignee_main/assignee_sub
     accept a user id, an exact username, an email, or "me" (ambiguous matches fail).
@@ -203,14 +211,21 @@ async def delete_task(branch_id: BranchRef, task_id: int) -> Any:
 
 
 @mcp.tool
-async def list_task_comments(branch_id: BranchRef, task_id: int, order: str = "asc") -> Any:
+async def list_task_comments(
+    branch_id: BranchRef, task_id: int, order: str = "asc", format: str = "html"
+) -> Any:
     """List all comments on a task.
 
     order: "asc" (default, oldest first) or "desc" (newest first) by created_at.
     Replies reference their root via parent_comment_id regardless of order.
+    format: "html" (default) or "markdown" — each comment's content is returned
+    converted to that format.
     """
+    params = {"order": order}
+    if format != "html":
+        params["format"] = format
     return await get_client().call_json(
-        "GET", f"/api/branches/{branch_id}/tasks/{task_id}/comments", params={"order": order}
+        "GET", f"/api/branches/{branch_id}/tasks/{task_id}/comments", params=params
     )
 
 
@@ -221,7 +236,8 @@ async def update_task_comment(
     comment_id: int,
     content: str,
 ) -> Any:
-    """Update the content of an existing task comment."""
+    """Update the content of an existing task comment. content accepts markdown or
+    HTML; strings without HTML tags are treated as markdown."""
     return await get_client().call_json(
         "PATCH",
         f"/api/branches/{branch_id}/tasks/{task_id}/comments/{comment_id}",

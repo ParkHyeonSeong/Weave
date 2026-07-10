@@ -17,7 +17,7 @@ async def test_get_task_issue(fake_client):
     async with Client(_app.mcp) as client:
         await client.call_tool("get_task_issue", {"branch_id": 1, "task_id": 2, "issue_id": 3})
     fake_client.call_json.assert_awaited_once_with(
-        "GET", "/api/branches/1/tasks/2/issues/3"
+        "GET", "/api/branches/1/tasks/2/issues/3", params={}
     )
 
 
