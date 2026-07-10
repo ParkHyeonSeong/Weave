@@ -61,6 +61,7 @@ import "@/styles/components/common/multiSelect.scss";
 import "@/styles/components/common/entityAppearance.scss";
 import "@/styles/components/common/avatar.scss";
 import "@/styles/components/common/context-menu.scss";
+import "@/styles/components/common/rawMarkdownEditor.scss";
 import "@/styles/components/branch/branchSettings.scss";
 import "@/styles/components/branch/settingsGithub.scss";
 import "@/styles/components/browse/browseBranches.scss";

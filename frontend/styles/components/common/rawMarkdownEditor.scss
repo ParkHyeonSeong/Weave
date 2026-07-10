@@ -1,0 +1,42 @@
+@use '../../variables' as *;
+
+// Raw markdown 편집기 (CodeMirror) — 비협업 3표면 공용
+.RawMarkdownEditor {
+  .cm-editor {
+    min-height: 120px;
+    background: $color-bg;
+
+    &.cm-focused { outline: none; }
+  }
+
+  .cm-scroller {
+    max-height: 400px;
+    overflow-y: auto;
+    font-family: 'SFMono-Regular', Consolas, monospace;
+    font-size: $font-size-sm;
+    line-height: 1.6;
+    padding: $space-3;
+  }
+
+  .cm-content { caret-color: $color-text; }
+  .cm-placeholder { color: $color-text-tertiary; }
+}
+
+// raw 토글 손실 경고/파싱 실패 배지
+.RawModeBadge {
+  display: flex;
+  align-items: center;
+  gap: $space-2;
+  padding: $space-1 $space-3;
+  font-size: $font-size-xs;
+  color: $color-warning;
+  background: #FFFBEB;
+  border-bottom: 1px solid $color-border;
+
+  svg { flex-shrink: 0; }
+
+  &--error {
+    color: $color-error;
+    background: $color-error-bg;
+  }
+}
