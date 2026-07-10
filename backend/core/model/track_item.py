@@ -68,11 +68,24 @@ async def find_by_track(track_id: int, user_id: int, db: AsyncSession):
             ti.color_override, ti.label_override,
             t.task_id, t.title, t.description, t.display_number,
             t.status, t.priority, t.start_date, t.due_date,
+            t.parent_task_id,
+            pt.display_number AS parent_display_number,
+            pt.title AS parent_title,
+            sub.total AS subtask_total, sub.done AS subtask_done,
             b.branch_id, b.branch_name, b.key AS branch_key, b.color AS branch_color, b.icon AS branch_icon,
             ws.label AS status_label, ws.color AS status_color, ws.category AS status_category,
             CASE WHEN bm.user_id IS NULL OR b.is_archived THEN TRUE ELSE FALSE END AS restricted
         FROM track_item ti
         LEFT JOIN task t ON ti.source_task_id = t.task_id
+        LEFT JOIN task pt ON t.parent_task_id = pt.task_id
+        LEFT JOIN LATERAL (
+            SELECT COUNT(*) FILTER (WHERE sws.category IS DISTINCT FROM 'cancelled') AS total,
+                   COUNT(*) FILTER (WHERE sws.category = 'done') AS done
+            FROM task st
+            LEFT JOIN workflow_status sws
+                ON sws.branch_id = st.branch_id AND sws.key = st.status
+            WHERE st.parent_task_id = t.task_id
+        ) sub ON TRUE
         LEFT JOIN branch b ON t.branch_id = b.branch_id
         LEFT JOIN workflow_status ws
             ON ws.branch_id = t.branch_id AND ws.key = t.status
@@ -121,6 +134,13 @@ async def find_by_track(track_id: int, user_id: int, db: AsyncSession):
                 'priority': r['priority'],
                 'start_date': r['start_date'].isoformat() if r['start_date'] else None,
                 'due_date': r['due_date'].isoformat() if r['due_date'] else None,
+                'parent': ({
+                    'task_id': r['parent_task_id'],
+                    'display_id': f"{r['branch_key']}-{r['parent_display_number']}",
+                    'title': r['parent_title'],
+                } if r['parent_task_id'] else None),
+                'subtask_total': r['subtask_total'] or 0,
+                'subtask_done': r['subtask_done'] or 0,
             })
             accessible_task_ids.append(r['task_id'])
         items.append(item)

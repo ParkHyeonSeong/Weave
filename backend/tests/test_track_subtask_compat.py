@@ -346,3 +346,43 @@ async def test_drag_add_item_registers_parent_sprint_scope(db_session):
     assert res['status'] is True
     scopes = await _scope_rows(db_session, track)
     assert scopes == [{'branch_id': branch, 'scope_type': 'sprint', 'scope_id': sprint}]
+
+
+# ---------------------------------------------------------------------------
+# Task 4: find_by_track hydrates parent + subtask progress
+# ---------------------------------------------------------------------------
+
+async def test_find_by_track_hydrates_parent_and_progress(db_session):
+    """하위 아이템엔 parent{}, 부모 아이템엔 subtask_done/total (cancelled 제외)."""
+    user, branch, track = await _seed_base(db_session)
+    parent = await _make_task(db_session, branch, user, title="Parent")
+    await _make_task(db_session, branch, user, parent_task_id=parent, status="done")
+    await _make_task(db_session, branch, user, parent_task_id=parent, status="todo")
+    await _make_task(db_session, branch, user, parent_task_id=parent, status="cancelled")
+    sub = await _make_task(db_session, branch, user, parent_task_id=parent, title="Sub")
+    await _make_track_item(db_session, track, parent)
+    await _make_track_item(db_session, track, sub)
+
+    items = await track_item_model.find_by_track(track, user, db_session)
+    by_task = {i['task_id']: i for i in items}
+    p_item, s_item = by_task[parent], by_task[sub]
+    assert p_item['parent'] is None
+    assert p_item['subtask_total'] == 3 and p_item['subtask_done'] == 1
+    assert s_item['parent']['task_id'] == parent
+    assert s_item['parent']['title'] == "Parent"
+    assert s_item['parent']['display_id'].startswith("KEY-")
+    assert s_item['subtask_total'] == 0
+
+
+async def test_find_by_track_restricted_hides_parent(db_session):
+    """비멤버 유저에게 restricted 아이템은 parent/진행도 미노출."""
+    user, branch, track = await _seed_base(db_session)
+    outsider = await _make_user(db_session, "b@x.com", "bob")
+    await _add_track_member(db_session, track, outsider, role="viewer")
+    parent = await _make_task(db_session, branch, user, title="Parent")
+    sub = await _make_task(db_session, branch, user, parent_task_id=parent)
+    await _make_track_item(db_session, track, sub)
+
+    items = await track_item_model.find_by_track(track, outsider, db_session)
+    assert items[0]['restricted'] is True
+    assert 'parent' not in items[0] and 'subtask_total' not in items[0]
