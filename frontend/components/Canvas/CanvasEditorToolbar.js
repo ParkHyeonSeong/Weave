@@ -8,7 +8,7 @@ import {
   AlignLeft, AlignCenter, AlignRight,
   ChevronDown, Highlighter, Palette,
   Info, AlertTriangle, CheckCircle2, XCircle,
-  Type, PaintBucket,
+  Type, PaintBucket, CodeXml,
   AlignStartVertical, AlignCenterVertical, AlignEndVertical,
 } from 'lucide-react';
 import { TextSelection } from '@tiptap/pm/state';
@@ -96,7 +96,7 @@ const insertMathWithPopover = (editor, kind, latex) => {
   view.focus();
 };
 
-export default function CanvasEditorToolbar({ editor }) {
+export default function CanvasEditorToolbar({ editor, rawModeEnabled = false, rawModeActive = false, onToggleRawMode }) {
   const [openDropdown, setOpenDropdown] = useState(null);
 
   if (!editor) return null;
@@ -144,6 +144,19 @@ export default function CanvasEditorToolbar({ editor }) {
   );
 
   const Sep = () => <div className="CanvasEditorToolbar__Sep" />;
+
+  // raw 모드 중엔 서식 명령이 숨겨진 WYSIWYG doc에 적용돼 무의미 — 토글만 노출.
+  // 주의: 위의 useState 3개보다 뒤에 있어야 한다 (rawModeActive가 토글돼도 훅 개수 불변).
+  if (rawModeEnabled && rawModeActive) {
+    return (
+      <div className="CanvasEditorToolbar" onMouseDown={(e) => e.preventDefault()}>
+        <Btn onClick={onToggleRawMode} active title="Rich text 편집으로 전환">
+          <CodeXml size={16} />
+        </Btn>
+        <span className="CanvasEditorToolbar__RawLabel">Markdown 소스 편집 중</span>
+      </div>
+    );
+  }
 
   return (
     <div className="CanvasEditorToolbar" onMouseDown={(e) => e.preventDefault()}>
@@ -509,6 +522,15 @@ export default function CanvasEditorToolbar({ editor }) {
       <Btn onClick={() => editor.chain().focus().redo().run()} title="Redo">
         <Redo2 size={16} />
       </Btn>
+
+      {rawModeEnabled && (
+        <>
+          <Sep />
+          <Btn onClick={onToggleRawMode} title="Markdown 소스로 편집">
+            <CodeXml size={16} />
+          </Btn>
+        </>
+      )}
     </div>
   );
 }

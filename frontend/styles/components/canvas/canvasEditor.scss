@@ -717,6 +717,12 @@
     margin: 0 $space-1;
   }
 
+  &__RawLabel {
+    font-size: $font-size-xs;
+    color: $color-text-secondary;
+    padding-left: $space-1;
+  }
+
   // 드롭다운 래퍼
   &__DropdownWrap {
     position: relative;
