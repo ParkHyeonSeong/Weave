@@ -4,7 +4,10 @@ import { ReactRenderer } from '@tiptap/react';
 import MentionPopup from './MentionPopup';
 import { reparseSuggestion, scheduleTriggerActivation } from './refSuggestion';
 
-const mentionPluginKey = new PluginKey('mentionSuggestion');
+// export: rawMode.js가 raw 진입 시 팝업을 강제로 닫는 데 재사용한다(WEAVE-3 raw 모드 §S3.6 수정).
+// MENTION_OFF는 이 플러그인의 자체 dismiss(Esc/onClose/onSelect)가 쓰는 비활성 상태값과 동일.
+export const mentionPluginKey = new PluginKey('mentionSuggestion');
+export const MENTION_OFF = { active: false, keyword: '', from: 0 };
 
 const MentionNode = Node.create({
   name: 'mention',

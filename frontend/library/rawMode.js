@@ -6,14 +6,16 @@ import { slashCommandPluginKey, SLASH_OFF } from '@/components/Canvas/extensions
 import { taskRefPluginKey } from '@/components/Canvas/extensions/TaskRefExtension';
 import { REF_OFF } from '@/components/Canvas/extensions/refSuggestion';
 import { mathEditPluginKey, MATH_EDIT_OFF } from '@/components/Canvas/extensions/MathEditExtension';
+import { mentionPluginKey, MENTION_OFF } from '@/components/Canvas/extensions/MentionExtension';
 
-// raw 진입 시 열려 있는 제안 팝업(슬래시 메뉴/taskRef 검색/수식 편집)을 닫는다.
-// 이 세 플러그인은 view.update()에서만 팝업을 destroy하는데, update()는 tr이
+// raw 진입 시 열려 있는 제안 팝업(슬래시 메뉴/taskRef 검색/수식 편집/멘션)을 닫는다.
+// 이 플러그인들은 view.update()에서만 팝업을 destroy하는데, update()는 tr이
 // 실제로 dispatch돼야 불린다 — enterRaw()는 React state만 바꿔 EditorContent를
 // 숨길 뿐 tr을 전혀 내지 않으므로, 열려 있던 팝업(document.body에 직접 붙는 DOM)이
 // 고아로 남아 raw CodeMirror 위에 계속 떠 있는다(실측·스크린샷으로 확인된 버그).
-// 세 플러그인 모두 없는 표면(surface)도 있을 수 있어 getState()로 방어 체크한다.
-function closeEditorPopups(editor) {
+// 표면마다 등록 확장이 다를 수 있어 getState()로 방어 체크한다.
+// (export는 rawMode.dom.test.js의 팝업 생명주기 검증용 — 실사용 진입점은 enterRaw뿐)
+export function closeEditorPopups(editor) {
   const st = editor.state;
   let tr = null;
   if (slashCommandPluginKey.getState(st)?.active) {
@@ -25,12 +27,15 @@ function closeEditorPopups(editor) {
   if (mathEditPluginKey.getState(st)?.active) {
     tr = (tr || st.tr).setMeta(mathEditPluginKey, MATH_EDIT_OFF);
   }
+  if (mentionPluginKey.getState(st)?.active) {
+    tr = (tr || st.tr).setMeta(mentionPluginKey, MENTION_OFF);
+  }
   if (tr) editor.view.dispatch(tr);
 }
 
 // findUnsupportedFormatting 키 → 사용자 표시 라벨 (모르는 키는 키 그대로 노출)
+// underline은 ++text++로 무손실 왕복해 flag되지 않으므로 라벨도 없다 (markdownCodec.js 참조)
 const UNSUPPORTED_LABELS = {
-  underline: '밑줄',
   color: '글자색',
   highlightColor: '형광펜 색',
   textAlign: '정렬',

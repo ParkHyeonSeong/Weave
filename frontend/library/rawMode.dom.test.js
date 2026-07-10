@@ -3,7 +3,8 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { buildMarkdownExtensions } from './markdownCodec';
-import { enterRawState, parseRawToHtml, formatUnsupportedWarning } from './rawMode';
+import { enterRawState, parseRawToHtml, formatUnsupportedWarning, closeEditorPopups } from './rawMode';
+import MentionNode, { mentionPluginKey } from '@/components/Canvas/extensions/MentionExtension';
 
 // StarterKit v3에는 underline/link 포함 — TaskDescriptionEditor.js:26-29와 동일 전제
 const extensions = buildMarkdownExtensions([StarterKit]);
@@ -55,14 +56,44 @@ describe('parseRawToHtml', () => {
   });
 });
 
+describe('closeEditorPopups', () => {
+  // 리뷰어 재현: mention(@) 팝업만 열린 상태에서 enterRaw하면 tr이 null이라
+  // dispatch가 스킵돼 body에 붙은 fixed 팝업이 고아로 남았다(e5f76eb 누락분).
+  // 팝업 컨테이너는 ReactRenderer element(.react-renderer)를 담아 body에 직접
+  // append되므로, headless 에디터에서도 생성/정리를 그대로 검증할 수 있다.
+  it('mention 팝업이 열려 있으면 상태를 끄고 body의 팝업 DOM을 정리한다', () => {
+    const ext = buildMarkdownExtensions([StarterKit, MentionNode]);
+    editor = new Editor({ extensions: ext, content: '<p>hello</p>' });
+    // jsdom엔 레이아웃이 없어 팝업 위치 계산만 스텁 (생명주기 검증엔 무관)
+    editor.view.coordsAtPos = () => ({ left: 0, right: 0, top: 0, bottom: 0 });
+    editor.view.dispatch(
+      editor.state.tr.setMeta(mentionPluginKey, { active: true, keyword: '', from: 1 }),
+    );
+    expect(mentionPluginKey.getState(editor.state).active).toBe(true);
+    expect(document.body.querySelector('.react-renderer')).not.toBeNull();
+
+    closeEditorPopups(editor);
+    expect(mentionPluginKey.getState(editor.state).active).toBe(false);
+    expect(document.body.querySelector('.react-renderer')).toBeNull();
+  });
+
+  it('활성 팝업이 없으면 아무 트랜잭션도 내지 않는다 (no-op)', () => {
+    const ext = buildMarkdownExtensions([StarterKit, MentionNode]);
+    editor = new Editor({ extensions: ext, content: '<p>hello</p>' });
+    const before = editor.state;
+    closeEditorPopups(editor);
+    expect(editor.state).toBe(before); // dispatch 자체가 스킵돼 state 동일 참조
+  });
+});
+
 describe('formatUnsupportedWarning', () => {
   it('빈 배열/undefined면 null', () => {
     expect(formatUnsupportedWarning([])).toBeNull();
     expect(formatUnsupportedWarning(undefined)).toBeNull();
   });
   it('알려진 키는 한국어 라벨로', () => {
-    expect(formatUnsupportedWarning(['underline', 'color'])).toBe(
-      '일부 서식(밑줄, 글자색)은 markdown으로 표현되지 않아 단순화됩니다'
+    expect(formatUnsupportedWarning(['textAlign', 'color'])).toBe(
+      '일부 서식(정렬, 글자색)은 markdown으로 표현되지 않아 단순화됩니다'
     );
   });
   it('모르는 키는 그대로 노출', () => {
