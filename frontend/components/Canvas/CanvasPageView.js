@@ -18,9 +18,7 @@ import { useMathHydration } from '@/library/mathRender';
 import { common, createLowlight } from 'lowlight';
 import { toHtml } from 'hast-util-to-html';
 import { compileToSvg, downloadPdf } from '@/library/typstCompiler';
-import { showToast } from '@/components/Layout/Toast';
-import { htmlToMarkdown } from '@/library/markdownCodec';
-import { ensureRenderableHtml } from '@/library/ensureHtml';
+import { copyAsMarkdown } from '@/library/copyMarkdown';
 import { buildCanvasEditorExtensions } from './canvasEditorExtensions';
 
 const lowlight = createLowlight(common);
@@ -352,15 +350,9 @@ export default function CanvasPageView({ onRefClick }) {
   };
 
   // 페이지 본문(저장 HTML)을 markdown으로 클립보드 복사 — typst/folder는 메뉴 미노출
-  const handleCopyMarkdown = async () => {
+  const handleCopyMarkdown = () => {
     setShowMoreMenu(false);
-    try {
-      const md = htmlToMarkdown(ensureRenderableHtml(page.content) || '', buildCanvasEditorExtensions());
-      await navigator.clipboard.writeText(md);
-      showToast('Markdown이 복사되었습니다');
-    } catch {
-      showToast('Markdown 복사에 실패했습니다', 'error');
-    }
+    copyAsMarkdown(page.content, buildCanvasEditorExtensions());
   };
 
   // 이동

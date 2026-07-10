@@ -2,6 +2,14 @@ import { Plugin } from '@tiptap/pm/state';
 import { DOMParser as ProseDOMParser } from '@tiptap/pm/model';
 import { markdownToHtml, looksLikeMarkdown } from '@/library/markdownMath';
 
+// HTML 문자열을 현재 스키마로 파싱해 선택 영역에 꽂아 넣는다 (raw-escape/md-convert 경로 공용).
+function replaceSelectionWithHtml(view, html) {
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = html;
+  const slice = ProseDOMParser.fromSchema(view.state.schema).parseSlice(wrapper);
+  view.dispatch(view.state.tr.replaceSelection(slice));
+}
+
 export function createMarkdownPastePlugin() {
   return new Plugin({
     props: {
@@ -27,12 +35,7 @@ export function createMarkdownPastePlugin() {
             .map((para) => `<p>${escapeHtml(para).replace(/\n/g, '<br>')}</p>`)
             .join('');
 
-          const wrapper = document.createElement('div');
-          wrapper.innerHTML = html;
-          const slice = ProseDOMParser.fromSchema(view.state.schema).parseSlice(wrapper);
-
-          const tr = view.state.tr.replaceSelection(slice);
-          view.dispatch(tr);
+          replaceSelectionWithHtml(view, html);
           return true;
         }
 
@@ -51,14 +54,7 @@ export function createMarkdownPastePlugin() {
 
         const converted = markdownToHtml(text, { math });
 
-        // HTML을 ProseMirror 노드로 파싱
-        const wrapper = document.createElement('div');
-        wrapper.innerHTML = converted;
-        const slice = ProseDOMParser.fromSchema(view.state.schema)
-          .parseSlice(wrapper);
-
-        const tr = view.state.tr.replaceSelection(slice);
-        view.dispatch(tr);
+        replaceSelectionWithHtml(view, converted);
         return true;
       },
     },

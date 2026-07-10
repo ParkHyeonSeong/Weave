@@ -25,9 +25,7 @@ import ActivityTimeline from '@/components/common/ActivityTimeline';
 import NavLink from '@/components/common/NavLink';
 import { taskDeleteMessage } from '@/library/taskDeleteMessage';
 import { buildTaskDescriptionExtensions } from './taskDescriptionExtensions';
-import { showToast } from '@/components/Layout/Toast';
-import { htmlToMarkdown } from '@/library/markdownCodec';
-import { ensureRenderableHtml } from '@/library/ensureHtml';
+import { copyAsMarkdown } from '@/library/copyMarkdown';
 
 export default function TaskDetailPanel({ branchId, branchKey, taskTypes: externalTaskTypes, workflowStatuses: externalStatuses, taskSummary, onClose, onSelectTask }) {
   const router = useRouter();
@@ -88,15 +86,9 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
   }, [task?.description, updateField]);
 
   // 설명을 markdown으로 클립보드 복사 (읽기 뷰 headless 변환 — 전부 클라이언트 사이드)
-  const copyDescMarkdown = useCallback(async () => {
+  const copyDescMarkdown = useCallback(() => {
     if (!task?.description) return;
-    try {
-      const md = htmlToMarkdown(ensureRenderableHtml(task.description), buildTaskDescriptionExtensions());
-      await navigator.clipboard.writeText(md);
-      showToast('Markdown이 복사되었습니다');
-    } catch {
-      showToast('Markdown 복사에 실패했습니다', 'error');
-    }
+    copyAsMarkdown(task.description, buildTaskDescriptionExtensions());
   }, [task?.description]);
 
   // 삭제

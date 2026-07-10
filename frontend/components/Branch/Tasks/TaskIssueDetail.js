@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { ArrowLeft, CircleDot, MoreHorizontal, Pencil, Copy, Trash2, XCircle, CheckCircle2 } from 'lucide-react';
 import { axios } from '@/library/_axios';
-import { ensureHtml, ensureRenderableHtml } from '@/library/ensureHtml';
+import { ensureHtml } from '@/library/ensureHtml';
 import { sanitizeHtml } from '@/library/sanitize';
 import { useRefHydration } from '@/library/refHydration';
 import { useMathHydration } from '@/library/mathRender';
@@ -10,8 +10,7 @@ import Avatar from '@/components/common/Avatar';
 import IssueEditor from './IssueEditor';
 import ConfirmModal from '@/components/modal/ConfirmModal';
 import { buildIssueEditorExtensions } from './issueEditorExtensions';
-import { showToast } from '@/components/Layout/Toast';
-import { htmlToMarkdown } from '@/library/markdownCodec';
+import { copyAsMarkdown } from '@/library/copyMarkdown';
 
 export default function TaskIssueDetail() {
   const router = useRouter();
@@ -187,15 +186,9 @@ export default function TaskIssueDetail() {
   };
 
   // 본문/댓글을 markdown으로 복사 — 읽기 뷰 렌더(:328,:402)와 동일하게 ensureHtml 폴백 적용
-  const copyAsMarkdown = async (html) => {
+  const handleCopyMarkdown = (html) => {
     if (!html) return;
-    try {
-      const md = htmlToMarkdown(ensureRenderableHtml(html), buildIssueEditorExtensions());
-      await navigator.clipboard.writeText(md);
-      showToast('Markdown이 복사되었습니다');
-    } catch {
-      showToast('Markdown 복사에 실패했습니다', 'error');
-    }
+    copyAsMarkdown(html, buildIssueEditorExtensions());
   };
 
   // 이슈 삭제
@@ -317,7 +310,7 @@ export default function TaskIssueDetail() {
                   id="issue-body"
                   openMenuId={openMenuId}
                   setOpenMenuId={setOpenMenuId}
-                  onCopyMarkdown={issue.body ? () => copyAsMarkdown(issue.body) : undefined}
+                  onCopyMarkdown={issue.body ? () => handleCopyMarkdown(issue.body) : undefined}
                   onEdit={isAuthor ? () => setEditingBody(true) : undefined}
                   onDelete={isAuthor ? () => setShowDeleteConfirm(true) : undefined}
                   deleteLabel="Delete issue"
@@ -393,7 +386,7 @@ export default function TaskIssueDetail() {
                       id={`comment-${comment.comment_id}`}
                       openMenuId={openMenuId}
                       setOpenMenuId={setOpenMenuId}
-                      onCopyMarkdown={() => copyAsMarkdown(comment.content)}
+                      onCopyMarkdown={() => handleCopyMarkdown(comment.content)}
                       onEdit={isCommentAuthor ? () => setEditingCommentId(comment.comment_id) : undefined}
                       onDelete={isCommentAuthor ? () => deleteComment(comment.comment_id) : undefined}
                       deleteLabel="Delete"

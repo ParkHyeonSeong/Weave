@@ -9,9 +9,7 @@ import { buildMentionHtml } from '@/components/Canvas/extensions/MentionExtensio
 import ConfirmModal from '@/components/modal/ConfirmModal';
 import CommentEditor from './CommentEditor';
 import { buildCommentEditorExtensions } from './commentEditorExtensions';
-import { showToast } from '@/components/Layout/Toast';
-import { htmlToMarkdown } from '@/library/markdownCodec';
-import { ensureRenderableHtml } from '@/library/ensureHtml';
+import { copyAsMarkdown } from '@/library/copyMarkdown';
 
 /**
  * 단일 댓글 컴포넌트. 본인/타인 공용.
@@ -97,15 +95,7 @@ function CommentItem({
     } catch (e) { logError('Delete comment', e); }
   };
 
-  const handleCopyMarkdown = async () => {
-    try {
-      const md = htmlToMarkdown(ensureRenderableHtml(comment.content) || '', buildCommentEditorExtensions());
-      await navigator.clipboard.writeText(md);
-      showToast('Markdown이 복사되었습니다');
-    } catch {
-      showToast('Markdown 복사에 실패했습니다', 'error');
-    }
-  };
+  const handleCopyMarkdown = () => copyAsMarkdown(comment.content, buildCommentEditorExtensions());
 
   return (
     <div

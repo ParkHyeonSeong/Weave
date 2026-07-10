@@ -10,9 +10,7 @@ import { useMathHydration } from '@/library/mathRender';
 import PresenceBar from './PresenceBar';
 import EntityIcon from '@/components/common/EntityIcon';
 import EntityAppearancePopover from '@/components/common/EntityAppearancePopover';
-import { showToast } from '@/components/Layout/Toast';
-import { htmlToMarkdown } from '@/library/markdownCodec';
-import { ensureRenderableHtml } from '@/library/ensureHtml';
+import { copyAsMarkdown } from '@/library/copyMarkdown';
 import { buildCanvasEditorExtensions } from './canvasEditorExtensions';
 
 const CanvasCollabEditor = dynamic(() => import('./CanvasCollabEditor'), { ssr: false });
@@ -164,15 +162,7 @@ export default function CanvasOverview() {
   };
 
   // overview 본문(저장 HTML)을 markdown으로 클립보드 복사 — CanvasPageView와 동일 패턴
-  const handleCopyMarkdown = async () => {
-    try {
-      const md = htmlToMarkdown(ensureRenderableHtml(overview.content) || '', buildCanvasEditorExtensions());
-      await navigator.clipboard.writeText(md);
-      showToast('Markdown이 복사되었습니다');
-    } catch {
-      showToast('Markdown 복사에 실패했습니다', 'error');
-    }
-  };
+  const handleCopyMarkdown = () => copyAsMarkdown(overview.content, buildCanvasEditorExtensions());
 
   const handleCloseEdit = async () => {
     if (htmlRef.current) {
