@@ -176,18 +176,23 @@ export default function TaskListRow({ task, branchId, taskTypes, workflowStatuse
         ))}
       </div>
 
-      {/* 에픽 */}
-      <div className={`TaskListRow__Cell TaskListRow__Cell--epic ${hasEpic ? '' : 'TaskListRow__Cell--hoverOnly'}`} onClick={stopDrag} onMouseDown={stopDrag} onTouchStart={stopDrag}>
-        <CustomSelect
-          value={hasEpic ? String(task.epic_id) : ''}
-          options={epicOptions}
-          onChange={(val) => handleFieldChange('epic_id', val ? Number(val) : null)}
-          size="sm"
-          hideArrow
-          placeholder="+ Epic"
-          className={`TaskListRow__Epic ${hasEpic ? '' : 'TaskListRow__Epic--empty'}`}
-        />
-      </div>
+      {/* 에픽 — 하위태스크는 부모에서 파생(자기 값 없음)이라 편집기를 숨긴다.
+          indent prop이 아닌 parent_task_id 기준: 그룹핑 평면 뷰도 커버 */}
+      {task.parent_task_id != null ? (
+        <div className="TaskListRow__Cell TaskListRow__Cell--epic" />
+      ) : (
+        <div className={`TaskListRow__Cell TaskListRow__Cell--epic ${hasEpic ? '' : 'TaskListRow__Cell--hoverOnly'}`} onClick={stopDrag} onMouseDown={stopDrag} onTouchStart={stopDrag}>
+          <CustomSelect
+            value={hasEpic ? String(task.epic_id) : ''}
+            options={epicOptions}
+            onChange={(val) => handleFieldChange('epic_id', val ? Number(val) : null)}
+            size="sm"
+            hideArrow
+            placeholder="+ Epic"
+            className={`TaskListRow__Epic ${hasEpic ? '' : 'TaskListRow__Epic--empty'}`}
+          />
+        </div>
+      )}
 
       {/* 상태 */}
       <div className="TaskListRow__Cell TaskListRow__Cell--status" onClick={stopDrag} onMouseDown={stopDrag} onTouchStart={stopDrag}>

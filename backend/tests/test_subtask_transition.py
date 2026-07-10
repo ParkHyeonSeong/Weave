@@ -276,11 +276,45 @@ async def test_patch_sprint_epic_on_existing_subtask_is_ignored(db_session):
     child = await _make_task(db_session, branch, alice, parent_task_id=parent,
                              title="Child")
 
+    # 센티널: UPDATE가 실행되면 updated_at이 NOW()로 덮이므로 과거 값으로 고정
+    # (같은 트랜잭션 안에선 NOW()가 상수라 before/after 비교로는 못 잡는다)
+    await db_session.execute(text(
+        "UPDATE task SET updated_at = '2000-01-01' WHERE task_id = :t"), {"t": child})
+
     body = schema.TaskUpdate(sprint_id=sprint, epic_id=epic)
     res = await ctrl.update(child, body, branch, _req(alice), db_session)
     assert res["status"] is True
     assert await _task_col(db_session, child, "sprint_id") is None
     assert await _task_col(db_session, child, "epic_id") is None
+    # scope-only PATCH는 필드가 전부 제거되어 DB UPDATE 자체가 생략된다
+    assert (await _task_col(db_session, child, "updated_at")).year == 2000
+
+
+# ---------------------------------------------------------------------------
+# reorder must not write subtask sprint/sort_order (컨테이너 위치 미소유)
+# ---------------------------------------------------------------------------
+
+async def test_reorder_with_subtask_ids_skips_subtasks(db_session):
+    """reorder 대상에 하위 id가 섞여도(Cmd/Ctrl 다중 선택 드래그) 하위의
+    sprint_id·sort_order는 쓰지 않는다 — §4 불변식의 제3 쓰기 경로 차단."""
+    alice = await _make_user(db_session, "alice_rord@sub.test", "alice_rord")
+    branch = await _make_branch(db_session, alice, key="SPROD")
+    await _add_member(db_session, branch, alice, "member")
+    await _make_status(db_session, branch, "todo", "todo")
+    sprint = await _make_sprint(db_session, branch, alice)
+    parent = await _make_task(db_session, branch, alice, title="Parent")
+    child = await _make_task(db_session, branch, alice, parent_task_id=parent,
+                             title="Child")
+    other = await _make_task(db_session, branch, alice, title="Other")
+    child_sort_before = await _task_col(db_session, child, "sort_order")
+
+    body = schema.TaskReorder(task_ids=[other, child], sprint_id=sprint)
+    res = await ctrl.reorder(body, branch, _req(alice), db_session)
+    assert res["status"] is True
+    # 최상위는 정상 이동, 하위는 sprint/sort_order 무변경
+    assert await _task_col(db_session, other, "sprint_id") == sprint
+    assert await _task_col(db_session, child, "sprint_id") is None
+    assert await _task_col(db_session, child, "sort_order") == child_sort_before
 
 
 async def test_promote_with_sprint_in_same_patch_keeps_sprint(db_session):

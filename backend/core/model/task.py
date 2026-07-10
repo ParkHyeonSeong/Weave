@@ -709,11 +709,26 @@ async def count_ids_in_branch(branch_id: int, task_ids: list, db: AsyncSession) 
 
 async def reorder(branch_id: int, task_ids: list, sprint_id, after_task_id, db: AsyncSession):
     """태스크 이동 + 순서 변경 (다중 지원)
-    - task_ids: 이동할 태스크 ID 목록
+    - task_ids: 이동할 태스크 ID 목록 — 최상위만 유효. 하위태스크는 컨테이너
+      위치를 소유하지 않으므로(sprint는 부모 라이브 파생, sort_order는 부모 내
+      순서) 섞여 들어와도 조용히 제외한다.
     - sprint_id: 대상 스프린트 (None = backlog)
     - after_task_id: 이 태스크 뒤에 삽입 (None = 맨 위)
     """
-    # 1. 대상 컨테이너의 현재 태스크 순서 조회 (이동할 태스크 제외)
+    # 0. 하위태스크 제외 — Cmd/Ctrl 다중 선택에 하위가 섞인 드래그 등.
+    #    남기면 하위의 sprint_id(stale 재유입)·sort_order(부모 내 순서 오염)를 써버린다.
+    result = await db.execute(text("""
+        SELECT task_id FROM task
+        WHERE task_id = ANY(:ids) AND parent_task_id IS NULL
+    """), {'ids': list(task_ids)})
+    top_level = {row[0] for row in result.fetchall()}
+    task_ids = [tid for tid in task_ids if tid in top_level]
+    if not task_ids:
+        return
+
+    # 1. 대상 컨테이너의 현재 태스크 순서 조회 (이동할 태스크 제외).
+    #    최상위만 — 하위태스크(sprint_id NULL)가 백로그 컨테이너에 섞여
+    #    sort_order가 재배열되는 것 방지.
     if sprint_id is not None:
         where = "t.sprint_id = :sprint_id"
         params = {'branch_id': branch_id, 'sprint_id': sprint_id}
@@ -723,7 +738,7 @@ async def reorder(branch_id: int, task_ids: list, sprint_id, after_task_id, db: 
 
     result = await db.execute(text(f"""
         SELECT task_id FROM task t
-        WHERE t.branch_id = :branch_id AND {where}
+        WHERE t.branch_id = :branch_id AND t.parent_task_id IS NULL AND {where}
         ORDER BY t.sort_order, t.created_at, t.task_id
     """), params)
     existing_ids = [row[0] for row in result.fetchall()]
@@ -748,11 +763,12 @@ async def reorder(branch_id: int, task_ids: list, sprint_id, after_task_id, db: 
             WHERE task_id = :task_id
         """), {'sort_order': idx, 'task_id': tid})
 
-    # 5. 이동할 태스크의 sprint_id 변경
+    # 5. 이동할 태스크의 sprint_id 변경 (parent IS NULL은 0단계 필터의 이중 방어)
     for tid in task_ids:
         await db.execute(text("""
             UPDATE task SET sprint_id = :sprint_id
             WHERE task_id = :task_id AND branch_id = :branch_id
+              AND parent_task_id IS NULL
         """), {'sprint_id': sprint_id, 'task_id': tid, 'branch_id': branch_id})
 
 

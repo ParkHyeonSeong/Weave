@@ -661,9 +661,16 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
     } else {
       // 태스크 이동/순서 변경
       const draggedTaskId = Number(active.id);
-      const movingIds = selectedTaskIds.has(draggedTaskId)
+      // Cmd/Ctrl 선택엔 하위태스크도 섞일 수 있는데, 하위는 컨테이너 위치가
+      // 없으므로(sprint는 부모 파생, 드래그 비활성 v1 정책) 배치에서 제외한다.
+      const topLevelIds = new Set(
+        [...sprints.flatMap((s) => s.tasks || []), ...backlogTasks].map((t) => t.task_id)
+      );
+      const movingIds = (selectedTaskIds.has(draggedTaskId)
         ? [...selectedTaskIds]
-        : [draggedTaskId];
+        : [draggedTaskId]
+      ).filter((id) => topLevelIds.has(id));
+      if (movingIds.length === 0) return;
 
       // 대상 컨테이너와 위치 결정
       const overId = String(over.id);

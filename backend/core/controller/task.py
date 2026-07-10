@@ -391,16 +391,19 @@ async def update(task_id: int, body, branch_id: int, request: Request, db: Async
         fields['description'] = ensure_html(fields['description'])
 
     # 하위로 되는/남는 task엔 sprint/epic 자기 값을 저장하지 않는다 — 부모 라이브
-    # 파생 불변식(§4). 전환이면 stale 일괄 소거, 이미 하위인데 sprint/epic만 온
-    # PATCH는 무시(전환 경로 밖 stale 재유입 차단). 승격(명시적 parent=null)은
-    # 최상위가 되므로 같은 PATCH의 sprint/epic 저장을 허용한다.
+    # 파생 불변식(§4). 승격(명시적 parent=null)은 최상위가 되므로 저장을 허용한다.
     effective_parent = (body.parent_task_id if 'parent_task_id' in body.model_fields_set
                         else task['parent_task_id'])
-    if effective_parent is not None and (
-            'parent_task_id' in body.model_fields_set
-            or 'sprint_id' in fields or 'epic_id' in fields):
-        fields['sprint_id'] = None
-        fields['epic_id'] = None
+    if effective_parent is not None:
+        if 'parent_task_id' in body.model_fields_set:
+            # 전환: 기존 stale 값까지 일괄 소거
+            fields['sprint_id'] = None
+            fields['epic_id'] = None
+        else:
+            # 이미 하위: sprint/epic만 온 PATCH는 필드를 제거해 무시 —
+            # fields가 비면 DB UPDATE 자체가 생략되어 updated_at도 안 움직인다.
+            fields.pop('sprint_id', None)
+            fields.pop('epic_id', None)
 
     # status 동적 검증 + alias 해석 — canonical key로 치환 후 저장.
     # explicit null(NOT NULL 컬럼이라 통과 시 NULL UPDATE 500)은 ''로 흘려
