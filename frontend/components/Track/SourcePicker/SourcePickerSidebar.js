@@ -1,10 +1,13 @@
-import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback, Fragment } from 'react';
 import { Search, ChevronDown, ChevronRight, GripVertical, Plus, Filter, Calendar, Zap, X } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import EntityIcon from '@/components/common/EntityIcon';
 
 const PICKER_DATA_MIME = 'application/x-track-source';
 const SEARCH_DEBOUNCE_MS = 200;
+
+// task + subtasks를 평탄화 (카운트용)
+const flattenTasks = (tasks) => tasks.flatMap((t) => [t, ...(t.subtasks || [])]);
 
 // 트리: branch → sprints[] + epics[] → tasks[]. 검색은 task title 클라이언트 필터.
 export default function SourcePickerSidebar({
@@ -70,13 +73,22 @@ export default function SourcePickerSidebar({
     const matchTask = (t) =>
       t.title.toLowerCase().includes(needle)
       || t.display_id.toLowerCase().includes(needle);
+    // 부모 매칭 → 하위 전부 유지. 하위만 매칭 → 부모를 컨텍스트로 강등(dim, 드래그 억제).
+    const filterTasks = (list) => list
+      .map((t) => {
+        const matchedSubs = (t.subtasks || []).filter(matchTask);
+        if (matchTask(t)) return t;
+        if (matchedSubs.length > 0) return { ...t, subtasks: matchedSubs, contextOnly: true };
+        return null;
+      })
+      .filter(Boolean);
     return tree.map((b) => ({
       ...b,
       sprints: b.sprints
-        .map((s) => ({ ...s, tasks: s.tasks.filter(matchTask) }))
+        .map((s) => ({ ...s, tasks: filterTasks(s.tasks) }))
         .filter((s) => s.tasks.length > 0),
       epics: b.epics
-        .map((e) => ({ ...e, tasks: e.tasks.filter(matchTask) }))
+        .map((e) => ({ ...e, tasks: filterTasks(e.tasks) }))
         .filter((e) => e.tasks.length > 0),
     })).filter((b) => b.sprints.length > 0 || b.epics.length > 0);
   }, [tree, debouncedQ]);
@@ -108,15 +120,15 @@ export default function SourcePickerSidebar({
   };
 
   const totalAccessible = filteredTree.reduce(
-    (sum, b) => sum + b.sprints.reduce((s, sp) => s + sp.tasks.length, 0)
-                    + b.epics.reduce((s, ep) => s + ep.tasks.length, 0),
+    (sum, b) => sum + b.sprints.reduce((s, sp) => s + flattenTasks(sp.tasks).length, 0)
+                    + b.epics.reduce((s, ep) => s + flattenTasks(ep.tasks).length, 0),
     0,
   );
   const totalNew = filteredTree.reduce(
     (sum, b) =>
       sum
-      + b.sprints.reduce((s, sp) => s + sp.tasks.filter((t) => !t.in_track).length, 0)
-      + b.epics.reduce((s, ep) => s + ep.tasks.filter((t) => !t.in_track).length, 0),
+      + b.sprints.reduce((s, sp) => s + flattenTasks(sp.tasks).filter((t) => !t.in_track && !t.contextOnly).length, 0)
+      + b.epics.reduce((s, ep) => s + flattenTasks(ep.tasks).filter((t) => !t.in_track && !t.contextOnly).length, 0),
     0,
   );
 
@@ -305,23 +317,50 @@ function ScopeGroup({ groupKey, icon, title, hint, tasks, branchColor, isOpen, o
         <span className="SourcePicker__GroupIcon">{icon}</span>
         <span className="SourcePicker__GroupTitle">{title}</span>
         {hint && <span className="SourcePicker__GroupHint">{hint}</span>}
-        <span className="SourcePicker__GroupCount">{tasks.length}</span>
+        <span className="SourcePicker__GroupCount">{flattenTasks(tasks).length}</span>
       </div>
       {isOpen && tasks.map((task) => (
-        <div
-          key={task.task_id}
-          className={`SourcePicker__Task ${task.in_track ? 'SourcePicker__Task--used' : ''}`}
-          draggable={!task.in_track}
-          onDragStart={(e) => !task.in_track && onDragStart(e, task)}
-          title={task.in_track ? '이미 캔버스에 있음' : '드래그하여 캔버스에 추가'}
-        >
-          <span className="SourcePicker__TaskGrip"><GripVertical size={11} /></span>
-          <span className="SourcePicker__TaskBranchBar" style={{ background: branchColor }} />
-          <span className="SourcePicker__TaskId">{task.display_id}</span>
-          <span className="SourcePicker__TaskTitle">{task.title}</span>
-          {task.in_track && <span className="SourcePicker__TaskBadge">on canvas</span>}
-        </div>
+        <Fragment key={task.task_id}>
+          <TaskRow
+            task={task} branchColor={branchColor}
+            contextOnly={task.contextOnly} onDragStart={onDragStart}
+          />
+          {(task.subtasks || []).map((sub) => (
+            <TaskRow
+              key={sub.task_id} task={sub} branchColor={branchColor}
+              depth={1} onDragStart={onDragStart}
+            />
+          ))}
+        </Fragment>
       ))}
+    </div>
+  );
+}
+
+function TaskRow({ task, branchColor, depth = 0, contextOnly = false, onDragStart }) {
+  const draggable = !task.in_track && !contextOnly;
+  const rowTitle = contextOnly
+    ? '검색된 하위태스크의 부모 (컨텍스트)'
+    : task.in_track ? '이미 캔버스에 있음' : '드래그하여 캔버스에 추가';
+  return (
+    <div
+      className={[
+        'SourcePicker__Task',
+        task.in_track ? 'SourcePicker__Task--used' : '',
+        depth > 0 ? 'SourcePicker__Task--sub' : '',
+        contextOnly ? 'SourcePicker__Task--context' : '',
+      ].filter(Boolean).join(' ')}
+      draggable={draggable}
+      onDragStart={(e) => draggable && onDragStart(e, task)}
+      title={rowTitle}
+    >
+      {!contextOnly && (
+        <span className="SourcePicker__TaskGrip"><GripVertical size={11} /></span>
+      )}
+      <span className="SourcePicker__TaskBranchBar" style={{ background: branchColor }} />
+      <span className="SourcePicker__TaskId">{task.display_id}</span>
+      <span className="SourcePicker__TaskTitle">{task.title}</span>
+      {task.in_track && <span className="SourcePicker__TaskBadge">on canvas</span>}
     </div>
   );
 }

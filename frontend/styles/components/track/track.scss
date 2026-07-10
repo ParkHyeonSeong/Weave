@@ -492,6 +492,17 @@ $track-border-soft: color.adjust($color-border, $lightness: 5%);
     }
   }
 
+  &__Task--sub {
+    padding-left: 26px;
+
+    .SourcePicker__TaskId { opacity: 0.75; }
+  }
+
+  &__Task--context {
+    opacity: 0.55;
+    cursor: default;
+  }
+
   &__TaskGrip {
     color: $track-ink-mute;
     opacity: 0;
