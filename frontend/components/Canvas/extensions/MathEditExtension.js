@@ -4,7 +4,12 @@ import { ReactRenderer } from '@tiptap/react';
 import MathEditPopover from './MathEditPopover';
 
 export const mathEditPluginKey = new PluginKey('mathEdit');
-const OFF = { active: false, pos: null, latex: '', kind: 'inline', isNew: false };
+// export: rawMode.js가 raw 진입 시 팝업을 강제로 닫는 데 재사용한다(WEAVE-3 raw 모드 §S3.6 수정).
+// 주의: isNew(빈 수식 노드) 정리는 cancelEdit()이 담당 — 이 OFF만 dispatch하면 상태는
+// 닫히지만 방금 /m으로 삽입된 빈 노드 자체는 지워지지 않는다(raw 진입은 그 노드를
+// 건드리지 않으므로 문서에 남는다 — 극히 드문 edge case, 별도 이슈로 방치 가능).
+export const MATH_EDIT_OFF = { active: false, pos: null, latex: '', kind: 'inline', isNew: false };
+const OFF = MATH_EDIT_OFF;
 let openSeq = 0;
 
 const MathEditExtension = Extension.create({

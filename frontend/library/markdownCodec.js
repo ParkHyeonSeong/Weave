@@ -94,7 +94,10 @@ export function findUnsupportedFormatting(doc) {
   const visit = (node) => {
     if (!node) return;
     for (const mark of node.marks || []) {
-      if (mark.type === 'underline') found.add('underline');
+      // underline은 여기서 플래그하지 않는다: @tiptap/extension-underline이 자체
+      // markdown 확장(++text++)으로 무손실 왕복한다(실측: markdown_codec_cases.json
+      // "underline-nonstandard" 픽스처, roundtrip 포함). 다른 서식과 달리 색상 등
+      // 속성이 아니라 마크 존재만으로 무조건 플래그하던 것은 오탐이었다.
       if (mark.type === 'textStyle' && mark.attrs?.color) found.add('color');
       if (mark.type === 'highlight' && mark.attrs?.color) found.add('highlightColor');
     }

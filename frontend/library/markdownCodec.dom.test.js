@@ -62,7 +62,7 @@ describe('htmlToMarkdown / markdownToEditorHtml', () => {
 });
 
 describe('findUnsupportedFormatting', () => {
-  it('md 미표현 서식을 수집한다', () => {
+  it('md 미표현 서식을 수집한다 (underline은 ++text++로 무손실 왕복하므로 제외)', () => {
     const doc = {
       type: 'doc',
       content: [
@@ -76,7 +76,7 @@ describe('findUnsupportedFormatting', () => {
       ],
     };
     expect(findUnsupportedFormatting(doc).sort()).toEqual(
-      ['cellBackground', 'color', 'highlightColor', 'imageWidth', 'textAlign', 'underline'],
+      ['cellBackground', 'color', 'highlightColor', 'imageWidth', 'textAlign'],
     );
   });
   it('지원 서식만 있으면 빈 배열', () => {

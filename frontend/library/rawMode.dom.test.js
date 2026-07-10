@@ -23,9 +23,11 @@ describe('enterRawState', () => {
     expect(warnings).toEqual([]);
   });
 
-  it('underline 마크가 있으면 warnings에 underline이 들어간다', () => {
+  it('underline 마크는 ++text++로 무손실 왕복하므로 warnings에 들어가지 않는다', () => {
     editor = makeEditor('<p><u>밑줄</u></p>');
-    expect(enterRawState(editor).warnings).toContain('underline');
+    const { markdown, warnings } = enterRawState(editor);
+    expect(markdown).toContain('++밑줄++');
+    expect(warnings).not.toContain('underline');
   });
 });
 

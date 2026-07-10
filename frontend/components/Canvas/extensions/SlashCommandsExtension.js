@@ -10,7 +10,9 @@ import { issueRefPluginKey } from './IssueRefExtension';
 import { mathEditPluginKey } from './mathExtensions';
 
 export { slashCommandPluginKey };
-const OFF = { active: false, query: '', from: 0, index: 0 };
+// export: rawMode.js가 raw 진입 시 팝업을 강제로 닫는 데 재사용한다(WEAVE-3 raw 모드 §S3.6 수정).
+export const SLASH_OFF = { active: false, query: '', from: 0, index: 0 };
+const OFF = SLASH_OFF;
 
 // 선택된 커맨드로 검색 시작: 토큰을 지우고 해당 ref 팝업의 input 검색으로 전환.
 // 포커스는 팝업 input이 가져간다.
