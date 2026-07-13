@@ -239,16 +239,22 @@ _CONVERTER_OPTIONS = dict(
 # html_inline은 inline 토큰의 children 안에 있어 children까지 스캔해야
 # 한다. is_html 자체는 ingress(§3.4)·frontend ensureHtml과 공유하는
 # 계약이라 여기서 바꾸지 않는다(동일 오판의 ingress 정렬은 후속).
+#
+# 토큰 타입만으로는 부족하다(실측) — CommonMark는 HTML 주석·DOCTYPE·
+# PI·CDATA도 전부 html_block으로 파싱하는데, 이들은 letter-tag(<태그명..>)가
+# 없어 legacy raw markdown 안에 섞여 있어도 is_html=False(원문 보존 대상)로
+# 판정되는 입력이다. 토큰 타입 매치에 더해 그 토큰의 content가 is_html과
+# 동일한 letter-tag 정규식(_HTML_TAG_RE)에 매치할 때만 HTML로 인정한다.
 _EGRESS_HTML_DETECTOR = MarkdownIt('commonmark', {'html': True})
 
 
 def _is_html_for_egress(text: str) -> bool:
     for token in _EGRESS_HTML_DETECTOR.parse(text):
-        if token.type == 'html_block':
+        if token.type == 'html_block' and _HTML_TAG_RE.search(token.content):
             return True
         if token.type == 'inline' and token.children:
             for child in token.children:
-                if child.type == 'html_inline':
+                if child.type == 'html_inline' and _HTML_TAG_RE.search(child.content):
                     return True
     return False
 

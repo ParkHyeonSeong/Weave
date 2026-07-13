@@ -144,13 +144,16 @@ def test_empty_inputs():
 def test_html_to_markdown_legacy_raw_md_passthrough():
     # ingress 픽스 이전 저장분: DB에 태그 없는 raw markdown이 그대로 있다.
     # 가드 없이 markdownify에 통과시키면 **bold**→\*\*bold\*\* escape 오염 +
-    # 빈 줄이 접힌다. is_html이 아니면 원문 그대로 반환해야 한다.
+    # 빈 줄이 접힌다. _is_html_for_egress가 False(commonmark 파서가
+    # html_block/html_inline 토큰을 못 찾거나, 찾아도 letter-tag content가
+    # 아니면)면 원문 그대로 반환해야 한다.
     legacy = '# 제목\n\n**bold** and _italic_\n\n- [ ] todo'
     assert html_to_markdown(legacy) == legacy
 
 
 def test_html_to_markdown_plain_text_passthrough():
-    # 태그 판별('<'+태그명+공백·/·> 경계) — 부등호 텍스트도 원문 유지 (회귀 핀)
+    # 'a < b > c'는 유효한 HTML 태그 구문이 아니라 commonmark 파서가
+    # html_block/html_inline 토큰을 아예 만들지 않는다 — 원문 그대로 유지 (회귀 핀)
     assert html_to_markdown('a < b > c') == 'a < b > c'
 
 
@@ -195,4 +198,35 @@ def test_html_to_markdown_indented_code_html_literal_preserved():
     # 표준 md 4칸 들여쓰기 코드블록 — 구 anchored regex는 선두 \s*가 들여쓰기를
     # 삼켜 HTML로 오판, markdownify가 'literal'로 축약했다(코드블록 파괴).
     doc = '    <p>literal</p>'
+    assert html_to_markdown(doc) == doc
+
+
+# ---- egress: HTML 판별 — letter-tag 없는 html_block(주석·DOCTYPE·PI·CDATA) ----
+
+def test_html_to_markdown_comment_only_passthrough():
+    # CommonMark는 HTML 주석도 html_block 토큰으로 파싱한다 — 토큰 타입만
+    # 보고 True를 반환하면 letter-tag가 없는 주석까지 HTML로 오판해
+    # markdownify가 통째로 삭제한다(실측: '' 로 귀결). letter-tag 없는
+    # html_block은 legacy raw markdown으로 보고 원문 그대로 반환해야 한다.
+    doc = '<!-- note -->'
+    assert html_to_markdown(doc) == doc
+
+
+def test_html_to_markdown_comment_mixed_body_passthrough():
+    doc = 'hello\n\n<!-- note -->'
+    assert html_to_markdown(doc) == doc
+
+
+def test_html_to_markdown_doctype_passthrough():
+    doc = '<!DOCTYPE html>'
+    assert html_to_markdown(doc) == doc
+
+
+def test_html_to_markdown_processing_instruction_passthrough():
+    doc = '<?pi test?>'
+    assert html_to_markdown(doc) == doc
+
+
+def test_html_to_markdown_cdata_passthrough():
+    doc = '<![CDATA[x]]>'
     assert html_to_markdown(doc) == doc
