@@ -40,7 +40,7 @@ modified. Each tool acts as the token's owner; `?` marks optional arguments.
 
 **Tasks**
 - `list_branch_tasks(branch_id, sprint_id?, limit?, offset?)` — all tasks in a branch
-- `get_task(branch_id, task_id)` — full task detail
+- `get_task(branch_id, task_id, format?)` — full task detail; `format`: html (default) | markdown — rich-text fields (description) converted
 - `create_task(branch_id, title, description?, priority?, status?, task_type?, due_date?, start_date?, sprint_id?, epic_id?, parent_task_id?, assignee_main?, assignee_sub?, label_ids?, custom_fields?)` — create a task
 - `update_task(branch_id, task_id, title?, description?, status?, priority?, task_type?, sprint_id?, epic_id?, start_date?, due_date?, assignee_main?, assignee_sub?, label_ids?, custom_fields?, dry_run?)` — update a task (label/assignee/custom_fields는 REPLACE; 하나만 추가/제거하려면 아래 전용 도구. dry_run=true면 쓰기 없이 변경 diff만 반환)
 - `add_task_label(branch_id, task_id, label_id)` · `remove_task_label(branch_id, task_id, label_id)` — 기존 라벨 유지한 채 단일 라벨 추가/제거
@@ -52,13 +52,13 @@ modified. Each tool acts as the token's owner; `?` marks optional arguments.
 - `list_task_pages(branch_id, task_id)` · `link_task_page(branch_id, task_id, page_id)` · `search_task_pages(branch_id, task_id, q)` · `unlink_task_page(branch_id, task_id, link_id)` — task ↔ Canvas page links
 
 **Task comments**
-- `list_task_comments(branch_id, task_id, order?)` — `order`: asc (default, oldest first) | desc
+- `list_task_comments(branch_id, task_id, order?, format?)` — `order`: asc (default, oldest first) | desc; `format`: html (default) | markdown
 - `add_task_comment(branch_id, task_id, content)`
 - `update_task_comment(branch_id, task_id, comment_id, content)`
 - `delete_task_comment(branch_id, task_id, comment_id)`
 
 **Issues** (sub-issues under a task)
-- `list_task_issues(branch_id, task_id)` · `get_task_issue(branch_id, task_id, issue_id)`
+- `list_task_issues(branch_id, task_id)` · `get_task_issue(branch_id, task_id, issue_id, format?)` — `format`: html (default) | markdown (issue body and comments)
 - `create_task_issue(branch_id, task_id, title, body?)`
 - `update_task_issue(branch_id, task_id, issue_id, title?, body?, status?)`
 - `delete_task_issue(branch_id, task_id, issue_id)`
@@ -96,7 +96,7 @@ modified. Each tool acts as the token's owner; `?` marks optional arguments.
 - `list_canvas_members(canvas_id)` · `search_canvas_non_members(canvas_id, q?)` · `add_canvas_member(canvas_id, user_id, role?)` · `update_canvas_member_role(canvas_id, user_id, role)` · `remove_canvas_member(canvas_id, user_id)` — `role`: admin | member (admin-only)
 - `create_canvas(canvas_name, key, description?, visibility?, branch_id?)` — `key`: 2-10 uppercase, starts with a letter
 - `update_canvas(canvas_id, canvas_name?, key?, description?, visibility?, color?, icon?)` · `delete_canvas(canvas_id)` (archive) · `restore_canvas(canvas_id)` · `leave_canvas(canvas_id)` · `join_canvas(canvas_id)` · `list_archived_canvases()` · `list_public_canvases()`
-- `get_canvas_page_tree(canvas_id)` · `get_canvas_page(canvas_id, page_id)`
+- `get_canvas_page_tree(canvas_id)` · `get_canvas_page(canvas_id, page_id, format?)` — `format`: html (default) | markdown (page content)
 - `create_canvas_page(canvas_id, title, content?, parent_page_id?, type?)` — `type`: document | folder | typst
 - `update_canvas_page(canvas_id, page_id, title?, content?, wide_mode?)` — `content` replaces the whole page body
 - `move_canvas_page(canvas_id, page_id, position, parent_page_id?)` · `delete_canvas_page(canvas_id, page_id)`
