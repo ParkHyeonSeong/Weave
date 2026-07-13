@@ -397,6 +397,12 @@
       border-bottom-right-radius: 0;
       border-bottom: none;
     }
+
+    // 제출 중 시각 비활성 — CommentEditor--submitting(taskComment.scss:259-262)과 동일 dim
+    &--submitting .ProseMirror,
+    &--submitting .RawMarkdownEditor {
+      opacity: 0.6;
+    }
   }
 
   &__ReplyActions {

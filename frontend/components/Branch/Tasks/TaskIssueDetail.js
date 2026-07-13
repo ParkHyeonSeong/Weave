@@ -448,7 +448,7 @@ export default function TaskIssueDetail() {
           size={28}
           className="IssueDetail__Avatar IssueDetail__Avatar--sm"
         />
-        <div className="IssueDetail__ReplyForm">
+        <div className={`IssueDetail__ReplyForm${submitting ? ' IssueDetail__ReplyForm--submitting' : ''}`}>
           <IssueEditor
             ref={newCommentRef}
             rawModeEnabled
