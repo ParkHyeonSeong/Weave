@@ -104,9 +104,10 @@ export default function CanvasEditorToolbar({ editor, rawModeEnabled = false, ra
   // 표면별 feature-detection — 이 툴바는 Canvas 외에 task 설명·issue 에디터도
   // 공유하는데(TaskDescriptionEditor.js:113, IssueEditor.js:56) 그 표면들엔
   // TextStyle/Color/TextAlign 확장이 없어 setColor/setTextAlign이 undefined →
-  // 클릭 시 TypeError(실측). image/table/mermaid의 기존 관례(아래 377·382·510행
-  // extensionManager name 체크)를 그대로 따른다. 확장을 표면에 추가하는 안은
-  // md-lossy 서식을 md-canonical 표면으로 확대하는 것이라 기각.
+  // 클릭 시 TypeError(실측). image/table/mermaid가 쓰던 extensionManager name
+  // 체크(기존 관례)를 이 헬퍼로 일반화해 아래 전부(색상/정렬 포함)에 통일 적용한다.
+  // 확장을 표면에 추가하는 안은 md-lossy 서식을 md-canonical 표면으로 확대하는
+  // 것이라 기각.
   const hasExtension = (name) => editor.extensionManager.extensions.some((e) => e.name === name);
   const canColor = hasExtension('color');       // Color는 TextStyle과 세트 등록(canvasEditorExtensions.js:54-55)
   const canHighlight = hasExtension('highlight');
@@ -394,12 +395,12 @@ export default function CanvasEditorToolbar({ editor, rawModeEnabled = false, ra
       <Btn onClick={addLink} active={editor.isActive('link')} title="Link">
         <LinkIcon size={16} />
       </Btn>
-      {editor.extensionManager.extensions.some(e => e.name === 'image') && (
+      {hasExtension('image') && (
         <Btn onClick={addImage} title="Image">
           <ImageIcon size={16} />
         </Btn>
       )}
-      {editor.extensionManager.extensions.some(e => e.name === 'table') && (
+      {hasExtension('table') && (
         <DropdownWrapper isOpen={openDropdown === 'table'} onClose={() => { closeDropdown(); setTableSize({ rows: 0, cols: 0 }); }}>
           <Btn onClick={() => toggleDropdown('table')} title="Table">
             <TableIcon size={16} />
@@ -460,7 +461,7 @@ export default function CanvasEditorToolbar({ editor, rawModeEnabled = false, ra
           )}
         </DropdownWrapper>
       )}
-      {editor.extensionManager.extensions.some(e => e.name === 'table') && (
+      {hasExtension('table') && (
         <DropdownWrapper isOpen={openDropdown === 'cellBg'} onClose={closeDropdown}>
           <Btn onClick={() => toggleDropdown('cellBg')} title="Cell Background">
             <PaintBucket size={16} />
@@ -488,7 +489,7 @@ export default function CanvasEditorToolbar({ editor, rawModeEnabled = false, ra
           )}
         </DropdownWrapper>
       )}
-      {editor.extensionManager.extensions.some(e => e.name === 'table') && (
+      {hasExtension('table') && (
         <>
           <Btn onClick={() => editor.chain().focus().setCellAttribute('verticalAlign', 'top').run()}
             title="Align Top">
@@ -527,7 +528,7 @@ export default function CanvasEditorToolbar({ editor, rawModeEnabled = false, ra
           )}
         </DropdownWrapper>
       )}
-      {editor.extensionManager.extensions.some(e => e.name === 'mermaid') && (
+      {hasExtension('mermaid') && (
         <Btn onClick={() => editor.chain().focus().insertMermaid().run()} title="Mermaid Diagram">
           <Workflow size={16} />
         </Btn>

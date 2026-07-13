@@ -17,6 +17,8 @@ import { useRawMode } from '@/library/rawMode';
  *   - placeholder: string
  *   - branchId: number (enables image upload)
  *   - autoFocus: bool
+ *   - rawAutoEnter: bool (default true) — false skips raw-mode auto-entry from ui_prefs
+ *     for this instance (manual toggle still allowed); see CommentItem.js reply prefill
  *   - onSubmit(html): called on Cmd/Ctrl+Enter; receives current HTML
  *   - onCancel(): called on Esc
  */
