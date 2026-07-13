@@ -137,3 +137,46 @@ def test_unknown_tag_degrades_to_text():
 def test_empty_inputs():
     assert html_to_markdown('') == ''
     assert markdown_to_html('') == ''
+
+
+# ---- egress: legacy raw markdown 가드 ----
+
+def test_html_to_markdown_legacy_raw_md_passthrough():
+    # ingress 픽스 이전 저장분: DB에 태그 없는 raw markdown이 그대로 있다.
+    # 가드 없이 markdownify에 통과시키면 **bold**→\*\*bold\*\* escape 오염 +
+    # 빈 줄이 접힌다. is_html이 아니면 원문 그대로 반환해야 한다.
+    legacy = '# 제목\n\n**bold** and _italic_\n\n- [ ] todo'
+    assert html_to_markdown(legacy) == legacy
+
+
+def test_html_to_markdown_plain_text_passthrough():
+    # 태그 판별('<'+태그명+공백·/·> 경계) — 부등호 텍스트도 원문 유지 (회귀 핀)
+    assert html_to_markdown('a < b > c') == 'a < b > c'
+
+
+def test_html_to_markdown_autolink_url_passthrough():
+    # markdown autolink는 HTML 태그가 아니다 — is_html의 <[a-z].*> 오판으로
+    # 통째 삭제되던 케이스(실측: 기존 코드에서 html_to_markdown == ''). 원문 보존.
+    assert html_to_markdown('<https://example.com>') == '<https://example.com>'
+
+
+def test_html_to_markdown_autolink_email_passthrough():
+    assert html_to_markdown('<user@example.com>') == '<user@example.com>'
+
+
+def test_html_to_markdown_autolink_mixed_doc_passthrough():
+    # autolink + 다른 md가 섞인 legacy 문서 전체 보존 (autolink 소실+bold escape 재현 핀)
+    doc = '# T\n\n<https://example.com>\n\n**bold**'
+    assert html_to_markdown(doc) == doc
+
+
+def test_html_to_markdown_inline_code_tag_passthrough():
+    # md 본문 속 `<p>` 인라인 코드 — search 판별이면 HTML로 오판해 훼손(실측 핀).
+    # 판별은 문서 시작 anchored match여야 한다(TipTap HTML은 루트 태그로 시작).
+    doc = 'Use `<p>` here'
+    assert html_to_markdown(doc) == doc
+
+
+def test_html_to_markdown_fenced_html_example_passthrough():
+    doc = '# Doc\n\n```html\n<div class="x">hi</div>\n```'
+    assert html_to_markdown(doc) == doc

@@ -223,9 +223,35 @@ _CONVERTER_OPTIONS = dict(
 )
 
 
+# egress 전용 HTML 판별 — is_html(<[a-z][\s\S]*>)은 markdown autolink
+# <https://example.com>·<user@example.com>까지 HTML로 오판해 markdownify가
+# 통째로 삭제한다(실측). 판별 규칙 2겹:
+#  (1) 실제 태그만 인정 — 태그명(영문자 시작) 뒤가 공백·'/'·'>'
+#  (2) **문서 시작에 anchored** — search로 전문을 훑으면 md 본문 속의
+#      `<p>` 인라인 코드·```html 펜스 예제까지 HTML로 오판해 훼손한다(실측).
+#      TipTap 저장 HTML은 항상 루트 태그(<p>/<h1>/<ul>…)로 시작하므로
+#      시작부 match로 충분하다(픽스처 26케이스 전수 인식 확인).
+# is_html 자체는 ingress(§3.4)·frontend ensureHtml과 공유하는 계약이라
+# 여기서 바꾸지 않는다(동일 오판의 ingress 정렬은 후속).
+_EGRESS_TAG_RE = re.compile(r'\s*<[a-zA-Z][a-zA-Z0-9-]*[\s/>]')
+
+
+def _is_html_for_egress(text: str) -> bool:
+    return bool(_EGRESS_TAG_RE.match(text))
+
+
 def html_to_markdown(html: str) -> str:
+    r"""HTML → markdown. 실제 HTML 태그가 없는 입력은 변환 없이 원문 그대로
+    반환한다 — ingress 픽스 이전에 저장된 legacy raw markdown/plain text를
+    markdownify에 통과시키면 `**`→`\*\*` escape·빈 줄 접힘으로 오염되고,
+    markdown autolink(<https://...>)는 통째로 삭제되기 때문. 판별은 autolink와
+    본문 속 태그 예제를 오판하는 is_html이 아니라, 문서 시작에 anchored된
+    _is_html_for_egress(TipTap HTML은 루트 태그로 시작)를 쓴다.
+    """
     if not html:
         return ''
+    if not _is_html_for_egress(html):
+        return html
     # U+0000은 HTML 무효 문자(파서 단계에서 U+FFFD 치환/드롭 대상) — 입력에서
     # 선제 제거해 아래 _TABLE_GUARD 보초와 절대 충돌하지 않게 한다.
     html = html.replace(_TABLE_GUARD, '')
