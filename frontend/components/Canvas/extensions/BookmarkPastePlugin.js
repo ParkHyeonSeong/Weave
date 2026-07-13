@@ -13,6 +13,14 @@ export function createBookmarkPastePlugin() {
   return new Plugin({
     props: {
       handlePaste(view, event) {
+        // Cmd/Ctrl+Shift+V 탈출구: URL의 칩/북마크 변환도 건너뛴다.
+        // 현재는 tiptap의 reverse 수집(@tiptap/core dist:3746) 덕에 빌더에서
+        // 나중에 등록된 markdownPaste가 먼저 실행돼 shift 분기가 raw 삽입을
+        // 이미 처리하지만, 등록 순서·priority 의존 암묵 계약이라 여기에도
+        // 사양을 명시한다. false 위임으로 충분: markdownPaste가 뒤에 있으면
+        // 그 shift 분기가, 없으면 PM 기본 paste(shiftKey=평문)가 이어받는다.
+        if (view.input.shiftKey) return false;
+
         // HTML 붙여넣기면 무시 (리치 콘텐츠 유지)
         const html = event.clipboardData?.getData('text/html');
         if (html) return false;
