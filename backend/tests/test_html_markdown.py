@@ -171,8 +171,8 @@ def test_html_to_markdown_autolink_mixed_doc_passthrough():
 
 
 def test_html_to_markdown_inline_code_tag_passthrough():
-    # md 본문 속 `<p>` 인라인 코드 — search 판별이면 HTML로 오판해 훼손(실측 핀).
-    # 판별은 문서 시작 anchored match여야 한다(TipTap HTML은 루트 태그로 시작).
+    # md 본문 속 `<p>` 인라인 코드 — 정규식 search 판별이면 HTML로 오판해 훼손(실측 핀).
+    # md 파서는 code_inline으로 토크나이즈하므로 html 토큰 감지가 올바르게 통과시킨다.
     doc = 'Use `<p>` here'
     assert html_to_markdown(doc) == doc
 

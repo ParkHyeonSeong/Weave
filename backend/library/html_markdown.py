@@ -258,8 +258,8 @@ def html_to_markdown(html: str) -> str:
     반환한다 — ingress 픽스 이전에 저장된 legacy raw markdown/plain text를
     markdownify에 통과시키면 `**`→`\*\*` escape·빈 줄 접힘으로 오염되고,
     markdown autolink(<https://...>)는 통째로 삭제되기 때문. 판별은 autolink와
-    본문 속 태그 예제를 오판하는 is_html이 아니라, 문서 시작에 anchored된
-    _is_html_for_egress(TipTap HTML은 루트 태그로 시작)를 쓴다.
+    본문 속 태그 예제를 오판하는 is_html이 아니라, markdown-it의
+    html_block/html_inline 토큰 감지(_is_html_for_egress)를 쓴다.
     """
     if not html:
         return ''
