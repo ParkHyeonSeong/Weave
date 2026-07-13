@@ -281,5 +281,28 @@
       "html->md"
     ],
     "note": "셀 안 리터럴 | — JS 실측: escape 없이 raw 직렬화(a|b), 유령 컬럼/셀 밀림 없어야 함. 그 md의 재파싱은 셀을 쪼개므로(JS도 동일하게 lossy) md->html/roundtrip 불가, html_tiptap 손입력이라 regen도 불가"
+  },
+  {
+    "name": "bookmark-paren-url",
+    "regen": false,
+    "markdown": "[t](https://example.com/a%29b)",
+    "html_tiptap": "<div data-bookmark=\"true\" data-url=\"https://example.com/a)b\" data-title=\"t\" data-domain=\"example.com\"></div>",
+    "html_ingress": null,
+    "directions": [
+      "html->md"
+    ],
+    "note": "URL 괄호 percent-encode(encodeMarkdownUrl/_esc_link_url) — unbalanced ')'가 [label](url)을 조기 종료시켜 href 절단+텍스트 누출. bookmark는 md 복원 없음 → html->md 전용, html_tiptap 손입력이라 regen 불가"
+  },
+  {
+    "name": "link-paren-encoded-roundtrip",
+    "markdown": "[t](https://example.com/a%28b%29c)",
+    "html_tiptap": "<p><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://example.com/a%28b%29c\">t</a></p>",
+    "html_ingress": "<p><a href=\"https://example.com/a%28b%29c\">t</a></p>\n",
+    "directions": [
+      "md->html",
+      "html->md",
+      "roundtrip"
+    ],
+    "note": "percent-encoded 괄호 href를 양쪽 파서(marked/markdown-it)가 그대로 보존 — encodeMarkdownUrl 출력의 왕복 안정성 계약"
   }
 ]

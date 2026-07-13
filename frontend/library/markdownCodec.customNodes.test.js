@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import StarterKit from '@tiptap/starter-kit';
 import { getMarkdownManager } from './markdownCodec';
+import { matchInternalLink, encodeMarkdownUrl } from '@/components/Canvas/extensions/refMarkdown';
 import TaskRefNode from '@/components/Canvas/extensions/TaskRefExtension';
 import IssueRefNode from '@/components/Canvas/extensions/IssueRefExtension';
 import DocRefNode from '@/components/Canvas/extensions/DocRefExtension';
@@ -72,6 +73,10 @@ describe('mention / bookmark (강등 전용)', () => {
     const b = { type: 'doc', content: [{ type: 'bookmark', attrs: { url: 'https://example.com', title: 'Example' } }] };
     expect(mgr().serialize(b).trim()).toBe('[Example](https://example.com)');
   });
+  it('bookmark URL의 괄호는 %28/%29로 인코딩된다 (unbalanced 괄호가 링크 문법을 깨는 것 방지)', () => {
+    const b = { type: 'doc', content: [{ type: 'bookmark', attrs: { url: 'https://example.com/a)b', title: 't' } }] };
+    expect(mgr().serialize(b).trim()).toBe('[t](https://example.com/a%29b)');
+  });
 });
 
 describe('mermaid', () => {
@@ -100,5 +105,18 @@ describe('callout', () => {
     const callout = findNode(json, 'callout')[0];
     expect(callout.attrs.type).toBe('warning');
     expect(mgr().serialize(json).trim()).toBe(md);
+  });
+});
+
+describe('encodeMarkdownUrl', () => {
+  it('괄호만 percent-encode, 나머지 불변·멱등(이중 인코딩 없음)', () => {
+    expect(encodeMarkdownUrl('https://x.com/a(b)c')).toBe('https://x.com/a%28b%29c');
+    expect(encodeMarkdownUrl('https://x.com/a%28b%29c')).toBe('https://x.com/a%28b%29c');
+    expect(encodeMarkdownUrl('')).toBe('');
+  });
+  it('percent-encoded 문자가 있어도 내부 링크 매치가 깨지지 않는다', () => {
+    const m = matchInternalLink('[t](/branch/3/task/12?q=%28x%29)');
+    expect(m).not.toBeNull();
+    expect(m.pathname.startsWith('/branch/3/task/12')).toBe(true);
   });
 });

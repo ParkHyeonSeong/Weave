@@ -3,7 +3,7 @@ import { PluginKey } from '@tiptap/pm/state';
 import TaskRefPopup from './TaskRefPopup';
 import { createRefSuggestionPlugin } from './refSuggestion';
 import { numAttr, strAttr } from './refAttr';
-import { internalOrigin, formatRefLabel, matchInternalLink, splitRefLinkText, ISSUE_PATH, TASK_PATH } from './refMarkdown';
+import { internalOrigin, formatRefLabel, matchInternalLink, splitRefLinkText, ISSUE_PATH, TASK_PATH, encodeMarkdownUrl } from './refMarkdown';
 
 export const taskRefPluginKey = new PluginKey('taskRefSuggestion');
 
@@ -39,7 +39,7 @@ const TaskRefNode = Node.create({
   // === raw markdown 코덱 (스펙 §3.2): 칩 ↔ 내부 URL 링크 ===
   renderMarkdown(node) {
     const { branchId, taskId, displayId, title } = node.attrs || {};
-    return `[${formatRefLabel(displayId, title)}](${internalOrigin()}/branch/${branchId}/task/${taskId})`;
+    return `[${formatRefLabel(displayId, title)}](${encodeMarkdownUrl(`${internalOrigin()}/branch/${branchId}/task/${taskId}`)})`;
   },
   markdownTokenizer: {
     name: 'taskRef',

@@ -3,7 +3,7 @@ import { PluginKey } from '@tiptap/pm/state';
 import IssueRefPopup from './IssueRefPopup';
 import { createRefSuggestionPlugin } from './refSuggestion';
 import { numAttr, strAttr } from './refAttr';
-import { internalOrigin, formatRefLabel, matchInternalLink, splitRefLinkText, ISSUE_PATH } from './refMarkdown';
+import { internalOrigin, formatRefLabel, matchInternalLink, splitRefLinkText, ISSUE_PATH, encodeMarkdownUrl } from './refMarkdown';
 
 export const issueRefPluginKey = new PluginKey('issueRefSuggestion');
 
@@ -32,7 +32,7 @@ const IssueRefNode = Node.create({
   // === raw markdown 코덱 (스펙 §3.2) ===
   renderMarkdown(node) {
     const { branchId, taskId, issueId, displayId, title } = node.attrs || {};
-    return `[${formatRefLabel(displayId, title)}](${internalOrigin()}/branch/${branchId}/task/${taskId}/issue/${issueId})`;
+    return `[${formatRefLabel(displayId, title)}](${encodeMarkdownUrl(`${internalOrigin()}/branch/${branchId}/task/${taskId}/issue/${issueId}`)})`;
   },
   markdownTokenizer: {
     name: 'issueRef',

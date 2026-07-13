@@ -3,7 +3,7 @@ import { PluginKey } from '@tiptap/pm/state';
 import DocRefPopup from './DocRefPopup';
 import { createRefSuggestionPlugin } from './refSuggestion';
 import { numAttr, strAttr } from './refAttr';
-import { internalOrigin, escapeLinkText, matchInternalLink, DOC_PATH } from './refMarkdown';
+import { internalOrigin, escapeLinkText, matchInternalLink, DOC_PATH, encodeMarkdownUrl } from './refMarkdown';
 
 export const docRefPluginKey = new PluginKey('docRefSuggestion');
 
@@ -30,7 +30,7 @@ const DocRefNode = Node.create({
   // === raw markdown 코덱 (스펙 §3.2) ===
   renderMarkdown(node) {
     const { canvasId, pageId, title } = node.attrs || {};
-    return `[${escapeLinkText(title)}](${internalOrigin()}/canvas/${canvasId}/${pageId})`;
+    return `[${escapeLinkText(title)}](${encodeMarkdownUrl(`${internalOrigin()}/canvas/${canvasId}/${pageId}`)})`;
   },
   markdownTokenizer: {
     name: 'docRef',

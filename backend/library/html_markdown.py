@@ -55,9 +55,16 @@ def _esc_link_text(text) -> str:
     return _LINK_TEXT_ESC_RE.sub(r'\\\1', str(text if text is not None else ''))
 
 
+def _esc_link_url(url) -> str:
+    """frontend refMarkdown.js encodeMarkdownUrl과 동일 규칙(계약) — md 링크
+    목적지의 괄호를 %28/%29로 percent-encode. unbalanced ')'는 markdown-it·
+    marked 양쪽에서 링크를 조기 종료시켜 href 절단을 일으킨다(실측). 멱등."""
+    return str(url or '').replace('(', '%28').replace(')', '%29')
+
+
 def _chip_link(label: str, path: str) -> str:
     """[esc(label)](base_url + path) — ref 칩 3종(task/issue/doc) 공용 링크 조립."""
-    return f"[{_esc_link_text(label)}]({_base_url()}{path})"
+    return f"[{_esc_link_text(label)}]({_esc_link_url(_base_url() + path)})"
 
 
 # ---------------------------------------------------------------------------
@@ -100,7 +107,7 @@ class _WeaveConverter(MarkdownConverter):
         if el.get('data-bookmark') is not None:
             # JS 폴백(BookmarkExtension.js:39)과 동일 — title 공백 시 url을 라벨로.
             label = el.get('data-title') or el.get('data-url', '')
-            return f"\n[{_esc_link_text(label)}]({el.get('data-url', '')})\n\n"
+            return f"\n[{_esc_link_text(label)}]({_esc_link_url(el.get('data-url', ''))})\n\n"
         return text  # 미커버 div — 텍스트 강등
 
     # Tiptap 리스트 아이템은 항상 자식을 <p>로 감싼다. markdownify 기본값은

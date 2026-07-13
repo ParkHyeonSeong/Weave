@@ -53,3 +53,13 @@ export function splitRefLinkText(text) {
 export function formatRefLabel(displayId, title) {
   return escapeLinkText([displayId, title].filter(Boolean).join(' '));
 }
+
+// md 링크 목적지(destination) 문법을 깨는 괄호를 percent-encode (CommonMark 관례).
+// @tiptap/extension-link 공식 renderMarkdown은 href를 그대로 삽입하고(dist 실측),
+// unbalanced ')'는 marked·markdown-it 양쪽에서 링크를 조기 종료시켜 href 절단을
+// 일으킨다. %28/%29는 양쪽 파서 모두 href로 보존해 왕복 안정·멱등(실측).
+// backend/library/html_markdown.py _esc_link_url과 동일 규칙(계약) — 링크 목적지를
+// 만드는 renderMarkdown은 전부 이 헬퍼를 거친다(bookmark + 칩 3종).
+export function encodeMarkdownUrl(url) {
+  return String(url ?? '').replace(/\(/g, '%28').replace(/\)/g, '%29');
+}
