@@ -27,7 +27,6 @@ mdit-py-plugins 0.6.1) — 상세는 .superpowers/sdd/task-S2.1-report.md:
     옵션명(allow_space/allow_digits/double_inline)은 브리프 그대로 실측 일치.
 """
 import re
-from html.parser import HTMLParser
 
 from markdown_it import MarkdownIt
 from markdownify import MarkdownConverter, abstract_inline_conversion
@@ -241,48 +240,48 @@ _CONVERTER_OPTIONS = dict(
 # 한다. is_html 자체는 ingress(§3.4)·frontend ensureHtml과 공유하는
 # 계약이라 여기서 바꾸지 않는다(동일 오판의 ingress 정렬은 후속).
 #
-# 토큰 타입만으로는 부족하다(실측) — CommonMark는 HTML 주석·DOCTYPE·
-# PI·CDATA도 전부 html_block으로 파싱하는데, 이들은 legacy raw markdown 안에
-# 섞여 있어도 is_html=False(원문 보존 대상)로 판정되는 입력이다. 처음엔 토큰
-# 타입 매치에 더해 content가 is_html과 동일한 letter-tag 정규식(_HTML_TAG_RE)에
-# 매치할 때만 HTML로 인정했으나, 이 문자열 search는 주석/CDATA/PI **안에** 박힌
-# 태그 예제까지 real tag로 오판한다(실측):
+# 토큰 타입만으로는 부족하다(실측) — CommonMark는 HTML 주석·DOCTYPE·PI·CDATA도
+# 전부 html_block/html_inline으로 파싱하는데, 이들만 있거나 이들 **내부에** 태그
+# 예제가 박혀 있을 뿐인 입력은 legacy raw markdown으로 보고 is_html=False(원문
+# 보존)여야 한다 — 단, 특수 구문이 닫힌 *뒤에* 같은 토큰 안에서 진짜 태그가
+# 이어지면(`<!-- note --> <p>x</p>`처럼) is_html=True다. 처음엔 토큰 타입 매치에
+# 더해 content가 is_html과 동일한 letter-tag 정규식(_HTML_TAG_RE)에 매치할
+# 때만 HTML로 인정했으나, 이 문자열 search는 주석/CDATA/PI **안에** 박힌 태그
+# 예제까지 real tag로 오판한다(실측):
 #  `<!-- example <p>literal</p> -->` → ''(통째 삭제), `hello <!-- <p>literal</p> -->`
 #  → 'hello'(주석 뒤 통째 삭제), `<![CDATA[<p>literal</p>]]>` → '<p>literal</p>'
 #  (CDATA 래퍼가 벗겨짐), `<?pi <p>literal</p>?>` → 'pi <pliteral?>'(훼손).
-# 대신 html.parser.HTMLParser의 이벤트 스트림으로 real tag 존재 여부를 판별한다
-# — handle_starttag/handle_startendtag만 real tag로 인정하고, comment/decl(CDATA
-# 포함)/PI는 각각 handle_comment/handle_decl/handle_pi라는 별도 이벤트로 파싱돼
-# 자연히 배제된다. 문자열 위치와 무관하게(앵커링 없이) 스캔하므로 `<!-- note -->
-# <p>x</p>`처럼 한 html_block 안에서 주석 뒤에 실제 태그가 오는 반대 방향
-# 케이스도 놓치지 않는다. is_html 자체는 ingress(§3.4)·frontend ensureHtml과
+# html.parser.HTMLParser 이벤트로 대체했던 두 번째 시도도 깨졌다(실측) —
+# HTMLParser와 CommonMark는 주석/PI 종료 규칙이 다르다:
+#  `<?pi data > example <p>literal</p> ?>` — CommonMark는 `?>`까지 통째로 PI인데
+#  HTMLParser는 첫 `>`에서 PI를 끝내 내부 `<p>`를 real tag로 오판·훼손한다.
+#  `<!-- note --!> <p>literal</p> -->` — CommonMark는 마지막 `-->`까지 주석인데
+#  HTMLParser는 `--!>`도 주석 종료로 인정해 뒤의 `<p>`를 real tag로 오판한다.
+# 대신 content를 같은 commonmark 파서(_EGRESS_HTML_DETECTOR)의 parseInline()
+# 으로 재토큰화한다 — CommonMark inline 토크나이저는 주석/PI/CDATA/decl 같은
+# 특수 구문 하나를 통째로 한 html_inline 토큰으로 만든다(경계 판정이 블록
+# 파서와 완전히 동일한 문법). 그래서 각 html_inline 토큰의 content가
+# opening/startend 태그로 시작하는지(`<[a-zA-Z]` 접두)만 보면 특수 구문 내부에
+# 박힌 태그 예제는 그 토큰 content가 `<!`/`<?`/`</`로 시작해 자연히 배제되고,
+# 특수 구문이 닫힌 뒤에 이어지는 진짜 태그는 별도 html_inline 토큰으로 쪼개져
+# 나와 정상 인식된다. is_html 자체는 ingress(§3.4)·frontend ensureHtml과
 # 공유하는 계약이라 여기서 바꾸지 않는다(동일 오판의 ingress 정렬은 후속) —
 # _HTML_TAG_RE는 그 계약을 위해 그대로 유지한다.
 _EGRESS_HTML_DETECTOR = MarkdownIt('commonmark', {'html': True})
 
-
-class _RealTagDetector(HTMLParser):
-    """comment/decl(CDATA 포함)/PI 밖의 실제 start/startend 태그만 감지."""
-
-    def __init__(self):
-        super().__init__(convert_charrefs=False)
-        self.found = False
-
-    def handle_starttag(self, tag, attrs):
-        self.found = True
-
-    def handle_startendtag(self, tag, attrs):
-        self.found = True
+_OPENING_TAG_RE = re.compile(r'<[a-zA-Z]')
 
 
 def _content_has_real_tag(content: str) -> bool:
-    detector = _RealTagDetector()
-    try:
-        detector.feed(content)
-        detector.close()
-    except Exception:
-        return False
-    return detector.found
+    """content를 commonmark inline 문법(parseInline)으로 재토큰화해, opening/
+    startend 태그로 시작하는 html_inline 토큰이 하나라도 있으면 True."""
+    for block in _EGRESS_HTML_DETECTOR.parseInline(content):
+        if block.type != 'inline' or not block.children:
+            continue
+        for child in block.children:
+            if child.type == 'html_inline' and _OPENING_TAG_RE.match(child.content):
+                return True
+    return False
 
 
 def _is_html_for_egress(text: str) -> bool:

@@ -271,3 +271,32 @@ def test_html_to_markdown_comment_then_real_tag_converts():
     out = html_to_markdown(doc)
     assert out != doc
     assert 'x' in out
+
+
+# ---- egress: HTML 판별 — html.parser와 CommonMark의 특수 구문 종료 규칙 불일치 ----
+# (html.parser.HTMLParser로 content를 재해석하면 PI/주석 종료 판정이 CommonMark
+# 블록 파서와 달라 경계를 잘못 잡는다 — parseInline 재토큰화로 교체해 동일
+# 문법으로 통일해야 한다.)
+
+def test_html_to_markdown_pi_permissive_gt_boundary_passthrough():
+    # CommonMark는 `?>`까지 통째로 하나의 PI인데, html.parser는 PI 안의 첫
+    # `>`에서 종료를 인정해 내부 `<p>`를 real tag로 오판·훼손했다(실측:
+    # 'pi data  example\n\nliteral\n\n?>'로 변환됨).
+    doc = '<?pi data > example <p>literal</p> ?>'
+    assert html_to_markdown(doc) == doc
+
+
+def test_html_to_markdown_comment_permissive_bang_boundary_passthrough():
+    # CommonMark는 마지막 `-->`까지 통째로 하나의 주석인데, html.parser는
+    # `--!>`도 주석 종료로 인정해 뒤의 `<p>`를 real tag로 오판했다(실측:
+    # 'literal\n\n-->'로 변환됨).
+    doc = '<!-- note --!> <p>literal</p> -->'
+    assert html_to_markdown(doc) == doc
+
+
+def test_html_to_markdown_pi_then_real_tag_converts():
+    # 대칭 케이스 — PI가 닫힌 뒤에 실제 태그가 이어지면 HTML로 판정해야 한다.
+    doc = '<?pi?> <p>x</p>'
+    out = html_to_markdown(doc)
+    assert out != doc
+    assert 'x' in out
