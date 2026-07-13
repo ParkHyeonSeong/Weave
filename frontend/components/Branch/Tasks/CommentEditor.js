@@ -25,6 +25,7 @@ export default function CommentEditor({
   placeholder = 'Add a comment...',
   branchId,
   autoFocus = false,
+  rawAutoEnter = true,
   onSubmit,
   onCancel,
 }) {
@@ -103,7 +104,7 @@ export default function CommentEditor({
   const {
     isRaw, rawText, session, warnings, parseError,
     handleRawChange, toggleRaw, parseCurrentRaw, isRawEmpty,
-  } = useRawMode(editor, extensions);
+  } = useRawMode(editor, extensions, true, { autoEnter: rawAutoEnter });
 
   // raw 모드 Cmd+Enter/Esc — CodeMirror defaultKeymap의 Mod-Enter(빈 줄 삽입)보다
   // 먼저 잡아야 하므로 조상 캡처 단계에서 가로챈다(캡처는 대상 리스너보다 선행).

@@ -3,7 +3,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { buildMarkdownExtensions } from './markdownCodec';
-import { enterRawState, parseRawToHtml, formatUnsupportedWarning, closeEditorPopups } from './rawMode';
+import { enterRawState, parseRawToHtml, formatUnsupportedWarning, closeEditorPopups, shouldAutoEnterRaw } from './rawMode';
 import MentionNode, { mentionPluginKey } from '@/components/Canvas/extensions/MentionExtension';
 
 // StarterKit v3에는 underline/link 포함 — TaskDescriptionEditor.js:26-29와 동일 전제
@@ -98,5 +98,29 @@ describe('formatUnsupportedWarning', () => {
   });
   it('모르는 키는 그대로 노출', () => {
     expect(formatUnsupportedWarning(['weirdMark'])).toContain('weirdMark');
+  });
+});
+
+describe('shouldAutoEnterRaw (prefill 인스턴스의 raw 자동 진입 억제)', () => {
+  it('raw 선호 + autoEnter 허용이면 true', () => {
+    expect(shouldAutoEnterRaw({ editor_raw_mode: true }, true)).toBe(true);
+  });
+  it('prefill 인스턴스(autoEnter=false)는 선호가 raw여도 진입하지 않는다', () => {
+    expect(shouldAutoEnterRaw({ editor_raw_mode: true }, false)).toBe(false);
+  });
+  it('raw 선호가 없으면 autoEnter와 무관하게 false', () => {
+    expect(shouldAutoEnterRaw({}, true)).toBe(false);
+    expect(shouldAutoEnterRaw(undefined, true)).toBe(false);
+  });
+  it('멘션 칩은 raw 왕복에서 평문으로 강등된다 — prefill 인스턴스가 rich로 시작해야 하는 이유', () => {
+    const ext = buildMarkdownExtensions([StarterKit, MentionNode]);
+    editor = new Editor({
+      extensions: ext,
+      content: '<p><span data-mention="true" data-user-id="7" data-username="alice">@alice</span>&nbsp;</p>',
+    });
+    const { markdown } = enterRawState(editor);
+    expect(markdown).toContain('@alice'); // 평문 강등 (mention은 md 복원 토크나이저가 없음)
+    editor.commands.setContent(parseRawToHtml(markdown, ext));
+    expect(JSON.stringify(editor.getJSON())).not.toContain('"mention"'); // 복원 불가 → data-mention 소실 → 알림 소실
   });
 });

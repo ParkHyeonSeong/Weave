@@ -64,11 +64,21 @@ export function parseRawToHtml(md, extensions) {
   return markdownToEditorHtml(md, extensions);
 }
 
+// prefill(답글 자동 멘션 등) 콘텐츠를 갖고 뜨는 에디터 인스턴스는 선호가 raw여도
+// rich로 시작해야 한다 — enterRaw의 md 직렬화가 멘션 칩을 @평문으로 강등하고
+// (mention은 md 복원 토크나이저가 없음) 제출 시 data-mention이 사라져 mention
+// 알림이 소실되기 때문. 수동 토글은 명시적 선택이라 허용(억제하지 않음).
+export function shouldAutoEnterRaw(prefs, autoEnter = true) {
+  return autoEnter && prefs?.editor_raw_mode === true;
+}
+
 // 비협업 3표면(task 설명·issue·댓글) 공용 raw 모드 훅.
 // - editor: TipTap Editor (준비 전 null 허용)
 // - extensions: 해당 표면 useEditor에 넘긴 것과 같은 배열
 // - enabled: false면 자동 진입·토글 비활성 (IssueEditor를 공유하는 AnnotationSidebar 제외용)
-export function useRawMode(editor, extensions, enabled = true) {
+// - options.autoEnter: false면 선호가 raw여도 자동 진입만 스킵 (수동 토글은 그대로 허용;
+//   답글 prefill처럼 raw 왕복 시 콘텐츠가 손실되는 인스턴스용 — CommentItem.js 참조)
+export function useRawMode(editor, extensions, enabled = true, { autoEnter = true } = {}) {
   const { prefs, loaded, setNamespace } = useUiPrefs();
   const [isRaw, setIsRaw] = useState(false);
   const isRawRef = useRef(false);
@@ -145,13 +155,13 @@ export function useRawMode(editor, extensions, enabled = true) {
 
   const isRawEmpty = useCallback(() => rawTextRef.current.trim() === '', []);
 
-  // ui_prefs 선호 자동 진입 — 에디터 준비 + prefs 로드 후 1회
+  // ui_prefs 선호 자동 진입 — 에디터 준비 + prefs 로드 후 1회 (prefill 인스턴스는 억제)
   const autoRef = useRef(false);
   useEffect(() => {
     if (!enabled || autoRef.current || !editor || !loaded) return;
     autoRef.current = true;
-    if (prefs.editor_raw_mode === true) enterRaw();
-  }, [enabled, editor, loaded, prefs.editor_raw_mode, enterRaw]);
+    if (shouldAutoEnterRaw(prefs, autoEnter)) enterRaw();
+  }, [enabled, autoEnter, editor, loaded, prefs.editor_raw_mode, enterRaw]);
 
   return {
     isRaw, isRawRef, rawText, session, warnings, parseError,

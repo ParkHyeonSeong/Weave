@@ -180,6 +180,7 @@ function CommentItem({
               placeholder="Reply..."
               branchId={branchId}
               autoFocus
+              rawAutoEnter={!replyPrefill.includes('data-mention')}
               onSubmit={handleSubmitReply}
               onCancel={() => setReplyOpen(false)}
             />
