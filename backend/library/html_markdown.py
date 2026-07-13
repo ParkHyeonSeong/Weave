@@ -242,9 +242,11 @@ _CONVERTER_OPTIONS = dict(
 #
 # 토큰 타입만으로는 부족하다(실측) — CommonMark는 HTML 주석·DOCTYPE·PI·CDATA도
 # 전부 html_block/html_inline으로 파싱하는데, 이들만 있거나 이들 **내부에** 태그
-# 예제가 박혀 있을 뿐인 입력은 legacy raw markdown으로 보고 is_html=False(원문
-# 보존)여야 한다 — 단, 특수 구문이 닫힌 *뒤에* 같은 토큰 안에서 진짜 태그가
-# 이어지면(`<!-- note --> <p>x</p>`처럼) is_html=True다. 처음엔 토큰 타입 매치에
+# 예제가 박혀 있을 뿐인 입력은 legacy raw markdown으로 보고 _is_html_for_egress=
+# False(원문 보존)여야 한다 — 단, 특수 구문이 닫힌 *뒤에* 같은 토큰 안에서 진짜
+# 태그가 이어지면(`<!-- note --> <p>x</p>`처럼) _is_html_for_egress=True다.
+# (ingress의 is_html은 별개 — 태그 예제가 특수 구문 안에 있어도 letter-tag
+# search라 True를 돌려준다. 예: is_html('<!-- <p>x</p> -->')==True.) 처음엔 토큰 타입 매치에
 # 더해 content가 is_html과 동일한 letter-tag 정규식(_HTML_TAG_RE)에 매치할
 # 때만 HTML로 인정했으나, 이 문자열 search는 주석/CDATA/PI **안에** 박힌 태그
 # 예제까지 real tag로 오판한다(실측):
@@ -259,8 +261,8 @@ _CONVERTER_OPTIONS = dict(
 #  HTMLParser는 `--!>`도 주석 종료로 인정해 뒤의 `<p>`를 real tag로 오판한다.
 # 대신 content를 같은 commonmark 파서(_EGRESS_HTML_DETECTOR)의 parseInline()
 # 으로 재토큰화한다 — CommonMark inline 토크나이저는 주석/PI/CDATA/decl 같은
-# 특수 구문 하나를 통째로 한 html_inline 토큰으로 만든다(경계 판정이 블록
-# 파서와 완전히 동일한 문법). 그래서 각 html_inline 토큰의 content가
+# 특수 구문 하나를 통째로 한 html_inline 토큰으로 만든다(관련 특수 구문의
+# 종료 경계가 블록 파서와 동일한 CommonMark 규칙). 그래서 각 html_inline 토큰의 content가
 # opening/startend 태그로 시작하는지(`<[a-zA-Z]` 접두)만 보면 특수 구문 내부에
 # 박힌 태그 예제는 그 토큰 content가 `<!`/`<?`/`</`로 시작해 자연히 배제되고,
 # 특수 구문이 닫힌 뒤에 이어지는 진짜 태그는 별도 html_inline 토큰으로 쪼개져
