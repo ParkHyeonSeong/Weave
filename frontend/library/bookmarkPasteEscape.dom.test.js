@@ -40,7 +40,7 @@ describe('BookmarkPastePlugin shift 탈출구', () => {
   });
 });
 
-describe('실 등록 체인 순서 회귀 (someProp 경유 — 등록 순서가 뒤집히면 깨진다)', () => {
+describe('실 등록 체인 동작 회귀 (someProp 경유 — 순서 독립: 양 플러그인 모두 shift 가드 보유)', () => {
   it('Shift 붙여넣기: 내부 URL이 평문으로 남는다', () => {
     editor = new Editor({ extensions: buildCommentEditorExtensions({ branchId: 1 }), content: '<p></p>' });
     editor.view.input.shiftKey = true;
