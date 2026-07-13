@@ -230,3 +230,44 @@ def test_html_to_markdown_processing_instruction_passthrough():
 def test_html_to_markdown_cdata_passthrough():
     doc = '<![CDATA[x]]>'
     assert html_to_markdown(doc) == doc
+
+
+# ---- egress: HTML 판별 — comment/CDATA/PI 안에 박힌 태그 예제는 진짜 태그가 아니다 ----
+# (_HTML_TAG_RE.search는 토큰 content 문자열 전체를 훑어 주석·CDATA·PI 내부의
+# 태그 예제까지 real tag로 오판한다 — html.parser 이벤트 기반 판정(start/startend
+# 태그만 인정, comment/decl/PI는 별도 이벤트라 자연 배제)으로 교체해야 한다.)
+
+def test_html_to_markdown_comment_with_tag_example_passthrough():
+    # 주석 안의 <p>literal</p>는 문자열로는 태그처럼 보이지만 handle_starttag가
+    # 아니라 handle_comment 이벤트다 — real tag로 잡히면 안 된다(실측: '' 로 귀결되던 버그).
+    doc = '<!-- example <p>literal</p> -->'
+    assert html_to_markdown(doc) == doc
+
+
+def test_html_to_markdown_comment_prefixed_text_with_tag_example_passthrough():
+    # 앞에 실텍스트가 있는 문단 속 html_inline 주석 — search 판정은 주석 안
+    # 태그 예제까지 훑어 HTML로 오판해 markdownify가 주석 뒤를 통째로 삼키고
+    # 'hello'만 남긴다(실측).
+    doc = 'hello <!-- example <p>literal</p> -->'
+    assert html_to_markdown(doc) == doc
+
+
+def test_html_to_markdown_cdata_with_tag_example_passthrough():
+    # 실측: 구현이 CDATA 래퍼를 벗기고 안의 '<p>literal</p>'만 남겼다(HTML로 오판).
+    doc = '<![CDATA[<p>literal</p>]]>'
+    assert html_to_markdown(doc) == doc
+
+
+def test_html_to_markdown_pi_with_tag_example_passthrough():
+    # 실측: 'pi <pliteral?>'로 훼손되던 버그 — PI는 markdownify HTML 컨텍스트가 아니다.
+    doc = '<?pi <p>literal</p>?>'
+    assert html_to_markdown(doc) == doc
+
+
+def test_html_to_markdown_comment_then_real_tag_converts():
+    # 반대 방향 — 한 html_block 안에서 주석 뒤에 실제 태그가 오면 HTML로
+    # 판정해야 한다. 단순 앵커링(문자열 맨 앞만 봄)이면 놓치는 케이스(리뷰 명시).
+    doc = '<!-- note --> <p>x</p>'
+    out = html_to_markdown(doc)
+    assert out != doc
+    assert 'x' in out
