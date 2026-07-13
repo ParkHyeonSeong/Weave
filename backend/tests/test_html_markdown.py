@@ -233,13 +233,14 @@ def test_html_to_markdown_cdata_passthrough():
 
 
 # ---- egress: HTML 판별 — comment/CDATA/PI 안에 박힌 태그 예제는 진짜 태그가 아니다 ----
-# (_HTML_TAG_RE.search는 토큰 content 문자열 전체를 훑어 주석·CDATA·PI 내부의
-# 태그 예제까지 real tag로 오판한다 — html.parser 이벤트 기반 판정(start/startend
-# 태그만 인정, comment/decl/PI는 별도 이벤트라 자연 배제)으로 교체해야 한다.)
+# (문자열 search 판정은 주석·CDATA·PI 내부의 태그 예제까지 real tag로 오판한다.
+# 현행 판정: token content를 parseInline으로 CommonMark 경계 그대로 재토큰화하고,
+# html_inline child가 opening 태그로 시작(<[a-zA-Z])할 때만 인정 — 특수 구문은
+# 하나가 통째로 한 토큰이라 내부 태그 예제가 자연 배제된다.)
 
 def test_html_to_markdown_comment_with_tag_example_passthrough():
-    # 주석 안의 <p>literal</p>는 문자열로는 태그처럼 보이지만 handle_starttag가
-    # 아니라 handle_comment 이벤트다 — real tag로 잡히면 안 된다(실측: '' 로 귀결되던 버그).
+    # 주석 안의 <p>literal</p>는 문자열로는 태그처럼 보이지만 주석 전체가
+    # 한 토큰(<!--로 시작)이다 — real tag로 잡히면 안 된다(실측: '' 로 귀결되던 버그).
     doc = '<!-- example <p>literal</p> -->'
     assert html_to_markdown(doc) == doc
 
