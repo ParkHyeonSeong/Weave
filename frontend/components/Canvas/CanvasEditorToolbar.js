@@ -101,6 +101,17 @@ export default function CanvasEditorToolbar({ editor, rawModeEnabled = false, ra
 
   if (!editor) return null;
 
+  // 표면별 feature-detection — 이 툴바는 Canvas 외에 task 설명·issue 에디터도
+  // 공유하는데(TaskDescriptionEditor.js:113, IssueEditor.js:56) 그 표면들엔
+  // TextStyle/Color/TextAlign 확장이 없어 setColor/setTextAlign이 undefined →
+  // 클릭 시 TypeError(실측). image/table/mermaid의 기존 관례(아래 377·382·510행
+  // extensionManager name 체크)를 그대로 따른다. 확장을 표면에 추가하는 안은
+  // md-lossy 서식을 md-canonical 표면으로 확대하는 것이라 기각.
+  const hasExtension = (name) => editor.extensionManager.extensions.some((e) => e.name === name);
+  const canColor = hasExtension('color');       // Color는 TextStyle과 세트 등록(canvasEditorExtensions.js:54-55)
+  const canHighlight = hasExtension('highlight');
+  const canTextAlign = hasExtension('textAlign');
+
   const toggleDropdown = (name) => {
     setOpenDropdown((prev) => (prev === name ? null : name));
   };
@@ -219,55 +230,61 @@ export default function CanvasEditorToolbar({ editor, rawModeEnabled = false, ra
         <Code size={16} />
       </Btn>
 
-      {/* 텍스트 컬러 드롭다운 */}
-      <DropdownWrapper isOpen={openDropdown === 'color'} onClose={closeDropdown}>
-        <Btn onClick={() => toggleDropdown('color')} title="Text Color">
-          <Palette size={16} />
-        </Btn>
-        {openDropdown === 'color' && (
-          <div className="CanvasEditorToolbar__DropdownMenu CanvasEditorToolbar__ColorMenu">
-            <div className="CanvasEditorToolbar__ColorSection">
-              <span className="CanvasEditorToolbar__ColorLabel">Text</span>
-              <div className="CanvasEditorToolbar__ColorGrid">
-                {TEXT_COLORS.map((c) => (
+      {/* 텍스트 컬러/하이라이트 드롭다운 — 스키마에 있는 섹션만 노출 */}
+      {(canColor || canHighlight) && (
+        <DropdownWrapper isOpen={openDropdown === 'color'} onClose={closeDropdown}>
+          <Btn onClick={() => toggleDropdown('color')} title={canColor ? 'Text Color' : 'Highlight'}>
+            <Palette size={16} />
+          </Btn>
+          {openDropdown === 'color' && (
+            <div className="CanvasEditorToolbar__DropdownMenu CanvasEditorToolbar__ColorMenu">
+              {canColor && (
+                <div className="CanvasEditorToolbar__ColorSection">
+                  <span className="CanvasEditorToolbar__ColorLabel">Text</span>
+                  <div className="CanvasEditorToolbar__ColorGrid">
+                    {TEXT_COLORS.map((c) => (
+                      <button
+                        key={c}
+                        className="CanvasEditorToolbar__ColorSwatch"
+                        style={{ backgroundColor: c }}
+                        onClick={() => { editor.chain().focus().setColor(c).run(); closeDropdown(); }}
+                      />
+                    ))}
+                  </div>
                   <button
-                    key={c}
-                    className="CanvasEditorToolbar__ColorSwatch"
-                    style={{ backgroundColor: c }}
-                    onClick={() => { editor.chain().focus().setColor(c).run(); closeDropdown(); }}
-                  />
-                ))}
-              </div>
-              <button
-                className="CanvasEditorToolbar__ColorReset"
-                onClick={() => { editor.chain().focus().unsetColor().run(); closeDropdown(); }}
-              >
-                Reset color
-              </button>
-            </div>
-            <div className="CanvasEditorToolbar__ColorSection">
-              <span className="CanvasEditorToolbar__ColorLabel">Highlight</span>
-              <div className="CanvasEditorToolbar__ColorGrid">
-                {HIGHLIGHT_COLORS.map((h) => (
+                    className="CanvasEditorToolbar__ColorReset"
+                    onClick={() => { editor.chain().focus().unsetColor().run(); closeDropdown(); }}
+                  >
+                    Reset color
+                  </button>
+                </div>
+              )}
+              {canHighlight && (
+                <div className="CanvasEditorToolbar__ColorSection">
+                  <span className="CanvasEditorToolbar__ColorLabel">Highlight</span>
+                  <div className="CanvasEditorToolbar__ColorGrid">
+                    {HIGHLIGHT_COLORS.map((h) => (
+                      <button
+                        key={h.color}
+                        className="CanvasEditorToolbar__ColorSwatch CanvasEditorToolbar__ColorSwatch--highlight"
+                        style={{ backgroundColor: h.color }}
+                        title={h.label}
+                        onClick={() => { editor.chain().focus().toggleHighlight({ color: h.color }).run(); closeDropdown(); }}
+                      />
+                    ))}
+                  </div>
                   <button
-                    key={h.color}
-                    className="CanvasEditorToolbar__ColorSwatch CanvasEditorToolbar__ColorSwatch--highlight"
-                    style={{ backgroundColor: h.color }}
-                    title={h.label}
-                    onClick={() => { editor.chain().focus().toggleHighlight({ color: h.color }).run(); closeDropdown(); }}
-                  />
-                ))}
-              </div>
-              <button
-                className="CanvasEditorToolbar__ColorReset"
-                onClick={() => { editor.chain().focus().unsetHighlight().run(); closeDropdown(); }}
-              >
-                Remove highlight
-              </button>
+                    className="CanvasEditorToolbar__ColorReset"
+                    onClick={() => { editor.chain().focus().unsetHighlight().run(); closeDropdown(); }}
+                  >
+                    Remove highlight
+                  </button>
+                </div>
+              )}
             </div>
-          </div>
-        )}
-      </DropdownWrapper>
+          )}
+        </DropdownWrapper>
+      )}
 
       <Sep />
 
@@ -287,21 +304,24 @@ export default function CanvasEditorToolbar({ editor, rawModeEnabled = false, ra
 
       <Sep />
 
-      {/* 정렬 */}
-      <Btn onClick={() => editor.chain().focus().setTextAlign('left').run()}
-        active={editor.isActive({ textAlign: 'left' })} title="Align Left">
-        <AlignLeft size={16} />
-      </Btn>
-      <Btn onClick={() => editor.chain().focus().setTextAlign('center').run()}
-        active={editor.isActive({ textAlign: 'center' })} title="Align Center">
-        <AlignCenter size={16} />
-      </Btn>
-      <Btn onClick={() => editor.chain().focus().setTextAlign('right').run()}
-        active={editor.isActive({ textAlign: 'right' })} title="Align Right">
-        <AlignRight size={16} />
-      </Btn>
-
-      <Sep />
+      {canTextAlign && (
+        <>
+          {/* 정렬 */}
+          <Btn onClick={() => editor.chain().focus().setTextAlign('left').run()}
+            active={editor.isActive({ textAlign: 'left' })} title="Align Left">
+            <AlignLeft size={16} />
+          </Btn>
+          <Btn onClick={() => editor.chain().focus().setTextAlign('center').run()}
+            active={editor.isActive({ textAlign: 'center' })} title="Align Center">
+            <AlignCenter size={16} />
+          </Btn>
+          <Btn onClick={() => editor.chain().focus().setTextAlign('right').run()}
+            active={editor.isActive({ textAlign: 'right' })} title="Align Right">
+            <AlignRight size={16} />
+          </Btn>
+          <Sep />
+        </>
+      )}
 
       {/* 삽입: 인용, 콜아웃, 코드블록, 구분선 */}
       <Btn onClick={() => editor.chain().focus().toggleBlockquote().run()}
