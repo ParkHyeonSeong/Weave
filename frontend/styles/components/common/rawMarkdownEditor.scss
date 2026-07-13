@@ -30,7 +30,7 @@
   padding: $space-1 $space-3;
   font-size: $font-size-xs;
   color: $color-warning;
-  background: #FFFBEB;
+  background: $color-warning-bg;
   border-bottom: 1px solid $color-border;
 
   svg { flex-shrink: 0; }
