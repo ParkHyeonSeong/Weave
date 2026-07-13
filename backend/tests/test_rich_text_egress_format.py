@@ -142,6 +142,22 @@ async def test_get_issue_format_markdown_body_comments_timeline(db_session):
     assert tl[0]["content"] == '`x`'   # timeline은 comments dict 공유 — 함께 치환
 
 
+async def test_get_task_format_markdown_inline_html_not_at_root(db_session):
+    # ingress ensure_html(is_html=True)이 저장하는 유효 HTML인데 텍스트가 루트
+    # 태그로 시작하지 않는 케이스 — egress 판별이 anchored regex였을 때 raw로
+    # 오판해 HTML이 그대로 반환되던 회귀(계약 위반: format=markdown 응답에 HTML 잔존).
+    from library.html_markdown import ensure_html
+
+    user = await _make_user(db_session, "eg_f@t.t", "eg_f")
+    branch = await _make_branch(db_session, user, name="EG_F", key="EGF")
+    await _add_member(db_session, branch, user)
+    tid = await _make_task(db_session, branch, user,
+                            description=ensure_html('hello <strong>bold</strong>'))
+    res = await task_ctrl.get_detail(tid, branch, _req(user), db_session, fmt='markdown')
+    assert res["status"] is True
+    assert res["task"]["description"] == 'hello **bold**'
+
+
 async def test_get_canvas_page_format_markdown_and_typst_skip(db_session):
     user = await _make_user(db_session, "eg_e@t.t", "eg_e")
     canvas = await _make_canvas(db_session, user, name="C", key="EGE")

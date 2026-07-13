@@ -180,3 +180,19 @@ def test_html_to_markdown_inline_code_tag_passthrough():
 def test_html_to_markdown_fenced_html_example_passthrough():
     doc = '# Doc\n\n```html\n<div class="x">hi</div>\n```'
     assert html_to_markdown(doc) == doc
+
+
+# ---- egress: HTML 판별 — anchored regex 대신 markdown-it 토큰 감지 ----
+
+def test_html_to_markdown_inline_html_not_at_root_converts():
+    # ingress ensure_html(is_html=True)이 유효 HTML로 저장하는 케이스인데,
+    # 구 anchored regex(루트 태그 시작 판정)는 raw markdown으로 오판해
+    # 그대로 반환했다(계약 위반: format=markdown 응답에 HTML이 남는다).
+    assert html_to_markdown('hello <strong>bold</strong>') == 'hello **bold**'
+
+
+def test_html_to_markdown_indented_code_html_literal_preserved():
+    # 표준 md 4칸 들여쓰기 코드블록 — 구 anchored regex는 선두 \s*가 들여쓰기를
+    # 삼켜 HTML로 오판, markdownify가 'literal'로 축약했다(코드블록 파괴).
+    doc = '    <p>literal</p>'
+    assert html_to_markdown(doc) == doc

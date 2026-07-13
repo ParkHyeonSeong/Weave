@@ -225,19 +225,32 @@ _CONVERTER_OPTIONS = dict(
 
 # egress 전용 HTML 판별 — is_html(<[a-z][\s\S]*>)은 markdown autolink
 # <https://example.com>·<user@example.com>까지 HTML로 오판해 markdownify가
-# 통째로 삭제한다(실측). 판별 규칙 2겹:
-#  (1) 실제 태그만 인정 — 태그명(영문자 시작) 뒤가 공백·'/'·'>'
-#  (2) **문서 시작에 anchored** — search로 전문을 훑으면 md 본문 속의
-#      `<p>` 인라인 코드·```html 펜스 예제까지 HTML로 오판해 훼손한다(실측).
-#      TipTap 저장 HTML은 항상 루트 태그(<p>/<h1>/<ul>…)로 시작하므로
-#      시작부 match로 충분하다(픽스처 26케이스 전수 인식 확인).
-# is_html 자체는 ingress(§3.4)·frontend ensureHtml과 공유하는 계약이라
-# 여기서 바꾸지 않는다(동일 오판의 ingress 정렬은 후속).
-_EGRESS_TAG_RE = re.compile(r'\s*<[a-zA-Z][a-zA-Z0-9-]*[\s/>]')
+# 통째로 삭제한다(실측). 이전엔 "문서 시작에 anchored된 태그 정규식"으로
+# 걸렀으나 양방향으로 깨졌다(실측):
+#  (a) `hello <strong>bold</strong>` — ingress ensure_html(is_html=True)이
+#      유효 HTML로 저장하는데, 루트 태그로 시작하지 않아 raw markdown으로
+#      오판 → format=markdown 응답에 HTML이 그대로 반환(계약 위반).
+#  (b) `    <p>literal</p>` — 표준 md 4칸 들여쓰기 코드블록인데 선두 \s*가
+#      들여쓰기를 삼켜 HTML로 오판 → markdownify가 코드블록을 축약·파괴.
+# 대신 commonmark 파서로 실제 파싱해 html_block/html_inline 토큰 존재
+# 여부로 판별한다 — CommonMark 스펙이 정의하는 "진짜 HTML 컨텍스트"만
+# 인정하므로 autolink·인라인 코드 속 `<p>`·```html``` 펜스 예제·들여쓰기
+# 코드블록은 전부 걸러지고, 텍스트 어디에 있든 실제 HTML 태그는 인식된다.
+# html_inline은 inline 토큰의 children 안에 있어 children까지 스캔해야
+# 한다. is_html 자체는 ingress(§3.4)·frontend ensureHtml과 공유하는
+# 계약이라 여기서 바꾸지 않는다(동일 오판의 ingress 정렬은 후속).
+_EGRESS_HTML_DETECTOR = MarkdownIt('commonmark', {'html': True})
 
 
 def _is_html_for_egress(text: str) -> bool:
-    return bool(_EGRESS_TAG_RE.match(text))
+    for token in _EGRESS_HTML_DETECTOR.parse(text):
+        if token.type == 'html_block':
+            return True
+        if token.type == 'inline' and token.children:
+            for child in token.children:
+                if child.type == 'html_inline':
+                    return True
+    return False
 
 
 def html_to_markdown(html: str) -> str:
