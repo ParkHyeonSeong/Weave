@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-// BookmarkPastePlugin의 Cmd+Shift+V 탈출구 + 실 등록 체인의 paste 플러그인 순서 회귀.
-// 순서 계약(실측 2026-07-10): tiptap ExtensionManager.plugins는 확장 배열을 reverse해
-// 수집하므로 빌더에서 나중에 등록된 markdownPaste가 bookmarkPaste보다 먼저 실행된다.
+// BookmarkPastePlugin의 Cmd+Shift+V 탈출구 + 실 등록 체인의 paste 플러그인 동작 회귀.
+// 순서 독립(실측 2026-07-10): tiptap ExtensionManager.plugins는 확장 배열을 reverse해
+// 수집하므로 빌더에서 나중에 등록된 markdownPaste가 bookmarkPaste보다 먼저 실행되지만,
+// 양 플러그인 모두 자체 shift 가드를 보유해 실행 순서와 무관하게 결과가 동일하다.
 import { describe, it, expect, afterEach } from 'vitest';
 import { Editor } from '@tiptap/core';
 import { buildCommentEditorExtensions } from '@/components/Branch/Tasks/commentEditorExtensions';
