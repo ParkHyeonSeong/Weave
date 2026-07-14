@@ -52,7 +52,7 @@
 
   .mention {
     color: $color-primary;
-    background: rgba($color-primary, 0.1);
+    background: color-mix(in srgb, var(--color-primary) 10%, transparent);
     padding: 1px 5px;
     border-radius: 4px;
     font-weight: $font-weight-medium;
@@ -253,7 +253,7 @@
     cursor: pointer;
 
     &:hover { border-color: $color-primary; }
-    &.ProseMirror-selectednode { border-color: $color-primary; box-shadow: 0 0 0 2px rgba($color-primary, 0.2); }
+    &.ProseMirror-selectednode { border-color: $color-primary; box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 20%, transparent); }
   }
 
   &--submitting .ProseMirror,

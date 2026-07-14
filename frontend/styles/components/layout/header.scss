@@ -285,7 +285,7 @@
     }
 
     &--unread {
-      background: rgba($color-primary, 0.05);
+      background: color-mix(in srgb, var(--color-primary) 5%, transparent);
       border-left-color: $color-primary;
 
       .Header__NotiSender {
@@ -325,7 +325,7 @@
   }
 
   // 타입 색 칩: 글자를 읽지 않고 색으로 분류(멘션/태스크/이슈). 틴트는 시맨틱
-  // 토큰의 rgba로(기존 rgba($color-primary, …) 관용구와 동일, 색상함수 미사용).
+  // color-mix 토큰 사용(기존 primary 틴트 관용구와 동일, 색상함수 미사용).
   &__NotiChip {
     flex-shrink: 0;
     padding: 1px 6px;
@@ -336,17 +336,17 @@
 
     &--mention {
       color: $color-primary;
-      background: rgba($color-primary, 0.1);
+      background: color-mix(in srgb, var(--color-primary) 10%, transparent);
     }
 
     &--task {
       color: $color-success;
-      background: rgba($color-success, 0.1);
+      background: color-mix(in srgb, var(--color-success) 10%, transparent);
     }
 
     &--issue {
       color: $color-warning;
-      background: rgba($color-warning, 0.1);
+      background: color-mix(in srgb, var(--color-warning) 10%, transparent);
     }
   }
 

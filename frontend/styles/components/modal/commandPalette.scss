@@ -158,7 +158,7 @@
 
     &--open {
       color: $color-success;
-      background: rgba($color-success, 0.1);
+      background: color-mix(in srgb, var(--color-success) 10%, transparent);
     }
 
     &--closed {

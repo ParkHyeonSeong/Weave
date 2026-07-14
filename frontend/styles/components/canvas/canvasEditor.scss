@@ -277,7 +277,7 @@
         // 노드 선택 표시 (클릭 시)
         &.ProseMirror-selectednode {
           border-color: $color-primary;
-          box-shadow: 0 0 0 2px rgba($color-primary, 0.2);
+          box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 20%, transparent);
         }
       }
 
@@ -313,7 +313,7 @@
 
         &.ProseMirror-selectednode {
           border-color: $color-ref-doc;
-          box-shadow: 0 0 0 2px rgba($color-ref-doc, 0.2);
+          box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-ref-doc) 20%, transparent);
         }
       }
 
@@ -349,7 +349,7 @@
 
         &.ProseMirror-selectednode {
           border-color: $color-ref-issue;
-          box-shadow: 0 0 0 2px rgba($color-ref-issue, 0.2);
+          box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-ref-issue) 20%, transparent);
         }
       }
 
@@ -417,7 +417,7 @@
 
         &.ProseMirror-selectednode {
           border-color: $color-primary;
-          box-shadow: 0 0 0 2px rgba($color-primary, 0.15);
+          box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 15%, transparent);
         }
 
         &__link {
@@ -531,7 +531,7 @@
         &--selected,
         &.ProseMirror-selectednode {
           border-color: $color-primary;
-          box-shadow: 0 0 0 2px rgba($color-primary, 0.15);
+          box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 15%, transparent);
         }
 
         &__toolbar {
@@ -961,7 +961,7 @@
 
       &:focus {
         border-color: $color-primary;
-        box-shadow: 0 0 0 2px rgba($color-primary, 0.15);
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 15%, transparent);
       }
 
       &::placeholder { color: $color-text-tertiary; }
@@ -1225,7 +1225,7 @@
 // @멘션 인라인 노드
 .mention {
   color: $color-primary;
-  background: rgba($color-primary, 0.1);
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
   padding: 1px 4px;
   border-radius: 3px;
   cursor: default;

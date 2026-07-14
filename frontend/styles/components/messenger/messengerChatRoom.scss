@@ -419,7 +419,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba($color-primary, 0.08);
+    background: color-mix(in srgb, var(--color-primary) 8%, transparent);
     border: 2px dashed $color-primary;
     border-radius: $radius-2xl;
     pointer-events: none;

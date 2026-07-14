@@ -168,7 +168,7 @@
     align-self: flex-start;
 
     &:hover {
-      background: rgba($color-primary, 0.08);
+      background: color-mix(in srgb, var(--color-primary) 8%, transparent);
     }
   }
 }

@@ -202,7 +202,7 @@
 
   &--drag-over {
     border-color: $color-primary;
-    background: rgba($color-primary, 0.03);
+    background: color-mix(in srgb, var(--color-primary) 3%, transparent);
   }
 
   &__Header {

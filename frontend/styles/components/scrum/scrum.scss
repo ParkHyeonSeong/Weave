@@ -319,7 +319,7 @@
     &:hover { border-color:$color-ref-doc; }
   }
   .mention {
-    color:$color-primary; background:rgba($color-primary, 0.1);
+    color:$color-primary; background:color-mix(in srgb, var(--color-primary) 10%, transparent);
     padding:1px 5px; border-radius:4px; font-weight:$font-weight-medium; white-space:nowrap;
   }
   .ref-chip__badge {

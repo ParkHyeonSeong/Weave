@@ -62,7 +62,7 @@
 
     &:hover { background: $color-surface; color: $color-text; }
 
-    &--active { background: rgba($color-primary, 0.12); color: $color-text; }
+    &--active { background: color-mix(in srgb, var(--color-primary) 12%, transparent); color: $color-text; }
   }
 
   &__ItemIcon { display: flex; align-items: center; flex-shrink: 0; }

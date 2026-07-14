@@ -217,7 +217,7 @@
     border-radius: $radius-lg;
 
     &--op {
-      border-color: rgba($color-primary, 0.3);
+      border-color: color-mix(in srgb, var(--color-primary) 30%, transparent);
     }
   }
 
@@ -231,8 +231,8 @@
     min-height: 36px;
 
     .IssueDetail__Card--op & {
-      background: rgba($color-primary, 0.04);
-      border-bottom-color: rgba($color-primary, 0.15);
+      background: color-mix(in srgb, var(--color-primary) 4%, transparent);
+      border-bottom-color: color-mix(in srgb, var(--color-primary) 15%, transparent);
     }
   }
 

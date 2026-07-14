@@ -30,7 +30,7 @@
     &--active {
       color: $color-primary;
       border-color: $color-primary;
-      background: rgba($color-primary, 0.05);
+      background: color-mix(in srgb, var(--color-primary) 5%, transparent);
     }
   }
 
@@ -64,7 +64,7 @@
 
     &:hover { background: $color-surface-hover; }
 
-    &--active { background: rgba($color-primary, 0.06); }
+    &--active { background: color-mix(in srgb, var(--color-primary) 6%, transparent); }
   }
 
   &__Apply {

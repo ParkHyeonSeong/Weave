@@ -607,7 +607,7 @@
     &--active {
       color: $color-primary;
       border-color: $color-primary;
-      background: rgba($color-primary, 0.05);
+      background: color-mix(in srgb, var(--color-primary) 5%, transparent);
     }
   }
 
@@ -723,7 +723,7 @@
     &--active {
       color: $color-primary;
       border-color: $color-primary;
-      background: rgba($color-primary, 0.05);
+      background: color-mix(in srgb, var(--color-primary) 5%, transparent);
     }
   }
 
@@ -752,7 +752,7 @@
     &--active {
       color: $color-primary;
       border-color: $color-primary;
-      background: rgba($color-primary, 0.05);
+      background: color-mix(in srgb, var(--color-primary) 5%, transparent);
     }
   }
 
@@ -1009,13 +1009,13 @@
     font-size: 11px;
     font-weight: $font-weight-medium;
     color: $color-primary;
-    background: rgba($color-primary, 0.07);
+    background: color-mix(in srgb, var(--color-primary) 7%, transparent);
     border: 1px solid transparent;
     border-radius: $radius-sm;
     cursor: pointer;
     transition: all $transition-fast;
 
-    &:hover { background: rgba($color-primary, 0.14); }
+    &:hover { background: color-mix(in srgb, var(--color-primary) 14%, transparent); }
   }
 }
 
