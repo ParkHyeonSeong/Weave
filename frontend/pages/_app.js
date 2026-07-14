@@ -14,6 +14,7 @@ import ErrorBoundary from '@/components/Layout/ErrorBoundary';
 import Toast from '@/components/Layout/Toast';
 import { UiPrefsProvider } from '@/library/UiPrefsContext';
 import LightboxProvider from '@/components/common/LightboxProvider';
+import "@/styles/_themes.scss";
 import "@/styles/globals.scss";
 import "@/styles/fonts.css";
 import "@/styles/components/auth/login.scss";

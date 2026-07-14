@@ -1,0 +1,167 @@
+@use 'sass:color';
+
+// ============================================================================
+// 테마 토큰 — 라이트/다크 2벌. 사이트 파일은 var(--...)만 소비한다.
+// 사이트 파일에서는 sass 색함수에 SCSS 변수 입력 금지 — 브리지 후 var() 문자열이라
+// 컴파일이 깨진다. (리터럴 입력은 금지 대상 아님 — S3·S5에서 단계 제거.)
+// 블록 키 대칭·브리지 커버리지는 library/themeTokens.test.js가 강제한다.
+// 다크 값은 Linear near-black 1차 팔레트 — WCAG AA 게이트에서 조정될 수 있다.
+// ============================================================================
+
+// 파생 계산용 리터럴 (라이트 팔레트 원본 — _variables.scss 기존값과 동일해야 함)
+$_l-primary: #5E6AD2;
+$_l-border: #E5E5E5;
+$_l-surface: #F9FAFB;
+$_l-bg: #FFFFFF;
+$_l-error: #DC2626;
+$_l-warning: #D97706;
+
+// [0] 라이트 -----------------------------------------------------------------
+:root {
+  color-scheme: light;
+
+  --color-bg: #FFFFFF;
+  --color-surface: #F9FAFB;
+  --color-surface-hover: #F3F4F6;
+
+  --color-primary: #5E6AD2;
+  --color-primary-hover: #4F5BC0;
+  --color-primary-subtle: rgba(94, 106, 210, 0.08);
+
+  --color-text: #1C1C1C;
+  --color-text-secondary: #6B7280;
+  --color-text-tertiary: #6B7280;
+  --color-text-inverse: #FFFFFF;
+
+  --color-border: #E5E5E5;
+  --color-border-hover: #D1D5DB;
+
+  --color-input-bg: #FFFFFF;
+  --color-input-border: #E5E5E5;
+
+  --color-error: #DC2626;
+  --color-error-bg: #FEF2F2;
+  --color-success: #16A34A;
+  --color-success-bg: #F0FDF4;
+  --color-warning: #D97706;
+  --color-warning-bg: #FFFBEB;
+
+  --color-code-bg: #F1F3F5;
+  --color-code-text: #EB5757;
+  --color-code-block-bg: #F6F8FA;
+
+  --color-ref-doc: #C2410C;
+  --color-ref-doc-bg: #FFF7ED;
+  --color-ref-issue: #8B5CF6;
+  --color-ref-issue-bg: #F5F3FF;
+
+  --color-status-in-progress: #1E40AF;
+  --color-status-in-progress-bg: #DBEAFE;
+
+  // 파생 토큰 — 기존 사이트의 color.adjust/scale 결과를 명명 승격 (값 동일 보장: sass가 계산)
+  --color-primary-strong: #{color.adjust($_l-primary, $lightness: -6%)};        // home-shared 636·637·704·705, trackSettings 261(-5%→-6% 통합)
+  --color-primary-border-soft: #{color.adjust($_l-primary, $lightness: 35%)};   // trackSettings 112
+  --color-primary-wash: #{color.scale($_l-primary, $lightness: 85%)};           // taskComment 130
+  --color-error-strong: #{color.adjust($_l-error, $lightness: -8%)};            // epicFlow 306, archive-view 158(-6%→-8% 통합)
+  --color-warning-strong: #{color.adjust($_l-warning, $lightness: -6%)};        // launchpad 193
+  --color-surface-sunken: #{color.adjust($_l-surface, $lightness: -1%)};        // scrum 57
+  --color-surface-raised: #{color.adjust($_l-surface, $lightness: 1%)};         // taskList 1433
+  --color-bg-sunken: #{color.adjust($_l-bg, $lightness: -1%)};                  // trackSettings 195
+  --color-text-soft: #{color.adjust($_l-border, $lightness: -45%)};             // scrum 73·103·113·145·241 (보더 -45% = 회색 텍스트 관용구)
+  --color-border-faint: #{color.adjust($_l-border, $lightness: 3%)};            // scrum 213·343
+
+  // 그림자 — 다크에서는 값 자체가 재정의된다(§2)
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+
+  // Track 종이 계열 (track.scss:11-17 로컬 토큰 승격 — 다크 종이톤은 S4에서 재설계)
+  --track-paper: #{$_l-surface};
+  --track-paper-edge: #F3F4F6;
+  --track-ink-soft: #4B5563;
+  --track-border-soft: #{color.adjust($_l-border, $lightness: 5%)};
+  --track-paper-raised: #{color.adjust($_l-surface, $lightness: 1%)};
+  --track-paper-raised-05: #{color.adjust($_l-surface, $lightness: 0.5%)};
+  --track-paper-sunken-1: #{color.adjust($_l-surface, $lightness: -1%)};
+  --track-paper-sunken-15: #{color.adjust($_l-surface, $lightness: -1.5%)};
+  --track-paper-sunken-2: #{color.adjust($_l-surface, $lightness: -2%)};
+}
+
+// [1] 다크 (Linear near-black — 1차값) ---------------------------------------
+html[data-theme='dark'] {
+  color-scheme: dark;
+
+  --color-bg: #0E0F11;
+  --color-surface: #17181C;
+  --color-surface-hover: #1E2025;
+
+  --color-primary: #7C8AEA;
+  --color-primary-hover: #8B98F0;
+  --color-primary-subtle: rgba(124, 138, 234, 0.14);
+
+  --color-text: #E6E8EB;
+  --color-text-secondary: #9CA3AF;
+  --color-text-tertiary: #828A99;
+  --color-text-inverse: #0E0F11;
+
+  --color-border: #26282E;
+  --color-border-hover: #33363E;
+
+  --color-input-bg: #17181C;
+  --color-input-border: #26282E;
+
+  --color-error: #F0666B;
+  --color-error-bg: #2A1518;
+  --color-success: #4CC38A;
+  --color-success-bg: #12281C;
+  --color-warning: #E5A54B;
+  --color-warning-bg: #2A2110;
+
+  --color-code-bg: #1E2126;
+  --color-code-text: #F07178;
+  --color-code-block-bg: #14161A;
+
+  --color-ref-doc: #E8845A;
+  --color-ref-doc-bg: #2A1D12;
+  --color-ref-issue: #A78BFA;
+  --color-ref-issue-bg: #201A2E;
+
+  --color-status-in-progress: #7EA6F4;
+  --color-status-in-progress-bg: #14213B;
+
+  --color-primary-strong: #6D7BE0;
+  --color-primary-border-soft: #3A4160;
+  --color-primary-wash: #1E2340;
+  --color-error-strong: #E0575C;
+  --color-warning-strong: #D19335;
+  --color-surface-sunken: #131418;
+  --color-surface-raised: #1B1D22;
+  --color-bg-sunken: #0B0C0E;
+  --color-text-soft: #8B93A1;
+  --color-border-faint: #2C2E35;
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.65);
+
+  --track-paper: #17181C;
+  --track-paper-edge: #1E2025;
+  --track-ink-soft: #A8B0BC;
+  --track-border-soft: #2C2E35;
+  --track-paper-raised: #1B1D22;
+  --track-paper-raised-05: #191B1F;
+  --track-paper-sunken-1: #141518;
+  --track-paper-sunken-15: #121316;
+  --track-paper-sunken-2: #101114;
+}
+
+// [2] 테마 불변 별칭 — 양 테마 공통이라 대칭 검사 제외 (var 체인으로 테마 추종)
+:root {
+  --color-border-focus: var(--color-primary);
+  --shadow-focus: 0 0 0 3px var(--color-primary-subtle);
+  --track-ink: var(--color-text);
+  --track-ink-mute: var(--color-text-tertiary);
+  --track-border: var(--color-border);
+}
