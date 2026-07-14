@@ -1,4 +1,3 @@
-@use 'sass:color';
 @use '../../variables' as *;
 
 // -- EpicFlow (메인 컨테이너) -------------------------------------------------
@@ -303,7 +302,7 @@
   transition: background $transition-fast;
 
   &:hover {
-    background: color.adjust($color-error, $lightness: -8%);
+    background: var(--color-error-strong);
   }
 }
 

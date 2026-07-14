@@ -54,7 +54,7 @@
 .ScrumGrid__CellWrap:focus-within { border-color:#16A34A; box-shadow:0 0 0 3px rgba(#16A34A, 0.16); }
 .ScrumCell { display:flex; flex-direction:column; flex:1; padding:5px 7px; font-size:12px; min-height:24px; cursor:text; }
 .ScrumCell .ProseMirror { flex:1; outline:none; min-height:20px; }
-.ScrumCell--loading { min-height:34px; background:color.adjust($color-surface, $lightness:-1%); border-radius:6px; }
+.ScrumCell--loading { min-height:34px; background:var(--color-surface-sunken); border-radius:6px; }
 .Scrum__ChipRow { display:flex; gap:6px; flex-wrap:wrap; }
 .Scrum__Chip { border:1px solid $color-border; border-radius:999px; padding:3px 10px; font-size:12px; background:#fff; cursor:pointer; }
 .Scrum__Chip--on { border-color:#16A34A; color:#16A34A; font-weight:700; }
@@ -70,7 +70,7 @@
 .ScrumBoard__Tabs { display:flex; gap:4px; flex-shrink:0; }
 .ScrumBoard__Tabs button {
   border:1px solid $color-border; border-radius:8px; padding:4px 12px; font-size:13px; font-weight:700;
-  background:#fff; color:color.adjust($color-border, $lightness:-45%); cursor:pointer;
+  background:#fff; color:var(--color-text-soft); cursor:pointer;
   white-space:nowrap; // CJK 글자단위 세로 스택 차단(Head가 flex-wrap:wrap이므로 넘치면 다음 줄로)
 }
 .ScrumBoard__Tabs button.is-on { border-color:#16A34A; color:#16A34A; background:color.adjust(#16A34A, $lightness:52%); }
@@ -100,7 +100,7 @@
   display:inline-flex; align-items:center; gap:6px;
   border:1px solid $color-border; border-radius:8px; padding:4px 10px;
   font-size:13px; font-weight:700; background:#fff;
-  color:color.adjust($color-border, $lightness:-45%); cursor:pointer;
+  color:var(--color-text-soft); cursor:pointer;
   transition:border-color 120ms, background 120ms, color 120ms;
   &:hover { border-color:$color-border-hover; background:$color-surface-hover; color:$color-text; }
   svg { opacity:.8; }
@@ -110,7 +110,7 @@
   display:inline-flex; align-items:center; justify-content:center;
   width:30px; height:30px;
   border:1px solid $color-border; border-radius:8px; background:#fff;
-  color:color.adjust($color-border, $lightness:-45%); cursor:pointer;
+  color:var(--color-text-soft); cursor:pointer;
   transition:border-color 120ms, background 120ms, color 120ms;
   &:hover { border-color:$color-border-hover; background:$color-surface-hover; color:$color-text; }
   svg { opacity:.8; }
@@ -142,7 +142,7 @@
 }
 .ScrumMembers__Count {
   font-style:normal; font-size:12px; font-weight:700;
-  color:color.adjust($color-border, $lightness:-45%);
+  color:var(--color-text-soft);
   background:$color-surface-hover; border-radius:999px; padding:1px 8px;
 }
 .ScrumMembers__Close {
@@ -210,7 +210,7 @@
 .ScrumMembers__List { display:flex; flex-direction:column; }
 .ScrumMembers__Row {
   display:flex; align-items:center; gap:10px;
-  padding:8px 2px; border-bottom:1px solid color.adjust($color-border, $lightness:3%);
+  padding:8px 2px; border-bottom:1px solid var(--color-border-faint);
   &:last-child { border-bottom:none; }
 }
 // 색/크기/폰트는 <Avatar>가 인라인으로 칠함(user_id 해시). 여기선 레이아웃만.
@@ -238,7 +238,7 @@
 .ScrumMembers__RoleCol { flex-shrink:0; min-width:84px; }
 .ScrumMembers__RoleBadge {
   display:inline-block; font-size:12px; font-weight:600; text-transform:capitalize;
-  color:color.adjust($color-border, $lightness:-45%);
+  color:var(--color-text-soft);
   background:$color-surface-hover; border-radius:6px; padding:3px 10px;
 }
 .ScrumMembers__ActionCol {
@@ -340,7 +340,7 @@
 .RetroMember { display:flex; flex-direction:column; gap:8px; }
 .RetroMember + .RetroMember {
   margin-top:4px; padding-top:14px;
-  border-top:1px solid color.adjust($color-border, $lightness:3%);
+  border-top:1px solid var(--color-border-faint);
 }
 .RetroMember__Head { display:flex; align-items:center; gap:7px; font-weight:800; font-size:14px; }
 // 색/크기/폰트는 <Avatar>가 인라인으로 칠함(user_id 해시). 여기선 레이아웃만.

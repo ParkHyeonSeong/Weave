@@ -1,4 +1,3 @@
-@use 'sass:color';
 @use '../../variables' as *;
 
 .HomeView {
@@ -190,7 +189,7 @@
       background: $color-warning;
       color: $color-text-inverse;
 
-      &:hover { background: color.adjust($color-warning, $lightness: -6%); }
+      &:hover { background: var(--color-warning-strong); }
     }
   }
 

@@ -1,4 +1,3 @@
-@use 'sass:color';
 @use '../../variables' as *;
 
 .TaskList {
@@ -1430,7 +1429,7 @@
   &--subtask {
     padding-left: $space-8;
     position: relative;
-    background: color.adjust($color-surface, $lightness: 1%);
+    background: var(--color-surface-raised);
 
     &::before {
       content: '';
