@@ -37,6 +37,7 @@ const LIGHT_BASELINE = {
   'color-border': '#E5E5E5', 'color-border-hover': '#D1D5DB',
   'color-input-bg': '#FFFFFF', 'color-input-border': '#E5E5E5',
   'color-input-border-hover': '#D1D5DB',
+  'color-selected-indicator': 'transparent',
   'color-error': '#DC2626', 'color-error-bg': '#FEF2F2',
   'color-success': '#16A34A', 'color-success-bg': '#F0FDF4',
   'color-warning': '#D97706', 'color-warning-bg': '#FFFBEB',
@@ -144,23 +145,53 @@ describe('track 로컬 별칭 완전성 — $track-x는 동일명 var(--track-x)
   });
 });
 
+// 앵커 rule의 own declarations만 추출 — 첫 중첩 셀렉터의 `{` 또는 자기 블록의 `}`에서 멈춘다.
+// (구 구현은 400자 슬라이스+비앵커 정규식이라 ①뒤쪽 자식 셀렉터의 선언 ②$color-input-border-hover
+//  같은 접두 매칭까지 통과시켰다 — 외부 검수 재현.)
+function ownDeclBody(src, anchor, fromIndex = 0) {
+  const anchorIdx = src.indexOf(anchor, fromIndex);
+  if (anchorIdx === -1) return null;
+  const openIdx = src.indexOf('{', anchorIdx);
+  let depth = 0;
+  let i = openIdx;
+  for (; i < src.length; i++) {
+    const ch = src[i];
+    if (ch === '{') {
+      depth += 1;
+      if (depth === 2) break; // 첫 중첩 셀렉터 진입 — 자식 선언은 제외하고 멈춘다
+    } else if (ch === '}') {
+      depth -= 1;
+      if (depth === 0) break; // 중첩 없이 자기 블록이 닫힘
+    }
+  }
+  return { anchorIdx, body: src.slice(openIdx + 1, i) };
+}
+
 describe('컨트롤 보더 재분류 고정 — 승격 컨트롤은 input-border 유지 (외부 검수 회귀 방지)', () => {
   // 가변 fill 등으로 보더가 유일한 형상 단서인 컨트롤들 — 전수 재감사(2026-07-15)에서 승격 확정.
   // 대표: canvasEditor ColorSwatch(검정 프리셋이 다크 bg 대비 1.1:1이라 보더 없으면 소실).
+  const INPUT_BORDER_RE = /border[^;]*\$color-input-border(?![a-z-])/; // word-boundary — -hover 오매칭 차단
+  const SELECTED_INDICATOR_RE = /var\(--color-selected-indicator\)/;
   const PINNED = [
-    ['components/canvas/canvasEditor.scss', '&__ColorSwatch {'],
-    ['components/canvas/canvasEditor.scss', '.CanvasEditor {'],
-    ['components/branch/taskList.scss', '&__OpToggle {'],
-    ['components/myTasks/myTasks.scss', '&__ScopeToggle {'],
-    ['components/home/shared/home-shared.scss', '.HomeTabs {'],
-    ['components/browse/browseBranches.scss', '&--joined {'],
+    { label: 'canvasEditor ColorSwatch', file: 'components/canvas/canvasEditor.scss', path: ['&__ColorSwatch {'], re: INPUT_BORDER_RE },
+    { label: 'canvasEditor .CanvasEditor', file: 'components/canvas/canvasEditor.scss', path: ['.CanvasEditor {'], re: INPUT_BORDER_RE },
+    { label: 'taskList OpToggle', file: 'components/branch/taskList.scss', path: ['&__OpToggle {'], re: INPUT_BORDER_RE },
+    { label: 'myTasks ScopeToggle', file: 'components/myTasks/myTasks.scss', path: ['&__ScopeToggle {'], re: INPUT_BORDER_RE },
+    { label: 'home-shared HomeTabs', file: 'components/home/shared/home-shared.scss', path: ['.HomeTabs {'], re: INPUT_BORDER_RE },
+    { label: 'browseBranches --joined', file: 'components/browse/browseBranches.scss', path: ['&--joined {'], re: INPUT_BORDER_RE },
+    // 선택 상태 인디케이터(수정 1, SC 1.4.11) — active 셀렉터가 다크 전용 토큰을 실제로 소비하는지 고정
+    { label: 'home-shared HomeTabs__Tab.is-on', file: 'components/home/shared/home-shared.scss', path: ['.HomeTabs {', '&.is-on {'], re: SELECTED_INDICATOR_RE },
+    { label: 'myTasks ScopeBtn--active', file: 'components/myTasks/myTasks.scss', path: ['&__ScopeBtn {', '&--active {'], re: SELECTED_INDICATOR_RE },
   ];
-  it.each(PINNED)('%s %s 가 $color-input-border 사용', (file, anchor) => {
+  it.each(PINNED)('$label 가 기대 패턴을 own declarations에서 사용', ({ file, path, re }) => {
     const src = readFileSync(resolve(__dirname, '../styles', file), 'utf8');
-    const idx = src.indexOf(anchor);
-    expect(idx, `${anchor} not found`).toBeGreaterThan(-1);
-    // anchor 이후 첫 border 선언이 input-border인지
-    const seg = src.slice(idx, idx + 400);
-    expect(seg).toMatch(/border[^;]*\$color-input-border/);
+    let fromIndex = 0;
+    let result = null;
+    for (const anchor of path) {
+      result = ownDeclBody(src, anchor, fromIndex);
+      expect(result, `${anchor} not found in ${file}`).not.toBeNull();
+      fromIndex = result.anchorIdx; // 다음 앵커는 이 블록 시작 이후에서만 탐색(동일 셀렉터 재등장 방지)
+    }
+    expect(result.body).toMatch(re);
   });
 });

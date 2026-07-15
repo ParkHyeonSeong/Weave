@@ -40,6 +40,9 @@ $_l-warning: #D97706;
   --color-input-border: #E5E5E5;
   --color-input-border-hover: #D1D5DB;
 
+  // 세그먼트 컨트롤의 선택 상태 단서 — 다크에서만 가시(SC 1.4.11 3:1), 라이트는 기존 배경 대비로 충분해 투명
+  --color-selected-indicator: transparent;
+
   --color-error: #DC2626;
   --color-error-bg: #FEF2F2;
   --color-success: #16A34A;
@@ -112,6 +115,9 @@ html[data-theme='dark'] {
   --color-input-bg: #17181C;
   --color-input-border: #6B7280;
   --color-input-border-hover: #7A8290;
+
+  // 세그먼트 컨트롤의 선택 상태 단서 — 다크에서만 가시(SC 1.4.11 3:1), 라이트는 기존 배경 대비로 충분해 투명
+  --color-selected-indicator: #6B7280;
 
   --color-error: #F0666B;
   --color-error-bg: #2A1518;

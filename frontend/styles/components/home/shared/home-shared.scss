@@ -207,7 +207,7 @@
     &.is-on {
       background: $color-bg;
       color: $color-text;
-      box-shadow: $shadow-xs;
+      box-shadow: $shadow-xs, inset 0 0 0 1px var(--color-selected-indicator);
     }
   }
 }
