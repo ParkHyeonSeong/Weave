@@ -58,6 +58,10 @@ describe('mergeServerTheme — 스펙 §3 전이표 (서버 권위는 성공 조
     expect(mergeServerTheme({ loadStatus: 'success', serverTheme: undefined, localMode: 'dark' }, { systemEnabled: true }))
       .toEqual({ mode: 'system', mirrorWrite: 'system' });
   });
+  it('공개 후: 서버 부재 & 로컬도 system → 무동작(미러 재기록 생략)', () => {
+    expect(mergeServerTheme({ loadStatus: 'success', serverTheme: undefined, localMode: 'system' }, { systemEnabled: true }))
+      .toEqual({ mode: 'system', mirrorWrite: null });
+  });
   it('공개 후: 서버 잘못된 값 → system 취급 + 미러 정정', () => {
     expect(mergeServerTheme({ loadStatus: 'success', serverTheme: 'neon', localMode: 'dark' }, { systemEnabled: true }))
       .toEqual({ mode: 'system', mirrorWrite: 'system' });
