@@ -145,53 +145,103 @@ describe('track 로컬 별칭 완전성 — $track-x는 동일명 var(--track-x)
   });
 });
 
-// 앵커 rule의 own declarations만 추출 — 첫 중첩 셀렉터의 `{` 또는 자기 블록의 `}`에서 멈춘다.
-// (구 구현은 400자 슬라이스+비앵커 정규식이라 ①뒤쪽 자식 셀렉터의 선언 ②$color-input-border-hover
-//  같은 접두 매칭까지 통과시켰다 — 외부 검수 재현.)
-function ownDeclBody(src, anchor, fromIndex = 0) {
-  const anchorIdx = src.indexOf(anchor, fromIndex);
-  if (anchorIdx === -1) return null;
-  const openIdx = src.indexOf('{', anchorIdx);
-  let depth = 0;
-  let i = openIdx;
-  for (; i < src.length; i++) {
-    const ch = src[i];
-    if (ch === '{') {
-      depth += 1;
-      if (depth === 2) break; // 첫 중첩 셀렉터 진입 — 자식 선언은 제외하고 멈춘다
-    } else if (ch === '}') {
-      depth -= 1;
-      if (depth === 0) break; // 중첩 없이 자기 블록이 닫힘
-    }
-  }
-  return { anchorIdx, body: src.slice(openIdx + 1, i) };
+// 컴파일된 CSS에서 flat 규칙(selector { decls })을 순회 추출.
+// 대상 5파일 중 4개(taskList·myTasks·home-shared·browseBranches)는 mobile 믹스인 경유로
+// @media 블록을 실제로 방출한다(canvasEditor만 무사용) — 단 아래 8핀 셀렉터는 전부 @media
+// 밖 최상위 규칙이라 이 flat 정규식으로 충분하다. 한계의 실패 방향은 안전: 핀이 @media
+// 안으로 이동하면 규칙을 못 찾아 테스트가 RED로 알려준다(조용한 통과 아님).
+function extractRules(css) {
+  return [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)].map((m) => ({ selector: m[1].trim(), body: m[2] }));
 }
 
-describe('컨트롤 보더 재분류 고정 — 승격 컨트롤은 input-border 유지 (외부 검수 회귀 방지)', () => {
+// 규칙 prelude(콤마 그룹·조상 결합자 포함)가 핀 셀렉터를 "소유"하는지 판정.
+// 순수 문자열 포함(includes)은 쓰지 않는다 — `.CanvasEditor`가 `.CanvasEditorToolbar__ColorSwatch`나
+// `.CanvasEditor__Content`까지 접두 매칭돼 버려 남의 규칙 선언까지 끌어와 격리가 깨진다(강등 시뮬레이션
+// (a)에서 재현: 다른 규칙의 미변경 선언이 섞여 들어와 커밋 대상 선언을 주석 처리해도 GREEN으로 남는다).
+// 콤마로 나눈 각 파트의 "마지막 콤파운드 토큰"이 핀 셀렉터와 정확히 같거나, 그 핀 셀렉터로 시작하는
+// 의사클래스 연속(`SELECTOR:hover` 등)일 때만 소유로 인정한다 — BEM 접두사·형제 클래스는 배제된다.
+function ownsSelector(prelude, pinSelector) {
+  return prelude.split(',').some((part) => {
+    const tokens = part.trim().split(/[\s>+~]+/).filter(Boolean);
+    const last = tokens[tokens.length - 1] || '';
+    return last === pinSelector || last.startsWith(`${pinSelector}:`);
+  });
+}
+
+// 핀 셀렉터를 소유하는 모든 규칙의 선언부를 합쳐 반환. 하나도 못 찾으면 null —
+// "선언 불일치"와 "셀렉터 자체가 사라짐(리팩터링)"을 구분해 후자를 더 명확한 실패로 드러낸다.
+function ownDeclarations(css, pinSelector) {
+  const bodies = extractRules(css).filter((r) => ownsSelector(r.selector, pinSelector)).map((r) => r.body);
+  return bodies.length ? bodies.join('\n') : null;
+}
+
+const scssCompileCache = new Map();
+function compiledSiteCss(relPath) {
+  if (!scssCompileCache.has(relPath)) {
+    scssCompileCache.set(relPath, compile(resolve(__dirname, '../styles', relPath)).css);
+  }
+  return scssCompileCache.get(relPath);
+}
+
+describe('컨트롤 보더/인디케이터 재분류 고정 — 컴파일 CSS 선언 기반 (외부 검수 회귀 방지)', () => {
   // 가변 fill 등으로 보더가 유일한 형상 단서인 컨트롤들 — 전수 재감사(2026-07-15)에서 승격 확정.
   // 대표: canvasEditor ColorSwatch(검정 프리셋이 다크 bg 대비 1.1:1이라 보더 없으면 소실).
-  const INPUT_BORDER_RE = /border[^;]*\$color-input-border(?![a-z-])/; // word-boundary — -hover 오매칭 차단
-  const SELECTED_INDICATOR_RE = /var\(--color-selected-indicator\)/;
+  // 컴파일 결과는 주석 제거·중첩 평탄화·Sass `_`≡`-` 별칭 정규화가 끝난 텍스트라 원문 정규식의
+  // 잔여 허점(주석 처리된 선언 통과·미사용 속성 통과·`_hover` 별칭 경계 통과)이 구조적으로 소멸한다.
+  // declPattern은 값의 닫는 `)`까지 정확히 요구 — `--color-input-border-hover` 같은 별칭 컴파일
+  // 결과를 원천 차단한다(중간에 다른 문자가 오면 매치 실패).
+  const INPUT_BORDER_DECL = /(?:border[^:;{]*|box-shadow):[^;{]*var\(--color-input-border\)/;
+  const SELECTED_INDICATOR_DECL = /box-shadow:[^;{]*var\(--color-selected-indicator\)/;
   const PINNED = [
-    { label: 'canvasEditor ColorSwatch', file: 'components/canvas/canvasEditor.scss', path: ['&__ColorSwatch {'], re: INPUT_BORDER_RE },
-    { label: 'canvasEditor .CanvasEditor', file: 'components/canvas/canvasEditor.scss', path: ['.CanvasEditor {'], re: INPUT_BORDER_RE },
-    { label: 'taskList OpToggle', file: 'components/branch/taskList.scss', path: ['&__OpToggle {'], re: INPUT_BORDER_RE },
-    { label: 'myTasks ScopeToggle', file: 'components/myTasks/myTasks.scss', path: ['&__ScopeToggle {'], re: INPUT_BORDER_RE },
-    { label: 'home-shared HomeTabs', file: 'components/home/shared/home-shared.scss', path: ['.HomeTabs {'], re: INPUT_BORDER_RE },
-    { label: 'browseBranches --joined', file: 'components/browse/browseBranches.scss', path: ['&--joined {'], re: INPUT_BORDER_RE },
-    // 선택 상태 인디케이터(수정 1, SC 1.4.11) — active 셀렉터가 다크 전용 토큰을 실제로 소비하는지 고정
-    { label: 'home-shared HomeTabs__Tab.is-on', file: 'components/home/shared/home-shared.scss', path: ['.HomeTabs {', '&.is-on {'], re: SELECTED_INDICATOR_RE },
-    { label: 'myTasks ScopeBtn--active', file: 'components/myTasks/myTasks.scss', path: ['&__ScopeBtn {', '&--active {'], re: SELECTED_INDICATOR_RE },
+    { label: 'canvasEditor .CanvasEditor', file: 'components/canvas/canvasEditor.scss', selector: '.CanvasEditor', re: INPUT_BORDER_DECL },
+    { label: 'canvasEditor ColorSwatch(Toolbar)', file: 'components/canvas/canvasEditor.scss', selector: '.CanvasEditorToolbar__ColorSwatch', re: INPUT_BORDER_DECL },
+    { label: 'taskList FilterBuilder OpToggle', file: 'components/branch/taskList.scss', selector: '.FilterBuilder__OpToggle', re: INPUT_BORDER_DECL },
+    { label: 'myTasks ScopeToggle', file: 'components/myTasks/myTasks.scss', selector: '.MyTasks__ScopeToggle', re: INPUT_BORDER_DECL },
+    { label: 'home-shared HomeTabs', file: 'components/home/shared/home-shared.scss', selector: '.HomeTabs', re: INPUT_BORDER_DECL },
+    { label: 'browseBranches JoinBtn--joined', file: 'components/browse/browseBranches.scss', selector: '.BrowseBranches__JoinBtn--joined', re: INPUT_BORDER_DECL },
+    // 선택 상태 인디케이터(수정 1, SC 1.4.11) — active 셀렉터가 토큰을 실제로 소비하는지만 여기서 고정.
+    // 다크 값 자체의 시맨틱(투명 회귀 방지)은 아래 별도 describe에서 대비비로 고정한다.
+    { label: 'home-shared HomeTabs__Tab.is-on', file: 'components/home/shared/home-shared.scss', selector: '.HomeTabs__Tab.is-on', re: SELECTED_INDICATOR_DECL },
+    { label: 'myTasks ScopeBtn--active', file: 'components/myTasks/myTasks.scss', selector: '.MyTasks__ScopeBtn--active', re: SELECTED_INDICATOR_DECL },
   ];
-  it.each(PINNED)('$label 가 기대 패턴을 own declarations에서 사용', ({ file, path, re }) => {
-    const src = readFileSync(resolve(__dirname, '../styles', file), 'utf8');
-    let fromIndex = 0;
-    let result = null;
-    for (const anchor of path) {
-      result = ownDeclBody(src, anchor, fromIndex);
-      expect(result, `${anchor} not found in ${file}`).not.toBeNull();
-      fromIndex = result.anchorIdx; // 다음 앵커는 이 블록 시작 이후에서만 탐색(동일 셀렉터 재등장 방지)
-    }
-    expect(result.body).toMatch(re);
+  it.each(PINNED)('$label 가 컴파일된 규칙에서 기대 선언을 사용', ({ file, selector, re }) => {
+    const decls = ownDeclarations(compiledSiteCss(file), selector);
+    expect(decls, `${selector} 규칙을 컴파일된 ${file}에서 찾지 못함`).not.toBeNull();
+    expect(decls).toMatch(re);
+  });
+});
+
+// WCAG 2.x 상대휘도/대비비 — hex 6자리만 지원. transparent 등 6자리 hex가 아닌 값은 파싱 실패로
+// null → contrastRatio가 0을 반환해 아래 >=3 단정이 RED가 된다(다크 인디케이터 투명 회귀 검출).
+function hexToRgb(hex) {
+  const m = /^#([0-9a-fA-F]{6})$/.exec(String(hex).trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+function relativeLuminance({ r, g, b }) {
+  const lin = (c) => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+}
+function contrastRatio(hexA, hexB) {
+  const a = hexToRgb(hexA);
+  const b = hexToRgb(hexB);
+  if (!a || !b) return 0;
+  const [lo, hi] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => x - y);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+describe('다크 selected-indicator 값 시맨틱 고정 (SC 1.4.11 비텍스트 대비 3:1)', () => {
+  const darkBody = css.match(/html\[data-theme=(?:dark|["']dark["'])\]\s*\{([^}]*)\}/)[1];
+  const darkValues = Object.fromEntries(
+    [...darkBody.matchAll(/--([a-z0-9-]+)\s*:\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]),
+  );
+  it('bg·surface 대비 3:1 이상 — transparent 등으로 되돌리면 파싱 실패로 RED', () => {
+    const indicator = darkValues['color-selected-indicator'];
+    expect(contrastRatio(indicator, darkValues['color-bg']), `vs bg: ${indicator}`).toBeGreaterThanOrEqual(3);
+    expect(contrastRatio(indicator, darkValues['color-surface']), `vs surface: ${indicator}`).toBeGreaterThanOrEqual(3);
   });
 });
