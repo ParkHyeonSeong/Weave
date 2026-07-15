@@ -143,3 +143,24 @@ describe('track 로컬 별칭 완전성 — $track-x는 동일명 var(--track-x)
     expect(bad.map((m) => `track-${m[1]} = ${m[2].trim()}`)).toEqual([]);
   });
 });
+
+describe('컨트롤 보더 재분류 고정 — 승격 컨트롤은 input-border 유지 (외부 검수 회귀 방지)', () => {
+  // 가변 fill 등으로 보더가 유일한 형상 단서인 컨트롤들 — 전수 재감사(2026-07-15)에서 승격 확정.
+  // 대표: canvasEditor ColorSwatch(검정 프리셋이 다크 bg 대비 1.1:1이라 보더 없으면 소실).
+  const PINNED = [
+    ['components/canvas/canvasEditor.scss', '&__ColorSwatch {'],
+    ['components/canvas/canvasEditor.scss', '.CanvasEditor {'],
+    ['components/branch/taskList.scss', '&__OpToggle {'],
+    ['components/myTasks/myTasks.scss', '&__ScopeToggle {'],
+    ['components/home/shared/home-shared.scss', '.HomeTabs {'],
+    ['components/browse/browseBranches.scss', '&--joined {'],
+  ];
+  it.each(PINNED)('%s %s 가 $color-input-border 사용', (file, anchor) => {
+    const src = readFileSync(resolve(__dirname, '../styles', file), 'utf8');
+    const idx = src.indexOf(anchor);
+    expect(idx, `${anchor} not found`).toBeGreaterThan(-1);
+    // anchor 이후 첫 border 선언이 input-border인지
+    const seg = src.slice(idx, idx + 400);
+    expect(seg).toMatch(/border[^;]*\$color-input-border/);
+  });
+});

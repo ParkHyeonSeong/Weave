@@ -380,7 +380,7 @@
     color: $color-text-tertiary;
     cursor: pointer;
     transition: all $transition-fast;
-    border-top: 1px solid $color-input-border;
+    border-top: 1px solid $color-border;
     width: 100%;
 
     &:hover {
@@ -766,7 +766,7 @@
     overflow-y: auto;
     padding: $space-3;
     background: $color-bg;
-    border: 1px solid $color-input-border;
+    border: 1px solid $color-border;
     border-radius: 10px;
     box-shadow: $shadow-lg;
 
@@ -905,7 +905,7 @@
 
   &__OpToggle {
     display: inline-flex;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-sm;
     overflow: hidden;
   }
@@ -920,7 +920,7 @@
     cursor: pointer;
     transition: all $transition-fast;
 
-    & + & { border-left: 1px solid $color-input-border; }
+    & + & { border-left: 1px solid $color-border; }
 
     &--active {
       color: $color-text-inverse;

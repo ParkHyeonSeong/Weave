@@ -2,7 +2,7 @@
 
 .CanvasEditor {
   position: relative;
-  border: 1px solid $color-border;
+  border: 1px solid $color-input-border;
   border-radius: $radius-xl;
   max-width: 100%;
 
@@ -914,7 +914,7 @@
     width: 24px;
     height: 24px;
     border-radius: $radius-sm;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     cursor: pointer;
     transition: transform $transition-fast;
 
