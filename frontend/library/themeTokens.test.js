@@ -271,6 +271,10 @@ describe('다크 selected-indicator 값 시맨틱 고정 (SC 1.4.11 비텍스트
     if (decl.prop.startsWith('--')) darkValues[decl.prop.slice(2)] = decl.value.trim();
   }));
 
+  // 파일 상단 위치기반 추출(대칭·baseline·별칭)이 "dark 블록은 정확히 1개"를 암묵 가정한다 —
+  // 뒤쪽 dark 재정의 블록이 생기면 여기서 즉시 RED(외부 검수: 유일성 또는 전면 cascade 요구).
+  expect(darkRules.length).toBe(1);
+
   // ScopeToggle 실제 인접 합성색 — .MyTasks__ScopeBtn--active의 background(반투명 rgba)를
   // 컴파일된 myTasks CSS에서 postcss AST로 그대로 읽어(하드코딩 금지) 다크 surface 위에 알파
   // 합성한다. bg·surface 단독 대비만으로는 실제 렌더 결과보다 대비가 후하게 나와 회귀를 놓친다
