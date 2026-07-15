@@ -66,6 +66,7 @@ class UpdateUiPrefs(BaseModel):
     saved_view_pins: Optional[dict] = None  # { "<branchId>|global": [view_id, ...] } per-user 핀 순서
     comment_sort: Optional[str] = None  # 'newest' | 'oldest' — 태스크 댓글 정렬 선호
     editor_raw_mode: Optional[bool] = None  # 비협업 에디터 raw markdown 토글 선호 — 전 표면 공통 1개
+    theme: Optional[str] = None  # 'light' | 'dark' | 'system' — 다크모드 선호 (기본 system)
 
     @field_validator('comment_sort')
     @classmethod
@@ -74,4 +75,13 @@ class UpdateUiPrefs(BaseModel):
             return None
         if v not in ('newest', 'oldest'):
             raise ValueError("comment_sort must be 'newest' or 'oldest'")
+        return v
+
+    @field_validator('theme')
+    @classmethod
+    def validate_theme(cls, v):
+        if v is None:
+            return None
+        if v not in ('light', 'dark', 'system'):
+            raise ValueError("theme must be 'light', 'dark' or 'system'")
         return v

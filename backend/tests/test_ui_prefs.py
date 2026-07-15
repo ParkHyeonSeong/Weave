@@ -78,3 +78,16 @@ def test_update_ui_prefs_schema_rejects_non_bool_editor_raw_mode():
     from routers.schema.profile import UpdateUiPrefs
     with pytest.raises(ValidationError):
         UpdateUiPrefs(editor_raw_mode="always")
+
+
+def test_update_ui_prefs_schema_allows_theme():
+    from routers.schema.profile import UpdateUiPrefs
+    for v in ("light", "dark", "system"):
+        body = UpdateUiPrefs(theme=v)
+        assert body.model_dump(exclude_none=True) == {"theme": v}
+
+
+def test_update_ui_prefs_schema_rejects_invalid_theme():
+    from routers.schema.profile import UpdateUiPrefs
+    with pytest.raises(ValidationError):
+        UpdateUiPrefs(theme="midnight")
