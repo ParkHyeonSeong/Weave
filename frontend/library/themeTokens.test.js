@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { compile } from 'sass';
 
@@ -65,5 +65,80 @@ describe('브리지 커버리지 — _variables.scss가 참조하는 var는 전�
     const refs = [...bridge.matchAll(/var\(--([a-z0-9-]+)\)/g)].map((m) => m[1]);
     const defined = new Set([...light, ...aliases]);
     expect([...new Set(refs)].filter((r) => !defined.has(r))).toEqual([]);
+  });
+});
+
+describe('브리지 완전성 — 모든 $color-*/$shadow-* 선언이 동일명 var()여야 한다', () => {
+  // 새 토큰이 리터럴로 추가되면(브리지 우회) 여기서 잡힌다 — warning-bg 사후 추가 재발 방지.
+  it('리터럴 잔존 없음', () => {
+    const bridge = readFileSync(resolve(__dirname, '../styles/_variables.scss'), 'utf8');
+    const decls = [...bridge.matchAll(/^\$((?:color|shadow)-[a-z0-9-]+)\s*:\s*([^;]+);/gm)];
+    expect(decls.length).toBeGreaterThan(30);
+    const bad = decls.filter((m) => m[2].trim() !== `var(--${m[1]})`)
+      .map((m) => `${m[1]} = ${m[2].trim()}`);
+    expect(bad).toEqual([]);
+  });
+});
+
+describe('사이트 SCSS의 sass 색함수 $변수 입력 금지 (컴파일 의존 재유입 차단)', () => {
+  it('rgba($…)/color.adjust($…)/color.scale($…) 잔존 없음', () => {
+    const stylesDir = resolve(__dirname, '../styles');
+    const files = readdirSync(stylesDir, { recursive: true })
+      .map(String)
+      .filter((f) => f.endsWith('.scss') && !f.endsWith('_themes.scss'));
+    const offenders = [];
+    for (const f of files) {
+      readFileSync(resolve(stylesDir, f), 'utf8').split('\n').forEach((line, i) => {
+        const code = line.split('//')[0]; // 주석 제외
+        if (/(?:rgba|color\.adjust|color\.scale)\(\s*\$/.test(code)) offenders.push(`${f}:${i + 1}`);
+      });
+    }
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe('전 SCSS var(--…) 참조 커버리지', () => {
+  // 테마 정의 ∪ 불변 별칭 ∪ 런타임 JS 주입 ∪ S5 이행 예정(context-menu 폴백 소비)만 허용.
+  const RUNTIME_INJECTED = ['branch-color', 'status-color', 'accent', 'sticky-header-h'];
+  // 예외는 경로+개수까지 고정 — 번지거나 늘어나면 즉시 검출, 이관(S4/S5)하면 목록·개수 갱신 신호.
+  // S4: track.scss 기존 fallback 소비(848·859·1769·2171·2708 tertiary, 1208 secondary).
+  //   ⚠️ fallback(#9ca3af)이 신 토큰 라이트값(--color-text-tertiary=#6B7280)과 달라 단순 치환 시
+  //      라이트 색이 바뀐다 — S4에서 사이트별 의도 판정 필수.
+  // S5: context-menu.scss의 미정의 var 폴백 소비 2건.
+  const PENDING = {
+    'track/track.scss': { 'text-secondary': 1, 'text-tertiary': 5 },
+    'common/context-menu.scss': { 'color-hover': 1, 'color-border-subtle': 1 },
+  };
+  it('미정의 var 참조 없음 (예외는 경로·개수 고정)', () => {
+    const stylesDir = resolve(__dirname, '../styles');
+    const defined = new Set([...light, ...aliases, ...RUNTIME_INJECTED]);
+    const offenders = [];
+    const seen = {}; // 예외 사용 실측 tally
+    for (const f of readdirSync(stylesDir, { recursive: true }).map(String)
+        .filter((f) => f.endsWith('.scss') && !f.endsWith('_themes.scss'))) {
+      const src = readFileSync(resolve(stylesDir, f), 'utf8');
+      const pendingFile = Object.keys(PENDING).find((sfx) => f.endsWith(sfx));
+      for (const m of src.matchAll(/var\(--([a-z0-9-]+)/g)) {
+        if (defined.has(m[1])) continue;
+        if (pendingFile && PENDING[pendingFile][m[1]] != null) {
+          seen[pendingFile] = seen[pendingFile] || {};
+          seen[pendingFile][m[1]] = (seen[pendingFile][m[1]] || 0) + 1;
+          continue;
+        }
+        offenders.push(`${f}: --${m[1]}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+    expect(seen).toEqual(PENDING); // 개수가 줄어도(이관 완료) 알림 — 목록 갱신
+  });
+});
+
+describe('track 로컬 별칭 완전성 — $track-x는 동일명 var(--track-x)', () => {
+  it('별칭 잔존/오기 없음', () => {
+    const src = readFileSync(resolve(__dirname, '../styles/components/track/track.scss'), 'utf8');
+    const decls = [...src.matchAll(/^\$track-([a-z0-9-]+)\s*:\s*([^;]+);/gm)];
+    expect(decls.length).toBe(7);
+    const bad = decls.filter((m) => m[2].trim() !== `var(--track-${m[1]})`);
+    expect(bad.map((m) => `track-${m[1]} = ${m[2].trim()}`)).toEqual([]);
   });
 });
