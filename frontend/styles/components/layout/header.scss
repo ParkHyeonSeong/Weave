@@ -63,7 +63,7 @@
     max-width: 480px;
     padding: 6px $space-3;
     background: $color-surface;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-lg;
     color: $color-text-tertiary;
     font-size: $font-size-sm;
@@ -71,7 +71,7 @@
     cursor: pointer;
 
     &:hover {
-      border-color: $color-border-hover;
+      border-color: $color-input-border-hover;
       color: $color-text-secondary;
     }
   }
@@ -148,7 +148,7 @@
     right: 0;
     width: 360px;
     background: $color-bg;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-lg;
     box-shadow: $shadow-md;
     z-index: 200;
@@ -378,7 +378,7 @@
     right: 0;
     min-width: 180px;
     background: $color-bg;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-lg;
     box-shadow: $shadow-md;
     padding: $space-1;

@@ -250,7 +250,7 @@
   // -- 역할 셀렉트 --
   &__RoleSelect {
     padding: $space-1 $space-2;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-md;
     font-size: $font-size-xs;
     color: $color-text;
@@ -303,7 +303,7 @@
   &__Input,
   &__Select {
     padding: $space-2 $space-3;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-md;
     font-size: $font-size-sm;
     color: $color-text;
@@ -360,7 +360,7 @@
     padding: $space-2 $space-4;
     background: transparent;
     color: $color-text-secondary;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-md;
     font-size: $font-size-sm;
     font-weight: $font-weight-medium;

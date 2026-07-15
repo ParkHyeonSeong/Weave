@@ -36,6 +36,7 @@ const LIGHT_BASELINE = {
   'color-text-inverse': '#FFFFFF',
   'color-border': '#E5E5E5', 'color-border-hover': '#D1D5DB',
   'color-input-bg': '#FFFFFF', 'color-input-border': '#E5E5E5',
+  'color-input-border-hover': '#D1D5DB',
   'color-error': '#DC2626', 'color-error-bg': '#FEF2F2',
   'color-success': '#16A34A', 'color-success-bg': '#F0FDF4',
   'color-warning': '#D97706', 'color-warning-bg': '#FFFBEB',

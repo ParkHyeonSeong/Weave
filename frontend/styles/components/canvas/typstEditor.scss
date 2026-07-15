@@ -55,7 +55,7 @@
     font-weight: 500;
     color: $color-text;
     background: $color-bg;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-md;
     cursor: pointer;
     transition: background 0.15s;
@@ -84,7 +84,7 @@
     flex: 1;
     min-width: 280px;
     overflow: auto;
-    border-right: 1px solid $color-border;
+    border-right: 1px solid $color-input-border;
 
     .cm-editor {
       height: 100%;

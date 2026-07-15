@@ -38,7 +38,7 @@
     font-size: $font-size-sm;
     color: $color-primary;
     background: none;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     padding: $space-2 $space-4;
     border-radius: $radius-md;
     cursor: pointer;
@@ -128,7 +128,7 @@
     font-size: $font-size-sm;
     color: $color-primary;
     background: $color-bg;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     padding: 6px 14px;
     border-radius: $radius-md;
     cursor: pointer;
@@ -177,7 +177,7 @@
   &__IconBtn {
     width: 26px; height: 26px;
     display: inline-flex; align-items: center; justify-content: center;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     background: $color-bg;
     border-radius: $radius-md;
     color: $color-text-secondary;
@@ -199,7 +199,7 @@
   &__EditInput {
     padding: 6px 10px;
     font-size: $font-size-sm;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-md;
     outline: none;
     background: $color-bg;
@@ -220,7 +220,7 @@
     padding: 5px 8px;
     font-size: 12px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-md;
     outline: none;
     background: $color-bg;
@@ -233,7 +233,7 @@
     display: inline-flex; align-items: center; gap: 4px;
     font-size: 11.5px; color: $color-text-secondary;
     background: $color-bg;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     padding: 5px 10px;
     border-radius: $radius-md;
     cursor: pointer;
@@ -243,7 +243,7 @@
     font-size: $font-size-sm;
     color: $color-text-secondary;
     background: none;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     padding: 5px 12px;
     border-radius: $radius-md;
     cursor: pointer;
@@ -316,7 +316,7 @@
     font-size: $font-size-sm;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     color: $color-text;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-md;
     outline: none;
     background: $color-bg;

@@ -97,7 +97,7 @@
 
   &__Composer {
     padding: $space-2;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-lg;
   }
 
@@ -217,7 +217,7 @@
   &__ReplyComposer {
     margin-top: $space-2;
     padding: 6px;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-md;
   }
 

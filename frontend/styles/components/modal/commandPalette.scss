@@ -21,7 +21,7 @@
   width: 100%;
   max-width: 560px;
   background: $color-bg;
-  border: 1px solid $color-border;
+  border: 1px solid $color-input-border;
   border-radius: $radius-xl;
   box-shadow: $shadow-lg;
   overflow: hidden;
@@ -30,7 +30,7 @@
     display: flex;
     align-items: center;
     padding: $space-3 $space-4;
-    border-bottom: 1px solid $color-border;
+    border-bottom: 1px solid $color-input-border;
   }
 
   &__SearchIcon {

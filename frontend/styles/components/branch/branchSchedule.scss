@@ -57,7 +57,7 @@
     font-size: $font-size-xs;
     font-weight: $font-weight-medium;
     color: $color-text-secondary;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     transition: all $transition-fast;
 
     &:hover {
@@ -305,7 +305,7 @@
     font-size: $font-size-xs;
     font-weight: $font-weight-medium;
     color: $color-text-secondary;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     transition: all $transition-fast;
 
     &:hover {

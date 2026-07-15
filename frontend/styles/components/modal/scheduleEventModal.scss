@@ -221,7 +221,7 @@
     justify-content: space-between;
     padding: $space-2 $space-3;
     background: $color-bg;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-md;
     font-size: $font-size-sm;
     color: $color-text;
@@ -253,7 +253,7 @@
     top: 100%;
     margin-top: 2px;
     background: $color-bg;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-md;
     max-height: 180px;
     overflow-y: auto;
@@ -337,7 +337,7 @@
     right: 0;
     top: 100%;
     background: $color-bg;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-md;
     max-height: 180px;
     overflow-y: auto;

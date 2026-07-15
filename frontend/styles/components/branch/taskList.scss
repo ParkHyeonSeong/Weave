@@ -51,7 +51,7 @@
   &__SprintBtn {
     background: $color-surface;
     color: $color-text-secondary;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     // 폭이 모자라면 버튼이 찌그러지거나("+ Create / Sprint" 2줄) 텍스트가 쪼개지는 대신,
     // Actions의 wrap으로 깔끔하게 줄바꿈되도록 자연폭을 고정.
     flex-shrink: 0;
@@ -249,7 +249,7 @@
     align-items: center;
     gap: $space-2;
     padding: $space-2 $space-4;
-    border-top: 1px solid $color-border;
+    border-top: 1px solid $color-input-border;
   }
 
   &__InlineError {
@@ -291,7 +291,7 @@
     left: 0;
     min-width: 140px;
     background: $color-bg;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-lg;
     box-shadow: $shadow-md;
     z-index: 100;
@@ -380,7 +380,7 @@
     color: $color-text-tertiary;
     cursor: pointer;
     transition: all $transition-fast;
-    border-top: 1px solid $color-border;
+    border-top: 1px solid $color-input-border;
     width: 100%;
 
     &:hover {
@@ -422,7 +422,7 @@
     padding: 6px 10px 6px 30px;
     font-size: $font-size-sm;
     color: $color-text;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-md;
     outline: none;
     background: $color-bg;
@@ -502,7 +502,7 @@
     min-width: 26px;
     height: 26px;
     padding: 0 7px;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: 13px;
     background: $color-surface;
     color: $color-text-tertiary;
@@ -523,7 +523,7 @@
     overflow-y: auto;
     padding: 6px;
     background: $color-bg;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: 10px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
   }
@@ -593,7 +593,7 @@
     font-weight: $font-weight-medium;
     color: $color-text-secondary;
     background: $color-bg;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-md;
     cursor: pointer;
     white-space: nowrap;
@@ -636,7 +636,7 @@
     left: 0;
     min-width: 150px;
     background: $color-bg;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-md;
     box-shadow: $shadow-lg;
     z-index: 50;
@@ -712,7 +712,7 @@
     font-weight: $font-weight-medium;
     color: $color-text-secondary;
     background: $color-bg;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-md;
     cursor: pointer;
     transition: all $transition-fast;
@@ -740,7 +740,7 @@
     font-weight: $font-weight-medium;
     color: $color-text-secondary;
     background: $color-bg;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-md;
     cursor: pointer;
     white-space: nowrap;
@@ -766,7 +766,7 @@
     overflow-y: auto;
     padding: $space-3;
     background: $color-bg;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: 10px;
     box-shadow: $shadow-lg;
 
@@ -833,7 +833,7 @@
     font-size: $font-size-xs;
     color: $color-text;
     background: $color-bg;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-sm;
     cursor: pointer;
   }
@@ -848,7 +848,7 @@
     padding: 0;
     color: $color-text-tertiary;
     background: $color-bg;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-sm;
     cursor: pointer;
     transition: all $transition-fast;
@@ -920,7 +920,7 @@
     cursor: pointer;
     transition: all $transition-fast;
 
-    & + & { border-left: 1px solid $color-border; }
+    & + & { border-left: 1px solid $color-input-border; }
 
     &--active {
       color: $color-text-inverse;
@@ -948,7 +948,7 @@
     font-size: $font-size-xs;
     color: $color-text;
     background: $color-bg;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-sm;
     outline: none;
     transition: border-color $transition-fast;
@@ -1330,7 +1330,7 @@
     max-height: 240px;
     overflow-y: auto;
     background: $color-bg;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-lg;
     box-shadow: $shadow-md;
     padding: $space-1 0;
@@ -1449,7 +1449,7 @@
   gap: $space-2;
   padding: $space-2 $space-4 $space-2 $space-8;
   color: $color-text-tertiary;
-  border-bottom: 1px solid $color-border;
+  border-bottom: 1px solid $color-input-border;
 
   &Input {
     flex: 1;

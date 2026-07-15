@@ -13,7 +13,7 @@
     font-weight: $font-weight-medium;
     color: $color-text-secondary;
     background: $color-bg;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-md;
     cursor: pointer;
     transition: all $transition-fast;
@@ -22,7 +22,7 @@
     height: 28px;
 
     &:hover {
-      border-color: $color-border-hover;
+      border-color: $color-input-border-hover;
       color: $color-text;
     }
   }
@@ -76,7 +76,7 @@
     max-height: 240px;
     overflow-y: auto;
     background: $color-bg;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-lg;
     box-shadow: $shadow-md;
     z-index: 200;
@@ -118,7 +118,7 @@
     width: 14px;
     height: 14px;
     border-radius: 3px;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     flex-shrink: 0;
     color: transparent;
     transition: all $transition-fast;

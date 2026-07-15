@@ -67,7 +67,7 @@
     padding: $space-2 $space-3;
     font-size: $font-size-sm;
     color: $color-text;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-md;
     outline: none;
     background: $color-bg;
@@ -94,7 +94,7 @@
     padding: $space-2 $space-3;
     font-size: $font-size-sm;
     color: $color-text;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-md;
     outline: none;
     resize: vertical;
@@ -136,13 +136,13 @@
     font-size: $font-size-sm;
     font-weight: $font-weight-medium;
     color: $color-text-secondary;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-md;
     cursor: pointer;
     transition: all $transition-fast;
 
     &:hover:not(:disabled) {
-      border-color: $color-border-hover;
+      border-color: $color-input-border-hover;
     }
 
     &--active {
@@ -190,7 +190,7 @@
     font-weight: $font-weight-medium;
     color: $color-text-secondary;
     background: $color-surface;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-md;
     cursor: pointer;
     transition: all $transition-fast;
@@ -354,7 +354,7 @@
     left: 0;
     width: 360px;
     background: $color-bg;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-lg;
     box-shadow: $shadow-lg;
     z-index: 10;
@@ -366,7 +366,7 @@
     align-items: center;
     gap: $space-2;
     padding: $space-3;
-    border-bottom: 1px solid $color-border;
+    border-bottom: 1px solid $color-input-border;
   }
 
   &__SearchIcon {
@@ -694,7 +694,7 @@
     width: 100%;
     padding: $space-2 $space-3;
     font-size: $font-size-sm;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-md;
     outline: none;
     color: $color-text;
@@ -858,7 +858,7 @@
   &__DetailInput {
     padding: $space-2 $space-3;
     font-size: $font-size-sm;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-md;
     outline: none;
     color: $color-text;
@@ -1035,7 +1035,7 @@
   &__EditInput, &__AddInput {
     padding: $space-2 $space-3;
     font-size: $font-size-sm;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-md;
     outline: none;
     color: $color-text;
@@ -1047,7 +1047,7 @@
   &__Select {
     padding: $space-2 $space-3;
     font-size: $font-size-sm;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-md;
     outline: none;
     color: $color-text;
@@ -1262,7 +1262,7 @@
   &__EditInput, &__AddInput {
     padding: $space-2 $space-3;
     font-size: $font-size-sm;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-md;
     outline: none;
     color: $color-text;
@@ -1274,7 +1274,7 @@
   &__Select {
     padding: $space-2 $space-3;
     font-size: $font-size-sm;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-md;
     outline: none;
     color: $color-text;

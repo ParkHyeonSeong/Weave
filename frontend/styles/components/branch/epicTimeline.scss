@@ -26,7 +26,7 @@
     cursor: pointer;
     transition: all $transition-fast;
     white-space: nowrap;
-    border-right: 1px solid $color-border;
+    border-right: 1px solid $color-input-border;
 
     &:last-child {
       border-right: none;

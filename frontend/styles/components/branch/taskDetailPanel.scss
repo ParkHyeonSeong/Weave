@@ -430,7 +430,7 @@
     transition: all $transition-fast;
 
     &:hover {
-      border-color: $color-border;
+      border-color: $color-input-border;
     }
 
     span {
@@ -457,7 +457,7 @@
     max-height: 200px;
     overflow-y: auto;
     background: $color-bg;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-lg;
     box-shadow: $shadow-md;
     z-index: 100;
@@ -593,7 +593,7 @@
 // -- Task Description Editor --
 .TaskDescEditor {
   position: relative;
-  border: 1px solid $color-border;
+  border: 1px solid $color-input-border;
   border-radius: $radius-lg;
   overflow: hidden;
   max-width: 100%;
@@ -1181,7 +1181,7 @@
     font-size: $font-size-sm;
     color: $color-text;
     background: $color-surface;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-md;
     outline: none;
 
@@ -1200,7 +1200,7 @@
     left: 0;
     right: 0;
     background: $color-surface;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-md;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
     z-index: 10;

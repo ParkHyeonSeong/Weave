@@ -562,7 +562,7 @@
           &--secondary {
             color: $color-text-secondary;
             background: $color-surface;
-            border: 1px solid $color-border;
+            border: 1px solid $color-input-border;
           }
         }
 
@@ -575,7 +575,7 @@
           line-height: 1.5;
           color: $color-text;
           background: $color-code-block-bg;
-          border: 1px solid $color-border;
+          border: 1px solid $color-input-border;
           border-radius: $radius-md;
           outline: none;
           resize: vertical;
@@ -754,7 +754,7 @@
     left: 0;
     min-width: 160px;
     background: $color-bg;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-lg;
     box-shadow: $shadow-md;
     padding: $space-1;
@@ -798,7 +798,7 @@
   &__TableCell {
     width: 20px;
     height: 20px;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: 2px;
     cursor: pointer;
     transition: all $transition-fast;
@@ -833,7 +833,7 @@
   &__TableCustomInput {
     width: 52px;
     padding: $space-1 $space-2;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-sm;
     font-size: $font-size-sm;
     text-align: center;
@@ -951,7 +951,7 @@
 
     input {
       width: 100%;
-      border: 1px solid $color-border;
+      border: 1px solid $color-input-border;
       border-radius: $radius-md;
       padding: $space-1 $space-2;
       font-size: $font-size-sm;
@@ -973,7 +973,7 @@
 .TaskRefPopup {
   width: 360px;
   background: $color-bg;
-  border: 1px solid $color-border;
+  border: 1px solid $color-input-border;
   border-radius: $radius-lg;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   overflow: hidden;
@@ -1062,7 +1062,7 @@
 .DocRefPopup {
   width: 360px;
   background: $color-bg;
-  border: 1px solid $color-border;
+  border: 1px solid $color-input-border;
   border-radius: $radius-lg;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   overflow: hidden;
@@ -1138,7 +1138,7 @@
 .IssueRefPopup {
   width: 360px;
   background: $color-bg;
-  border: 1px solid $color-border;
+  border: 1px solid $color-input-border;
   border-radius: $radius-lg;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   overflow: hidden;
@@ -1237,7 +1237,7 @@
 .MentionPopup {
   width: 280px;
   background: $color-bg;
-  border: 1px solid $color-border;
+  border: 1px solid $color-input-border;
   border-radius: $radius-lg;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   overflow: hidden;
@@ -1307,7 +1307,7 @@
   gap: 2px;
   padding: 3px 4px;
   background: $color-bg;
-  border: 1px solid $color-border;
+  border: 1px solid $color-input-border;
   border-radius: $radius-md;
   box-shadow: $shadow-md;
   white-space: nowrap;
@@ -1351,7 +1351,7 @@
   width: 320px;
   padding: 10px;
   background: $color-bg;
-  border: 1px solid $color-border;
+  border: 1px solid $color-input-border;
   border-radius: $radius-lg;
   box-shadow: $shadow-lg;
   display: flex;
@@ -1364,7 +1364,7 @@
     font-family: monospace;
     font-size: 13px;
     padding: 6px 8px;
-    border: 1px solid $color-border-hover;
+    border: 1px solid $color-input-border-hover;
     border-radius: $radius-md;
   }
   &__Preview {
@@ -1380,7 +1380,7 @@
   &__Btn {
     padding: 4px 10px;
     font-size: 12px;
-    border: 1px solid $color-border-hover;
+    border: 1px solid $color-input-border-hover;
     border-radius: $radius-md;
     background: $color-bg;
     cursor: pointer;

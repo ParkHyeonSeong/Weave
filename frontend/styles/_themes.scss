@@ -38,6 +38,7 @@ $_l-warning: #D97706;
 
   --color-input-bg: #FFFFFF;
   --color-input-border: #E5E5E5;
+  --color-input-border-hover: #D1D5DB;
 
   --color-error: #DC2626;
   --color-error-bg: #FEF2F2;
@@ -98,7 +99,7 @@ html[data-theme='dark'] {
 
   --color-primary: #7C8AEA;
   --color-primary-hover: #8B98F0;
-  --color-primary-subtle: rgba(124, 138, 234, 0.14);
+  --color-primary-subtle: rgba(124, 138, 234, 0.08);
 
   --color-text: #E6E8EB;
   --color-text-secondary: #9CA3AF;
@@ -109,7 +110,8 @@ html[data-theme='dark'] {
   --color-border-hover: #33363E;
 
   --color-input-bg: #17181C;
-  --color-input-border: #26282E;
+  --color-input-border: #6B7280;
+  --color-input-border-hover: #7A8290;
 
   --color-error: #F0666B;
   --color-error-bg: #2A1518;

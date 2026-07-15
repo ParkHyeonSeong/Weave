@@ -2,7 +2,7 @@
 
 .SlashCommandMenu {
   width:280px; max-width:88vw;
-  background:$color-bg; border:1px solid $color-border; border-radius:$radius-lg;
+  background:$color-bg; border:1px solid $color-input-border; border-radius:$radius-lg;
   box-shadow:0 4px 12px rgba(0,0,0,0.1); overflow:hidden;
 
   &__Header {

@@ -77,13 +77,13 @@
     padding: $space-1 $space-3;
     font-size: $font-size-sm;
     color: $color-text-secondary;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-md;
     transition: all $transition-fast;
 
     &:hover {
       background: $color-surface;
-      border-color: $color-border-hover;
+      border-color: $color-input-border-hover;
       color: $color-text;
     }
   }
@@ -346,7 +346,7 @@
     top: calc(100% + 4px);
     min-width: 140px;
     background: $color-bg;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-lg;
     box-shadow: $shadow-md;
     padding: $space-1 0;
@@ -443,7 +443,7 @@
     padding: $space-1 $space-3;
     font-size: $font-size-sm;
     font-weight: $font-weight-medium;
-    border: 1px solid $color-border;
+    border: 1px solid $color-input-border;
     border-radius: $radius-md;
     transition: all $transition-fast;
 

@@ -195,7 +195,7 @@
   &__PolicyCard {
     flex: 1;
     padding: $space-5;
-    border: 2px solid $color-border;
+    border: 2px solid $color-input-border;
     border-radius: $radius-xl;
     text-align: center;
     background: $color-bg;
@@ -203,7 +203,7 @@
     cursor: pointer;
 
     &:hover {
-      border-color: $color-border-hover;
+      border-color: $color-input-border-hover;
     }
 
     &--active {
