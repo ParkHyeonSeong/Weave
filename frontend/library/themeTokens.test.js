@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { compile } from 'sass';
+import postcss from 'postcss';
 
 // _themes.scss 계약: 컴파일 결과에 flat 블록 3개 —
 //   [0] :root(라이트) [1] html[data-theme='dark'](다크) [2] :root(테마불변 별칭)
@@ -145,36 +146,6 @@ describe('track 로컬 별칭 완전성 — $track-x는 동일명 var(--track-x)
   });
 });
 
-// 컴파일된 CSS에서 flat 규칙(selector { decls })을 순회 추출.
-// 대상 5파일 중 4개(taskList·myTasks·home-shared·browseBranches)는 mobile 믹스인 경유로
-// @media 블록을 실제로 방출한다(canvasEditor만 무사용) — 단 아래 8핀 셀렉터는 전부 @media
-// 밖 최상위 규칙이라 이 flat 정규식으로 충분하다. 한계의 실패 방향은 안전: 핀이 @media
-// 안으로 이동하면 규칙을 못 찾아 테스트가 RED로 알려준다(조용한 통과 아님).
-function extractRules(css) {
-  return [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)].map((m) => ({ selector: m[1].trim(), body: m[2] }));
-}
-
-// 규칙 prelude(콤마 그룹·조상 결합자 포함)가 핀 셀렉터를 "소유"하는지 판정.
-// 순수 문자열 포함(includes)은 쓰지 않는다 — `.CanvasEditor`가 `.CanvasEditorToolbar__ColorSwatch`나
-// `.CanvasEditor__Content`까지 접두 매칭돼 버려 남의 규칙 선언까지 끌어와 격리가 깨진다(강등 시뮬레이션
-// (a)에서 재현: 다른 규칙의 미변경 선언이 섞여 들어와 커밋 대상 선언을 주석 처리해도 GREEN으로 남는다).
-// 콤마로 나눈 각 파트의 "마지막 콤파운드 토큰"이 핀 셀렉터와 정확히 같거나, 그 핀 셀렉터로 시작하는
-// 의사클래스 연속(`SELECTOR:hover` 등)일 때만 소유로 인정한다 — BEM 접두사·형제 클래스는 배제된다.
-function ownsSelector(prelude, pinSelector) {
-  return prelude.split(',').some((part) => {
-    const tokens = part.trim().split(/[\s>+~]+/).filter(Boolean);
-    const last = tokens[tokens.length - 1] || '';
-    return last === pinSelector || last.startsWith(`${pinSelector}:`);
-  });
-}
-
-// 핀 셀렉터를 소유하는 모든 규칙의 선언부를 합쳐 반환. 하나도 못 찾으면 null —
-// "선언 불일치"와 "셀렉터 자체가 사라짐(리팩터링)"을 구분해 후자를 더 명확한 실패로 드러낸다.
-function ownDeclarations(css, pinSelector) {
-  const bodies = extractRules(css).filter((r) => ownsSelector(r.selector, pinSelector)).map((r) => r.body);
-  return bodies.length ? bodies.join('\n') : null;
-}
-
 const scssCompileCache = new Map();
 function compiledSiteCss(relPath) {
   if (!scssCompileCache.has(relPath)) {
@@ -183,41 +154,92 @@ function compiledSiteCss(relPath) {
   return scssCompileCache.get(relPath);
 }
 
-describe('컨트롤 보더/인디케이터 재분류 고정 — 컴파일 CSS 선언 기반 (외부 검수 회귀 방지)', () => {
+// 콤마로 나눈 각 파트를 공백 정규화 후 완전 동일 문자열로만 비교한다 — 부분/접두 매칭·의사클래스
+// 연속(`:hover` 등)·자손 결합자 전부 불허. 이전 flat 정규식 + ownsSelector의 "마지막 콤파운드
+// 토큰이 접두 일치"식 판정은 `SELECTOR:hover`처럼 진짜와 무관한 강등(기본 셀렉터에서 제거하고
+// hover에만 남김)까지 "소유"로 오인했다 — 완전 동일 문자열 비교는 이 경로를 구조적으로 차단한다.
+function selectorMatches(ruleSelector, targetSelectors) {
+  const targets = new Set(Array.isArray(targetSelectors) ? targetSelectors : [targetSelectors]);
+  return ruleSelector.split(',').some((part) => targets.has(part.replace(/\s+/g, ' ').trim()));
+}
+
+// target 셀렉터를 가진 "root 직속" 규칙만 postcss AST로 찾는다. rule.parent.type이 'root'가
+// 아니면(즉 @media/@supports 등 안쪽이면) 애초에 후보에서 제외 — 외부 검수가 실증한 "@media 안
+// 두 번째 이후 규칙이 최상위처럼 추출됨" 구멍을 이 한 줄이 구조적으로 닫는다. 매치가 0건이면
+// "셀렉터 자체가 사라짐(@media 이동 포함)"과 "선언 불일치"를 구분해 호출부가 각각 다르게 보고한다.
+function findRootRules(root, targetSelectors) {
+  const rules = [];
+  root.walkRules((rule) => {
+    if (rule.parent.type === 'root' && selectorMatches(rule.selector, targetSelectors)) rules.push(rule);
+  });
+  return rules;
+}
+
+describe('컨트롤 보더/인디케이터 재분류 고정 — 컴파일 CSS postcss AST 기반 (외부 검수 회귀 방지)', () => {
   // 가변 fill 등으로 보더가 유일한 형상 단서인 컨트롤들 — 전수 재감사(2026-07-15)에서 승격 확정.
   // 대표: canvasEditor ColorSwatch(검정 프리셋이 다크 bg 대비 1.1:1이라 보더 없으면 소실).
-  // 컴파일 결과는 주석 제거·중첩 평탄화·Sass `_`≡`-` 별칭 정규화가 끝난 텍스트라 원문 정규식의
-  // 잔여 허점(주석 처리된 선언 통과·미사용 속성 통과·`_hover` 별칭 경계 통과)이 구조적으로 소멸한다.
-  // declPattern은 값의 닫는 `)`까지 정확히 요구 — `--color-input-border-hover` 같은 별칭 컴파일
-  // 결과를 원천 차단한다(중간에 다른 문자가 오면 매치 실패).
-  const INPUT_BORDER_DECL = /(?:border[^:;{]*|box-shadow):[^;{]*var\(--color-input-border\)/;
-  const SELECTED_INDICATOR_DECL = /box-shadow:[^;{]*var\(--color-selected-indicator\)/;
+  //
+  // 정규식 기반 원문의 잔여 false-green 4종(외부 검수 실증)을 AST 구조로 전부 닫는다:
+  //  ① `/* border: … */` CSS 블록주석 — postcss는 주석을 Comment 노드로 별도 분리하므로
+  //     walkDecls가 애초에 방문하지 않는다(Sass `//` 라인주석은 컴파일 결과에 아예 안 남지만,
+  //     `/* */` 블록주석은 Sass가 보존해 컴파일 CSS에 텍스트로 남는다 — 그래서 이 케이스가 성립).
+  //  ② `--dead-border: var(…)` / `border-radius: var(…)` / `content: "border: var(…)"` —
+  //     prop 화이트리스트 "정확 일치"(부분 문자열·접두 매칭 아님)라 `border-radius`는 `border`
+  //     화이트리스트에 안 걸리고, 커스텀 프로퍼티(`--dead-border`)·`content`도 마찬가지.
+  //  ③ 기본 셀렉터에서 제거하고 `:hover`에만 남김 — selectorMatches의 완전 동일 문자열 비교가
+  //     `SELECTOR:hover` != `SELECTOR`로 판정해 애초에 findRootRules 후보에 안 들어온다.
+  //  ④ `@media` 안 두 번째 이후 규칙이 최상위처럼 추출됨 — findRootRules의 root-직속 단정.
+  //
+  // needle은 값의 닫는 `)`까지 포함한 문자열(`var(--color-input-border)`)이라 `--color-input-
+  // border-hover` 같은 별칭 컴파일 결과를 원천 차단한다(중간에 다른 문자가 오면 매치 실패).
+  const BORDER_PROPS = new Set(['border', 'border-top', 'border-right', 'border-bottom', 'border-left', 'border-color']);
+  const INDICATOR_PROPS = new Set(['box-shadow']);
   const PINNED = [
-    { label: 'canvasEditor .CanvasEditor', file: 'components/canvas/canvasEditor.scss', selector: '.CanvasEditor', re: INPUT_BORDER_DECL },
-    { label: 'canvasEditor ColorSwatch(Toolbar)', file: 'components/canvas/canvasEditor.scss', selector: '.CanvasEditorToolbar__ColorSwatch', re: INPUT_BORDER_DECL },
-    { label: 'taskList FilterBuilder OpToggle', file: 'components/branch/taskList.scss', selector: '.FilterBuilder__OpToggle', re: INPUT_BORDER_DECL },
-    { label: 'myTasks ScopeToggle', file: 'components/myTasks/myTasks.scss', selector: '.MyTasks__ScopeToggle', re: INPUT_BORDER_DECL },
-    { label: 'home-shared HomeTabs', file: 'components/home/shared/home-shared.scss', selector: '.HomeTabs', re: INPUT_BORDER_DECL },
-    { label: 'browseBranches JoinBtn--joined', file: 'components/browse/browseBranches.scss', selector: '.BrowseBranches__JoinBtn--joined', re: INPUT_BORDER_DECL },
+    { label: 'canvasEditor .CanvasEditor', file: 'components/canvas/canvasEditor.scss', selector: '.CanvasEditor', props: BORDER_PROPS, needle: 'var(--color-input-border)' },
+    { label: 'canvasEditor ColorSwatch(Toolbar)', file: 'components/canvas/canvasEditor.scss', selector: '.CanvasEditorToolbar__ColorSwatch', props: BORDER_PROPS, needle: 'var(--color-input-border)' },
+    { label: 'taskList FilterBuilder OpToggle', file: 'components/branch/taskList.scss', selector: '.FilterBuilder__OpToggle', props: BORDER_PROPS, needle: 'var(--color-input-border)' },
+    { label: 'myTasks ScopeToggle', file: 'components/myTasks/myTasks.scss', selector: '.MyTasks__ScopeToggle', props: BORDER_PROPS, needle: 'var(--color-input-border)' },
+    { label: 'home-shared HomeTabs', file: 'components/home/shared/home-shared.scss', selector: '.HomeTabs', props: BORDER_PROPS, needle: 'var(--color-input-border)' },
+    { label: 'browseBranches JoinBtn--joined', file: 'components/browse/browseBranches.scss', selector: '.BrowseBranches__JoinBtn--joined', props: BORDER_PROPS, needle: 'var(--color-input-border)' },
     // 선택 상태 인디케이터(수정 1, SC 1.4.11) — active 셀렉터가 토큰을 실제로 소비하는지만 여기서 고정.
     // 다크 값 자체의 시맨틱(투명 회귀 방지)은 아래 별도 describe에서 대비비로 고정한다.
-    { label: 'home-shared HomeTabs__Tab.is-on', file: 'components/home/shared/home-shared.scss', selector: '.HomeTabs__Tab.is-on', re: SELECTED_INDICATOR_DECL },
-    { label: 'myTasks ScopeBtn--active', file: 'components/myTasks/myTasks.scss', selector: '.MyTasks__ScopeBtn--active', re: SELECTED_INDICATOR_DECL },
+    { label: 'home-shared HomeTabs__Tab.is-on', file: 'components/home/shared/home-shared.scss', selector: '.HomeTabs__Tab.is-on', props: INDICATOR_PROPS, needle: 'var(--color-selected-indicator)' },
+    { label: 'myTasks ScopeBtn--active', file: 'components/myTasks/myTasks.scss', selector: '.MyTasks__ScopeBtn--active', props: INDICATOR_PROPS, needle: 'var(--color-selected-indicator)' },
   ];
-  it.each(PINNED)('$label 가 컴파일된 규칙에서 기대 선언을 사용', ({ file, selector, re }) => {
-    const decls = ownDeclarations(compiledSiteCss(file), selector);
-    expect(decls, `${selector} 규칙을 컴파일된 ${file}에서 찾지 못함`).not.toBeNull();
-    expect(decls).toMatch(re);
+  it.each(PINNED)('$label 가 컴파일된 규칙에서 기대 선언을 사용', ({ file, selector, props, needle }) => {
+    const root = postcss.parse(compiledSiteCss(file));
+    const rules = findRootRules(root, selector);
+    expect(rules.length, `${selector} 규칙(root 직속·셀렉터 완전일치)을 컴파일된 ${file}에서 찾지 못함`).toBeGreaterThan(0);
+    const values = [];
+    rules.forEach((rule) => rule.walkDecls((decl) => { if (props.has(decl.prop)) values.push(decl.value); }));
+    expect(values.some((v) => v.includes(needle)), `${selector}의 [${[...props].join('/')}] 선언에서 "${needle}" 미발견 (found=${JSON.stringify(values)})`).toBe(true);
   });
 });
 
-// WCAG 2.x 상대휘도/대비비 — hex 6자리만 지원. transparent 등 6자리 hex가 아닌 값은 파싱 실패로
-// null → contrastRatio가 0을 반환해 아래 >=3 단정이 RED가 된다(다크 인디케이터 투명 회귀 검출).
-function hexToRgb(hex) {
-  const m = /^#([0-9a-fA-F]{6})$/.exec(String(hex).trim());
-  if (!m) return null;
-  const n = parseInt(m[1], 16);
-  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+// WCAG 2.x 상대휘도/대비비. hex 6자리와 rgb(a)(...) 둘 다 파싱한다(myTasks ScopeBtn--active의
+// 반투명 배경 rgba(94, 106, 210, 0.1)를 합성색 계산에 그대로 써야 하므로 hex 전용으로는 부족하다).
+// transparent 등 둘 다 아닌 값은 파싱 실패로 null → contrastRatio가 0을 반환해 아래 >=3 단정이
+// RED가 된다(다크 인디케이터 투명 회귀 검출).
+function parseColor(value) {
+  const str = String(value).trim();
+  const hex = /^#([0-9a-fA-F]{6})$/.exec(str);
+  if (hex) {
+    const n = parseInt(hex[1], 16);
+    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255, a: 1 };
+  }
+  const rgba = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+)\s*)?\)$/.exec(str);
+  if (rgba) {
+    return { r: Number(rgba[1]), g: Number(rgba[2]), b: Number(rgba[3]), a: rgba[4] != null ? Number(rgba[4]) : 1 };
+  }
+  return null;
+}
+// 반투명 전경(fgValue)을 불투명 배경(bgHex) 위에 알파 합성한 불투명 rgb 결과. 파싱 실패면 null.
+function compositeOver(fgValue, bgHex) {
+  const fg = parseColor(fgValue);
+  const bg = parseColor(bgHex);
+  if (!fg || !bg) return null;
+  const a = fg.a;
+  return { r: a * fg.r + (1 - a) * bg.r, g: a * fg.g + (1 - a) * bg.g, b: a * fg.b + (1 - a) * bg.b };
 }
 function relativeLuminance({ r, g, b }) {
   const lin = (c) => {
@@ -226,22 +248,55 @@ function relativeLuminance({ r, g, b }) {
   };
   return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
 }
-function contrastRatio(hexA, hexB) {
-  const a = hexToRgb(hexA);
-  const b = hexToRgb(hexB);
+// colorA/colorB는 hex/rgba 문자열 또는 이미 파싱된 {r,g,b} 객체(합성색) 둘 다 허용.
+function contrastRatio(colorA, colorB) {
+  const a = typeof colorA === 'string' ? parseColor(colorA) : colorA;
+  const b = typeof colorB === 'string' ? parseColor(colorB) : colorB;
   if (!a || !b) return 0;
   const [lo, hi] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => x - y);
   return (hi + 0.05) / (lo + 0.05);
 }
 
 describe('다크 selected-indicator 값 시맨틱 고정 (SC 1.4.11 비텍스트 대비 3:1)', () => {
-  const darkBody = css.match(/html\[data-theme=(?:dark|["']dark["'])\]\s*\{([^}]*)\}/)[1];
-  const darkValues = Object.fromEntries(
-    [...darkBody.matchAll(/--([a-z0-9-]+)\s*:\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]),
-  );
-  it('bg·surface 대비 3:1 이상 — transparent 등으로 되돌리면 파싱 실패로 RED', () => {
-    const indicator = darkValues['color-selected-indicator'];
-    expect(contrastRatio(indicator, darkValues['color-bg']), `vs bg: ${indicator}`).toBeGreaterThanOrEqual(3);
-    expect(contrastRatio(indicator, darkValues['color-surface']), `vs surface: ${indicator}`).toBeGreaterThanOrEqual(3);
+  // _themes.scss는 원칙상 dark 블록이 1개지만, "html[data-theme=dark]" 셀렉터를 가진 root 직속
+  // 규칙 전부를 문서 순서로 walk해 프로퍼티별 "마지막 선언 승리"(실제 CSS cascade와 동일)로
+  // darkValues를 합성한다 — 첫 블록만 읽으면 뒤쪽 재정의(예: 원복 실수로 인디케이터를 다시
+  // transparent로 되돌리는 블록 추가)를 놓치고 stale 값으로 GREEN 처리한다(외부 검수 실증).
+  // 셀렉터는 quoted/unquoted 둘 다 허용(따옴표 유무는 Sass 버전에 좌우 — 최상단 주석 참고).
+  const themesRoot = postcss.parse(css);
+  const DARK_SELECTORS = ['html[data-theme=dark]', "html[data-theme='dark']", 'html[data-theme="dark"]'];
+  const darkRules = findRootRules(themesRoot, DARK_SELECTORS);
+  const darkValues = {};
+  darkRules.forEach((rule) => rule.walkDecls((decl) => {
+    if (decl.prop.startsWith('--')) darkValues[decl.prop.slice(2)] = decl.value.trim();
+  }));
+
+  // ScopeToggle 실제 인접 합성색 — .MyTasks__ScopeBtn--active의 background(반투명 rgba)를
+  // 컴파일된 myTasks CSS에서 postcss AST로 그대로 읽어(하드코딩 금지) 다크 surface 위에 알파
+  // 합성한다. bg·surface 단독 대비만으로는 실제 렌더 결과보다 대비가 후하게 나와 회귀를 놓친다
+  // (외부 검수 실증: indicator #5F6774일 때 bg 3.36·surface 3.11로 통과하지만 실제 합성색
+  // #1E202E 대비는 2.83으로 실패). surface 값 자체도 위 darkValues(take-last)에서 읽는다.
+  const myTasksRoot = postcss.parse(compiledSiteCss('components/myTasks/myTasks.scss'));
+  const scopeBtnActiveRule = findRootRules(myTasksRoot, '.MyTasks__ScopeBtn--active')[0];
+  let scopeBtnBg = null;
+  scopeBtnActiveRule?.walkDecls((decl) => { if (decl.prop === 'background') scopeBtnBg = decl.value.trim(); });
+  const scopeToggleAdjacent = compositeOver(scopeBtnBg, darkValues['color-surface']);
+
+  // 4개 인접색 각각을 독립된 it()로 단정 — 하나로 합쳐 첫 실패에서 bail하면 이후 신호(특히
+  // ScopeToggle 합성색)가 실행조차 안 돼 리포트에서 안 보인다. 분리해두면 어떤 인접색이
+  // 얼마의 대비로 얼마나 못 미쳤는지 실패 로그에서 개별적으로 확인할 수 있다.
+  const indicator = darkValues['color-selected-indicator'];
+  it('vs bg 3:1 이상 — transparent 등으로 되돌리면 파싱 실패로 RED', () => {
+    expect(contrastRatio(indicator, darkValues['color-bg']), `indicator=${indicator}`).toBeGreaterThanOrEqual(3);
+  });
+  it('vs surface 3:1 이상', () => {
+    expect(contrastRatio(indicator, darkValues['color-surface']), `indicator=${indicator}`).toBeGreaterThanOrEqual(3);
+  });
+  it('vs surface-hover 3:1 이상', () => {
+    expect(contrastRatio(indicator, darkValues['color-surface-hover']), `indicator=${indicator}`).toBeGreaterThanOrEqual(3);
+  });
+  it('vs ScopeToggle 실제 합성색(반투명 active 배경 on 다크 surface) 3:1 이상', () => {
+    expect(scopeToggleAdjacent, `ScopeToggle 합성색 계산 실패(배경 rgba 파싱 불가): bg=${scopeBtnBg}, surface=${darkValues['color-surface']}`).not.toBeNull();
+    expect(contrastRatio(indicator, scopeToggleAdjacent), `indicator=${indicator} on (${scopeBtnBg} over ${darkValues['color-surface']})`).toBeGreaterThanOrEqual(3);
   });
 });
