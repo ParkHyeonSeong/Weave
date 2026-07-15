@@ -6,9 +6,10 @@ const UiPrefsContext = createContext(null);
 // localStorage 1회 이주용 키 (네임스페이스 → 옛 localStorage 키)
 const LEGACY = { launchpad_order: 'home_launchpad_order', widget_layout: 'home_widget_layout' };
 
-export function UiPrefsProvider({ children }) {
+export function UiPrefsProvider({ children, fetchEnabled = true }) {
   const [prefs, setPrefs] = useState({});
   const [loaded, setLoaded] = useState(false);
+  const [loadStatus, setLoadStatus] = useState('loading'); // 'loading'|'success'|'error'|'skipped'
   const prefsRef = useRef(prefs);
   prefsRef.current = prefs;
 
@@ -21,8 +22,10 @@ export function UiPrefsProvider({ children }) {
     axios.patch('/profile/ui-prefs', { [key]: value }).catch(() => {});
   }, []);
 
-  // 최초 1회 로드 + localStorage 이주
+  // 최초 1회 로드 + localStorage 이주. 공개 경로는 fetch 스킵(미인증 401/interceptor 방지) —
+  // loadStatus로 성공/실패/스킵을 구분해야 테마 서버 권위가 "성공 조회"에만 적용된다(스펙 §3).
   useEffect(() => {
+    if (!fetchEnabled) { setLoadStatus('skipped'); setLoaded(true); return; }
     let alive = true;
     axios.get('/profile/ui-prefs')
       .then((res) => {
@@ -45,11 +48,12 @@ export function UiPrefsProvider({ children }) {
           }
         }
         setPrefs(migrated);
+        setLoadStatus('success');
         setLoaded(true);
       })
-      .catch(() => { if (alive) setLoaded(true); });
+      .catch(() => { if (alive) { setLoadStatus('error'); setLoaded(true); } });
     return () => { alive = false; };
-  }, []);
+  }, [fetchEnabled]);
 
   // 숨김 편의 헬퍼 (app ∈ 'branches'|'canvases'|'tracks'|'scrums')
   const hide = useCallback((app, id) => {
@@ -80,7 +84,7 @@ export function UiPrefsProvider({ children }) {
   }, [setNamespace]);
 
   return (
-    <UiPrefsContext.Provider value={{ prefs, loaded, setNamespace, hide, unhide, isHidden, setHomeCtl, setPinnedViews }}>
+    <UiPrefsContext.Provider value={{ prefs, loaded, loadStatus, setNamespace, hide, unhide, isHidden, setHomeCtl, setPinnedViews }}>
       {children}
     </UiPrefsContext.Provider>
   );
@@ -88,7 +92,7 @@ export function UiPrefsProvider({ children }) {
 
 // Provider 밖(로그인 페이지 등)에서도 안전하게 동작하는 기본값
 const EMPTY = {
-  prefs: {}, loaded: false,
+  prefs: {}, loaded: false, loadStatus: 'skipped',
   setNamespace: () => {}, hide: () => {}, unhide: () => {}, isHidden: () => false,
   setHomeCtl: () => {}, setPinnedViews: () => {},
 };

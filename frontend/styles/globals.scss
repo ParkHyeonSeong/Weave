@@ -79,3 +79,10 @@ input {
 :focus:not(:focus-visible) {
   outline: none;
 }
+
+// 테마 토글 순간 transition:all 사이트들의 스태거드 색 전환 억제 (theme.js withTransitionsSuppressed와 짝)
+html.theme-switching *,
+html.theme-switching *::before,
+html.theme-switching *::after {
+  transition: none !important;
+}

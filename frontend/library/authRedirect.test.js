@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  appShellFlags,
   buildChangePasswordPath,
   buildLoginPath,
   getReturnToFromQuery,
+  needsLayoutPath,
   normalizeReturnTo,
 } from './authRedirect.js';
 
@@ -86,5 +88,30 @@ describe('auth redirect helpers', () => {
     expect(normalizeReturnTo('/setups')).toBe('/setups');
     expect(normalizeReturnTo('/auth/loginx')).toBe('/auth/loginx');
     expect(normalizeReturnTo('/branch/1/sub/2?x=1#h')).toBe('/branch/1/sub/2?x=1#h');
+  });
+});
+
+describe('needsLayoutPath — public exact / admin segment 경계', () => {
+  it.each([
+    ['/auth/login', false], ['/auth/change-password', false], ['/auth/reset', false], ['/setup', false],
+    ['/admin', false], ['/admin/integrations', false],
+    ['/', true], ['/branch/1', true],
+    ['/setup-guide', true],   // startsWith였다면 오분류되던 경로
+    ['/administer', true],    // 〃
+    ['/auth/login-help', true], // PUBLIC exact 매칭 확인
+  ])('%s → needsLayout %s', (path, want) => {
+    expect(needsLayoutPath(path)).toBe(want);
+  });
+});
+
+describe('appShellFlags — prefs 조회는 인증 상태 단독 (스펙 §3)', () => {
+  it('미인증 public→private transient: 경로가 private여도 세션 없으면 fetch 금지', () => {
+    expect(appShellFlags('/branch/1', false).prefsFetchEnabled).toBe(false);
+  });
+  it('정상 로그인 경유 change-password: PUBLIC_PATHS여도 세션 있으면 fetch', () => {
+    expect(appShellFlags('/auth/change-password', true).prefsFetchEnabled).toBe(true);
+  });
+  it('cookie-only 새 탭 change-password(세션 없음): fetch 금지 — 수용된 한계', () => {
+    expect(appShellFlags('/auth/change-password', false).prefsFetchEnabled).toBe(false);
   });
 });

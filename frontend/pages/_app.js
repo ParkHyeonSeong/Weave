@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { axios } from '@/library/_axios';
 import {
+  appShellFlags,
   buildChangePasswordPath,
   buildLoginPath,
   getReturnToFromQuery,
@@ -13,6 +14,7 @@ import Layout from '@/components/Layout/Layout';
 import ErrorBoundary from '@/components/Layout/ErrorBoundary';
 import Toast from '@/components/Layout/Toast';
 import { UiPrefsProvider } from '@/library/UiPrefsContext';
+import { ThemeProvider, ThemeServerSync } from '@/library/theme';
 import LightboxProvider from '@/components/common/LightboxProvider';
 import "@/styles/_themes.scss";
 import "@/styles/globals.scss";
@@ -108,9 +110,6 @@ import "@/styles/components/scrum/scrum.scss";
 import "@/styles/components/shared/refPanelPageLayout.scss";
 import "@/styles/components/shared/linkHoverPopover.scss";
 import "@/styles/components/common/lightbox.scss";
-
-// 공개 경로는 authRedirect.PUBLIC_PATHS를 단일 소스로 쓰고, /admin은 레이아웃 없이만 렌더한다.
-const noLayoutPaths = [...PUBLIC_PATHS, '/admin'];
 
 export default function App({ Component, pageProps }) {
   const router = useRouter();
@@ -216,18 +215,27 @@ export default function App({ Component, pageProps }) {
     return () => window.removeEventListener('auth:expired', handleExpired);
   }, [router, router.asPath]);
 
-  if (!appReady) return null;
+  const hasSession = typeof window !== 'undefined' && !!sessionStorage.getItem('profile');
+  // 레이아웃·prefs 조회 판정 단일 소스 — fetch는 인증 상태 단독 기준 (경로 항 금지 — 위 (b)).
+  const { needsLayout, prefsFetchEnabled } = appShellFlags(router.pathname, hasSession);
 
-  const needsLayout = !noLayoutPaths.some(p => router.pathname.startsWith(p));
-
+  // ThemeProvider는 appReady 게이트 밖 — 게이트가 라우트마다 트리를 리셋해도 테마 상태·리스너는 상주.
   return (
-    <ErrorBoundary>
-      <LightboxProvider>
-        {needsLayout
-          ? <UiPrefsProvider><Layout><Component {...pageProps} /></Layout></UiPrefsProvider>
-          : <Component {...pageProps} />}
-        <Toast />
-      </LightboxProvider>
-    </ErrorBoundary>
+    <ThemeProvider>
+      {appReady && (
+        <ErrorBoundary>
+          <LightboxProvider>
+            {/* key: fetch 가능성 경계에서 Provider 리마운트 → 로그인/계정 전환 시 prefs 재조회 */}
+            <UiPrefsProvider key={prefsFetchEnabled ? 'auth' : 'anon'} fetchEnabled={prefsFetchEnabled}>
+              <ThemeServerSync />
+              {needsLayout
+                ? <Layout><Component {...pageProps} /></Layout>
+                : <Component {...pageProps} />}
+            </UiPrefsProvider>
+            <Toast />
+          </LightboxProvider>
+        </ErrorBoundary>
+      )}
+    </ThemeProvider>
   );
 }

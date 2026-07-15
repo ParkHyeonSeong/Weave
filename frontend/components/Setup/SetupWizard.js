@@ -82,6 +82,7 @@ export default function SetupWizard() {
 
       if (res.data.status) {
         sessionStorage.setItem('profile', JSON.stringify(res.data.profile));
+        sessionStorage.setItem('app_initialized', 'true');
         router.push('/');
       } else {
         const err = getError(res.data);

@@ -3,7 +3,7 @@ export const CHANGE_PASSWORD_PATH = '/auth/change-password';
 export const RESET_PATH = '/auth/reset';
 export const SETUP_PATH = '/setup';
 
-// 두 역할을 겸한다: (1) 무인증 접근 허용 경로(_app.js의 인증 게이트·noLayoutPaths의 단일 소스),
+// 두 역할을 겸한다: (1) 무인증 접근 허용 경로(_app.js의 인증 게이트·needsLayoutPath의 단일 소스),
 // (2) returnTo로 부적합한 경로(normalizeReturnTo의 차단 prefix — 로그인 후 다시 이리 보내면 루프).
 // 지금은 두 집합이 같지만 정의상 같다는 보장은 없다. 무인증이면서 returnTo로는 유효한 공개 페이지
 // (예: /welcome)가 생기면 PUBLIC_PATHS(접근)와 차단 prefix 목록을 둘로 분리할 것.
@@ -52,4 +52,17 @@ export function buildLoginPath(returnTo) {
 
 export function buildChangePasswordPath(returnTo) {
   return buildAuthPath(CHANGE_PASSWORD_PATH, returnTo);
+}
+
+// 레이아웃(사이드바/헤더) 판정: public은 exact(인증 게이트와 동일 판정), admin은 segment 경계.
+// raw startsWith는 /setup-guide·/administer 같은 경로를 오분류한다 (현 라우트 집합에선 동작 동일).
+export function needsLayoutPath(pathname) {
+  const isAdmin = pathname === '/admin' || pathname.startsWith('/admin/');
+  return !(PUBLIC_PATHS.includes(pathname) || isAdmin);
+}
+
+// _app 셸 판정 단일 소스 — prefs 조회는 인증 상태 단독 기준(경로 항 금지: 스펙 §3).
+// pathname을 받되 fetch 판정에 쓰지 않는 것 자체가 계약이다(테스트가 고정).
+export function appShellFlags(pathname, hasSession) {
+  return { needsLayout: needsLayoutPath(pathname), prefsFetchEnabled: !!hasSession };
 }
