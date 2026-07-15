@@ -1,4 +1,3 @@
-@use 'sass:color';
 @use '../../variables' as *;
 
 // ============================================================================
@@ -7,14 +6,14 @@
 //   distinctive moves: serif display title, brand-glow nodes, weave bar.
 // ============================================================================
 
-// 사이트 전역 surface 톤과 통일 — Track 전용 노란 종이톤은 폐기
-$track-paper: $color-surface;        // #F9FAFB
-$track-paper-edge: $color-surface-hover;  // #F3F4F6
-$track-ink: $color-text;
-$track-ink-soft: #4B5563;
-$track-ink-mute: $color-text-tertiary;
-$track-border: $color-border;
-$track-border-soft: color.adjust($color-border, $lightness: 5%);
+// 사이트 전역 surface 톤과 통일 — 값은 _themes.scss의 --track-* 토큰(다크 종이톤은 S4에서 재설계)
+$track-paper: var(--track-paper);
+$track-paper-edge: var(--track-paper-edge);
+$track-ink: var(--track-ink);
+$track-ink-soft: var(--track-ink-soft);
+$track-ink-mute: var(--track-ink-mute);
+$track-border: var(--track-border);
+$track-border-soft: var(--track-border-soft);
 
 // =========================================================================
 // 루트 컨테이너
@@ -75,7 +74,7 @@ $track-border-soft: color.adjust($color-border, $lightness: 5%);
   flex-shrink: 0;
   padding: 28px 32px 0;
   border-bottom: 1px solid $track-border-soft;
-  background: linear-gradient(180deg, $track-paper 0%, color.adjust($track-paper, $lightness: 1%) 100%);
+  background: linear-gradient(180deg, $track-paper 0%, var(--track-paper-raised) 100%);
   position: relative;
 
   &__Top {
@@ -282,7 +281,7 @@ $track-border-soft: color.adjust($color-border, $lightness: 5%);
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: linear-gradient(180deg, color.adjust($track-paper, $lightness: 0.5%) 0%, $track-paper 100%);
+  background: linear-gradient(180deg, var(--track-paper-raised-05) 0%, $track-paper 100%);
 
   &__Head {
     display: flex;
@@ -1160,7 +1159,7 @@ $track-border-soft: color.adjust($color-border, $lightness: 5%);
     align-items: center;
     justify-content: center;
     text-align: center;
-    background: linear-gradient(180deg, $track-paper 0%, color.adjust($track-paper, $lightness: 1%) 100%);
+    background: linear-gradient(180deg, $track-paper 0%, var(--track-paper-raised) 100%);
   }
 
   &__EmptyIcon { margin-bottom: 14px; opacity: 0.7; }
@@ -1427,7 +1426,7 @@ $track-border-soft: color.adjust($color-border, $lightness: 5%);
   // Restricted variant
   &--restricted {
     align-items: stretch;
-    background: linear-gradient(180deg, $track-paper 0%, color.adjust($track-paper, $lightness: 1%) 100%);
+    background: linear-gradient(180deg, $track-paper 0%, var(--track-paper-raised) 100%);
   }
 
   &__RestrictedHero {
@@ -1630,7 +1629,7 @@ $track-border-soft: color.adjust($color-border, $lightness: 5%);
     overflow: hidden;
     height: $head-h;
     border-bottom: 1px solid $track-border;
-    background: linear-gradient(180deg, color.adjust($track-paper, $lightness: 1%), $track-paper);
+    background: linear-gradient(180deg, var(--track-paper-raised), $track-paper);
   }
 
   &__Head {
@@ -1708,7 +1707,7 @@ $track-border-soft: color.adjust($color-border, $lightness: 5%);
     align-items: center;
     gap: 8px;
     padding: 0 14px 0 12px;
-    background: color.adjust($track-paper, $lightness: -1.5%);
+    background: var(--track-paper-sunken-15);
     border-bottom: 1px solid $track-border-soft;
     border-left: 3px solid transparent;
   }
@@ -1802,7 +1801,7 @@ $track-border-soft: color.adjust($color-border, $lightness: 5%);
   &__RowGroupHead {
     position: absolute;
     left: 0; right: 0;
-    background: color.adjust($track-paper, $lightness: -1.5%);
+    background: var(--track-paper-sunken-15);
     border-bottom: 1px solid $track-border-soft;
   }
   &__RowDivider {
@@ -1983,7 +1982,7 @@ $track-border-soft: color.adjust($color-border, $lightness: 5%);
     height: 38px;
     min-width: $tree-min-width;
     border-bottom: 1px solid $track-border;
-    background: color.adjust($track-paper, $lightness: 0.5%);
+    background: var(--track-paper-raised-05);
     position: sticky;
     top: 0;
     z-index: 4;
@@ -2024,13 +2023,13 @@ $track-border-soft: color.adjust($color-border, $lightness: 5%);
     gap: 8px;
     width: 100%;
     padding: 9px 24px;
-    background: color.adjust($track-paper, $lightness: -1%);
+    background: var(--track-paper-sunken-1);
     border-top: 1px solid $track-border-soft;
     border-bottom: 1px solid $track-border-soft;
     text-align: left;
     transition: background 120ms;
 
-    &:hover { background: color.adjust($track-paper, $lightness: -2%); }
+    &:hover { background: var(--track-paper-sunken-2); }
   }
   &__GroupChevron {
     color: $track-ink-soft;
@@ -2460,7 +2459,7 @@ $track-border-soft: color.adjust($color-border, $lightness: 5%);
     gap: 12px;
     padding: 14px 22px 18px;
     border-top: 1px solid $track-border-soft;
-    background: color.adjust($track-paper, $lightness: 1%);
+    background: var(--track-paper-raised);
   }
 
   &__Diff {
@@ -2579,7 +2578,7 @@ $track-border-soft: color.adjust($color-border, $lightness: 5%);
     gap: 12px;
     padding: 14px 22px;
     border-bottom: 1px solid $track-border-soft;
-    background: color.adjust($track-paper, $lightness: 0.5%);
+    background: var(--track-paper-raised-05);
     flex-wrap: wrap;
   }
 
@@ -2714,7 +2713,7 @@ $track-border-soft: color.adjust($color-border, $lightness: 5%);
     gap: 8px;
     padding: 14px 22px 18px;
     border-top: 1px solid $track-border-soft;
-    background: color.adjust($track-paper, $lightness: 0.5%);
+    background: var(--track-paper-raised-05);
   }
 
   &__Btn {
