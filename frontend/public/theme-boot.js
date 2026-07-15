@@ -1,0 +1,1 @@
+(function(){var t=null;try{t=localStorage.getItem('theme');}catch(e){}var v=(t==='light'||t==='dark'||t==='system')?t:'system';var r=v==='dark'?'dark':'light';document.documentElement.setAttribute('data-theme',r);try{var m=document.querySelector('meta[name="theme-color"]');if(m)m.content=r==='dark'?'#0E0F11':'#FFFFFF';}catch(e){}})();

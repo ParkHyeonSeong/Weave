@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import {
   THEME_STORAGE_KEY, VALID_MODES, SYSTEM_ENABLED,
@@ -127,5 +129,12 @@ describe('applyResolvedTheme — attr + meta 멱등 동기', () => {
     const doc = fakeDoc('dark');
     applyResolvedTheme('dark', doc);
     expect(doc._meta.content).toBe('#0E0F11');
+  });
+});
+
+describe('public/theme-boot.js ↔ buildBootstrapScript 동기화', () => {
+  it('파일 내용 = 생성원 출력', () => {
+    const file = readFileSync(resolve(__dirname, '../public/theme-boot.js'), 'utf8').trim();
+    expect(file).toBe(buildBootstrapScript());
   });
 });
