@@ -30,7 +30,13 @@ export function UiPrefsProvider({ children, fetchEnabled = true }) {
     axios.get('/profile/ui-prefs')
       .then((res) => {
         if (!alive) return;
-        const server = (res.data.status && res.data.ui_prefs) ? res.data.ui_prefs : {};
+        if (!res.data.status) {
+          // 200이지만 실패 엔벨로프 — 서버 스냅샷 없음으로 취급(테마 서버 권위 미적용)
+          setLoadStatus('error');
+          setLoaded(true);
+          return;
+        }
+        const server = res.data.ui_prefs || {};
         const migrated = { ...server };
         // 서버 값 없고 localStorage에 기존 배치가 있으면 1회 이주
         for (const [ns, lsKey] of Object.entries(LEGACY)) {

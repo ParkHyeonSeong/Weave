@@ -46,4 +46,9 @@ describe('UiPrefsProvider loadStatus', () => {
     await mount(true);
     expect(document.getElementById('probe').textContent).toBe('error:-');
   });
+  it("200이지만 {status:false} 실패 엔벨로프 → error (서버 권위 미적용)", async () => {
+    axios.get.mockResolvedValueOnce({ data: { status: false } });
+    await mount(true);
+    expect(document.getElementById('probe').textContent).toBe('error:-');
+  });
 });

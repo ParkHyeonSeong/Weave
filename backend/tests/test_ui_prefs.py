@@ -91,3 +91,12 @@ def test_update_ui_prefs_schema_rejects_invalid_theme():
     from routers.schema.profile import UpdateUiPrefs
     with pytest.raises(ValidationError):
         UpdateUiPrefs(theme="midnight")
+
+
+async def test_ui_prefs_theme_survives_other_namespace_patch(db_session):
+    uid = await _make_user(db_session, "uiprefs_theme@test.local")
+    await user_model.update_ui_prefs(uid, {"theme": "dark"}, db_session)
+    await user_model.update_ui_prefs(uid, {"comment_sort": "oldest"}, db_session)
+    got = await user_model.get_ui_prefs(uid, db_session)
+    assert got["theme"] == "dark"          # 타 네임스페이스 PATCH에도 보존
+    assert got["comment_sort"] == "oldest"
