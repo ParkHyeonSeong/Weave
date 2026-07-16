@@ -73,6 +73,7 @@
     "jsdom": "^29.1.1",
     "patch-package": "^8.0.1",
     "postcss": "^8.5.19",
+    "postcss-value-parser": "^4.2.0",
     "vitest": "^2.1.9"
   }
 }

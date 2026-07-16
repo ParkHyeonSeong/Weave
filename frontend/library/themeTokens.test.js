@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { compile } from 'sass';
+import { compile, compileString } from 'sass';
 import postcss from 'postcss';
+import valueParser from 'postcss-value-parser';
 
 // _themes.scss 계약: 컴파일 결과에 flat 블록 3개 —
 //   [0] :root(라이트) [1] html[data-theme='dark'](다크) [2] :root(테마불변 별칭)
@@ -237,103 +238,90 @@ function effectiveValue(rules, props) {
 }
 
 // 값 문자열에서 "다른 var() 안에 중첩되지 않은" 최상위 var() 호출들의 첫 번째 인자(토큰)만 모아
-// 집합으로 반환한다. 괄호 깊이를 추적해 매치된 var(...) 블록 전체(중첩 fallback 포함)를 통째로
-// 건너뛰므로 fallback 안(`var(--a, var(--b))`의 `--b`)의 토큰은 절대 방문하지 않는다 — 이전
-// includes(needle) 부분 문자열 매칭은 fallback 안에 기대 토큰이 있어도(예:
-// `var(--color-input-border-hover, var(--color-input-border))`) true를 냈다(외부 검수 실증,
-// m시나리오: 최상위 첫 인자는 `-hover` 별칭이라 실제로는 기대 토큰을 안 씀에도 통과했다).
-// box-shadow처럼 콤마로 나열된 여러 최상위 var()(`var(--shadow-xs), inset … var(--color-selected-
-// indicator)`)는 서로 중첩 관계가 아니므로 각각 독립적으로 전부 수집된다(HomeTabs 다중 그림자).
+// 집합으로 반환한다. box-shadow처럼 콤마로 나열된 여러 최상위 var()(`var(--shadow-xs), inset …
+// var(--color-selected-indicator)`)는 서로 중첩 관계가 아니므로 각각 독립적으로 전부 수집된다
+// (HomeTabs 다중 그림자).
 //
-// 7라운드째 외부 검수가 실증한 잔여 구멍 2종을 이 수동 파서에 최소 침습으로 닫는다(postcss-
-// value-parser로 AST 파서 전환도 제안됐으나, package.json에 선언된 의존성이 아니라 새 패키지 설치가
-// 필요해 — 이 리포는 최소 변경을 선호하므로 quote-tracking + 경계 검사만 추가하는 쪽을 택했다):
-//  r) 문자열 리터럴 문맥 미추적 — `box-shadow: "var(--color-selected-indicator)"`처럼 값 자체가
-//     quoted 문자열이면 그 안의 `var(`는 CSS 함수 호출이 아니라 문자열 콘텐츠다. quote(`'`/`"`) 진입
-//     시 매칭되는 종료 quote까지 통째로 건너뛴다(`\` escape도 추적해 `\"` 안에서 조기 종료 안 함).
-//  r2) 식별자 경계 미검사 — `fakevar(--color-input-border)`의 `var(`는 `fakevar` 뒤에 접미로 붙은
-//     문자열일 뿐 실제 var() 호출이 아니다.
-//
-// 8라운드째 외부 검수가 실증한 잔여 구멍 2종을 추가로 닫는다(Minor 1):
-//  r3) quote 스킵이 최상위 스캔에만 적용되고 var(...) 내부 "괄호 깊이 추적" 루프에는 없었다 —
-//     `var(--shadow-xs, "(", var(--color-selected-indicator))`에서 fallback 안 문자열 리터럴
-//     `"("` 의 `(`를 진짜 괄호로 잘못 세어(짝 안 맞는 open 하나 추가) 바깥 var()의 closeIdx를 못
-//     찾았고, 그 결과 `--color-selected-indicator`가 fallback 안인데도 최상위 스캔에서 독립
-//     var()처럼 재발견돼 잘못 수집됐다. skipQuote를 최상위 스캔과 깊이 추적 루프 양쪽이 공유하도록
-//     해 문자열 리터럴 내부는 어느 스캔 단계에서도 괄호로 안 세게 통일한다.
-//  r4) 식별자 경계가 blacklist([A-Za-z0-9_-] 배제)였다 — 배제 목록에 없는 비ASCII 문자(예:
-//     `λvar(`)는 안 걸러져 함수 호출로 오인됐다. blacklist를 whitelist로 반전: `var(` 직전 문자가
-//     {값 시작, 공백, `(`, `,`} 중 하나일 때만 진짜 함수 호출로 인정한다 — 그 외(접미 매치든
-//     비ASCII 꼬리든)는 전부 배제한다.
-//
-// 9라운드째 외부 검수가 실증한 잔여 구멍 1종을 추가로 닫는다(Minor):
-//  r5) 괄호 깊이 추적 루프(및 최상위 스캔)가 문자열 밖의 `\` escape를 소비하지 않았다 — r3이 닫은
-//     구멍과 실패 패턴은 동일하지만 원인이 quote가 아니라 escape다. `var(--shadow-xs, \(, var(--color-
-//     selected-indicator))`에서 이스케이프된 `\(`의 `(`를 진짜 여는 괄호로 잘못 세어(depth 오염)
-//     바깥 var()의 closeIdx를 못 찾았고("괄호 불일치"로 판정돼 i+=4만 건너뜀), 그 결과 스캔이 이어서
-//     `var(--color-selected-indicator)`를 fallback 안인데도 독립 최상위 var()처럼 재발견해 잘못
-//     수집했다. 문자열 밖에서도 `\`를 만나면 깊이·quote 판정과 완전히 무관하게 다음 문자까지
-//     통째로 건너뛴다 — skipQuote(문자열 안 escape)와 별개로, 최상위 스캔·depth 추적 루프 양쪽에
-//     독립적으로 이 처리를 추가한다.
+// 10라운드째 외부 검수(방향 전환): 7~9라운드에 걸쳐 문자열 리터럴·식별자 경계·escape 구멍을 수동
+// 문자 스캐너에 땜질로 3차례 막았지만("quote/escape 추적 + 괄호 깊이 카운팅"을 직접 구현) 그때마다
+// 새 변종이 나왔다 — 파서를 손으로 재발명하는 접근 자체가 구조적으로 leaky했다. postcss-value-parser
+// (postcss 생태계 표준, zero-dep)로 교체해 문자열/식별자/괄호 처리를 AST 파서에 위임한다:
+// 문자열 리터럴은 별도 'string' 타입 노드라 애초에 word/function 스캔 대상이 아니고(quote-tracking
+// 불필요), `fakevar(`·`λvar(`·`fake\ var(`는 함수명이 정확히 'var'가 아니라 자연 배제되며(식별자
+// 경계 whitelist 불필요), 중첩 fallback은 매치 시 walk 콜백이 `return false`를 반환해 자식 노드
+// 방문 자체를 건너뛰므로(AST가 이미 괄호 깊이를 구조화해뒀다) 절대 방문되지 않는다. calc() 안의
+// var()는 calc 함수 노드(value !== 'var')이므로 자식이 정상 방문돼 기존 계약(calc는 var가 아니므로
+// descend)이 그대로 유지된다.
 function outermostVarTokens(value) {
-  const str = String(value);
   const tokens = new Set();
-  // '"'/"'" 진입 시 매칭되는 종료 quote 바로 다음 인덱스를 반환(escape 추적) — 최상위 스캔과 var(...)
-  // 내부 깊이 추적 루프가 이 헬퍼를 공유해(r3) 문자열 리터럴 내부 괄호가 어디서도 안 세인다.
-  function skipQuote(s, from) {
-    const quote = s[from];
-    let k = from + 1;
-    while (k < s.length) {
-      if (s[k] === '\\') { k += 2; continue; } // escape는 다음 문자까지 통째로 건너뜀
-      if (s[k] === quote) { k += 1; break; } // 매칭 종료 quote
-      k++;
-    }
-    return k;
-  }
-  // whitelist(r4): 값 시작·공백류·'('·',' 뒤일 때만 `var(`를 진짜 함수 호출로 인정.
-  const isVarBoundary = (prevChar, atStart) =>
-    atStart || prevChar === ' ' || prevChar === '\t' || prevChar === '\n' || prevChar === '(' || prevChar === ',';
-  let i = 0;
-  while (i < str.length) {
-    const ch0 = str[i];
-    if (ch0 === '\\') { i += 2; continue; } // r5(9라운드): 문자열 밖 escape — quote/괄호 판정보다 우선해 다음 문자 무조건 소비
-    if (ch0 === '"' || ch0 === "'") {
-      i = skipQuote(str, i); // 문자열 리터럴 내부는 var() 스캔 대상에서 완전히 제외
-      continue;
-    }
-    if (str.startsWith('var(', i)) {
-      const prevChar = i > 0 ? str[i - 1] : '';
-      if (!isVarBoundary(prevChar, i === 0)) { i++; continue; } // fakevar(/λvar( 등은 진짜 var() 아님
-      const parenOpen = i + 3; // '(' 위치
-      let depth = 0;
-      let closeIdx = -1;
-      let commaIdx = -1;
-      let j = parenOpen;
-      while (j < str.length) {
-        const c = str[j];
-        if (c === '\\') { j += 2; continue; } // r5: var(...) 내부도 동일 — \( 를 진짜 괄호로 안 셈(깊이 오염 방지)
-        if (c === '"' || c === "'") { j = skipQuote(str, j); continue; } // 인자 내부 문자열도 스킵(r3)
-        if (c === '(') { depth++; j++; continue; }
-        if (c === ')') {
-          depth--;
-          if (depth === 0) { closeIdx = j; break; }
-          j++;
-          continue;
-        }
-        if (c === ',' && depth === 1 && commaIdx === -1) commaIdx = j; // 이 var(...) 최상위(fallback 구분) 콤마만
-        j++;
-      }
-      if (closeIdx === -1) { i += 4; continue; } // 괄호 불일치(비정상 값) — 이 지점만 건너뜀
-      const argEnd = commaIdx === -1 ? closeIdx : commaIdx;
-      const firstArg = str.slice(parenOpen + 1, argEnd).trim();
-      const m = /^--([a-zA-Z0-9-]+)$/.exec(firstArg);
-      if (m) tokens.add(m[1]);
-      i = closeIdx + 1; // 이 var(...) 전체를 통째로 건너뜀 — 중첩/fallback 토큰은 절대 미방문
-      continue;
-    }
-    i++;
-  }
+  valueParser(String(value)).walk((node) => {
+    if (node.type !== 'function' || node.value !== 'var') return; // var() 아닌 함수(calc 등)는 자식 방문 계속
+    const firstWord = node.nodes.find((n) => n.type === 'word');
+    const m = firstWord && /^--([a-zA-Z0-9-]+)$/.exec(firstWord.value);
+    if (m) tokens.add(m[1]);
+    return false; // 이 var(...) 의 자식(fallback 포함)은 절대 미방문 — 중첩 토큰 배제
+  });
   return tokens;
+}
+
+// box-shadow 값을 "최상위(depth-0) 콤마" 기준으로 레이어 분해한다. postcss-value-parser는 함수 인자
+// 내부 콤마를 이미 그 함수 노드의 자식으로 묶어두므로, 최상위 노드 배열에 남아 있는 'div'(,) 노드만
+// 레이어 경계다(중첩 fallback 콤마와 혼동 불가) — Important 2(인디케이터 가시성 구조 단정)가 소비.
+function splitTopLevelLayers(value) {
+  const parsed = valueParser(String(value));
+  const layers = [[]];
+  parsed.nodes.forEach((node) => {
+    if (node.type === 'div' && node.value === ',') layers.push([]);
+    else layers[layers.length - 1].push(node);
+  });
+  return layers.map((nodes) => valueParser.stringify(nodes).trim());
+}
+
+// CSS <length> word 판정 — 부호 옵션 + 정수/소수 + 옵션 단위(단위 없는 `0`도 유효 length). box-shadow의
+// offset-x/y·blur·spread, border의 width 판별에 공용으로 쓴다. `inset`·`solid` 같은 키워드나
+// var(...)(word가 아니라 function 노드라 애초에 words 목록에 안 잡힘)는 매치되지 않는다.
+const LENGTH_WORD_RE = /^-?(?:\d+\.?\d*|\.\d+)(?:px|rem|em|%|vh|vw|vmin|vmax|ch|ex|pt|pc|in|cm|mm|q)?$/i;
+function isLengthWord(word) {
+  return LENGTH_WORD_RE.test(word);
+}
+function wordsOf(value) {
+  return valueParser(String(value)).nodes.filter((n) => n.type === 'word').map((n) => n.value);
+}
+
+// Important 2(외부 검수 10라운드) — outermostVarTokens만으로는 "토큰을 쓰는지"만 볼 뿐 그 결과가
+// 실제로 눈에 보이는 인디케이터인지는 안 본다. `box-shadow: var(--t)`(치환 후 불법값이면 선언 자체가
+// 무효화돼 box-shadow가 `none`처럼 작동)나 `inset 0 0 0 0 var(--t)`(spread 0 — 색이 뭐든 렌더 폭이
+// 0이라 안 보임)도 이전 코드는 GREEN이었다. 레이어(콤마 분해 후 기대 토큰을 쓰는 한 조각) 구조를
+// 직접 단정한다: `inset` 키워드 존재 + length word 4개 이상(offset-x/y·blur·spread) + 4번째 length
+// (spread)가 0보다 커야 함.
+function assertVisibleInsetShadowLayer(layerValue) {
+  const words = wordsOf(layerValue);
+  const hasInset = words.some((w) => w.toLowerCase() === 'inset');
+  const lengths = words.filter(isLengthWord);
+  const spread = lengths[3];
+  const spreadPositive = spread != null && parseFloat(spread) > 0;
+  return { hasInset, lengthCount: lengths.length, spread, visible: hasInset && lengths.length >= 4 && spreadPositive };
+}
+
+// 대칭 구멍 A(컨트롤러 발견, 승격핀 6곳) — border 가시성도 동일하게 미보장이었다: `border: 1px
+// var(--x)`(style 생략 → UA는 style 없으면 보더 자체를 렌더 안 함 → none 취급), `border: 0 solid
+// var(--x)`(width 0 → 선이 안 보임), `border: 1px none var(--x)`(style이 명시적으로 비가시 키워드) 전부
+// 이전엔 outermostVarTokens 토큰 사용 여부만 봐서 GREEN이었다. 기대 토큰을 실제로 쓰는 최종 선언
+// 값(들)에 대해 구조를 직접 단정한다: style 키워드가 가시 집합에 존재(생략·none/hidden은 FAIL) +
+// width가 명시됐다면(length word 존재) 0보다 커야 함(미명시=UA 기본 medium은 가시로 허용).
+const VISIBLE_BORDER_STYLES = new Set(['solid', 'dashed', 'dotted', 'double', 'groove', 'ridge', 'inset', 'outset']);
+const INVISIBLE_BORDER_STYLE_KEYWORDS = new Set(['none', 'hidden']);
+function assertVisibleBorder(values) {
+  const words = values.flatMap(wordsOf);
+  const styleWord = words.find((w) => {
+    const lw = w.toLowerCase();
+    return VISIBLE_BORDER_STYLES.has(lw) || INVISIBLE_BORDER_STYLE_KEYWORDS.has(lw);
+  });
+  const hasVisibleStyle = styleWord != null && VISIBLE_BORDER_STYLES.has(styleWord.toLowerCase());
+  const lengths = words.filter(isLengthWord);
+  const width = lengths[0];
+  const widthOk = width == null || parseFloat(width) > 0; // 미명시=medium 허용, 명시됐으면 >0 필수
+  return { hasVisibleStyle, styleWord, width, visible: hasVisibleStyle && widthOk };
 }
 
 describe('컨트롤 보더/인디케이터 재분류 고정 — 컴파일 CSS postcss AST 기반 (외부 검수 회귀 방지)', () => {
@@ -362,6 +350,13 @@ describe('컨트롤 보더/인디케이터 재분류 고정 — 컴파일 CSS po
   //     실제로는 최상위에서 안 쓰는데도 매치됐다. outermostVarTokens는 각 값의 "최상위 var() 첫
   //     인자" 집합만 추출하므로 fallback 전용 토큰은 집합에 없다 — 기대 토큰이 그 집합의 원소인지만
   //     단정한다(문자열 부분 매칭 폐기).
+  //
+  // 외부 검수 10라운드째 — "토큰을 쓰는지"만 보고 "그 결과가 실제로 눈에 보이는지"는 아무도 안 봤다:
+  //  ⑦ Important 2(indicator) — `box-shadow: var(--t)`(치환 후 불법값이면 선언 자체 무효화)나
+  //     `inset 0 0 0 0 var(--t)`(spread 0, 렌더 폭 없음)도 토큰 사용 여부만으로는 GREEN이었다.
+  //  ⑧ 대칭 구멍 A(컨트롤러 발견, border) — `border: 1px var(--x)`(style 생략→비가시), `border: 0
+  //     solid var(--x)`(width 0), `border: 1px none var(--x)`도 동일하게 무보호였다.
+  // 아래 it.each 본문에서 assertVisibleInsetShadowLayer/assertVisibleBorder로 구조를 직접 단정해 막는다.
   const BORDER_PROPS = new Set(['border', 'border-top', 'border-right', 'border-bottom', 'border-left', 'border-color']);
   const INDICATOR_PROPS = new Set(['box-shadow']);
   const PINNED = [
@@ -376,15 +371,29 @@ describe('컨트롤 보더/인디케이터 재분류 고정 — 컴파일 CSS po
     { label: 'home-shared HomeTabs__Tab.is-on', file: 'components/home/shared/home-shared.scss', selector: '.HomeTabs__Tab.is-on', props: INDICATOR_PROPS, needle: 'var(--color-selected-indicator)' },
     { label: 'myTasks ScopeBtn--active', file: 'components/myTasks/myTasks.scss', selector: '.MyTasks__ScopeBtn--active', props: INDICATOR_PROPS, needle: 'var(--color-selected-indicator)' },
   ];
-  it.each(PINNED)('$label 가 컴파일된 규칙의 최종 유효 선언에서 기대 토큰을 사용', ({ file, selector, props, needle }) => {
+  it.each(PINNED)('$label 가 컴파일된 규칙의 최종 유효 선언에서 기대 토큰을 사용하고 시각적으로 유효하다', ({ file, selector, props, needle }) => {
     const root = postcss.parse(compiledSiteCss(file));
     const rules = findRootRules(root, selector);
     expect(rules.length, `${selector} 규칙(root 직속·셀렉터 완전일치)을 컴파일된 ${file}에서 찾지 못함`).toBeGreaterThan(0);
     const final = effectiveValue(rules, props); // 매치 규칙 전부에 cascade(!important·후행승리) 적용한 최종값
     const finalValues = Object.values(final).map((v) => v.value);
     const [expectedToken] = outermostVarTokens(needle); // needle 자체도 동일 파서로 토큰화(정합성 보장)
-    const matched = finalValues.some((v) => outermostVarTokens(v).has(expectedToken));
-    expect(matched, `${selector}의 최종 유효 [${[...props].join('/')}] 선언에서 outermost var 토큰 "${expectedToken}" 미발견 (finalValues=${JSON.stringify(finalValues)})`).toBe(true);
+
+    if (props === INDICATOR_PROPS) {
+      // box-shadow는 콤마 레이어를 가질 수 있다(HomeTabs 다중 그림자) — 기대 토큰을 outermost var로
+      // 쓰는 레이어를 찾아 그 레이어 하나만 구조 검사한다(Important 2).
+      const layer = finalValues.flatMap(splitTopLevelLayers).find((l) => outermostVarTokens(l).has(expectedToken));
+      expect(layer, `${selector}의 최종 box-shadow에서 outermost var 토큰 "${expectedToken}"을 쓰는 레이어 미발견 (finalValues=${JSON.stringify(finalValues)})`).toBeDefined();
+      const shape = assertVisibleInsetShadowLayer(layer);
+      expect(shape.visible, `${selector} indicator 레이어가 구조적으로 비가시 — inset=${shape.hasInset}, length개수=${shape.lengthCount}, spread=${shape.spread} (layer="${layer}")`).toBe(true);
+      return;
+    }
+
+    // 대칭 구멍 A: border 계열 — 기대 토큰을 쓰는 최종 선언 값(들)에 대해서만 구조 검사.
+    const tokenValues = finalValues.filter((v) => outermostVarTokens(v).has(expectedToken));
+    expect(tokenValues.length, `${selector}의 최종 유효 [${[...props].join('/')}] 선언에서 outermost var 토큰 "${expectedToken}" 미발견 (finalValues=${JSON.stringify(finalValues)})`).toBeGreaterThan(0);
+    const shape = assertVisibleBorder(tokenValues);
+    expect(shape.visible, `${selector} border가 구조적으로 비가시 — style="${shape.styleWord}", width="${shape.width}" (values=${JSON.stringify(tokenValues)})`).toBe(true);
   });
 });
 
@@ -407,32 +416,50 @@ describe('핀 대상 컴포넌트 5파일 — 보호 토큰 네임스페이스 "
   });
 });
 
-// 소스 텍스트에서 보호 토큰 선언 패턴("--color-x:" 형태)을 직접 매칭한다(P4) — findProtectedDeclarations
-// (AST 기반, 컴파일된 CSS 필요)는 컴파일 대상인 핀 5파일에만 배선돼 있어 나머지 다수 파일은 무검사
-// 상태였다(내부 리뷰 P4 지적). 전 파일 sass 컴파일은 비용 과다라 채택하지 않는다 — 선언 패턴은 위
-// "사이트 SCSS의 sass 색함수" 스윕과 동일하게 소스에서 안정적으로 잡힌다: 소비(`var(--color-x)`)는
-// 콜론이 아니라 ')'/','가 뒤따르므로 오탐 없이 선언만 매치된다. 주석 제외는 기존 관례
-// (line.split('//')[0])를 재사용한다. 파일 I/O와 분리해두는 이유는 아래 "게이트 자체 검증" 섹션에서
-// synthetic 문자열로 FAIL 경로를 직접 단위 검증하기 위함 — 실 레포는 위반 0건이라 실 스윕만으로는
-// FAIL 분기가 한 번도 실행되지 않는다.
-function findProtectedDeclarationsInText(content, fileLabel) {
-  const offenders = [];
-  content.split('\n').forEach((line, i) => {
-    const code = line.split('//')[0]; // 주석 제외
-    if (/--(?:color|track|shadow)-[a-z0-9-]*\s*:/.test(code)) offenders.push(`${fileLabel}:${i + 1}`);
-  });
-  return offenders;
+// styles/ 아래 임의 파일(.scss는 컴파일, .css는 그대로 읽기)을 컴파일된/원본 CSS 텍스트로 반환한다.
+// scssCompileCache를 그대로 재사용해(relPath 키 공간이 겹치지 않으므로 안전) 핀 5파일과 캐시를
+// 공유한다 — Important 1 수정 지시("컴파일 결과는 모듈 스코프 캐시(핀 5파일과 공유)로 1회만").
+function siteCssText(relPath) {
+  if (relPath.endsWith('.css')) {
+    if (!scssCompileCache.has(relPath)) {
+      scssCompileCache.set(relPath, readFileSync(resolve(__dirname, '../styles', relPath), 'utf8'));
+    }
+    return scssCompileCache.get(relPath);
+  }
+  return compiledSiteCss(relPath);
 }
 
-describe('styles/ 전체 소스 스윕 — 비핀 파일 보호 토큰 선언 금지 (P4)', () => {
-  it('_themes.scss 외 모든 .scss가 --color-/--track-/--shadow- 를 선언하지 않는다', () => {
-    const stylesDir = resolve(__dirname, '../styles');
-    const files = readdirSync(stylesDir, { recursive: true })
-      .map(String)
-      .filter((f) => f.endsWith('.scss') && !f.endsWith('_themes.scss'));
-    const offenders = files.flatMap((f) =>
-      findProtectedDeclarationsInText(readFileSync(resolve(stylesDir, f), 'utf8'), f));
-    expect(offenders, `보호 토큰 선언 발견: ${offenders.join('; ')}`).toEqual([]);
+// P4(Important 1, 외부 검수 10라운드) — 원문 스윕은 소스 정규식("같은 줄에서 이름:" 매칭) + .scss만
+// 봐서 두 우회를 놓쳤다(외부 검수 실증): ① fonts.css(_app에서 _themes **뒤** import — 실측 확인,
+// pages/_app.js: _themes.scss → globals.scss → fonts.css 순)에 보호 토큰 override를 넣어도 .css는
+// 스윕 대상이 아니라 안 걸렸다. ② `--color-x`\n`: red;`처럼 콜론을 다음 줄로 보내면(유효 SCSS,
+// 컴파일 결과는 동일) 같은-줄 정규식이 매치 실패했다. 컴파일(.scss) 또는 그대로(.css) → postcss AST
+// walkDecls로 전환하면 원본 포맷(멀티라인·주석·중첩)과 무관하게 최종 선언만 보므로 두 우회 모두
+// 구조적으로 막힌다 — findProtectedDeclarations(핀 5파일이 이미 쓰는 동일 판정 로직)를 styles/ 전체로
+// 확장해 재사용한다(로직 중복·drift 방지). 고아 파일(_app 미import, 예: createIssue.scss)도 스윕
+// 대상에 포함되지만 무해하다 — 선언 금지는 파일 로드 여부와 무관한 전역 계약이다. sass.compile
+// 실패는 조용히 건너뛰지 않고(offender로 표면화) expect([]).toEqual([])를 RED로 떨어뜨린다.
+function sweepFileForProtectedDeclarations(relPath) {
+  try {
+    return findProtectedDeclarations(siteCssText(relPath)).map((o) => `${relPath}: ${o}`);
+  } catch (e) {
+    return [`${relPath}: 컴파일/파싱 실패(FAIL로 표면화, 침묵 스킵 금지) — ${String((e && e.message) || e).split('\n')[0]}`];
+  }
+}
+
+describe('styles/ 전체 컴파일/AST 스윕 — 비핀 파일 보호 토큰 선언 금지 (P4, 컴파일 기반)', () => {
+  const stylesDir = resolve(__dirname, '../styles');
+  const targetFiles = readdirSync(stylesDir, { recursive: true })
+    .map(String)
+    .filter((f) => (f.endsWith('.scss') && !f.endsWith('_themes.scss')) || f.endsWith('.css'));
+
+  it('스윕 대상 파일이 90개를 넘는다(범위 축소 감지 — .scss 92 + .css 1 실측 기준)', () => {
+    expect(targetFiles.length).toBeGreaterThan(90);
+  });
+
+  it('.scss 전부(컴파일 후 AST)+.css 전부(직접 파싱)가 --color-/--track-/--shadow- 를 선언하지 않는다', () => {
+    const offenders = targetFiles.flatMap(sweepFileForProtectedDeclarations);
+    expect(offenders, `보호 토큰 선언(또는 컴파일 실패) 발견: ${offenders.join('; ')}`).toEqual([]);
   });
 });
 
@@ -643,6 +670,18 @@ function findUnprotectedDeclarations(rules) {
 // 디스크립터 decl이라 이 형태를 아무도 감지하지 못한다. 현재 레포에 @property 사용처가 없어 실피해는
 // 없으나, 도입 시 이 구멍이 열린다 — 향후 과제로만 기록, 이번 라운드는 미대응.
 
+// structuralGate가 보장한 darkRule 하나에 cascade(reduceEffectiveDecls — !important 우선, 동급은
+// 후행 승리)를 적용해 "다크 블록의 최종 유효 커스텀 프로퍼티 값" 맵을 만든다. 다크 selected-indicator
+// 대비 단정(아래)과 대칭 구멍 B의 --color-input-border(-hover) 대비 단정이 이 헬퍼를 공유한다(로직
+// 중복·drift 방지) — prop 키는 "--" 접두를 뗀 형태(예: "color-bg")로 정규화해 둔다.
+function buildDarkValues(themesCss) {
+  const { darkRule } = structuralGate(themesCss);
+  const darkState = reduceEffectiveDecls([darkRule], (decl, prop) => prop.startsWith('--'));
+  const values = {};
+  for (const [prop, { value }] of Object.entries(darkState)) values[prop.slice(2)] = value;
+  return values;
+}
+
 describe('_themes.scss 구조 계약 — flat 3블록 강제 (selector 매칭→구조 게이트 전환, 9라운드)', () => {
   it('실 파일이 3블록 계약을 만족한다(형태·순서·보호 토큰 3블록 밖 배타성)', () => {
     expect(() => structuralGate(css)).not.toThrow();
@@ -669,11 +708,9 @@ describe('다크 selected-indicator 값 시맨틱 고정 (SC 1.4.11 비텍스트
   // 우회 불가능하다. 여기서는 구조가 보장된 darkRule 하나에 캐스케이드(reduceEffectiveDecls —
   // !important 우선, 동급은 후행 승리 — 실제 CSS cascade와 동일)를 적용해 darkValues를 합성한다 —
   // darkRule "내부"의 중복 선언에도 !important가 개입할 수 있어 단순 후행 승리로는 부족하다(외부
-  // 검수 7라운드 실증).
-  const { darkRule } = structuralGate(css);
-  const darkState = reduceEffectiveDecls([darkRule], (decl, prop) => prop.startsWith('--'));
-  const darkValues = {};
-  for (const [prop, { value }] of Object.entries(darkState)) darkValues[prop.slice(2)] = value;
+  // 검수 7라운드 실증). buildDarkValues는 대칭 구멍 B(아래 --color-input-border 대비 describe)와
+  // 공유하는 모듈 헬퍼다.
+  const darkValues = buildDarkValues(css);
 
   // ScopeToggle 실제 인접 합성색 — .MyTasks__ScopeBtn--active의 background를 컴파일된 myTasks
   // CSS에서 postcss AST로 그대로 읽어(하드코딩 금지) 다크 surface 위에 알파 합성한다. bg·surface
@@ -719,6 +756,27 @@ describe('다크 selected-indicator 값 시맨틱 고정 (SC 1.4.11 비텍스트
     expect(scopeToggleAdjacent, `ScopeToggle 배경 최종값 해석 실패: scopeBgFinal=${scopeBgFinal}`).not.toBeNull();
     expect(contrastOverBg(indicator, scopeToggleAdjacent), `indicator=${indicator} on scopeToggleAdjacent=${JSON.stringify(scopeToggleAdjacent)}`).toBeGreaterThanOrEqual(3);
   });
+});
+
+describe('다크 --color-input-border(-hover) 대비 고정 (대칭 구멍 B — 컨트롤러 탐색, 10라운드)', () => {
+  // indicator(위 describe)만 대비 단정이 있었고 컨트롤 경계 토큰 자체(승격핀 6곳 중 5곳이 실제로
+  // 소비하는 --color-input-border)는 무보호였다 — 다크 값을 --color-border(#26282E, 비-input 톤)로
+  // 강등해도 대비 단정이 하나도 없어 전 테스트가 GREEN이었다(Task 6 "다크 대비 보정"의 존재 이유가
+  // 무너지는 회귀). 알파 선합성 경로(compositeOver/contrastOverBg)를 그대로 재사용해 두 토큰 각각을
+  // bg·surface·input-bg 3가지 배경과 3:1 이상으로 고정한다.
+  const darkValues = buildDarkValues(css);
+  const BG_TOKENS = ['color-bg', 'color-surface', 'color-input-bg'];
+  const BORDER_TOKENS = ['color-input-border', 'color-input-border-hover'];
+  for (const borderToken of BORDER_TOKENS) {
+    for (const bgToken of BG_TOKENS) {
+      it(`${borderToken} vs ${bgToken} 3:1 이상`, () => {
+        expect(
+          contrastOverBg(darkValues[borderToken], darkValues[bgToken]),
+          `${borderToken}=${darkValues[borderToken]} vs ${bgToken}=${darkValues[bgToken]}`,
+        ).toBeGreaterThanOrEqual(3);
+      });
+    }
+  }
 });
 
 // 게이트 자체 상설 검증 — 이전 라운드들은 각 결함을 "실파일을 임시로 훼손 → vitest 실행 → 복원"하는
@@ -840,24 +898,30 @@ describe('게이트 자체 검증 (synthetic CSS)', () => {
     });
   });
 
-  describe('findProtectedDeclarationsInText — 소스 스윕 헬퍼 FAIL 경로 (P4 synthetic)', () => {
-    // 실 레포는 위반 0건이라 실 스윕(위 "styles/ 전체 소스 스윕")만으로는 FAIL 분기가 한 번도
-    // 실행되지 않는다 — 헬퍼를 파일 I/O에서 분리해 여기서 합성 문자열로 FAIL 경로를 직접 검증한다.
-    it('--color-x: 선언 패턴을 파일:라인으로 검출', () => {
-      const offenders = findProtectedDeclarationsInText('.Foo {\n  --color-x: red;\n}\n', 'fake.scss');
-      expect(offenders).toEqual(['fake.scss:2']);
+  describe('P4 컴파일 기반 스윕 synthetic (Important 1, 10라운드) — 원문 정규식이 놓친 우회 재현', () => {
+    // 실 레포는 위반 0건이라 실 스윕(위 "styles/ 전체 컴파일/AST 스윕")만으로는 FAIL 분기가 한 번도
+    // 실행되지 않는다 — compileString(파일 I/O 없이 SCSS 문자열을 바로 컴파일)으로 합성 소스를 만들어
+    // findProtectedDeclarations/sweepFileForProtectedDeclarations의 FAIL·엣지 경로를 직접 검증한다.
+    it('멀티라인 선언(콜론이 다음 줄)도 컴파일 후 AST로 검출 — 원문 같은-줄 정규식은 이 케이스를 놓쳤다', () => {
+      const cssText = compileString('.Foo {\n  --color-x\n    : red;\n}\n').css;
+      expect(findProtectedDeclarations(cssText)).toHaveLength(1);
     });
-    it('--track-/--shadow- 선언도 동일하게 검출', () => {
-      const offenders = findProtectedDeclarationsInText('.Foo { --track-x: 1; --shadow-y: 2; }\n', 'fake.scss');
-      expect(offenders).toEqual(['fake.scss:1']); // 같은 줄은 1회만(기존 스윕들과 동일 관례 — .test() 불리언)
+    it('블록주석(/* --color-x: red; */) 내부 텍스트는 Comment 노드라 선언으로 오검출 안 함', () => {
+      const cssText = compileString('.Foo {\n  /* --color-x: red; */\n  color: blue;\n}\n').css;
+      expect(findProtectedDeclarations(cssText)).toEqual([]);
     });
-    it('주석 뒤(// --color-x: red)는 무시', () => {
-      const offenders = findProtectedDeclarationsInText('// --color-x: red\n.Foo { color: red; }\n', 'fake.scss');
-      expect(offenders).toEqual([]);
+    it('.css 파일(합성, fonts.css 우회 재현) — postcss.parse 직접으로도 보호 토큰 선언 검출', () => {
+      const cssText = ':root { --color-selected-indicator: red; }';
+      expect(findProtectedDeclarations(cssText)).toEqual(['--color-selected-indicator@1행(위치: :root)']);
     });
-    it('소비(var(--color-x))는 선언이 아니므로 무시(콜론이 아니라 ")"가 뒤따름)', () => {
-      const offenders = findProtectedDeclarationsInText('.Foo { border-color: var(--color-x); }\n', 'fake.scss');
-      expect(offenders).toEqual([]);
+    it('소비(var(--color-x))는 선언이 아니므로 무시(기존 findProtectedDeclarations 계약 재확인)', () => {
+      const cssText = compileString('.Foo { border-color: var(--color-x); }\n').css;
+      expect(findProtectedDeclarations(cssText)).toEqual([]);
+    });
+    it('sweepFileForProtectedDeclarations — sass 컴파일 실패(존재하지 않는 파일)는 침묵 스킵 대신 offender로 표면화', () => {
+      const offenders = sweepFileForProtectedDeclarations('__does-not-exist__.scss');
+      expect(offenders).toHaveLength(1);
+      expect(offenders[0]).toMatch(/__does-not-exist__\.scss: 컴파일\/파싱 실패/);
     });
   });
 
@@ -888,29 +952,97 @@ describe('게이트 자체 검증 (synthetic CSS)', () => {
     });
   });
 
-  describe('outermostVarTokens — quote 전구간 스킵 + 식별자 경계 whitelist (Minor 1)', () => {
+  describe('outermostVarTokens — postcss-value-parser 기반 (10라운드 방향 전환, 이전 수동 파서 회귀 유지)', () => {
+    // 아래 케이스들은 7~9라운드 수동 문자 스캐너 시절 실증된 구멍의 재현이다 — 파서를
+    // postcss-value-parser로 교체(10라운드)한 뒤에도 전부 동일하게 통과해야 한다(수용 기준).
     it('var 인자 내부 문자열의 "(" 는 깊이 계산을 안 흔든다 — outer만 수집, fallback 미수집', () => {
       expect(outermostVarTokens('var(--a, "(", var(--b))')).toEqual(new Set(['a']));
     });
-    it('값 전체가 quoted 문자열이면 var()로 인정 안 함 — 공집합', () => {
+    it('값 전체가 quoted 문자열이면 var()로 인정 안 함 — 공집합(string 노드는 word/function 스캔 대상 아님)', () => {
       expect(outermostVarTokens('"var(--x)"')).toEqual(new Set());
     });
-    it('비ASCII 문자가 붙은 var(는 함수 호출로 인정 안 함(whitelist 경계) — 공집합', () => {
+    it('비ASCII 문자가 붙은 var(는 함수 호출로 인정 안 함 — 공집합(함수명이 "λvar" != "var")', () => {
       expect(outermostVarTokens('λvar(--x)')).toEqual(new Set());
     });
-    it('식별자 접미로 붙은 var(는 함수 호출 아님 — 공집합', () => {
+    it('식별자 접미로 붙은 var(는 함수 호출 아님 — 공집합(함수명이 "fakevar" != "var")', () => {
       expect(outermostVarTokens('fakevar(--x)')).toEqual(new Set());
+    });
+    it('검수 Minor(10라운드): escaped identifier(fake\\ var()도 함수 호출 아님 — 공집합(함수명이 "fake\\ var" != "var")', () => {
+      expect(outermostVarTokens('fake\\ var(--x)')).toEqual(new Set());
     });
     it('calc() 안 var()는 다른 var()에 중첩된 게 아니므로 outermost — 콤마 나열 둘 다 수집', () => {
       expect(outermostVarTokens('calc(1px + var(--a)), var(--b)')).toEqual(new Set(['a', 'b']));
     });
-    it('r5(9라운드): fallback 안 escape(\\() 가 depth 오염을 안 일으킴 — outer만 수집, fallback 내부 var 미수집', () => {
+    it('r5(9라운드 재현): fallback 안 escape(\\() 가 depth 오염을 안 일으킴 — outer만 수집, fallback 내부 var 미수집', () => {
       expect(outermostVarTokens('var(--a, \\(, var(--b))')).toEqual(new Set(['a']));
     });
-    it('r5: 문자열 밖에 등장하는 \\" (이스케이프된 quote)가 스캔 전체를 삼키지 않음 — 뒤쪽 var()를 정상 수집', () => {
-      // 옛 코드는 이 \" 를 (escape 미처리로) 진짜 문자열 시작으로 오인해 나머지 전체를 quote 내부로
-      // 삼켜(짝이 안 맞는 종료 quote가 없으니 문자열 끝까지) 뒤의 var(--x)를 통째로 놓쳤다.
+    it('r5(9라운드 재현): 문자열 밖에 등장하는 \\" (이스케이프된 quote)가 스캔 전체를 삼키지 않음 — 뒤쪽 var()를 정상 수집', () => {
       expect(outermostVarTokens('\\" , var(--x)')).toEqual(new Set(['x']));
+    });
+  });
+
+  describe('splitTopLevelLayers — box-shadow 콤마 레이어 분해 (Important 2 지원 함수)', () => {
+    it('단일 레이어는 그대로 1개 배열', () => {
+      expect(splitTopLevelLayers('inset 0 0 0 1px var(--x)')).toEqual(['inset 0 0 0 1px var(--x)']);
+    });
+    it('다중 그림자(HomeTabs)는 최상위 콤마로만 분해 — var() 내부 콤마와 혼동 없음', () => {
+      expect(splitTopLevelLayers('var(--shadow-xs), inset 0 0 0 1px var(--color-selected-indicator)'))
+        .toEqual(['var(--shadow-xs)', 'inset 0 0 0 1px var(--color-selected-indicator)']);
+    });
+  });
+
+  describe('assertVisibleInsetShadowLayer — 인디케이터 가시성 구조 단정 (Important 2, 10라운드)', () => {
+    it('정상 형태(inset+4 length+spread>0)는 visible', () => {
+      expect(assertVisibleInsetShadowLayer('inset 0 0 0 2px var(--x)').visible).toBe(true);
+    });
+    it('invalid-shadow — var(--t) 단독(치환 후 불법값이면 선언 자체가 none처럼 무효화)은 FAIL', () => {
+      expect(assertVisibleInsetShadowLayer('var(--t)').visible).toBe(false);
+    });
+    it('spread 0(inset 0 0 0 0 var(--t))은 렌더 폭이 없어 FAIL', () => {
+      const shape = assertVisibleInsetShadowLayer('inset 0 0 0 0 var(--t)');
+      expect(shape.spread).toBe('0');
+      expect(shape.visible).toBe(false);
+    });
+    it('inset 키워드 없이 length 4개뿐이면(outset 그림자) FAIL — 인디케이터는 inset 계약', () => {
+      expect(assertVisibleInsetShadowLayer('0 0 0 2px var(--x)').visible).toBe(false);
+    });
+    it('length가 4개 미만(blur만 있고 spread 없음)이면 FAIL', () => {
+      expect(assertVisibleInsetShadowLayer('inset 0 0 2px var(--x)').visible).toBe(false);
+    });
+  });
+
+  describe('assertVisibleBorder — 대칭 구멍 A(승격핀 border 가시성) 구조 단정, 10라운드', () => {
+    it('정상 형태(1px solid var(--x))는 visible', () => {
+      expect(assertVisibleBorder(['1px solid var(--x)']).visible).toBe(true);
+    });
+    it('style 키워드 생략(1px var(--x))은 FAIL', () => {
+      const shape = assertVisibleBorder(['1px var(--x)']);
+      expect(shape.hasVisibleStyle).toBe(false);
+      expect(shape.visible).toBe(false);
+    });
+    it('style이 명시적 none(1px none var(--x))은 FAIL', () => {
+      const shape = assertVisibleBorder(['1px none var(--x)']);
+      expect(shape.styleWord).toBe('none');
+      expect(shape.visible).toBe(false);
+    });
+    it('width 0(0 solid var(--x))은 FAIL', () => {
+      const shape = assertVisibleBorder(['0 solid var(--x)']);
+      expect(shape.width).toBe('0');
+      expect(shape.visible).toBe(false);
+    });
+    it('width 미명시(solid var(--x))는 UA 기본 medium으로 간주해 visible 허용', () => {
+      expect(assertVisibleBorder(['solid var(--x)']).visible).toBe(true);
+    });
+  });
+
+  describe('대칭 구멍 B synthetic — --color-input-border 다크 강등값이 대비 단정에 실제로 걸린다', () => {
+    // 실 레포 현재 값(#6B7280 on #0E0F11 계열)은 위 실파일 describe에서 이미 GREEN으로 고정됐다 —
+    // 여기서는 "만약 --color-border(비-input 톤, #26282E)로 강등되면 이 단정이 실제로 RED가 되는가"를
+    // darkValues 재구성 없이 대비 함수를 직접 단정해 검증한다(합성 CSS로 강등값을 재현).
+    it('강등값(#26282E, 일반 border 톤) vs 실제 다크 bg(#0E0F11)는 3:1 미만 — 대비 단정이 실제로 이 회귀를 잡는다', () => {
+      const degraded = '#26282E';
+      const darkBg = buildDarkValues(css)['color-bg'];
+      expect(contrastOverBg(degraded, darkBg)).toBeLessThan(3);
     });
   });
 
