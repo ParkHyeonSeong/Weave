@@ -27,6 +27,21 @@ describe('_themes.scss 토큰 대칭', () => {
   });
 });
 
+// setA 원소 중 setB에도 있는 것들 — 별칭·라이트 키 교집합 판정(P1)과 그 synthetic 단위 검증이 공유.
+function keyIntersection(setA, setB) {
+  return [...setA].filter((k) => setB.has(k));
+}
+
+describe('별칭 블록(3번째) 키가 라이트 블록과 배타적이다 (P1 — specificity 재선언 침묵 방지)', () => {
+  // 별칭 블록은 라이트와 동일하게 ':root' 단독 셀렉터라 specificity가 같다 — 별칭이 라이트 키를
+  // 재선언하면 파일 순서상 후행인 별칭 값이 라이트 실렌더를 조용히 덮어써도 아무 에러도 안 난다.
+  // 위 대칭 검사는 라이트/다크만 비교해 이 경로를 못 잡는다 — 내부 리뷰 P1 지적. 별칭 키 집합과
+  // 라이트 키 집합의 교집합이 비어 있어야 함을 직접 단정한다(현행 별칭 5토큰 전부 배타 — 즉시 통과).
+  it('별칭 키 ∩ 라이트 키 = ∅', () => {
+    expect(keyIntersection(aliases, light)).toEqual([]);
+  });
+});
+
 // 라이트 무변화(핵심 수용 기준)를 값 수준으로 고정 — 키 대칭만으로는 라이트 값 오타를 못 잡는다.
 // 기존 30토큰의 현행 리터럴(코어 팔레트)만 단정: 파생 토큰은 sass가 결정론 계산하므로 원본 고정으로 충분.
 const LIGHT_BASELINE = {
@@ -392,6 +407,35 @@ describe('핀 대상 컴포넌트 5파일 — 보호 토큰 네임스페이스 "
   });
 });
 
+// 소스 텍스트에서 보호 토큰 선언 패턴("--color-x:" 형태)을 직접 매칭한다(P4) — findProtectedDeclarations
+// (AST 기반, 컴파일된 CSS 필요)는 컴파일 대상인 핀 5파일에만 배선돼 있어 나머지 다수 파일은 무검사
+// 상태였다(내부 리뷰 P4 지적). 전 파일 sass 컴파일은 비용 과다라 채택하지 않는다 — 선언 패턴은 위
+// "사이트 SCSS의 sass 색함수" 스윕과 동일하게 소스에서 안정적으로 잡힌다: 소비(`var(--color-x)`)는
+// 콜론이 아니라 ')'/','가 뒤따르므로 오탐 없이 선언만 매치된다. 주석 제외는 기존 관례
+// (line.split('//')[0])를 재사용한다. 파일 I/O와 분리해두는 이유는 아래 "게이트 자체 검증" 섹션에서
+// synthetic 문자열로 FAIL 경로를 직접 단위 검증하기 위함 — 실 레포는 위반 0건이라 실 스윕만으로는
+// FAIL 분기가 한 번도 실행되지 않는다.
+function findProtectedDeclarationsInText(content, fileLabel) {
+  const offenders = [];
+  content.split('\n').forEach((line, i) => {
+    const code = line.split('//')[0]; // 주석 제외
+    if (/--(?:color|track|shadow)-[a-z0-9-]*\s*:/.test(code)) offenders.push(`${fileLabel}:${i + 1}`);
+  });
+  return offenders;
+}
+
+describe('styles/ 전체 소스 스윕 — 비핀 파일 보호 토큰 선언 금지 (P4)', () => {
+  it('_themes.scss 외 모든 .scss가 --color-/--track-/--shadow- 를 선언하지 않는다', () => {
+    const stylesDir = resolve(__dirname, '../styles');
+    const files = readdirSync(stylesDir, { recursive: true })
+      .map(String)
+      .filter((f) => f.endsWith('.scss') && !f.endsWith('_themes.scss'));
+    const offenders = files.flatMap((f) =>
+      findProtectedDeclarationsInText(readFileSync(resolve(stylesDir, f), 'utf8'), f));
+    expect(offenders, `보호 토큰 선언 발견: ${offenders.join('; ')}`).toEqual([]);
+  });
+});
+
 // WCAG 2.x 상대휘도/대비비. hex 6자리와 rgb(a)(...) 둘 다 파싱한다(myTasks ScopeBtn--active의
 // 반투명 배경 rgba(94, 106, 210, 0.1)를 합성색 계산에 그대로 써야 하므로 hex 전용으로는 부족하다).
 // transparent 등 둘 다 아닌 값은 파싱 실패로 null → contrastRatio가 0을 반환해 아래 >=3 단정이
@@ -574,9 +618,45 @@ function findProtectedDeclarations(cssText) {
   return offenders;
 }
 
+// P3(역방향, 내부 리뷰 지적) — 위 스캔들은 전부 "보호 접두가 3블록 '밖'에서 선언되면 안 된다"는
+// 한 방향만 본다. 반대 방향(3블록 '안'에 PROTECTED_TOKEN_PREFIXES 밖의 새 토큰 패밀리가 섞여도
+// 아무도 안 잡는다)은 열린 구멍이었다 — 예: 4번째 접두(예: --spacing-)가 도입돼 3블록에 추가돼도
+// findProtectedDeclarations/structuralGate 무엇도 감지 못한다. rules는 postcss Rule 노드 배열
+// (구조 게이트가 반환한 lightRule/darkRule/aliasRule 또는 synthetic 단일 rule)이고, 각 rule의
+// decl을 훑어 '--'로 시작하지만 보호 접두 3종 어디에도 안 속하는 선언을 offenders로 모은다.
+// color-scheme 같은 일반 프로퍼티는 '--' 접두가 아니므로 애초에 대상이 아니다.
+function findUnprotectedDeclarations(rules) {
+  const offenders = [];
+  for (const rule of rules) {
+    rule.walkDecls((decl) => {
+      if (!decl.prop.startsWith('--')) return;
+      if (!hasProtectedPrefix(decl.prop)) offenders.push(`${decl.prop}@${decl.source?.start?.line}행`);
+    });
+  }
+  return offenders;
+}
+
+// P2(내부 리뷰, 기록만·코드 변경 없음): 위 스캔들(findProtectedDeclarations·structuralGate·
+// findUnprotectedDeclarations)은 전부 decl.prop(일반 선언)만 본다 — CSS `@property --color-x {
+// syntax: '<color>'; inherits: false; initial-value: #fff; }` 같은 typed custom property 등록
+// at-rule은 프로퍼티명이 atrule.params에 있고 내부는 syntax/inherits/initial-value라는 별개
+// 디스크립터 decl이라 이 형태를 아무도 감지하지 못한다. 현재 레포에 @property 사용처가 없어 실피해는
+// 없으나, 도입 시 이 구멍이 열린다 — 향후 과제로만 기록, 이번 라운드는 미대응.
+
 describe('_themes.scss 구조 계약 — flat 3블록 강제 (selector 매칭→구조 게이트 전환, 9라운드)', () => {
   it('실 파일이 3블록 계약을 만족한다(형태·순서·보호 토큰 3블록 밖 배타성)', () => {
     expect(() => structuralGate(css)).not.toThrow();
+  });
+});
+
+describe('3블록 내 모든 custom property는 보호 접두 3종 중 하나 (P3 — 역방향 완전성)', () => {
+  it('라이트/다크/별칭 블록의 모든 --custom-property가 --color-/--track-/--shadow- 중 하나로 시작한다', () => {
+    const { lightRule, darkRule, aliasRule } = structuralGate(css);
+    const offenders = findUnprotectedDeclarations([lightRule, darkRule, aliasRule]);
+    expect(
+      offenders,
+      `보호 접두 밖 토큰 발견 — 새 토큰 패밀리면 PROTECTED_TOKEN_PREFIXES에 추가하라: ${offenders.join('; ')}`,
+    ).toEqual([]);
   });
 });
 
@@ -720,6 +800,32 @@ describe('게이트 자체 검증 (synthetic CSS)', () => {
       const state = reduceEffectiveDecls([darkRule], (decl, prop) => prop.startsWith('--'));
       expect(state['--x'].value).toBe('A');
     });
+
+    // synthetic 보충(concern 2, 내부 리뷰) — 순서/형태 오류 각 1건을 명시 FAIL로 단정한다.
+    it('블록 순서가 뒤바뀌면(다크가 1번째) FAIL', () => {
+      const cssText = `
+        html[data-theme='dark'] { --color-a: 2; }
+        :root { --color-a: 1; }
+        :root { --color-b: 3; }
+      `;
+      expect(() => structuralGate(cssText)).toThrow(/1번째 블록\(라이트\)/);
+    });
+    it('블록이 다중 셀렉터(:root, .Sneak)면 단독 :root가 아니므로 FAIL', () => {
+      const cssText = `
+        :root, .Sneak { --color-a: 1; }
+        html[data-theme='dark'] { --color-a: 2; }
+        :root { --color-b: 3; }
+      `;
+      expect(() => structuralGate(cssText)).toThrow(/1번째 블록\(라이트\)/);
+    });
+    it("2번째 블록이 html[data-theme='dark']:root 형태(:root 접미 오염)면 FAIL", () => {
+      const cssText = `
+        :root { --color-a: 1; }
+        html[data-theme='dark']:root { --color-a: 2; }
+        :root { --color-b: 3; }
+      `;
+      expect(() => structuralGate(cssText)).toThrow(/2번째 블록\(다크\)/);
+    });
   });
 
   describe('findProtectedDeclarations — 컴포넌트 보호 토큰 "선언" 금지 (9라운드)', () => {
@@ -731,6 +837,54 @@ describe('게이트 자체 검증 (synthetic CSS)', () => {
     it('var() 참조로 소비만 하면 통과 — 빈 배열', () => {
       const offenders = findProtectedDeclarations('.Foo { border-color: var(--color-x); }');
       expect(offenders).toEqual([]);
+    });
+  });
+
+  describe('findProtectedDeclarationsInText — 소스 스윕 헬퍼 FAIL 경로 (P4 synthetic)', () => {
+    // 실 레포는 위반 0건이라 실 스윕(위 "styles/ 전체 소스 스윕")만으로는 FAIL 분기가 한 번도
+    // 실행되지 않는다 — 헬퍼를 파일 I/O에서 분리해 여기서 합성 문자열로 FAIL 경로를 직접 검증한다.
+    it('--color-x: 선언 패턴을 파일:라인으로 검출', () => {
+      const offenders = findProtectedDeclarationsInText('.Foo {\n  --color-x: red;\n}\n', 'fake.scss');
+      expect(offenders).toEqual(['fake.scss:2']);
+    });
+    it('--track-/--shadow- 선언도 동일하게 검출', () => {
+      const offenders = findProtectedDeclarationsInText('.Foo { --track-x: 1; --shadow-y: 2; }\n', 'fake.scss');
+      expect(offenders).toEqual(['fake.scss:1']); // 같은 줄은 1회만(기존 스윕들과 동일 관례 — .test() 불리언)
+    });
+    it('주석 뒤(// --color-x: red)는 무시', () => {
+      const offenders = findProtectedDeclarationsInText('// --color-x: red\n.Foo { color: red; }\n', 'fake.scss');
+      expect(offenders).toEqual([]);
+    });
+    it('소비(var(--color-x))는 선언이 아니므로 무시(콜론이 아니라 ")"가 뒤따름)', () => {
+      const offenders = findProtectedDeclarationsInText('.Foo { border-color: var(--color-x); }\n', 'fake.scss');
+      expect(offenders).toEqual([]);
+    });
+  });
+
+  describe('keyIntersection — 별칭·라이트 교집합 판정 (P1 synthetic)', () => {
+    it('별칭이 라이트 키를 재선언하면 교집합에 잡힌다(specificity 동일 → 후행 재선언이 침묵 오염)', () => {
+      const lightKeys = new Set(['color-a', 'color-b']);
+      const aliasKeys = new Set(['color-a', 'color-c']);
+      expect(keyIntersection(aliasKeys, lightKeys)).toEqual(['color-a']);
+    });
+    it('배타적이면 빈 배열', () => {
+      expect(keyIntersection(new Set(['color-c']), new Set(['color-a', 'color-b']))).toEqual([]);
+    });
+  });
+
+  describe('findUnprotectedDeclarations — 보호 접두 역방향 판정 (P3 synthetic)', () => {
+    it('보호 접두 밖 토큰(--brand-new)을 검출', () => {
+      const root = postcss.parse(':root { --color-a: 1; --brand-new: 2; }');
+      const offenders = findUnprotectedDeclarations([root.first]);
+      expect(offenders).toEqual(['--brand-new@1행']);
+    });
+    it('보호 접두 3종만 있으면 빈 배열', () => {
+      const root = postcss.parse(':root { --color-a: 1; --track-b: 2; --shadow-c: 3; }');
+      expect(findUnprotectedDeclarations([root.first])).toEqual([]);
+    });
+    it('일반 프로퍼티(color-scheme 등)는 애초에 대상 아님', () => {
+      const root = postcss.parse(':root { color-scheme: light; --color-a: 1; }');
+      expect(findUnprotectedDeclarations([root.first])).toEqual([]);
     });
   });
 
