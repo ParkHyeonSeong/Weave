@@ -303,25 +303,193 @@ function assertVisibleInsetShadowLayer(layerValue) {
   return { hasInset, lengthCount: lengths.length, spread, visible: hasInset && lengths.length >= 4 && spreadPositive };
 }
 
-// 대칭 구멍 A(컨트롤러 발견, 승격핀 6곳) — border 가시성도 동일하게 미보장이었다: `border: 1px
-// var(--x)`(style 생략 → UA는 style 없으면 보더 자체를 렌더 안 함 → none 취급), `border: 0 solid
-// var(--x)`(width 0 → 선이 안 보임), `border: 1px none var(--x)`(style이 명시적으로 비가시 키워드) 전부
-// 이전엔 outermostVarTokens 토큰 사용 여부만 봐서 GREEN이었다. 기대 토큰을 실제로 쓰는 최종 선언
-// 값(들)에 대해 구조를 직접 단정한다: style 키워드가 가시 집합에 존재(생략·none/hidden은 FAIL) +
-// width가 명시됐다면(length word 존재) 0보다 커야 함(미명시=UA 기본 medium은 가시로 허용).
+// 대칭 구멍 A(컨트롤러 발견, 승격핀 6곳) — border 가시성 판정을 "네 면 cascade 합성 엔진"으로 재구축한다
+// (Important 1, 11라운드). 이전 assertVisibleBorder는 (a) BORDER_PROPS가 border-width/style·directional
+// longhand를 아예 안 모으고, (b) 기대 토큰을 쓰는 최종 선언 값만 골라 그 안에서 flat wordsOf로 style/width를
+// 읽어, 다음을 전부 false-green 처리했다(외부 검수 실증, RED-proof 7/7 재현):
+//   · `border:…; border-width:0`      → border-width 미수집 → 여전히 shorthand의 1px로 판정
+//   · `border:…; border-style:none`   → border-style 미수집 → 여전히 solid로 판정
+//   · `border:…; border-color:transparent` → border-color가 shorthand 토큰을 덮었는데도 shorthand 값 잔존
+//   · `border: calc(0px) solid var(…)` → wordsOf가 top-level word만 봐 calc(0px)를 "width 미지정=medium"으로 오인
+//   · `border-width:0 !important; border:…`(non-imp) → shorthand가 important width를 못 덮는데 못 봄
+//   · `border-left-width:0`            → directional 미수집 → 한 면 소실을 못 봄
+// 해법: 같은 exact selector의 모든 border shorthand/longhand 선언을 문서 순서로 훑어 **네 면(top/right/
+// bottom/left) × 세 성분(width/style/color)** 각각의 최종 {value, important, unsupported}를 상태 머신으로
+// 합성한다. shorthand는 네 면 전 성분을 설정(생략 성분은 initial로 재설정: width=medium/style=none/
+// color=currentcolor), directional/성분 longhand는 해당 면·성분만 덮는다. !important는 후행 non-important를
+// 무조건 이기고 동급은 후행 승. 미지원 문법(calc/var가 width·style 위치 등)은 "미지정" 간주 금지 —
+// unsupported로 표시해 fail-closed RED. perimeter는 네 면 모두 (기하학적 가시: style∈가시집합 & width가
+// 명시적0 아님) AND (color가 기대 토큰을 outermost var로 실사용)일 때만 통과한다.
 const VISIBLE_BORDER_STYLES = new Set(['solid', 'dashed', 'dotted', 'double', 'groove', 'ridge', 'inset', 'outset']);
 const INVISIBLE_BORDER_STYLE_KEYWORDS = new Set(['none', 'hidden']);
-function assertVisibleBorder(values) {
-  const words = values.flatMap(wordsOf);
-  const styleWord = words.find((w) => {
-    const lw = w.toLowerCase();
-    return VISIBLE_BORDER_STYLES.has(lw) || INVISIBLE_BORDER_STYLE_KEYWORDS.has(lw);
+const BORDER_STYLE_KEYWORDS = new Set([...VISIBLE_BORDER_STYLES, ...INVISIBLE_BORDER_STYLE_KEYWORDS]);
+const BORDER_WIDTH_KEYWORDS = new Set(['thin', 'medium', 'thick']); // <line-width> 키워드(전부 가시)
+// var() 등 색을 산출할 수 있는 함수 + 색 키워드. calc()·unknown 함수는 여기 없어 → 미지원(fail-closed).
+const COLOR_FUNCTIONS = new Set(['var', 'rgb', 'rgba', 'hsl', 'hsla', 'hwb', 'lab', 'lch', 'oklab', 'oklch', 'color', 'color-mix']);
+const COLOR_KEYWORDS = new Set(['transparent', 'currentcolor', 'inherit', 'initial', 'unset', 'revert']);
+const BORDER_INITIAL = { width: 'medium', style: 'none', color: 'currentcolor' }; // CSS 스펙 initial
+const BORDER_SIDES = ['top', 'right', 'bottom', 'left'];
+// border 계열만 인식: border / border-{side} / border-{width|style|color} / border-{side}-{width|style|color}.
+// border-radius·border-collapse·border-spacing·border-image·논리 프로퍼티(border-block 등)는 전부 미매치.
+const BORDER_PROP_RE = /^border(?:-(top|right|bottom|left))?(?:-(width|style|color))?$/;
+
+// shorthand의 top-level 노드 하나를 성분 슬롯으로 분류. 분류 불가(calc·unknown 함수/단어)면 null → 미지원.
+function classifyBorderShorthandNode(node) {
+  if (node.type === 'word') {
+    const w = node.value.toLowerCase();
+    if (BORDER_STYLE_KEYWORDS.has(w)) return { slot: 'style', value: node.value };
+    if (BORDER_WIDTH_KEYWORDS.has(w) || isLengthWord(node.value)) return { slot: 'width', value: node.value };
+    if (w[0] === '#' || COLOR_KEYWORDS.has(w)) return { slot: 'color', value: node.value };
+    return null;
+  }
+  if (node.type === 'function') {
+    if (COLOR_FUNCTIONS.has(node.value.toLowerCase())) return { slot: 'color', value: valueParser.stringify(node) };
+    return null; // calc()·미지원 함수 → 미분류
+  }
+  return null;
+}
+
+// border/border-{side} shorthand → {width,style,color} 각각 {value, unsupported}. 생략 성분은 initial 재설정.
+// 미분류 토큰이 하나라도 있거나 슬롯이 중복 채워지면(문법 오류) 세 성분 전부 unsupported로 fail-closed.
+function parseBorderShorthand(value) {
+  const result = {
+    width: { value: BORDER_INITIAL.width, unsupported: false },
+    style: { value: BORDER_INITIAL.style, unsupported: false },
+    color: { value: BORDER_INITIAL.color, unsupported: false },
+  };
+  const meaningful = valueParser(String(value)).nodes.filter((n) => n.type === 'word' || n.type === 'function');
+  const assigned = { width: false, style: false, color: false };
+  let unsupported = false;
+  for (const node of meaningful) {
+    const c = classifyBorderShorthandNode(node);
+    if (!c || assigned[c.slot]) { unsupported = true; continue; }
+    result[c.slot] = { value: c.value, unsupported: false };
+    assigned[c.slot] = true;
+  }
+  if (unsupported) for (const slot of ['width', 'style', 'color']) result[slot].unsupported = true;
+  return result;
+}
+
+// 값을 top-level 공백/콤마 기준 그룹으로 분해(성분 longhand 1~4값 확장용).
+function splitTopLevelSpaceGroups(value) {
+  const groups = [];
+  let cur = [];
+  for (const node of valueParser(String(value)).nodes) {
+    if (node.type === 'space' || (node.type === 'div' && node.value === ',')) {
+      if (cur.length) { groups.push(cur); cur = []; }
+    } else cur.push(node);
+  }
+  if (cur.length) groups.push(cur);
+  return groups.map((nodes) => valueParser.stringify(nodes).trim());
+}
+
+// margin식 1~4값 → [top,right,bottom,left] 확장.
+function expandFourSides(cells) {
+  const [a, b, c, d] = cells;
+  if (cells.length === 1) return [a, a, a, a];
+  if (cells.length === 2) return [a, b, a, b];
+  if (cells.length === 3) return [a, b, c, b];
+  return [a, b, c, d];
+}
+
+// 성분 longhand의 단일 값 그룹 하나를 {value, unsupported}로 검증. width=길이/키워드, style=가시/비가시 키워드,
+// color=색 함수/hex/색 키워드만 인정. 그 외(calc·복합·미지원)는 unsupported → fail-closed RED.
+function classifyComponentValue(component, group) {
+  const nodes = valueParser(group).nodes.filter((n) => n.type === 'word' || n.type === 'function');
+  if (nodes.length !== 1) return { value: group, unsupported: true };
+  const node = nodes[0];
+  if (component === 'style') {
+    if (node.type === 'word' && BORDER_STYLE_KEYWORDS.has(node.value.toLowerCase())) return { value: node.value, unsupported: false };
+    return { value: group, unsupported: true };
+  }
+  if (component === 'width') {
+    if (node.type === 'word' && (BORDER_WIDTH_KEYWORDS.has(node.value.toLowerCase()) || isLengthWord(node.value))) return { value: node.value, unsupported: false };
+    return { value: group, unsupported: true };
+  }
+  // color
+  if (node.type === 'function' && COLOR_FUNCTIONS.has(node.value.toLowerCase())) return { value: group, unsupported: false };
+  if (node.type === 'word' && (node.value[0] === '#' || COLOR_KEYWORDS.has(node.value.toLowerCase()))) return { value: node.value, unsupported: false };
+  return { value: group, unsupported: true };
+}
+
+function parseBorderComponentLonghand(component, value) {
+  const groups = splitTopLevelSpaceGroups(value);
+  if (groups.length === 0 || groups.length > 4) {
+    const bad = { value, unsupported: true };
+    return [bad, bad, bad, bad];
+  }
+  return expandFourSides(groups.map((g) => classifyComponentValue(component, g)));
+}
+
+// 핵심: 매치 규칙들(문서 순서)의 모든 border 선언을 훑어 면×성분 최종 상태를 cascade 합성한다.
+function synthesizeBorderSides(rules) {
+  const sides = {};
+  for (const side of BORDER_SIDES) {
+    sides[side] = {
+      width: { value: BORDER_INITIAL.width, important: false, unsupported: false },
+      style: { value: BORDER_INITIAL.style, important: false, unsupported: false },
+      color: { value: BORDER_INITIAL.color, important: false, unsupported: false },
+    };
+  }
+  const applyCell = (side, component, cand, important) => {
+    const cell = sides[side][component];
+    if (cell.important && !important) return; // important가 후행 non-important를 이김
+    cell.value = cand.value;
+    cell.unsupported = cand.unsupported;
+    cell.important = important;
+  };
+  rules.forEach((rule) => {
+    rule.walkDecls((decl) => {
+      const prop = normalizeProp(decl.prop);
+      const m = BORDER_PROP_RE.exec(prop);
+      if (!m) return;
+      const [, sideGroup, compGroup] = m;
+      const important = !!decl.important;
+      const value = decl.value.trim();
+      if (!compGroup) {
+        // shorthand: border(4면) 또는 border-{side}(해당 면), 세 성분 전부 설정(생략=initial 재설정)
+        const parsed = parseBorderShorthand(value);
+        for (const side of sideGroup ? [sideGroup] : BORDER_SIDES) {
+          applyCell(side, 'width', parsed.width, important);
+          applyCell(side, 'style', parsed.style, important);
+          applyCell(side, 'color', parsed.color, important);
+        }
+      } else if (!sideGroup) {
+        // 성분 longhand 전체 면: border-{width|style|color} (1~4값 확장)
+        const perSide = parseBorderComponentLonghand(compGroup, value);
+        BORDER_SIDES.forEach((side, i) => applyCell(side, compGroup, perSide[i], important));
+      } else {
+        // directional 성분 longhand: border-{side}-{width|style|color} — 그 면·성분만
+        applyCell(sideGroup, compGroup, classifyComponentValue(compGroup, value), important);
+      }
+    });
   });
-  const hasVisibleStyle = styleWord != null && VISIBLE_BORDER_STYLES.has(styleWord.toLowerCase());
-  const lengths = words.filter(isLengthWord);
-  const width = lengths[0];
-  const widthOk = width == null || parseFloat(width) > 0; // 미명시=medium 허용, 명시됐으면 >0 필수
-  return { hasVisibleStyle, styleWord, width, visible: hasVisibleStyle && widthOk };
+  return sides;
+}
+
+// 한 면의 기하학적 가시성: width가 명시적 0이 아니고(미지원 아님) style이 가시 집합.
+function sideGeometryVisible(side) {
+  if (side.width.unsupported || side.style.unsupported) return false;
+  if (!VISIBLE_BORDER_STYLES.has(String(side.style.value).toLowerCase())) return false;
+  const wv = String(side.width.value).toLowerCase();
+  if (BORDER_WIDTH_KEYWORDS.has(wv)) return true; // thin/medium/thick 전부 가시
+  if (isLengthWord(side.width.value)) return parseFloat(side.width.value) > 0;
+  return false; // 방어: 여기 오면 미지원
+}
+// 한 면의 color가 기대 토큰을 outermost var로 실사용하는가(transparent·무토큰 override면 false).
+function sideUsesToken(side, expectedToken) {
+  return !side.color.unsupported && outermostVarTokens(side.color.value).has(expectedToken);
+}
+// perimeter 계약: 네 면 모두 기하학적 가시 AND 기대 토큰 실사용.
+function assertPerimeterVisible(sides, expectedToken) {
+  const perSide = BORDER_SIDES.map((s) => ({
+    side: s,
+    geometryVisible: sideGeometryVisible(sides[s]),
+    usesToken: sideUsesToken(sides[s], expectedToken),
+    width: sides[s].width.value, style: sides[s].style.value, color: sides[s].color.value,
+    unsupported: sides[s].width.unsupported || sides[s].style.unsupported || sides[s].color.unsupported,
+  }));
+  return { visible: perSide.every((p) => p.geometryVisible && p.usesToken), perSide };
 }
 
 describe('컨트롤 보더/인디케이터 재분류 고정 — 컴파일 CSS postcss AST 기반 (외부 검수 회귀 방지)', () => {
@@ -356,7 +524,14 @@ describe('컨트롤 보더/인디케이터 재분류 고정 — 컴파일 CSS po
   //     `inset 0 0 0 0 var(--t)`(spread 0, 렌더 폭 없음)도 토큰 사용 여부만으로는 GREEN이었다.
   //  ⑧ 대칭 구멍 A(컨트롤러 발견, border) — `border: 1px var(--x)`(style 생략→비가시), `border: 0
   //     solid var(--x)`(width 0), `border: 1px none var(--x)`도 동일하게 무보호였다.
-  // 아래 it.each 본문에서 assertVisibleInsetShadowLayer/assertVisibleBorder로 구조를 직접 단정해 막는다.
+  //
+  // 외부 검수 11라운드째 — border 가시성을 "네 면 cascade 합성 엔진"으로 전면 재구축(Important 1):
+  //  ⑨ `border:…; border-width:0 / border-style:none / border-color:transparent / border-left-width:0` 및
+  //     `border: calc(0px) solid var(…)`(calc width를 미지정=medium으로 오인) 전부 이전엔 false-green이었다.
+  //     아래 border 분기가 synthesizeBorderSides로 면×성분 최종값을 합성해 perimeter를 직접 단정한다.
+  // 아래 it.each 본문에서 assertVisibleInsetShadowLayer(indicator)/assertPerimeterVisible(border)로 단정한다.
+  // BORDER_PROPS는 이제 border/indicator 분기 판별용 마커일 뿐 — 실제 border 성분 수집은 synthesizeBorderSides
+  // 내부의 BORDER_PROP_RE가 shorthand·성분·directional longhand를 전부 커버한다(구 화이트리스트 미수집 폐기).
   const BORDER_PROPS = new Set(['border', 'border-top', 'border-right', 'border-bottom', 'border-left', 'border-color']);
   const INDICATOR_PROPS = new Set(['box-shadow']);
   const PINNED = [
@@ -375,13 +550,13 @@ describe('컨트롤 보더/인디케이터 재분류 고정 — 컴파일 CSS po
     const root = postcss.parse(compiledSiteCss(file));
     const rules = findRootRules(root, selector);
     expect(rules.length, `${selector} 규칙(root 직속·셀렉터 완전일치)을 컴파일된 ${file}에서 찾지 못함`).toBeGreaterThan(0);
-    const final = effectiveValue(rules, props); // 매치 규칙 전부에 cascade(!important·후행승리) 적용한 최종값
-    const finalValues = Object.values(final).map((v) => v.value);
     const [expectedToken] = outermostVarTokens(needle); // needle 자체도 동일 파서로 토큰화(정합성 보장)
 
     if (props === INDICATOR_PROPS) {
       // box-shadow는 콤마 레이어를 가질 수 있다(HomeTabs 다중 그림자) — 기대 토큰을 outermost var로
       // 쓰는 레이어를 찾아 그 레이어 하나만 구조 검사한다(Important 2).
+      const final = effectiveValue(rules, props); // 매치 규칙 전부에 cascade(!important·후행승리) 적용한 최종값
+      const finalValues = Object.values(final).map((v) => v.value);
       const layer = finalValues.flatMap(splitTopLevelLayers).find((l) => outermostVarTokens(l).has(expectedToken));
       expect(layer, `${selector}의 최종 box-shadow에서 outermost var 토큰 "${expectedToken}"을 쓰는 레이어 미발견 (finalValues=${JSON.stringify(finalValues)})`).toBeDefined();
       const shape = assertVisibleInsetShadowLayer(layer);
@@ -389,11 +564,13 @@ describe('컨트롤 보더/인디케이터 재분류 고정 — 컴파일 CSS po
       return;
     }
 
-    // 대칭 구멍 A: border 계열 — 기대 토큰을 쓰는 최종 선언 값(들)에 대해서만 구조 검사.
-    const tokenValues = finalValues.filter((v) => outermostVarTokens(v).has(expectedToken));
-    expect(tokenValues.length, `${selector}의 최종 유효 [${[...props].join('/')}] 선언에서 outermost var 토큰 "${expectedToken}" 미발견 (finalValues=${JSON.stringify(finalValues)})`).toBeGreaterThan(0);
-    const shape = assertVisibleBorder(tokenValues);
-    expect(shape.visible, `${selector} border가 구조적으로 비가시 — style="${shape.styleWord}", width="${shape.width}" (values=${JSON.stringify(tokenValues)})`).toBe(true);
+    // 대칭 구멍 A: border 계열 — 네 면 cascade 합성 후 perimeter 가시성 + 기대 토큰 실사용 단정.
+    const sides = synthesizeBorderSides(rules);
+    const result = assertPerimeterVisible(sides, expectedToken);
+    expect(
+      result.visible,
+      `${selector} border perimeter 비가시/토큰누락 — 기대 토큰 "${expectedToken}", 면별=${JSON.stringify(result.perSide)}`,
+    ).toBe(true);
   });
 });
 
@@ -416,13 +593,24 @@ describe('핀 대상 컴포넌트 5파일 — 보호 토큰 네임스페이스 "
   });
 });
 
-// styles/ 아래 임의 파일(.scss는 컴파일, .css는 그대로 읽기)을 컴파일된/원본 CSS 텍스트로 반환한다.
+// .css 원문 정규화(Minor, 11라운드) — raw postcss 파싱은 escaped custom-property 이름
+// (`--\63 olor-selected-indicator` = 유효 CSS, 실이름 --color-selected-indicator)을 리터럴 prop으로
+// 남겨 hasProtectedPrefix(startsWith '--color-')를 우회시켰다(외부 검수 실증). Sass CSS-syntax 컴파일로
+// 식별자 escape를 정규화한다 — 부분 hex 정규식·escape 수동 재구현 없이 파서에 위임한다. custom
+// property는 스펙상 case-sensitive라 --Color-x는 그대로 보존되고(≠--color-x), var() 소비는 값이라 decl.prop
+// 검사에 안 걸리며, `/* */` 블록주석은 Comment 노드로 분리돼 오검출되지 않는다. 컴파일 실패는 조용히
+// 넘기지 않고 상위 sweepFileForProtectedDeclarations의 try/catch가 offender로 표면화해 RED로 떨어뜨린다.
+function normalizeRawCss(source) {
+  return compileString(String(source), { syntax: 'css' }).css;
+}
+
+// styles/ 아래 임의 파일(.scss는 컴파일, .css는 CSS-syntax 정규화)을 CSS 텍스트로 반환한다.
 // scssCompileCache를 그대로 재사용해(relPath 키 공간이 겹치지 않으므로 안전) 핀 5파일과 캐시를
 // 공유한다 — Important 1 수정 지시("컴파일 결과는 모듈 스코프 캐시(핀 5파일과 공유)로 1회만").
 function siteCssText(relPath) {
   if (relPath.endsWith('.css')) {
     if (!scssCompileCache.has(relPath)) {
-      scssCompileCache.set(relPath, readFileSync(resolve(__dirname, '../styles', relPath), 'utf8'));
+      scssCompileCache.set(relPath, normalizeRawCss(readFileSync(resolve(__dirname, '../styles', relPath), 'utf8')));
     }
     return scssCompileCache.get(relPath);
   }
@@ -447,17 +635,47 @@ function sweepFileForProtectedDeclarations(relPath) {
   }
 }
 
+// P4 스윕 대상 판정(Important 2, 11라운드) — pure helper. 보호 토큰 선언 금지 계약의 대상 파일인가?
+// 이전 필터는 `f.endsWith('_themes.scss')`로 예외를 걸어 루트 정본뿐 아니라 중첩 `components/example/
+// _themes.scss`·접미 우연 일치 `components/rogue_themes.scss`까지 잘못 제외했다(외부 검수 실증). SCSS
+// 예외는 루트 상대경로 exact '_themes.scss' **하나뿐**이어야 한다(endsWith 금지). .scss는 컴파일, .css는
+// 정규화 후 AST 스윕 대상이며, 그 외 확장자는 대상이 아니다. 새 .scss/.css는 자동으로 포함된다.
+function isProtectedSweepTarget(relPath) {
+  if (relPath === '_themes.scss') return false; // 유일 예외: 토큰의 정본 거처(라이트/다크/별칭 3블록)
+  return relPath.endsWith('.scss') || relPath.endsWith('.css');
+}
+
 describe('styles/ 전체 컴파일/AST 스윕 — 비핀 파일 보호 토큰 선언 금지 (P4, 컴파일 기반)', () => {
   const stylesDir = resolve(__dirname, '../styles');
-  const targetFiles = readdirSync(stylesDir, { recursive: true })
-    .map(String)
-    .filter((f) => (f.endsWith('.scss') && !f.endsWith('_themes.scss')) || f.endsWith('.css'));
+  const allFiles = readdirSync(stylesDir, { recursive: true }).map(String);
+  const targetFiles = allFiles.filter(isProtectedSweepTarget);
 
-  it('스윕 대상 파일이 90개를 넘는다(범위 축소 감지 — .scss 92 + .css 1 실측 기준)', () => {
+  // 확장자 커버리지를 "총개수 하한"으로 대체하지 않는다(Important 2) — 아래 exact 제외목록·역방향
+  // 포함 단정이 실제 커버리지를 고정한다. 개수는 극단적 축소만 잡는 보조 신호로만 남긴다.
+  it('스윕 대상 파일이 90개를 넘는다(극단 축소 보조 신호 — .scss 92 + .css 1 실측 기준)', () => {
     expect(targetFiles.length).toBeGreaterThan(90);
   });
 
-  it('.scss 전부(컴파일 후 AST)+.css 전부(직접 파싱)가 --color-/--track-/--shadow- 를 선언하지 않는다', () => {
+  it('제외되는 .scss는 루트 정본 _themes.scss 하나뿐 (endsWith 우회 방지 — 중첩/접미 _themes.scss는 대상)', () => {
+    const excludedScss = allFiles.filter((f) => f.endsWith('.scss') && !isProtectedSweepTarget(f));
+    expect(excludedScss).toEqual(['_themes.scss']);
+  });
+
+  it('styles/**/*.css 전부가 스윕 대상에 포함된다 + fonts.css 직접 고정 (.css 분기 삭제 재발 검출)', () => {
+    const allCss = allFiles.filter((f) => f.endsWith('.css'));
+    expect(allCss.length, 'styles/ 아래 .css가 하나도 없다면 인벤토리 전제가 깨짐').toBeGreaterThan(0);
+    for (const f of allCss) expect(targetFiles, `${f}가 스윕 대상에서 누락`).toContain(f);
+    expect(targetFiles).toContain('fonts.css');
+  });
+
+  it('.css 분기를 뺀 대체 판정은 최소 하나의 .css를 놓친다 (누락 회귀를 역방향 포함 단정이 잡음을 확인)', () => {
+    const withoutCssBranch = (relPath) => relPath !== '_themes.scss' && relPath.endsWith('.scss'); // .css 분기 제거 모사
+    const mutated = allFiles.filter(withoutCssBranch);
+    const allCss = allFiles.filter((f) => f.endsWith('.css'));
+    expect(allCss.some((f) => !mutated.includes(f))).toBe(true);
+  });
+
+  it('.scss 전부(컴파일 후 AST)+.css 전부(정규화 후 파싱)가 --color-/--track-/--shadow- 를 선언하지 않는다', () => {
     const offenders = targetFiles.flatMap(sweepFileForProtectedDeclarations);
     expect(offenders, `보호 토큰 선언(또는 컴파일 실패) 발견: ${offenders.join('; ')}`).toEqual([]);
   });
@@ -925,6 +1143,47 @@ describe('게이트 자체 검증 (synthetic CSS)', () => {
     });
   });
 
+  describe('isProtectedSweepTarget — P4 스윕 대상 판정 (Important 2, 11라운드)', () => {
+    it('루트 정본 _themes.scss(exact)만 예외 — false', () => {
+      expect(isProtectedSweepTarget('_themes.scss')).toBe(false);
+    });
+    it('중첩 components/example/_themes.scss는 대상 — true (endsWith 우회 없음)', () => {
+      expect(isProtectedSweepTarget('components/example/_themes.scss')).toBe(true);
+    });
+    it('접미 우연 일치 components/rogue_themes.scss도 대상 — true', () => {
+      expect(isProtectedSweepTarget('components/rogue_themes.scss')).toBe(true);
+    });
+    it('fonts.css(.css 커버리지)도 대상 — true', () => {
+      expect(isProtectedSweepTarget('fonts.css')).toBe(true);
+    });
+    it('비 scss/css(예: .js)는 대상 아님 — false', () => {
+      expect(isProtectedSweepTarget('components/foo.js')).toBe(false);
+    });
+  });
+
+  describe('normalizeRawCss — raw .css escaped custom-property 정규화 (Minor, 11라운드)', () => {
+    // 원문 raw 파싱은 `--\63 olor-…`(유효 CSS, 실이름 --color-…)를 리터럴 prop으로 남겨 보호 접두 검사를
+    // 우회시켰다. Sass CSS-syntax 컴파일로 식별자 escape를 정규화한 뒤 findProtectedDeclarations에 태운다.
+    it('escaped 선언(--\\63 olor-…)이 정규화 후 실이름 --color-selected-indicator로 검출된다', () => {
+      const norm = normalizeRawCss(':root { --\\63 olor-selected-indicator: red; }');
+      const offenders = findProtectedDeclarations(norm);
+      expect(offenders).toHaveLength(1);
+      expect(offenders[0]).toMatch(/--color-selected-indicator/);
+    });
+    it('일반(비escape) 보호 선언도 그대로 검출', () => {
+      expect(findProtectedDeclarations(normalizeRawCss(':root { --color-x: red; }'))).toHaveLength(1);
+    });
+    it('--Color-…(대문자)는 case-sensitive 유지 → 보호 접두(--color-) 아니므로 미검출(오검출 방지)', () => {
+      expect(findProtectedDeclarations(normalizeRawCss(':root { --Color-x: red; }'))).toEqual([]);
+    });
+    it('블록주석 안 escaped 선언은 Comment 노드라 미검출', () => {
+      expect(findProtectedDeclarations(normalizeRawCss('.Foo { /* --\\63 olor-x: red; */ color: blue; }'))).toEqual([]);
+    });
+    it('소비(var(--\\63 olor-x))는 선언이 아니라 값이므로 미검출', () => {
+      expect(findProtectedDeclarations(normalizeRawCss('.Foo { border-color: var(--\\63 olor-x); }'))).toEqual([]);
+    });
+  });
+
   describe('keyIntersection — 별칭·라이트 교집합 판정 (P1 synthetic)', () => {
     it('별칭이 라이트 키를 재선언하면 교집합에 잡힌다(specificity 동일 → 후행 재선언이 침묵 오염)', () => {
       const lightKeys = new Set(['color-a', 'color-b']);
@@ -1011,27 +1270,79 @@ describe('게이트 자체 검증 (synthetic CSS)', () => {
     });
   });
 
-  describe('assertVisibleBorder — 대칭 구멍 A(승격핀 border 가시성) 구조 단정, 10라운드', () => {
-    it('정상 형태(1px solid var(--x))는 visible', () => {
-      expect(assertVisibleBorder(['1px solid var(--x)']).visible).toBe(true);
+  describe('border 4면 cascade 합성 엔진 — 대칭 구멍 A mutation matrix (Important 1, 11라운드)', () => {
+    // 이 mutation들은 PINNED border 분기가 실제로 쓰는 synthesizeBorderSides→assertPerimeterVisible
+    // 경로를 그대로 태운다(helper 단위가 아니라 통합 경로 검증). f114013 현행 모델에서는 A 7건 전부
+    // visible=true(false-green, RED-proof 스크립트로 사전 확인)였고, 이 엔진에서 전부 올바른 RED로 뒤집힌다.
+    const TOKEN = 'color-input-border';
+    const V = 'var(--color-input-border)';
+    // 지정 selector('.X')의 root-직속 규칙(들)을 문서 순서로 합성해 perimeter 가시성을 판정.
+    const perimeterVisible = (cssText) =>
+      assertPerimeterVisible(synthesizeBorderSides(findRootRules(postcss.parse(cssText), '.X')), TOKEN).visible;
+
+    // A(RED) — 실뷰포트에서 보더가 소실/토큰 미사용인데 이전 모델이 false-green 처리하던 7종.
+    it.each([
+      ['shorthand 후 border-width:0 → 전면 width 0', `.X{border:1px solid ${V};border-width:0}`],
+      ['shorthand 후 border-style:none → 전면 style none', `.X{border:1px solid ${V};border-style:none}`],
+      ['shorthand 후 border-color:transparent → 토큰이 후행 override로 소실', `.X{border:1px solid ${V};border-color:transparent}`],
+      ['border: calc(0px) solid var(…) → calc width는 미지원(fail-closed)', `.X{border:calc(0px) solid ${V}}`],
+      ['shorthand 후 border-width:0 !important → important width 0', `.X{border:1px solid ${V};border-width:0 !important}`],
+      ['border-width:0 !important 후 shorthand(non-imp) → important가 shorthand width를 이김', `.X{border-width:0 !important;border:1px solid ${V}}`],
+      ['directional border-left-width:0 → 한 면 소실(perimeter 깨짐)', `.X{border:1px solid ${V};border-left-width:0}`],
+    ])('RED: %s', (_label, cssText) => {
+      expect(perimeterVisible(cssText)).toBe(false);
     });
-    it('style 키워드 생략(1px var(--x))은 FAIL', () => {
-      const shape = assertVisibleBorder(['1px var(--x)']);
-      expect(shape.hasVisibleStyle).toBe(false);
-      expect(shape.visible).toBe(false);
+
+    // B(GREEN) — 실제로 가시 + 토큰 사용이라 계속 통과해야 하는 케이스(회귀 방지).
+    it.each([
+      ['border-width:0 후 shorthand → 전 성분 복원', `.X{border-width:0;border:1px solid ${V}}`],
+      ['shorthand !important 후 border-width:0(non-imp) → important width 1px 유지', `.X{border:1px solid ${V} !important;border-width:0}`],
+      ['directional 성분으로 4면 조립(width/style/color) → 전면 가시+토큰', `.X{border-width:1px;border-style:solid;border-color:${V}}`],
+      ['border-color 콤마 아닌 4값 확장 + solid → 전면 토큰', `.X{border:1px solid ${V};border-style:solid solid solid solid}`],
+    ])('GREEN: %s', (_label, cssText) => {
+      expect(perimeterVisible(cssText)).toBe(true);
     });
-    it('style이 명시적 none(1px none var(--x))은 FAIL', () => {
-      const shape = assertVisibleBorder(['1px none var(--x)']);
-      expect(shape.styleWord).toBe('none');
-      expect(shape.visible).toBe(false);
+
+    it('여러 root 규칙(문서 순서)에 걸친 cascade도 합성 — 후행 규칙 border-bottom-width:0이 이긴다(RED)', () => {
+      const cssText = `.X{border:1px solid ${V}} .X{border-bottom-width:0}`;
+      expect(perimeterVisible(cssText)).toBe(false);
     });
-    it('width 0(0 solid var(--x))은 FAIL', () => {
-      const shape = assertVisibleBorder(['0 solid var(--x)']);
-      expect(shape.width).toBe('0');
-      expect(shape.visible).toBe(false);
+    it('border-radius/border-collapse 등 비-border 프로퍼티는 엔진이 무시(초기값 유지로 style none → RED)', () => {
+      // border 성분 선언이 전무하면 style=initial none → 비가시. border-radius는 성분에 영향 없음을 확인.
+      const sides = synthesizeBorderSides(findRootRules(postcss.parse('.X{border-radius:8px;border-collapse:collapse}'), '.X'));
+      expect(sides.top.style.value).toBe('none');
+      expect(assertPerimeterVisible(sides, TOKEN).visible).toBe(false);
     });
-    it('width 미명시(solid var(--x))는 UA 기본 medium으로 간주해 visible 허용', () => {
-      expect(assertVisibleBorder(['solid var(--x)']).visible).toBe(true);
+
+    // 엔진 서브함수 단위 검증 — 성분 파싱/확장/미지원 표시.
+    it('parseBorderShorthand: 1px solid var(…) → width/style/color 정상, unsupported 없음', () => {
+      const p = parseBorderShorthand(`1px solid ${V}`);
+      expect(p.width).toEqual({ value: '1px', unsupported: false });
+      expect(p.style).toEqual({ value: 'solid', unsupported: false });
+      expect(p.color).toEqual({ value: V, unsupported: false });
+    });
+    it('parseBorderShorthand: 생략 성분은 initial 재설정 (1px → style none/color currentcolor)', () => {
+      const p = parseBorderShorthand('1px');
+      expect(p.style.value).toBe('none');
+      expect(p.color.value).toBe('currentcolor');
+    });
+    it('parseBorderShorthand: calc(0px)(width 위치)는 세 성분 전부 unsupported', () => {
+      const p = parseBorderShorthand(`calc(0px) solid ${V}`);
+      expect(p.width.unsupported && p.style.unsupported && p.color.unsupported).toBe(true);
+    });
+    it('classifyComponentValue: transparent는 유효 색이나 토큰 없음, 0은 유효 width, calc()는 unsupported', () => {
+      expect(classifyComponentValue('color', 'transparent')).toEqual({ value: 'transparent', unsupported: false });
+      expect(classifyComponentValue('width', '0')).toEqual({ value: '0', unsupported: false });
+      expect(classifyComponentValue('width', 'calc(0px)').unsupported).toBe(true);
+    });
+    it('expandFourSides: 1값→4면 동일, 2값→top/bottom·right/left, 3값→top/right·left/bottom', () => {
+      expect(expandFourSides(['a'])).toEqual(['a', 'a', 'a', 'a']);
+      expect(expandFourSides(['a', 'b'])).toEqual(['a', 'b', 'a', 'b']);
+      expect(expandFourSides(['a', 'b', 'c'])).toEqual(['a', 'b', 'c', 'b']);
+    });
+    it('sideGeometryVisible: medium(미명시)은 가시, 명시적 0은 비가시', () => {
+      expect(sideGeometryVisible({ width: { value: 'medium', unsupported: false }, style: { value: 'solid', unsupported: false } })).toBe(true);
+      expect(sideGeometryVisible({ width: { value: '0', unsupported: false }, style: { value: 'solid', unsupported: false } })).toBe(false);
     });
   });
 
