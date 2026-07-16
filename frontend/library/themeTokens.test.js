@@ -182,24 +182,32 @@ function findRootRules(root, targetSelectors) {
 }
 
 // 일치 규칙들(문서 순서)을 walkDecls로 훑어 prop별 "최종 유효 선언 하나"를 CSS cascade 규칙대로
-// 합성한다: !important는 non-important를 무조건 이기고, 같은 중요도끼리는 후행이 이긴다(이 테스트가
-// 다루는 범위는 항상 "동일 selector 문자열"이므로 명시도는 항상 동률 — source order만이 승패를
-// 가른다). 이전의 "일치 규칙 전체를 some()으로 훑어 하나라도 있으면 통과"식 판정은 뒤에 오는
-// override(승격핀 뒤 동일 selector의 `border: none`, indicator핀 뒤 `box-shadow: none` 등)를
-// 놓치고 stale 값으로 GREEN 처리했다(외부 검수 실증, l시나리오). 반환값은 `{ [prop]: { value,
-// important } }` — 호출부는 "최종값 하나"만 검사해야 하며(some() 폐기), 여기 없는 prop은 그 selector
-// 조합에서 한 번도 선언되지 않았다는 뜻이다.
-function effectiveValue(rules, props) {
+// 합성하는 공용 리듀서. !important는 non-important를 무조건 이기고, 같은 중요도끼리는 후행이 이긴다
+// (custom property도 일반 프로퍼티와 동일한 cascade 규칙을 따른다 — `--x: A !important; --x: B;`의
+// 계산값은 여전히 A. 외부 검수 7라운드째 실증: darkValues가 이 규칙 없이 "무조건 후행 승리"만 쓰던
+// 시절엔 `--color-selected-indicator: rgba(107,114,128,0) !important;` 뒤에 `#6B7280;`이 오는
+// 케이스에서 브라우저는 투명인데 테스트는 #6B7280을 읽어 false-green을 냈다). predicate로 대상
+// decl만 골라 effectiveValue(prop 화이트리스트)와 darkValues 수집(전체 --커스텀 프로퍼티) 양쪽이
+// 이 로직을 공유한다 — 로직 중복·drift 방지. 반환값은 `{ [prop]: { value, important } }`.
+function reduceEffectiveDecls(rules, predicate) {
   const state = {};
   rules.forEach((rule) => {
     rule.walkDecls((decl) => {
-      if (!props.has(decl.prop)) return;
+      if (!predicate(decl)) return;
       const cur = state[decl.prop];
       if (cur && cur.important && !decl.important) return; // important가 후행 non-important를 이김
       state[decl.prop] = { value: decl.value.trim(), important: !!decl.important };
     });
   });
   return state;
+}
+
+// 이전의 "일치 규칙 전체를 some()으로 훑어 하나라도 있으면 통과"식 판정은 뒤에 오는 override(승격핀
+// 뒤 동일 selector의 `border: none`, indicator핀 뒤 `box-shadow: none` 등)를 놓치고 stale 값으로
+// GREEN 처리했다(외부 검수 실증, l시나리오). 호출부는 "최종값 하나"만 검사해야 하며(some() 폐기),
+// 여기 없는 prop은 그 selector 조합에서 한 번도 선언되지 않았다는 뜻이다.
+function effectiveValue(rules, props) {
+  return reduceEffectiveDecls(rules, (decl) => props.has(decl.prop));
 }
 
 // 값 문자열에서 "다른 var() 안에 중첩되지 않은" 최상위 var() 호출들의 첫 번째 인자(토큰)만 모아
@@ -210,12 +218,36 @@ function effectiveValue(rules, props) {
 // m시나리오: 최상위 첫 인자는 `-hover` 별칭이라 실제로는 기대 토큰을 안 씀에도 통과했다).
 // box-shadow처럼 콤마로 나열된 여러 최상위 var()(`var(--shadow-xs), inset … var(--color-selected-
 // indicator)`)는 서로 중첩 관계가 아니므로 각각 독립적으로 전부 수집된다(HomeTabs 다중 그림자).
+//
+// 7라운드째 외부 검수가 실증한 잔여 구멍 2종을 이 수동 파서에 최소 침습으로 닫는다(postcss-
+// value-parser로 AST 파서 전환도 제안됐으나, package.json에 선언된 의존성이 아니라 새 패키지 설치가
+// 필요해 — 이 리포는 최소 변경을 선호하므로 quote-tracking + 경계 검사만 추가하는 쪽을 택했다):
+//  r) 문자열 리터럴 문맥 미추적 — `box-shadow: "var(--color-selected-indicator)"`처럼 값 자체가
+//     quoted 문자열이면 그 안의 `var(`는 CSS 함수 호출이 아니라 문자열 콘텐츠다. quote(`'`/`"`) 진입
+//     시 매칭되는 종료 quote까지 통째로 건너뛴다(`\` escape도 추적해 `\"` 안에서 조기 종료 안 함).
+//  r2) 식별자 경계 미검사 — `fakevar(--color-input-border)`의 `var(`는 `fakevar` 뒤에 접미로 붙은
+//     문자열일 뿐 실제 var() 호출이 아니다. `var(` 직전 문자가 식별자 구성 문자([A-Za-z0-9_-])면
+//     무시한다(1글자만 전진 — 이후 다른 진짜 var()는 계속 스캔).
 function outermostVarTokens(value) {
   const str = String(value);
   const tokens = new Set();
   let i = 0;
   while (i < str.length) {
+    const ch0 = str[i];
+    if (ch0 === '"' || ch0 === "'") {
+      const quote = ch0;
+      let j = i + 1;
+      while (j < str.length) {
+        if (str[j] === '\\') { j += 2; continue; } // escape는 다음 문자까지 통째로 건너뜀
+        if (str[j] === quote) { j += 1; break; } // 매칭 종료 quote
+        j++;
+      }
+      i = j; // 문자열 리터럴 내부는 var() 스캔 대상에서 완전히 제외
+      continue;
+    }
     if (str.startsWith('var(', i)) {
+      const prevChar = i > 0 ? str[i - 1] : '';
+      if (/[A-Za-z0-9_-]/.test(prevChar)) { i++; continue; } // fakevar( 등 접미 매치는 진짜 var() 아님
       const parenOpen = i + 3; // '(' 위치
       let depth = 0;
       let closeIdx = -1;
@@ -299,6 +331,7 @@ describe('컨트롤 보더/인디케이터 재분류 고정 — 컴파일 CSS po
 // 반투명 배경 rgba(94, 106, 210, 0.1)를 합성색 계산에 그대로 써야 하므로 hex 전용으로는 부족하다).
 // transparent 등 둘 다 아닌 값은 파싱 실패로 null → contrastRatio가 0을 반환해 아래 >=3 단정이
 // RED가 된다(다크 인디케이터 투명 회귀 검출).
+const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 function parseColor(value) {
   const str = String(value).trim();
   const hex = /^#([0-9a-fA-F]{6})$/.exec(str);
@@ -308,7 +341,17 @@ function parseColor(value) {
   }
   const rgba = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+)\s*)?\)$/.exec(str);
   if (rgba) {
-    return { r: Number(rgba[1]), g: Number(rgba[2]), b: Number(rgba[3]), a: rgba[4] != null ? Number(rgba[4]) : 1 };
+    // 브라우저 의미론대로 clamp — a는 [0,1], RGB 채널은 [0,255]. clamp 없이 Number()만 쓰면
+    // `rgba(60,60,60,10)`(a=10)처럼 스펙 밖 값이 합성 수학을 붕괴시킨다: compositeOver의
+    // `a*fg + (1-a)*bg`가 a=10일 때 음의 계수(1-a=-9)로 bg를 반대 방향으로 끌어당겨 비현실적인
+    // 합성색을 만들고, 그 결과로 나온 대비가 실제 렌더(clamp된 a=1, 즉 완전 불투명)보다 훨씬 높게
+    // 나와 회귀를 놓쳤다(외부 검수 실증, s시나리오: 실대비 ≈1.5~1.7인데 미클램프 시 25~74로 통과).
+    return {
+      r: clamp(Number(rgba[1]), 0, 255),
+      g: clamp(Number(rgba[2]), 0, 255),
+      b: clamp(Number(rgba[3]), 0, 255),
+      a: rgba[4] != null ? clamp(Number(rgba[4]), 0, 1) : 1,
+    };
   }
   return null;
 }
@@ -357,17 +400,21 @@ function contrastOverBg(fgValue, bgValue) {
 
 describe('다크 selected-indicator 값 시맨틱 고정 (SC 1.4.11 비텍스트 대비 3:1)', () => {
   // _themes.scss는 원칙상 dark 블록이 1개지만, "html[data-theme=dark]" 셀렉터를 가진 root 직속
-  // 규칙 전부를 문서 순서로 walk해 프로퍼티별 "마지막 선언 승리"(실제 CSS cascade와 동일)로
-  // darkValues를 합성한다 — 첫 블록만 읽으면 뒤쪽 재정의(예: 원복 실수로 인디케이터를 다시
-  // transparent로 되돌리는 블록 추가)를 놓치고 stale 값으로 GREEN 처리한다(외부 검수 실증).
+  // 규칙 전부를 문서 순서로 walk해 프로퍼티별 cascade 최종값(!important 우선, 동급은 후행 승리 —
+  // 실제 CSS cascade와 동일)으로 darkValues를 합성한다 — 첫 블록만 읽으면 뒤쪽 재정의(예: 원복
+  // 실수로 인디케이터를 다시 transparent로 되돌리는 블록 추가)를 놓치고 stale 값으로 GREEN
+  // 처리한다(외부 검수 실증).
   // 셀렉터는 quoted/unquoted 둘 다 허용(따옴표 유무는 Sass 버전에 좌우 — 최상단 주석 참고).
   const themesRoot = postcss.parse(css);
   const DARK_SELECTORS = ['html[data-theme=dark]', "html[data-theme='dark']", 'html[data-theme="dark"]'];
   const darkRules = findRootRules(themesRoot, DARK_SELECTORS);
+  // reduceEffectiveDecls(effectiveValue와 동일한 importance-aware 리듀서)로 합성 — 무조건 후행 승리로
+  // 모으던 이전 버전은 custom property의 !important를 무시했다(위 함수 주석 참고, 외부 검수 7라운드
+  // 실증). darkRules.length===1 단정만으로는 이 결함을 못 잡는다 — 같은 블록 "내부"의 중복 선언에도
+  // !important가 개입할 수 있기 때문이다.
+  const darkState = reduceEffectiveDecls(darkRules, (decl) => decl.prop.startsWith('--'));
   const darkValues = {};
-  darkRules.forEach((rule) => rule.walkDecls((decl) => {
-    if (decl.prop.startsWith('--')) darkValues[decl.prop.slice(2)] = decl.value.trim();
-  }));
+  for (const [prop, { value }] of Object.entries(darkState)) darkValues[prop.slice(2)] = value;
 
   // 파일 상단 위치기반 추출(대칭·baseline·별칭)이 "dark 블록은 정확히 1개"를 암묵 가정한다 —
   // 뒤쪽 dark 재정의 블록이 생기면 여기서 즉시 RED(외부 검수: 유일성 또는 전면 cascade 요구).
