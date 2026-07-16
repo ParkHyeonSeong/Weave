@@ -189,14 +189,25 @@ function findRootRules(root, targetSelectors) {
 // 케이스에서 브라우저는 투명인데 테스트는 #6B7280을 읽어 false-green을 냈다). predicate로 대상
 // decl만 골라 effectiveValue(prop 화이트리스트)와 darkValues 수집(전체 --커스텀 프로퍼티) 양쪽이
 // 이 로직을 공유한다 — 로직 중복·drift 방지. 반환값은 `{ [prop]: { value, important } }`.
+//
+// prop 정규화(Minor 2, 8라운드 외부 검수 실증) — 표준 CSS 프로퍼티명은 스펙상 ASCII
+// case-insensitive라 `BORDER: none;` 뒤에 오는 `border: 1px solid red;`는 같은 프로퍼티의 후행
+// 재정의여야 한다. 정규화 없이 decl.prop을 그대로 키로 쓰면 대소문자만 다른 두 선언이 서로 다른
+// state 엔트리로 남아 override를 놓친다. 커스텀 프로퍼티(`--`로 시작)는 스펙상 case-sensitive이므로
+// 그대로 보존한다(`--Foo`와 `--foo`는 별개 토큰). predicate는 (decl, normalizedProp) 둘 다 받는다 —
+// 화이트리스트 비교(effectiveValue)도 정규화된 prop 기준이어야 대소문자 변형을 놓치지 않는다.
+function normalizeProp(prop) {
+  return prop.startsWith('--') ? prop : prop.toLowerCase();
+}
 function reduceEffectiveDecls(rules, predicate) {
   const state = {};
   rules.forEach((rule) => {
     rule.walkDecls((decl) => {
-      if (!predicate(decl)) return;
-      const cur = state[decl.prop];
+      const prop = normalizeProp(decl.prop);
+      if (!predicate(decl, prop)) return;
+      const cur = state[prop];
       if (cur && cur.important && !decl.important) return; // important가 후행 non-important를 이김
-      state[decl.prop] = { value: decl.value.trim(), important: !!decl.important };
+      state[prop] = { value: decl.value.trim(), important: !!decl.important };
     });
   });
   return state;
@@ -207,7 +218,7 @@ function reduceEffectiveDecls(rules, predicate) {
 // GREEN 처리했다(외부 검수 실증, l시나리오). 호출부는 "최종값 하나"만 검사해야 하며(some() 폐기),
 // 여기 없는 prop은 그 selector 조합에서 한 번도 선언되지 않았다는 뜻이다.
 function effectiveValue(rules, props) {
-  return reduceEffectiveDecls(rules, (decl) => props.has(decl.prop));
+  return reduceEffectiveDecls(rules, (decl, prop) => props.has(prop));
 }
 
 // 값 문자열에서 "다른 var() 안에 중첩되지 않은" 최상위 var() 호출들의 첫 번째 인자(토큰)만 모아
@@ -226,41 +237,64 @@ function effectiveValue(rules, props) {
 //     quoted 문자열이면 그 안의 `var(`는 CSS 함수 호출이 아니라 문자열 콘텐츠다. quote(`'`/`"`) 진입
 //     시 매칭되는 종료 quote까지 통째로 건너뛴다(`\` escape도 추적해 `\"` 안에서 조기 종료 안 함).
 //  r2) 식별자 경계 미검사 — `fakevar(--color-input-border)`의 `var(`는 `fakevar` 뒤에 접미로 붙은
-//     문자열일 뿐 실제 var() 호출이 아니다. `var(` 직전 문자가 식별자 구성 문자([A-Za-z0-9_-])면
-//     무시한다(1글자만 전진 — 이후 다른 진짜 var()는 계속 스캔).
+//     문자열일 뿐 실제 var() 호출이 아니다.
+//
+// 8라운드째 외부 검수가 실증한 잔여 구멍 2종을 추가로 닫는다(Minor 1):
+//  r3) quote 스킵이 최상위 스캔에만 적용되고 var(...) 내부 "괄호 깊이 추적" 루프에는 없었다 —
+//     `var(--shadow-xs, "(", var(--color-selected-indicator))`에서 fallback 안 문자열 리터럴
+//     `"("` 의 `(`를 진짜 괄호로 잘못 세어(짝 안 맞는 open 하나 추가) 바깥 var()의 closeIdx를 못
+//     찾았고, 그 결과 `--color-selected-indicator`가 fallback 안인데도 최상위 스캔에서 독립
+//     var()처럼 재발견돼 잘못 수집됐다. skipQuote를 최상위 스캔과 깊이 추적 루프 양쪽이 공유하도록
+//     해 문자열 리터럴 내부는 어느 스캔 단계에서도 괄호로 안 세게 통일한다.
+//  r4) 식별자 경계가 blacklist([A-Za-z0-9_-] 배제)였다 — 배제 목록에 없는 비ASCII 문자(예:
+//     `λvar(`)는 안 걸러져 함수 호출로 오인됐다. blacklist를 whitelist로 반전: `var(` 직전 문자가
+//     {값 시작, 공백, `(`, `,`} 중 하나일 때만 진짜 함수 호출로 인정한다 — 그 외(접미 매치든
+//     비ASCII 꼬리든)는 전부 배제한다.
 function outermostVarTokens(value) {
   const str = String(value);
   const tokens = new Set();
+  // '"'/"'" 진입 시 매칭되는 종료 quote 바로 다음 인덱스를 반환(escape 추적) — 최상위 스캔과 var(...)
+  // 내부 깊이 추적 루프가 이 헬퍼를 공유해(r3) 문자열 리터럴 내부 괄호가 어디서도 안 세인다.
+  function skipQuote(s, from) {
+    const quote = s[from];
+    let k = from + 1;
+    while (k < s.length) {
+      if (s[k] === '\\') { k += 2; continue; } // escape는 다음 문자까지 통째로 건너뜀
+      if (s[k] === quote) { k += 1; break; } // 매칭 종료 quote
+      k++;
+    }
+    return k;
+  }
+  // whitelist(r4): 값 시작·공백류·'('·',' 뒤일 때만 `var(`를 진짜 함수 호출로 인정.
+  const isVarBoundary = (prevChar, atStart) =>
+    atStart || prevChar === ' ' || prevChar === '\t' || prevChar === '\n' || prevChar === '(' || prevChar === ',';
   let i = 0;
   while (i < str.length) {
     const ch0 = str[i];
     if (ch0 === '"' || ch0 === "'") {
-      const quote = ch0;
-      let j = i + 1;
-      while (j < str.length) {
-        if (str[j] === '\\') { j += 2; continue; } // escape는 다음 문자까지 통째로 건너뜀
-        if (str[j] === quote) { j += 1; break; } // 매칭 종료 quote
-        j++;
-      }
-      i = j; // 문자열 리터럴 내부는 var() 스캔 대상에서 완전히 제외
+      i = skipQuote(str, i); // 문자열 리터럴 내부는 var() 스캔 대상에서 완전히 제외
       continue;
     }
     if (str.startsWith('var(', i)) {
       const prevChar = i > 0 ? str[i - 1] : '';
-      if (/[A-Za-z0-9_-]/.test(prevChar)) { i++; continue; } // fakevar( 등 접미 매치는 진짜 var() 아님
+      if (!isVarBoundary(prevChar, i === 0)) { i++; continue; } // fakevar(/λvar( 등은 진짜 var() 아님
       const parenOpen = i + 3; // '(' 위치
       let depth = 0;
       let closeIdx = -1;
       let commaIdx = -1;
-      for (let j = parenOpen; j < str.length; j++) {
+      let j = parenOpen;
+      while (j < str.length) {
         const c = str[j];
-        if (c === '(') depth++;
-        else if (c === ')') {
+        if (c === '"' || c === "'") { j = skipQuote(str, j); continue; } // 인자 내부 문자열도 스킵(r3)
+        if (c === '(') { depth++; j++; continue; }
+        if (c === ')') {
           depth--;
           if (depth === 0) { closeIdx = j; break; }
-        } else if (c === ',' && depth === 1 && commaIdx === -1) {
-          commaIdx = j; // 이 var(...) 최상위(fallback 구분) 콤마만 — 중첩 var() 안 콤마는 depth>1
+          j++;
+          continue;
         }
+        if (c === ',' && depth === 1 && commaIdx === -1) commaIdx = j; // 이 var(...) 최상위(fallback 구분) 콤마만
+        j++;
       }
       if (closeIdx === -1) { i += 4; continue; } // 괄호 불일치(비정상 값) — 이 지점만 건너뜀
       const argEnd = commaIdx === -1 ? closeIdx : commaIdx;
@@ -339,7 +373,11 @@ function parseColor(value) {
     const n = parseInt(hex[1], 16);
     return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255, a: 1 };
   }
-  const rgba = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+)\s*)?\)$/.exec(str);
+  // 엄격 CSS <number> 토큰만 허용(Important 1) — 느슨한 `[\d.]+`는 `1.`(trailing dot, CSS 불법 —
+  // 브라우저는 이 선언을 폐기해 box-shadow가 none처럼 무효화된다)도 매치해 Number('1.')===1로
+  // 정상 색상 취급했다(외부 검수 8라운드 실증). `\d+(?:\.\d+)?`(정수/소수)와 `\.\d+`(선행 점만) 두
+  // 형태만 인정 — trailing dot·다중 소수점(`1.2.3`)·빈 채널은 전부 매치 실패로 null.
+  const rgba = /^rgba?\(\s*(\d+(?:\.\d+)?|\.\d+)\s*,\s*(\d+(?:\.\d+)?|\.\d+)\s*,\s*(\d+(?:\.\d+)?|\.\d+)\s*(?:,\s*(\d+(?:\.\d+)?|\.\d+)\s*)?\)$/.exec(str);
   if (rgba) {
     // 브라우저 의미론대로 clamp — a는 [0,1], RGB 채널은 [0,255]. clamp 없이 Number()만 쓰면
     // `rgba(60,60,60,10)`(a=10)처럼 스펙 밖 값이 합성 수학을 붕괴시킨다: compositeOver의
@@ -398,21 +436,52 @@ function contrastOverBg(fgValue, bgValue) {
   return contrastRatio(composited, bgValue);
 }
 
+// 다크 셀렉터가 매칭 가능한 3가지 quote 변형(Sass 버전별 unquoted 출력 포함) — 파일 상단 주석 참고.
+const DARK_SELECTORS = ['html[data-theme=dark]', "html[data-theme='dark']", 'html[data-theme="dark"]'];
+
+// 다크 셀렉터를 가진 규칙을 parent 무관 **전수** 수집한다(root.walkRules 전체 + selectorMatches) —
+// findRootRules처럼 root 직속만 후보로 좁히지 않는다(Important 2, 8라운드 외부 검수 실증). root
+// 직속이 아닌(예: @media/@supports 안) 다크 규칙이 하나라도 있으면 그 자체를 즉시 throw로 금지한다:
+// `@media (min-width:0px){ html[data-theme='dark']{ --color-selected-indicator: rgba(...,0)
+// !important } }`처럼 항상-매치하는 미디어 쿼리로 감싸면 실뷰포트에서는 이 규칙이 그대로 적용/승리
+// 하는데, root-직속만 보던 이전 findRootRules는 이걸 후보에서 통째로 제외해 존재 자체를 놓쳤고
+// (유일성 검사도 자연히 우회), 게이트가 GREEN을 냈다. 어떤 미디어 쿼리가 "실제로 매치하는지"
+// 모델링하는 시도는 하지 않는다(min-width:0 같은 항상-참 조건을 일반화해 판별하는 건 신뢰할 수
+// 없다) — 대신 root 직속이 아닌 다크 규칙의 **존재 자체**를 금지한다. throw 없이 반환되면 그
+// 반환값은 root 직속 규칙만 담긴 전수 집합이며, 유일성(length===1)·cascade(reduceEffectiveDecls)는
+// 이 집합을 그대로 쓴다.
+function collectDarkSelectorRules(root, targetSelectors) {
+  const all = [];
+  root.walkRules((rule) => {
+    if (selectorMatches(rule, targetSelectors)) all.push(rule);
+  });
+  const nonRoot = all.filter((r) => r.parent.type !== 'root');
+  if (nonRoot.length > 0) {
+    const where = nonRoot
+      .map((r) => `${r.parent.type}${r.parent.params ? `(${r.parent.params})` : ''} > ${r.selector}`)
+      .join('; ');
+    throw new Error(
+      `다크 규칙이 root 직속이 아닌 곳(예: @media)에 ${nonRoot.length}건 존재 — 실뷰포트에서 카스케이드를 ` +
+      `이길 수 있어 금지: ${where}`,
+    );
+  }
+  return all;
+}
+
 describe('다크 selected-indicator 값 시맨틱 고정 (SC 1.4.11 비텍스트 대비 3:1)', () => {
-  // _themes.scss는 원칙상 dark 블록이 1개지만, "html[data-theme=dark]" 셀렉터를 가진 root 직속
-  // 규칙 전부를 문서 순서로 walk해 프로퍼티별 cascade 최종값(!important 우선, 동급은 후행 승리 —
-  // 실제 CSS cascade와 동일)으로 darkValues를 합성한다 — 첫 블록만 읽으면 뒤쪽 재정의(예: 원복
-  // 실수로 인디케이터를 다시 transparent로 되돌리는 블록 추가)를 놓치고 stale 값으로 GREEN
-  // 처리한다(외부 검수 실증).
+  // _themes.scss는 원칙상 dark 블록이 1개지만, "html[data-theme=dark]" 셀렉터를 가진 규칙 전부를
+  // (parent 무관 전수 수집 후 root 직속 위반이 없음을 확인한 다음) 문서 순서로 walk해 프로퍼티별
+  // cascade 최종값(!important 우선, 동급은 후행 승리 — 실제 CSS cascade와 동일)으로 darkValues를
+  // 합성한다 — 첫 블록만 읽으면 뒤쪽 재정의(예: 원복 실수로 인디케이터를 다시 transparent로 되돌리는
+  // 블록 추가)를 놓치고 stale 값으로 GREEN 처리한다(외부 검수 실증).
   // 셀렉터는 quoted/unquoted 둘 다 허용(따옴표 유무는 Sass 버전에 좌우 — 최상단 주석 참고).
   const themesRoot = postcss.parse(css);
-  const DARK_SELECTORS = ['html[data-theme=dark]', "html[data-theme='dark']", 'html[data-theme="dark"]'];
-  const darkRules = findRootRules(themesRoot, DARK_SELECTORS);
+  const darkRules = collectDarkSelectorRules(themesRoot, DARK_SELECTORS); // @media 등 비-root 다크 규칙 존재 시 여기서 즉시 throw
   // reduceEffectiveDecls(effectiveValue와 동일한 importance-aware 리듀서)로 합성 — 무조건 후행 승리로
   // 모으던 이전 버전은 custom property의 !important를 무시했다(위 함수 주석 참고, 외부 검수 7라운드
   // 실증). darkRules.length===1 단정만으로는 이 결함을 못 잡는다 — 같은 블록 "내부"의 중복 선언에도
   // !important가 개입할 수 있기 때문이다.
-  const darkState = reduceEffectiveDecls(darkRules, (decl) => decl.prop.startsWith('--'));
+  const darkState = reduceEffectiveDecls(darkRules, (decl, prop) => prop.startsWith('--'));
   const darkValues = {};
   for (const [prop, { value }] of Object.entries(darkState)) darkValues[prop.slice(2)] = value;
 
@@ -463,5 +532,95 @@ describe('다크 selected-indicator 값 시맨틱 고정 (SC 1.4.11 비텍스트
   it('vs ScopeToggle 실제 합성색(반투명 active 배경 on 다크 surface) 3:1 이상', () => {
     expect(scopeToggleAdjacent, `ScopeToggle 배경 최종값 해석 실패: scopeBgFinal=${scopeBgFinal}`).not.toBeNull();
     expect(contrastOverBg(indicator, scopeToggleAdjacent), `indicator=${indicator} on scopeToggleAdjacent=${JSON.stringify(scopeToggleAdjacent)}`).toBeGreaterThanOrEqual(3);
+  });
+});
+
+// 게이트 자체 상설 검증 — 이전 라운드들은 각 결함을 "실파일을 임시로 훼손 → vitest 실행 → 복원"하는
+// 수동 시뮬로만 검증했다(재현 스크립트가 안 남아 다음 라운드가 같은 결함을 다시 심어도 못 잡았다).
+// 여기서는 postcss.parse한 합성 CSS 문자열로 헬퍼(parseColor/collectDarkSelectorRules/
+// outermostVarTokens/reduceEffectiveDecls)를 직접 단정해, 시뮬 재현 없이도 이후 라운드의 회귀를
+// 상시 검출한다 — 8라운드 외부 검수 대응.
+describe('게이트 자체 검증 (synthetic CSS)', () => {
+  describe('parseColor — 엄격 CSS number (Important 1)', () => {
+    it('trailing dot(1.)은 CSS 불법 number — null', () => {
+      expect(parseColor('rgba(107,114,128,1.)')).toBeNull();
+    });
+    it('스펙 밖 alpha(10)는 파싱되고 clamp로 a=1', () => {
+      expect(parseColor('rgba(60,60,60,10)')).toEqual({ r: 60, g: 60, b: 60, a: 1 });
+    });
+    it('leading dot(.5)은 유효 CSS number', () => {
+      expect(parseColor('rgba(0,0,0,.5)')).toEqual({ r: 0, g: 0, b: 0, a: 0.5 });
+    });
+    it('음수 채널은 애초에 정규식 매치 실패 — null', () => {
+      expect(parseColor('rgba(-1,0,0,1)')).toBeNull();
+    });
+    it('다중 소수점(1.2.3)·빈 채널은 매치 실패 — null', () => {
+      expect(parseColor('rgba(1.2.3,0,0,1)')).toBeNull();
+      expect(parseColor('rgba(,0,0,1)')).toBeNull();
+    });
+  });
+
+  describe('다크 수집 — @media 안 다크 규칙 금지 + 유일성 + important 승리 (Important 2)', () => {
+    it('@media로 감싼 다크 규칙이 있으면 명시 메시지로 throw', () => {
+      const root = postcss.parse(`
+        :root { --x: 1; }
+        @media (min-width: 0px) {
+          html[data-theme='dark'] { --color-selected-indicator: rgba(0,0,0,0) !important; }
+        }
+      `);
+      expect(() => collectDarkSelectorRules(root, DARK_SELECTORS)).toThrow(/root 직속이 아닌/);
+    });
+    it('root 직속 다크 규칙만이면 통과하고 전수 집합을 반환', () => {
+      const root = postcss.parse(`html[data-theme='dark'] { --x: 1; }`);
+      const rules = collectDarkSelectorRules(root, DARK_SELECTORS);
+      expect(rules.length).toBe(1);
+    });
+    it('root 직속 다크 블록이 2개면 유일성 단정(toBe(1))이 FAIL한다', () => {
+      const root = postcss.parse(`
+        html[data-theme='dark'] { --x: 1; }
+        html[data-theme='dark'] { --x: 2; }
+      `);
+      const rules = collectDarkSelectorRules(root, DARK_SELECTORS); // throw 없이 전수 2건 반환(둘 다 root 직속)
+      expect(() => expect(rules.length).toBe(1)).toThrow(); // 실 파일 describe와 동일한 유일성 단정이 여기서 RED
+    });
+    it('!important가 후행 non-important를 이긴다(custom property도 동일 cascade)', () => {
+      const root = postcss.parse(`html[data-theme='dark'] { --x: A !important; --x: B; }`);
+      const rules = collectDarkSelectorRules(root, DARK_SELECTORS);
+      const state = reduceEffectiveDecls(rules, (decl, prop) => prop.startsWith('--'));
+      expect(state['--x'].value).toBe('A');
+    });
+  });
+
+  describe('outermostVarTokens — quote 전구간 스킵 + 식별자 경계 whitelist (Minor 1)', () => {
+    it('var 인자 내부 문자열의 "(" 는 깊이 계산을 안 흔든다 — outer만 수집, fallback 미수집', () => {
+      expect(outermostVarTokens('var(--a, "(", var(--b))')).toEqual(new Set(['a']));
+    });
+    it('값 전체가 quoted 문자열이면 var()로 인정 안 함 — 공집합', () => {
+      expect(outermostVarTokens('"var(--x)"')).toEqual(new Set());
+    });
+    it('비ASCII 문자가 붙은 var(는 함수 호출로 인정 안 함(whitelist 경계) — 공집합', () => {
+      expect(outermostVarTokens('λvar(--x)')).toEqual(new Set());
+    });
+    it('식별자 접미로 붙은 var(는 함수 호출 아님 — 공집합', () => {
+      expect(outermostVarTokens('fakevar(--x)')).toEqual(new Set());
+    });
+    it('calc() 안 var()는 다른 var()에 중첩된 게 아니므로 outermost — 콤마 나열 둘 다 수집', () => {
+      expect(outermostVarTokens('calc(1px + var(--a)), var(--b)')).toEqual(new Set(['a', 'b']));
+    });
+  });
+
+  describe('reduceEffectiveDecls — prop 정규화 (Minor 2)', () => {
+    it('일반 property는 case-insensitive 통합 — BORDER 뒤 border가 후행 승리', () => {
+      const root = postcss.parse('.x { BORDER: none; border: 1px solid red; }');
+      const state = reduceEffectiveDecls([root.first], () => true);
+      expect(Object.keys(state)).toEqual(['border']);
+      expect(state.border.value).toBe('1px solid red');
+    });
+    it('커스텀 프로퍼티는 case-sensitive 유지 — --Foo와 --foo는 별개 키', () => {
+      const root = postcss.parse('.x { --Foo: A; --foo: B; }');
+      const state = reduceEffectiveDecls([root.first], () => true);
+      expect(state['--Foo'].value).toBe('A');
+      expect(state['--foo'].value).toBe('B');
+    });
   });
 });
