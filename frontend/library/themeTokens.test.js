@@ -250,6 +250,16 @@ function effectiveValue(rules, props) {
 //     `λvar(`)는 안 걸러져 함수 호출로 오인됐다. blacklist를 whitelist로 반전: `var(` 직전 문자가
 //     {값 시작, 공백, `(`, `,`} 중 하나일 때만 진짜 함수 호출로 인정한다 — 그 외(접미 매치든
 //     비ASCII 꼬리든)는 전부 배제한다.
+//
+// 9라운드째 외부 검수가 실증한 잔여 구멍 1종을 추가로 닫는다(Minor):
+//  r5) 괄호 깊이 추적 루프(및 최상위 스캔)가 문자열 밖의 `\` escape를 소비하지 않았다 — r3이 닫은
+//     구멍과 실패 패턴은 동일하지만 원인이 quote가 아니라 escape다. `var(--shadow-xs, \(, var(--color-
+//     selected-indicator))`에서 이스케이프된 `\(`의 `(`를 진짜 여는 괄호로 잘못 세어(depth 오염)
+//     바깥 var()의 closeIdx를 못 찾았고("괄호 불일치"로 판정돼 i+=4만 건너뜀), 그 결과 스캔이 이어서
+//     `var(--color-selected-indicator)`를 fallback 안인데도 독립 최상위 var()처럼 재발견해 잘못
+//     수집했다. 문자열 밖에서도 `\`를 만나면 깊이·quote 판정과 완전히 무관하게 다음 문자까지
+//     통째로 건너뛴다 — skipQuote(문자열 안 escape)와 별개로, 최상위 스캔·depth 추적 루프 양쪽에
+//     독립적으로 이 처리를 추가한다.
 function outermostVarTokens(value) {
   const str = String(value);
   const tokens = new Set();
@@ -271,6 +281,7 @@ function outermostVarTokens(value) {
   let i = 0;
   while (i < str.length) {
     const ch0 = str[i];
+    if (ch0 === '\\') { i += 2; continue; } // r5(9라운드): 문자열 밖 escape — quote/괄호 판정보다 우선해 다음 문자 무조건 소비
     if (ch0 === '"' || ch0 === "'") {
       i = skipQuote(str, i); // 문자열 리터럴 내부는 var() 스캔 대상에서 완전히 제외
       continue;
@@ -285,6 +296,7 @@ function outermostVarTokens(value) {
       let j = parenOpen;
       while (j < str.length) {
         const c = str[j];
+        if (c === '\\') { j += 2; continue; } // r5: var(...) 내부도 동일 — \( 를 진짜 괄호로 안 셈(깊이 오염 방지)
         if (c === '"' || c === "'") { j = skipQuote(str, j); continue; } // 인자 내부 문자열도 스킵(r3)
         if (c === '(') { depth++; j++; continue; }
         if (c === ')') {
@@ -358,6 +370,25 @@ describe('컨트롤 보더/인디케이터 재분류 고정 — 컴파일 CSS po
     const [expectedToken] = outermostVarTokens(needle); // needle 자체도 동일 파서로 토큰화(정합성 보장)
     const matched = finalValues.some((v) => outermostVarTokens(v).has(expectedToken));
     expect(matched, `${selector}의 최종 유효 [${[...props].join('/')}] 선언에서 outermost var 토큰 "${expectedToken}" 미발견 (finalValues=${JSON.stringify(finalValues)})`).toBe(true);
+  });
+});
+
+describe('핀 대상 컴포넌트 5파일 — 보호 토큰 네임스페이스 "선언" 전면 금지 (조상 스코프 오염 차단, 9라운드)', () => {
+  // 위 PINNED가 이미 컴파일 중인 5파일(canvasEditor·taskList·myTasks·home-shared·browseBranches)은
+  // var(--color-x) 같은 소비만 정상이다. `.Foo { --color-x: … }`처럼 어떤 selector에서든 보호
+  // 네임스페이스를 재선언하면 그 조상 스코프 서브트리 전체의 캐스케이드 값을 오염시킨다 —
+  // structuralGate와 동일한 판정(findProtectedDeclarations)을 컴파일된 사이트 CSS 전체에 적용해
+  // 선언 자체의 존재를 금지한다(소비=var() 참조는 --접두 prop이 아니므로 애초에 안 걸린다).
+  const PINNED_FILES = [
+    'components/canvas/canvasEditor.scss',
+    'components/branch/taskList.scss',
+    'components/myTasks/myTasks.scss',
+    'components/home/shared/home-shared.scss',
+    'components/browse/browseBranches.scss',
+  ];
+  it.each(PINNED_FILES)('%s는 --color-/--track-/--shadow- 를 선언하지 않는다(소비만)', (file) => {
+    const offenders = findProtectedDeclarations(compiledSiteCss(file));
+    expect(offenders, `${file}에서 보호 토큰 선언 발견: ${offenders.join('; ')}`).toEqual([]);
   });
 });
 
@@ -439,55 +470,130 @@ function contrastOverBg(fgValue, bgValue) {
 // 다크 셀렉터가 매칭 가능한 3가지 quote 변형(Sass 버전별 unquoted 출력 포함) — 파일 상단 주석 참고.
 const DARK_SELECTORS = ['html[data-theme=dark]', "html[data-theme='dark']", 'html[data-theme="dark"]'];
 
-// 다크 셀렉터를 가진 규칙을 parent 무관 **전수** 수집한다(root.walkRules 전체 + selectorMatches) —
-// findRootRules처럼 root 직속만 후보로 좁히지 않는다(Important 2, 8라운드 외부 검수 실증). root
-// 직속이 아닌(예: @media/@supports 안) 다크 규칙이 하나라도 있으면 그 자체를 즉시 throw로 금지한다:
-// `@media (min-width:0px){ html[data-theme='dark']{ --color-selected-indicator: rgba(...,0)
-// !important } }`처럼 항상-매치하는 미디어 쿼리로 감싸면 실뷰포트에서는 이 규칙이 그대로 적용/승리
-// 하는데, root-직속만 보던 이전 findRootRules는 이걸 후보에서 통째로 제외해 존재 자체를 놓쳤고
-// (유일성 검사도 자연히 우회), 게이트가 GREEN을 냈다. 어떤 미디어 쿼리가 "실제로 매치하는지"
-// 모델링하는 시도는 하지 않는다(min-width:0 같은 항상-참 조건을 일반화해 판별하는 건 신뢰할 수
-// 없다) — 대신 root 직속이 아닌 다크 규칙의 **존재 자체**를 금지한다. throw 없이 반환되면 그
-// 반환값은 root 직속 규칙만 담긴 전수 집합이며, 유일성(length===1)·cascade(reduceEffectiveDecls)는
-// 이 집합을 그대로 쓴다.
-function collectDarkSelectorRules(root, targetSelectors) {
-  const all = [];
-  root.walkRules((rule) => {
-    if (selectorMatches(rule, targetSelectors)) all.push(rule);
-  });
-  const nonRoot = all.filter((r) => r.parent.type !== 'root');
-  if (nonRoot.length > 0) {
-    const where = nonRoot
-      .map((r) => `${r.parent.type}${r.parent.params ? `(${r.parent.params})` : ''} > ${r.selector}`)
-      .join('; ');
-    throw new Error(
-      `다크 규칙이 root 직속이 아닌 곳(예: @media)에 ${nonRoot.length}건 존재 — 실뷰포트에서 카스케이드를 ` +
-      `이길 수 있어 금지: ${where}`,
-    );
-  }
-  return all;
+// 보호 토큰 네임스페이스 — 이 접두사를 가진 custom property는 오직 flat 3블록(라이트/다크/별칭) 안에서만
+// 선언될 수 있다. 어떤 selector·atrule로 감싸든(9라운드 이전에는 이 두 가지가 감시 목록 밖이라 통과했다)
+// 이 세 블록 밖에서 나타나면 즉시 위반이다.
+const PROTECTED_TOKEN_PREFIXES = ['--color-', '--track-', '--shadow-'];
+function hasProtectedPrefix(prop) {
+  return PROTECTED_TOKEN_PREFIXES.some((p) => prop.startsWith(p));
 }
 
+// FAIL 메시지에 위반 위치를 selector/atrule 체인(바깥→안, 예: `@media (min-width:0) > :root`)으로
+// 이어붙인다 — 구조 게이트·컴포넌트 선언 금지 검사가 공유한다.
+function describeLocation(node) {
+  const parts = [];
+  let cur = node;
+  while (cur && cur.type !== 'root') {
+    if (cur.type === 'rule') parts.unshift(cur.selector);
+    else if (cur.type === 'atrule') parts.unshift(`@${cur.name}${cur.params ? ` ${cur.params}` : ''}`);
+    cur = cur.parent;
+  }
+  return parts.join(' > ') || '(root)';
+}
+
+// 구조 계약(9라운드) — selector 문자열 열거(구 collectDarkSelectorRules)를 전면 폐기하고 _themes.scss의
+// flat 3블록 계약을 postcss AST로 직접 강제한다. selector 열거 방식은 "감시할 selector 목록"을
+// 유지하는 접근이었는데, 외부 검수가 그 목록 밖 selector로 두 가지 우회를 실증했다(둘 다 실렌더에서
+// indicator 투명화를 일으키는데도 기존 방식으로는 37/37 GREEN이었다):
+//  ① `@media (min-width:0){ :root { --color-selected-indicator: …0 !important } }` — `:root`는
+//     DARK_SELECTORS 어떤 변형도 아니라서(선택자 문자열 자체가 다르다는 이유로) 다크 규칙으로
+//     수집조차 안 됐다. 그런데 `:root`도 `html`에 적용되고 important가 승리하므로 실뷰포트에서는
+//     이 규칙이 그대로 이긴다.
+//  ② `@supports (display:block){ html[data-theme='dark']:root { …0 !important } }` — 이번엔 selector
+//     문자열이 DARK_SELECTORS 어떤 변형과도 완전 동일 문자열이 아니라서(`:root` 접미가 붙어) 역시
+//     안 걸렸다.
+// 두 우회의 공통점은 "실렌더에서 이기는가"(root 직속 여부·important)와 무관하게 오직 "감시 목록에
+// 있는 정확한 selector 문자열인가"만으로 판정했다는 것 — 그래서 selector 매칭 자체를 버리고, "보호
+// 네임스페이스는 정해진 세 블록 밖 어디서도 선언될 수 없다"는 존재 자체 금지로 뒤집는다. selector가
+// 무엇이든(`:root`든 `html[...]:root`든 그 무엇이든) 3블록 밖이면 무조건 FAIL — 우회 불가능한
+// 화이트리스트(3블록만 예외)다.
+function structuralGate(themesCss) {
+  const root = postcss.parse(themesCss);
+  const rootRules = [];
+  root.walkRules((rule) => {
+    if (rule.parent.type === 'root') rootRules.push(rule);
+  });
+
+  if (rootRules.length !== 3) {
+    const where = rootRules
+      .map((r) => `"${r.selector}"@${r.source?.start?.line}행`)
+      .join(', ') || '(없음)';
+    throw new Error(
+      `_themes.scss 3블록 계약 위반: root 직속 규칙이 정확히 3개([라이트 :root, 다크 html[data-theme=dark], ` +
+      `별칭 :root])여야 하는데 ${rootRules.length}개 발견 — ${where}`,
+    );
+  }
+
+  const [lightRule, darkRule, aliasRule] = rootRules;
+  const isPlainRoot = (rule) => rule.selectors.length === 1 && rule.selectors[0].trim() === ':root';
+  const isDarkForm = (rule) =>
+    rule.selectors.length === 1 && DARK_SELECTORS.includes(rule.selectors[0].replace(/\s+/g, ' ').trim());
+
+  if (!isPlainRoot(lightRule)) {
+    throw new Error(`_themes.scss 3블록 계약 위반: 1번째 블록(라이트)은 ':root' 단독이어야 하는데 "${lightRule.selector}"(${lightRule.source?.start?.line}행)`);
+  }
+  if (!isDarkForm(darkRule)) {
+    throw new Error(`_themes.scss 3블록 계약 위반: 2번째 블록(다크)은 html[data-theme=dark] 계열(quote 무관) 단독이어야 하는데 "${darkRule.selector}"(${darkRule.source?.start?.line}행)`);
+  }
+  if (!isPlainRoot(aliasRule)) {
+    throw new Error(`_themes.scss 3블록 계약 위반: 3번째 블록(별칭)은 ':root' 단독이어야 하는데 "${aliasRule.selector}"(${aliasRule.source?.start?.line}행)`);
+  }
+
+  // 보호 토큰 네임스페이스 선언 전수 검사 — "위 3개 rule 노드와 identity가 같은가"로만 판정한다
+  // (selector 문자열 재비교가 아니다). @media/@supports 등으로 감싸 selector 텍스트를 3블록과 완전히
+  // 동일하게(①) 또는 다르게(②) 만들어도 그 rule 노드는 3블록과 별개 객체이므로 절대 우회 불가 —
+  // walkDecls는 @media/@supports 등 atrule 내부·다른 selector·중첩 무관 전수를 방문한다.
+  const legitBlocks = new Set(rootRules);
+  const offenders = [];
+  root.walkDecls((decl) => {
+    if (!hasProtectedPrefix(decl.prop)) return;
+    const inLegitBlock = decl.parent.type === 'rule' && legitBlocks.has(decl.parent);
+    if (inLegitBlock) return;
+    offenders.push(`${decl.prop}@${decl.source?.start?.line}행(위치: ${describeLocation(decl.parent)})`);
+  });
+  if (offenders.length > 0) {
+    throw new Error(
+      `_themes.scss 3블록 계약 위반: 보호 토큰(${PROTECTED_TOKEN_PREFIXES.join('/')}) 선언이 3블록 밖에서 ` +
+      `발견됨 — ${offenders.join('; ')}`,
+    );
+  }
+
+  return { root, lightRule, darkRule, aliasRule };
+}
+
+// 핀 대상 컴포넌트(및 임의 사이트 파일)가 보호 네임스페이스를 "선언"하는지 전수 검사한다(9라운드).
+// 이 파일들은 var(--color-x) 같은 소비만 정상이고, `.Foo { --color-x: … }`처럼 조상 스코프에
+// 재선언하면 그 서브트리 전체의 캐스케이드 값을 오염시킨다 — 컴포넌트는 소비 전용 계약이다.
+function findProtectedDeclarations(cssText) {
+  const root = postcss.parse(cssText);
+  const offenders = [];
+  root.walkDecls((decl) => {
+    if (!hasProtectedPrefix(decl.prop)) return;
+    offenders.push(`${decl.prop}@${decl.source?.start?.line}행(위치: ${describeLocation(decl.parent)})`);
+  });
+  return offenders;
+}
+
+describe('_themes.scss 구조 계약 — flat 3블록 강제 (selector 매칭→구조 게이트 전환, 9라운드)', () => {
+  it('실 파일이 3블록 계약을 만족한다(형태·순서·보호 토큰 3블록 밖 배타성)', () => {
+    expect(() => structuralGate(css)).not.toThrow();
+  });
+});
+
 describe('다크 selected-indicator 값 시맨틱 고정 (SC 1.4.11 비텍스트 대비 3:1)', () => {
-  // _themes.scss는 원칙상 dark 블록이 1개지만, "html[data-theme=dark]" 셀렉터를 가진 규칙 전부를
-  // (parent 무관 전수 수집 후 root 직속 위반이 없음을 확인한 다음) 문서 순서로 walk해 프로퍼티별
-  // cascade 최종값(!important 우선, 동급은 후행 승리 — 실제 CSS cascade와 동일)으로 darkValues를
-  // 합성한다 — 첫 블록만 읽으면 뒤쪽 재정의(예: 원복 실수로 인디케이터를 다시 transparent로 되돌리는
-  // 블록 추가)를 놓치고 stale 값으로 GREEN 처리한다(외부 검수 실증).
-  // 셀렉터는 quoted/unquoted 둘 다 허용(따옴표 유무는 Sass 버전에 좌우 — 최상단 주석 참고).
-  const themesRoot = postcss.parse(css);
-  const darkRules = collectDarkSelectorRules(themesRoot, DARK_SELECTORS); // @media 등 비-root 다크 규칙 존재 시 여기서 즉시 throw
-  // reduceEffectiveDecls(effectiveValue와 동일한 importance-aware 리듀서)로 합성 — 무조건 후행 승리로
-  // 모으던 이전 버전은 custom property의 !important를 무시했다(위 함수 주석 참고, 외부 검수 7라운드
-  // 실증). darkRules.length===1 단정만으로는 이 결함을 못 잡는다 — 같은 블록 "내부"의 중복 선언에도
-  // !important가 개입할 수 있기 때문이다.
-  const darkState = reduceEffectiveDecls(darkRules, (decl, prop) => prop.startsWith('--'));
+  // 9라운드: dark 블록의 존재·유일성·root-직속 여부·형태(selector 문자열)는 이제 structuralGate
+  // (flat 3블록 계약, 파일 상단 참고)가 구조적으로 보장한다 — 위반 시 이 시점에 즉시 throw(위치
+  // 포함 명시 메시지)한다. 구 collectDarkSelectorRules의 selector 열거 방식은 폐기됐다: 그 방식은
+  // "감시할 selector 문자열 목록"에 의존해 목록 밖 selector(`:root`, `html[...]:root` 등)로 감싼
+  // 우회를 놓쳤지만, structuralGate는 selector가 무엇이든 3블록 밖 보호 토큰 선언 자체를 금지하므로
+  // 우회 불가능하다. 여기서는 구조가 보장된 darkRule 하나에 캐스케이드(reduceEffectiveDecls —
+  // !important 우선, 동급은 후행 승리 — 실제 CSS cascade와 동일)를 적용해 darkValues를 합성한다 —
+  // darkRule "내부"의 중복 선언에도 !important가 개입할 수 있어 단순 후행 승리로는 부족하다(외부
+  // 검수 7라운드 실증).
+  const { darkRule } = structuralGate(css);
+  const darkState = reduceEffectiveDecls([darkRule], (decl, prop) => prop.startsWith('--'));
   const darkValues = {};
   for (const [prop, { value }] of Object.entries(darkState)) darkValues[prop.slice(2)] = value;
-
-  // 파일 상단 위치기반 추출(대칭·baseline·별칭)이 "dark 블록은 정확히 1개"를 암묵 가정한다 —
-  // 뒤쪽 dark 재정의 블록이 생기면 여기서 즉시 RED(외부 검수: 유일성 또는 전면 cascade 요구).
-  expect(darkRules.length).toBe(1);
 
   // ScopeToggle 실제 인접 합성색 — .MyTasks__ScopeBtn--active의 background를 컴파일된 myTasks
   // CSS에서 postcss AST로 그대로 읽어(하드코딩 금지) 다크 surface 위에 알파 합성한다. bg·surface
@@ -537,9 +643,9 @@ describe('다크 selected-indicator 값 시맨틱 고정 (SC 1.4.11 비텍스트
 
 // 게이트 자체 상설 검증 — 이전 라운드들은 각 결함을 "실파일을 임시로 훼손 → vitest 실행 → 복원"하는
 // 수동 시뮬로만 검증했다(재현 스크립트가 안 남아 다음 라운드가 같은 결함을 다시 심어도 못 잡았다).
-// 여기서는 postcss.parse한 합성 CSS 문자열로 헬퍼(parseColor/collectDarkSelectorRules/
+// 여기서는 postcss.parse한 합성 CSS 문자열로 헬퍼(parseColor/structuralGate/findProtectedDeclarations/
 // outermostVarTokens/reduceEffectiveDecls)를 직접 단정해, 시뮬 재현 없이도 이후 라운드의 회귀를
-// 상시 검출한다 — 8라운드 외부 검수 대응.
+// 상시 검출한다 — 8·9라운드 외부 검수 대응.
 describe('게이트 자체 검증 (synthetic CSS)', () => {
   describe('parseColor — 엄격 CSS number (Important 1)', () => {
     it('trailing dot(1.)은 CSS 불법 number — null', () => {
@@ -560,34 +666,71 @@ describe('게이트 자체 검증 (synthetic CSS)', () => {
     });
   });
 
-  describe('다크 수집 — @media 안 다크 규칙 금지 + 유일성 + important 승리 (Important 2)', () => {
-    it('@media로 감싼 다크 규칙이 있으면 명시 메시지로 throw', () => {
-      const root = postcss.parse(`
-        :root { --x: 1; }
+  describe('structuralGate — flat 3블록 계약 + 보호 토큰 3블록 밖 배타성 (Important, 9라운드)', () => {
+    // 검수 실증 우회 ①·②는 둘 다 selector 열거(구 collectDarkSelectorRules)의 "감시 목록에 없는
+    // selector"를 타고 들어왔다 — 아래 두 케이스는 그 정확한 재현이다. structuralGate는 selector
+    // 문자열이 무엇이든 3블록 밖 보호 토큰 선언 자체를 금지하므로 두 우회 모두 FAIL해야 한다.
+    it('정상 3블록이면 통과하고 darkRule을 반환한다', () => {
+      const cssText = `
+        :root { --color-a: 1; }
+        html[data-theme='dark'] { --color-a: 2; }
+        :root { --color-b: 3; }
+      `;
+      const { darkRule } = structuralGate(cssText);
+      expect(darkRule.selector).toBe(`html[data-theme='dark']`);
+    });
+    it('우회① media-:root — :root도 html에 적용되고 important가 승리하는데 선택자 목록 밖이라 놓쳤던 케이스, 이제 FAIL', () => {
+      const cssText = `
+        :root { --color-a: 1; }
+        html[data-theme='dark'] { --color-a: 2; }
+        :root { --color-b: 3; }
         @media (min-width: 0px) {
-          html[data-theme='dark'] { --color-selected-indicator: rgba(0,0,0,0) !important; }
+          :root { --color-selected-indicator: rgba(0,0,0,0) !important; }
         }
-      `);
-      expect(() => collectDarkSelectorRules(root, DARK_SELECTORS)).toThrow(/root 직속이 아닌/);
+      `;
+      expect(() => structuralGate(cssText)).toThrow(/보호 토큰|3블록/);
     });
-    it('root 직속 다크 규칙만이면 통과하고 전수 집합을 반환', () => {
-      const root = postcss.parse(`html[data-theme='dark'] { --x: 1; }`);
-      const rules = collectDarkSelectorRules(root, DARK_SELECTORS);
-      expect(rules.length).toBe(1);
+    it('우회② @supports dark:root — DARK_SELECTORS 어떤 변형과도 문자열이 달라 놓쳤던 케이스, 이제 FAIL', () => {
+      const cssText = `
+        :root { --color-a: 1; }
+        html[data-theme='dark'] { --color-a: 2; }
+        :root { --color-b: 3; }
+        @supports (display: block) {
+          html[data-theme='dark']:root { --color-selected-indicator: rgba(0,0,0,0) !important; }
+        }
+      `;
+      expect(() => structuralGate(cssText)).toThrow(/보호 토큰|3블록/);
     });
-    it('root 직속 다크 블록이 2개면 유일성 단정(toBe(1))이 FAIL한다', () => {
-      const root = postcss.parse(`
-        html[data-theme='dark'] { --x: 1; }
-        html[data-theme='dark'] { --x: 2; }
-      `);
-      const rules = collectDarkSelectorRules(root, DARK_SELECTORS); // throw 없이 전수 2건 반환(둘 다 root 직속)
-      expect(() => expect(rules.length).toBe(1)).toThrow(); // 실 파일 describe와 동일한 유일성 단정이 여기서 RED
+    it('4번째 root 블록이 있으면 블록 개수 불일치로 FAIL', () => {
+      const cssText = `
+        :root { --color-a: 1; }
+        html[data-theme='dark'] { --color-a: 2; }
+        :root { --color-b: 3; }
+        :root { --color-c: 4; }
+      `;
+      expect(() => structuralGate(cssText)).toThrow(/3블록/);
     });
-    it('!important가 후행 non-important를 이긴다(custom property도 동일 cascade)', () => {
-      const root = postcss.parse(`html[data-theme='dark'] { --x: A !important; --x: B; }`);
-      const rules = collectDarkSelectorRules(root, DARK_SELECTORS);
-      const state = reduceEffectiveDecls(rules, (decl, prop) => prop.startsWith('--'));
+    it('!important가 후행 non-important를 이긴다(다크 블록 내부 cascade, custom property도 동일 규칙)', () => {
+      const cssText = `
+        :root { --color-a: 1; }
+        html[data-theme='dark'] { --x: A !important; --x: B; }
+        :root { --color-b: 3; }
+      `;
+      const { darkRule } = structuralGate(cssText);
+      const state = reduceEffectiveDecls([darkRule], (decl, prop) => prop.startsWith('--'));
       expect(state['--x'].value).toBe('A');
+    });
+  });
+
+  describe('findProtectedDeclarations — 컴포넌트 보호 토큰 "선언" 금지 (9라운드)', () => {
+    it('.Foo{--color-x:red} 처럼 조상 스코프 재선언은 FAIL 대상 목록에 잡힌다', () => {
+      const offenders = findProtectedDeclarations('.Foo { --color-x: red; }');
+      expect(offenders.length).toBe(1);
+      expect(offenders[0]).toMatch(/--color-x/);
+    });
+    it('var() 참조로 소비만 하면 통과 — 빈 배열', () => {
+      const offenders = findProtectedDeclarations('.Foo { border-color: var(--color-x); }');
+      expect(offenders).toEqual([]);
     });
   });
 
@@ -606,6 +749,14 @@ describe('게이트 자체 검증 (synthetic CSS)', () => {
     });
     it('calc() 안 var()는 다른 var()에 중첩된 게 아니므로 outermost — 콤마 나열 둘 다 수집', () => {
       expect(outermostVarTokens('calc(1px + var(--a)), var(--b)')).toEqual(new Set(['a', 'b']));
+    });
+    it('r5(9라운드): fallback 안 escape(\\() 가 depth 오염을 안 일으킴 — outer만 수집, fallback 내부 var 미수집', () => {
+      expect(outermostVarTokens('var(--a, \\(, var(--b))')).toEqual(new Set(['a']));
+    });
+    it('r5: 문자열 밖에 등장하는 \\" (이스케이프된 quote)가 스캔 전체를 삼키지 않음 — 뒤쪽 var()를 정상 수집', () => {
+      // 옛 코드는 이 \" 를 (escape 미처리로) 진짜 문자열 시작으로 오인해 나머지 전체를 quote 내부로
+      // 삼켜(짝이 안 맞는 종료 quote가 없으니 문자열 끝까지) 뒤의 var(--x)를 통째로 놓쳤다.
+      expect(outermostVarTokens('\\" , var(--x)')).toEqual(new Set(['x']));
     });
   });
 
