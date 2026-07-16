@@ -277,12 +277,22 @@ function splitTopLevelLayers(value) {
   return layers.map((nodes) => valueParser.stringify(nodes).trim());
 }
 
-// CSS <length> word 판정 — 부호 옵션 + 정수/소수 + 옵션 단위(단위 없는 `0`도 유효 length). box-shadow의
-// offset-x/y·blur·spread, border의 width 판별에 공용으로 쓴다. `inset`·`solid` 같은 키워드나
-// var(...)(word가 아니라 function 노드라 애초에 words 목록에 안 잡힘)는 매치되지 않는다.
+// CSS <length> word 판정 — 부호 옵션 + 정수/소수 + 옵션 단위. box-shadow의 offset-x/y·blur·spread,
+// border의 width 판별에 공용으로 쓴다(spread 경로는 assertVisibleInsetShadowLayer가 동일 함수를
+// 재사용하므로 이 판정을 고치면 두 경로 모두 자동 적용된다). `inset`·`solid` 같은 키워드나 var(...)
+// (word가 아니라 function 노드라 애초에 words 목록에 안 잡힘)는 매치되지 않는다.
+//
+// 내부 리뷰 잔여 3(unitless 비영 길이): CSS 스펙상 단위 없는 <length>는 **0만** 유효하다(0 외
+// unitless, 예: `border: 5 solid var(…)`·box-shadow spread `5`는 불법 CSS → 브라우저가 그 선언 전체를
+// 폐기해 렌더는 `none`처럼 무효화된다). 이전 정규식은 단위를 완전히 옵션으로 둬 "5"도 유효 length로
+// 오인했다(false-GREEN). 정규식 자체는 매치 형태만 확인하고, 단위가 없는 경우에는 값이 0인지 별도로
+// 확인해 0 외 unitless는 미인정(false 반환 → 상위 호출부가 미지원/RED로 처리)한다.
 const LENGTH_WORD_RE = /^-?(?:\d+\.?\d*|\.\d+)(?:px|rem|em|%|vh|vw|vmin|vmax|ch|ex|pt|pc|in|cm|mm|q)?$/i;
+const LENGTH_UNIT_SUFFIX_RE = /(?:px|rem|em|%|vh|vw|vmin|vmax|ch|ex|pt|pc|in|cm|mm|q)$/i;
 function isLengthWord(word) {
-  return LENGTH_WORD_RE.test(word);
+  if (!LENGTH_WORD_RE.test(word)) return false;
+  if (LENGTH_UNIT_SUFFIX_RE.test(word)) return true; // 단위 있으면 값 무관 유효
+  return parseFloat(word) === 0; // 단위 없으면 0만 유효(비영 unitless는 불법 CSS → 미인정)
 }
 function wordsOf(value) {
   return valueParser(String(value)).nodes.filter((n) => n.type === 'word').map((n) => n.value);
@@ -330,7 +340,10 @@ const COLOR_KEYWORDS = new Set(['transparent', 'currentcolor', 'inherit', 'initi
 const BORDER_INITIAL = { width: 'medium', style: 'none', color: 'currentcolor' }; // CSS 스펙 initial
 const BORDER_SIDES = ['top', 'right', 'bottom', 'left'];
 // border 계열만 인식: border / border-{side} / border-{width|style|color} / border-{side}-{width|style|color}.
-// border-radius·border-collapse·border-spacing·border-image·논리 프로퍼티(border-block 등)는 전부 미매치.
+// border-radius·border-collapse·border-spacing·border-image는 전부 미매치(perimeter 무관이라 무시가 맞다).
+// 논리 프로퍼티(border-inline-*/border-block-* 등)도 이 정규식엔 미매치이지만, synthesizeBorderSides가
+// walkDecls 안에서 BORDER_PROP_RE보다 먼저 별도 분기로 가로채 fail-closed 처리한다(아래 참고) —
+// 이 정규식만으로 "미매치=무시해도 안전"은 아니다.
 const BORDER_PROP_RE = /^border(?:-(top|right|bottom|left))?(?:-(width|style|color))?$/;
 
 // shorthand의 top-level 노드 하나를 성분 슬롯으로 분류. 분류 불가(calc·unknown 함수/단어)면 null → 미지원.
@@ -438,13 +451,38 @@ function synthesizeBorderSides(rules) {
     cell.unsupported = cand.unsupported;
     cell.important = important;
   };
+  // 네 면 전체(모든 성분)를 unsupported로 마킹 — 아래 두 fail-closed 분기(논리 프로퍼티·`all` 리셋)가 공유.
+  const markPerimeterUnsupported = (rawValue, important) => {
+    const cand = { value: rawValue, unsupported: true };
+    for (const side of BORDER_SIDES) {
+      applyCell(side, 'width', cand, important);
+      applyCell(side, 'style', cand, important);
+      applyCell(side, 'color', cand, important);
+    }
+  };
   rules.forEach((rule) => {
     rule.walkDecls((decl) => {
       const prop = normalizeProp(decl.prop);
+      const important = !!decl.important;
+      // 내부 리뷰 잔여 1(논리 프로퍼티) — border-inline-width/border-block-* 등은 실렌더에서 물리
+      // 사이드(top/right/bottom/left)로 매핑돼 좌우 또는 상하 보더를 실제로 없앨 수 있는데
+      // BORDER_PROP_RE가 물리 프로퍼티만 인식해 이런 선언을 조용히 무시했다(blind → false-GREEN).
+      // 물리 매핑을 구현하는 대신 fail-closed: 전체 perimeter를 unsupported로 마킹해 RED로 떨어뜨린다.
+      if (/^border-(inline|block)/.test(prop)) {
+        markPerimeterUnsupported(decl.value.trim(), important);
+        return;
+      }
+      // 내부 리뷰 잔여 2(`all` 리셋) — `all: unset|initial|revert`는 border를 포함한 거의 모든
+      // 프로퍼티를 초기값/상속값으로 되돌리는데 BORDER_PROP_RE 밖이라 역시 blind 무시였다. `all`은
+      // 스펙상 전역값(initial/inherit/unset/revert/revert-layer)만 허용하므로 값 종류를 따질 필요
+      // 없이 prop이 'all'이면 무조건 전체 perimeter를 unsupported로 마킹한다.
+      if (prop === 'all') {
+        markPerimeterUnsupported(decl.value.trim(), important);
+        return;
+      }
       const m = BORDER_PROP_RE.exec(prop);
       if (!m) return;
       const [, sideGroup, compGroup] = m;
-      const important = !!decl.important;
       const value = decl.value.trim();
       if (!compGroup) {
         // shorthand: border(4면) 또는 border-{side}(해당 면), 세 성분 전부 설정(생략=initial 재설정)
@@ -1268,6 +1306,20 @@ describe('게이트 자체 검증 (synthetic CSS)', () => {
     it('length가 4개 미만(blur만 있고 spread 없음)이면 FAIL', () => {
       expect(assertVisibleInsetShadowLayer('inset 0 0 2px var(--x)').visible).toBe(false);
     });
+    // 내부 리뷰 잔여 3(unitless spread, isLengthWord 공유 경로) — offset-x/y·blur는 unitless 0으로
+    // 생략되고 spread만 단위 없는 비영 값(`5`)을 쓰는 경우, 그 자체가 불법 CSS라 브라우저가 선언 전체를
+    // 폐기한다(box-shadow가 none처럼 무효화). isLengthWord가 이제 unitless는 0만 인정하므로 "5"가
+    // length word로 카운트되지 않아 length개수가 3으로 떨어지고, spread(4번째)가 없어 visible=false.
+    it('unitless 비영 spread(inset 0 0 0 5 var(--t))는 불법 CSS — length개수 3으로 카운트, FAIL', () => {
+      const shape = assertVisibleInsetShadowLayer('inset 0 0 0 5 var(--t)');
+      expect(shape.lengthCount).toBe(3);
+      expect(shape.spread).toBeUndefined();
+      expect(shape.visible).toBe(false);
+    });
+    // 무회귀 확인 — 단위 있는 spread(1px)는 offset-x/y/blur가 unitless 0이어도 여전히 visible(true).
+    it('무회귀: 단위 있는 spread(inset 0 0 0 1px var(--x))는 계속 visible', () => {
+      expect(assertVisibleInsetShadowLayer('inset 0 0 0 1px var(--x)').visible).toBe(true);
+    });
   });
 
   describe('border 4면 cascade 합성 엔진 — 대칭 구멍 A mutation matrix (Important 1, 11라운드)', () => {
@@ -1280,7 +1332,8 @@ describe('게이트 자체 검증 (synthetic CSS)', () => {
     const perimeterVisible = (cssText) =>
       assertPerimeterVisible(synthesizeBorderSides(findRootRules(postcss.parse(cssText), '.X')), TOKEN).visible;
 
-    // A(RED) — 실뷰포트에서 보더가 소실/토큰 미사용인데 이전 모델이 false-green 처리하던 7종.
+    // A(RED) — 실뷰포트에서 보더가 소실/토큰 미사용인데 이전 모델이 false-green 처리하던 케이스.
+    // 원 7종(11라운드) + 내부 리뷰 잔여 3종(논리 프로퍼티·`all` 리셋·unitless 비영 width) = 10종.
     it.each([
       ['shorthand 후 border-width:0 → 전면 width 0', `.X{border:1px solid ${V};border-width:0}`],
       ['shorthand 후 border-style:none → 전면 style none', `.X{border:1px solid ${V};border-style:none}`],
@@ -1289,6 +1342,13 @@ describe('게이트 자체 검증 (synthetic CSS)', () => {
       ['shorthand 후 border-width:0 !important → important width 0', `.X{border:1px solid ${V};border-width:0 !important}`],
       ['border-width:0 !important 후 shorthand(non-imp) → important가 shorthand width를 이김', `.X{border-width:0 !important;border:1px solid ${V}}`],
       ['directional border-left-width:0 → 한 면 소실(perimeter 깨짐)', `.X{border:1px solid ${V};border-left-width:0}`],
+      // 내부 리뷰 잔여 1 — 논리 프로퍼티는 물리 매핑을 구현하지 않고 fail-closed(전체 perimeter unsupported)로 닫는다.
+      ['논리 프로퍼티 border-inline-width:0 → blind 무시 대신 fail-closed', `.X{border:1px solid ${V};border-inline-width:0}`],
+      // 내부 리뷰 잔여 2 — `all` 리셋(border 포함 전체 초기화)도 동일하게 fail-closed.
+      ['`all: unset` 리셋 → border 포함 전체 초기화, fail-closed', `.X{border:1px solid ${V};all:unset}`],
+      // 내부 리뷰 잔여 3 — unitless 비영 width는 불법 CSS(브라우저가 선언 자체를 폐기) → isLengthWord가
+      // 미인정해 classifyBorderShorthandNode가 분류 실패 → shorthand 전체 unsupported로 전파.
+      ['border: 5 solid var(…) → unitless 비영 width는 불법 CSS, fail-closed', `.X{border:5 solid ${V}}`],
     ])('RED: %s', (_label, cssText) => {
       expect(perimeterVisible(cssText)).toBe(false);
     });
@@ -1298,7 +1358,10 @@ describe('게이트 자체 검증 (synthetic CSS)', () => {
       ['border-width:0 후 shorthand → 전 성분 복원', `.X{border-width:0;border:1px solid ${V}}`],
       ['shorthand !important 후 border-width:0(non-imp) → important width 1px 유지', `.X{border:1px solid ${V} !important;border-width:0}`],
       ['directional 성분으로 4면 조립(width/style/color) → 전면 가시+토큰', `.X{border-width:1px;border-style:solid;border-color:${V}}`],
-      ['border-color 콤마 아닌 4값 확장 + solid → 전면 토큰', `.X{border:1px solid ${V};border-style:solid solid solid solid}`],
+      // B4 라벨 정정(내부 리뷰 지적) — 이전 라벨은 "border-color 4값"이었지만 실제 CSS는 border-style
+      // longhand의 1~4값 공백 확장(전면 solid)이다. shorthand가 세팅한 color 토큰은 그대로 유지된 채
+      // style만 4값으로 재확인되는 케이스를 검증한다.
+      ['border-style 콤마 아닌 4값 확장(전면 solid) → shorthand 토큰 유지, 전면 가시', `.X{border:1px solid ${V};border-style:solid solid solid solid}`],
     ])('GREEN: %s', (_label, cssText) => {
       expect(perimeterVisible(cssText)).toBe(true);
     });
