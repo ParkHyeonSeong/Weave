@@ -259,13 +259,70 @@ function effectiveValue(rules, props) {
 // 방문 자체를 건너뛰므로(AST가 이미 괄호 깊이를 구조화해뒀다) 절대 방문되지 않는다. calc() 안의
 // var()는 calc 함수 노드(value !== 'var')이므로 자식이 정상 방문돼 기존 계약(calc는 var가 아니므로
 // descend)이 그대로 유지된다.
+// ─────────────────────────────────────────────────────────────────────────────
+// I4(15R) — **값 쪽 CSS 식별자 정규화**. prop 쪽(normalizeProp)만 decodeCssIdentifier를 타고 값 쪽은
+// raw 문자열을 그대로 키워드 집합과 비교했다 — `border-color: tr\61 nsparent`(=transparent)·
+// `box-shadow: … r\65 d`(=red)처럼 **유효한 CSS escape**를 미지 ident로 오인해 invalid(폐기)로 돌렸고,
+// 그 결과 이전 토큰 선언으로 fallback해 GREEN이 됐다(브라우저는 override를 적용해 토큰이 실제로 소실).
+// 두 겹으로 고친다:
+//  (a) 구조 — postcss-value-parser는 hex escape의 **종료 공백**(`\61 `의 공백)을 값 구분자로 봐
+//      `tr\61 nsparent`를 word 2개(`tr\61` + `nsparent`)로 쪼갠다. CSS 토크나이저는 이 공백을 escape의
+//      일부로 소비하므로 실제로는 ident 1개다. parseValue가 파싱 직후 이 분할을 재결합한다. 이 패스는
+//      **구조 정규화만** 하고 디코딩은 하지 않으므로 몇 번 적용해도 결과가 같다(멱등) — 그래서
+//      stringify→재파싱 왕복(splitTopLevelLayers/splitTopLevelSpaceGroups)이 안전하다.
+//  (b) 의미 — 식별자 비교 지점에서 **정확히 한 번** decodeCssIdentifier를 적용한다(identOf/lowerIdentOf).
+//      prop 쪽과 **동일 함수**를 쓰되 입력은 항상 raw 노드 값이다. 문자열 predicate(isLengthWord/
+//      isColorWord/isNumberPercentAngle 등)는 스스로 디코딩하지 않고 호출부가 identOf로 디코딩한 값을
+//      넘긴다 — 디코딩 지점을 "노드 읽기 1곳"으로 고정해 이중 디코딩(`\5c` 계열)이 원천 불가능하게 한다.
+const SINGLE_WS_RE = /^[ \t\n\f\r]$/;
+// 값이 "미완결 hex escape"로 끝나는가(뒤따르는 공백 1개가 escape 종료자로 소비돼야 함). 짝수 개의
+// 백슬래시(=escaped backslash)로 끝나는 경우는 매치되지 않는다(`a\\61`은 리터럴 `\`+`61`이라 미결합).
+const TRAILING_HEX_ESCAPE_RE = /(?:^|[^\\])(?:\\\\)*\\[0-9a-fA-F]{1,6}$/;
+function joinEscapedIdentNodes(nodes) {
+  for (let i = 0; i < nodes.length; i += 1) {
+    const n = nodes[i];
+    if (Array.isArray(n.nodes)) joinEscapedIdentNodes(n.nodes); // 함수 인자 내부도 동일 정규화
+    while (
+      n.type === 'word' && TRAILING_HEX_ESCAPE_RE.test(n.value)
+      && nodes[i + 1] && nodes[i + 1].type === 'space' && SINGLE_WS_RE.test(nodes[i + 1].value)
+      && nodes[i + 2] && nodes[i + 2].type === 'word'
+    ) {
+      n.value = `${n.value} ${nodes[i + 2].value}`; // 공백은 escape 종료자 — ident 1개로 재결합
+      nodes.splice(i + 1, 2);
+    }
+  }
+  return nodes;
+}
+// 이 파일의 **모든 내부 값 파싱 진입점**. raw valueParser 직접 호출은 (의도적으로 raw를 검증하는)
+// 단위 테스트에만 남긴다.
+function parseValue(value) {
+  const parsed = valueParser(String(value));
+  joinEscapedIdentNodes(parsed.nodes);
+  return parsed;
+}
+// 노드 하나의 식별자 의미값 — decodeCssIdentifier **1회** 적용 지점.
+function identOf(node) { return decodeCssIdentifier(String(node.value)); }
+function lowerIdentOf(node) { return identOf(node).toLowerCase(); }
+// 전체 <dashed-ident>(I4) — `--` + name-code-point(영숫자/`_`/`-`/U+0080 이상). escape는 identOf가 이미
+// 해석하므로 여기선 디코딩 결과만 검사한다. 이전 ASCII 정규식은 `var(--é)` 같은 **유효** custom-property
+// 이름을 오거부해 "무효 var 문법 → 선언 폐기"로 흘려보냈다(브라우저는 deferred로 참여시킨다).
+// custom property는 스펙상 case-sensitive이므로 대소문자는 보존한다(계약 유지).
+const NAME_CODE_POINTS_RE = /^[A-Za-z0-9_\u0080-\u{10FFFF}-]*$/u;
+function dashedIdentName(rawWord) {
+  const decoded = decodeCssIdentifier(String(rawWord));
+  if (!decoded.startsWith('--')) return null;
+  const name = decoded.slice(2);
+  return NAME_CODE_POINTS_RE.test(name) ? name : null;
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 function outermostVarTokens(value) {
   const tokens = new Set();
-  valueParser(String(value)).walk((node) => {
+  parseValue(value).walk((node) => {
     if (!isVarFunction(node)) return; // var() 아닌 함수(calc 등)는 자식 방문 계속 (함수명 case-insensitive)
     const firstWord = node.nodes.find((n) => n.type === 'word');
-    const m = firstWord && /^--([a-zA-Z0-9_-]+)$/.exec(firstWord.value);
-    if (m) tokens.add(m[1]);
+    const name = firstWord && dashedIdentName(firstWord.value);
+    if (name != null) tokens.add(name);
     return false; // 이 var(...) 의 자식(fallback 포함)은 절대 미방문 — 중첩 토큰 배제
   });
   return tokens;
@@ -290,7 +347,7 @@ function outermostVarTokens(value) {
 // `node.value !== 'var'` 정확일치라 대문자를 "안전방향 fail-closed"로 오거부했다 — 정확 인정으로 정정.
 // 이 파일의 모든 var() 판정을 이 헬퍼로 단일화한다(대소문자 drift 방지).
 function isVarFunction(node) {
-  return !!node && node.type === 'function' && node.value.toLowerCase() === 'var';
+  return !!node && node.type === 'function' && lowerIdentOf(node) === 'var'; // I4(15R) 값 식별자 decode 1회
 }
 // I3(14R) — fallback 위치를 포함한 **모든 중첩 var()의 문법 재귀 검증**. CSS 스펙: var() 자체가(또는 그
 // fallback 안 어떤 중첩 var()라도) 문법 위반이면 그 선언은 parse-time 무효다(계산시점 유예가 아니라 즉시
@@ -313,15 +370,16 @@ function varFunctionToken(node) {
   const first = args[0];
   // I3(14R) — <dashed-ident>는 언더스코어를 포함한다(`--_name`은 유효 custom-property 이름). 이전
   // [a-zA-Z0-9-] 클래스는 `_`를 빠뜨려 유효 이름을 오거부했다(안전방향 fail-closed → 실제 규칙으로 정정).
-  const m = first.type === 'word' && /^--([a-zA-Z0-9_-]+)$/.exec(first.value);
-  if (!m) return null;
+  // I4(15R) — ASCII 정규식을 **전체 <dashed-ident>**(비ASCII·escape 포함)로 확장했다(dashedIdentName).
+  const name = first.type === 'word' ? dashedIdentName(first.value) : null;
+  if (name == null) return null;
   if (args.length > 1 && !(args[1].type === 'div' && args[1].value === ',')) return null; // 콤마 없는 잔여 인자 = 불법
   if (args.length > 2 && !allNestedVarsWellFormed(args.slice(2))) return null; // I3 — fallback 내부 중첩 var 재귀 검증
-  return m[1];
+  return name;
 }
 function topLevelVarTokens(value) {
   const tokens = new Set();
-  for (const node of valueParser(String(value)).nodes) {
+  for (const node of parseValue(value).nodes) {
     if (!isVarFunction(node)) continue; // 함수명 case-insensitive(VAR() 인정, I3)
     const t = varFunctionToken(node); // 문법 유효한 var()만 토큰 수집(잔여 인자·중첩 malformed면 미수집, I2/I3)
     if (t) tokens.add(t);
@@ -341,7 +399,7 @@ function topLevelVarTokens(value) {
 // 등 var 아닌 함수 노드는 자식을 계속 방문해 중첩 var(예: `calc(1px + var(--x))`)도 정상 검출한다.
 function valueHasWellFormedVar(value) {
   let found = false;
-  valueParser(String(value)).walk((node) => {
+  parseValue(value).walk((node) => {
     if (!isVarFunction(node)) return; // 함수명 case-insensitive(I3)
     if (varFunctionToken(node) != null) found = true;
     return false;
@@ -353,7 +411,7 @@ function valueHasWellFormedVar(value) {
 // 내부 콤마를 이미 그 함수 노드의 자식으로 묶어두므로, 최상위 노드 배열에 남아 있는 'div'(,) 노드만
 // 레이어 경계다(중첩 fallback 콤마와 혼동 불가) — Important 2(인디케이터 가시성 구조 단정)가 소비.
 function splitTopLevelLayers(value) {
-  const parsed = valueParser(String(value));
+  const parsed = parseValue(value);
   const layers = [[]];
   parsed.nodes.forEach((node) => {
     if (node.type === 'div' && node.value === ',') layers.push([]);
@@ -402,7 +460,7 @@ function isLengthWord(word) {
   return parseFloat(word) === 0; // 단위 없으면 0만 유효(비영 unitless는 불법 CSS → 미인정)
 }
 function wordsOf(value) {
-  return valueParser(String(value)).nodes.filter((n) => n.type === 'word').map((n) => n.value);
+  return parseValue(value).nodes.filter((n) => n.type === 'word').map(identOf); // I4(15R) decode 1회
 }
 
 // Important 2(외부 검수 10라운드) — outermostVarTokens만으로는 "토큰을 쓰는지"만 볼 뿐 그 결과가
@@ -418,8 +476,8 @@ function wordsOf(value) {
 // 음수면 선언이 폐기된다(`inset 0 0 -1px 1px var(--t)`가 이전엔 spread만 봐 통과 → blur 부호 검사 추가).
 // `%`는 위 isLengthWord가 이미 length에서 배제하므로 `1%` spread는 length개수 하락으로 자연 탈락한다.
 function assertVisibleInsetShadowLayer(layerValue) {
-  const nonSpace = valueParser(String(layerValue)).nodes.filter((n) => n.type !== 'space');
-  const words = nonSpace.filter((n) => n.type === 'word').map((n) => n.value);
+  const nonSpace = parseValue(layerValue).nodes.filter((n) => n.type !== 'space');
+  const words = nonSpace.filter((n) => n.type === 'word').map(identOf); // I4(15R) decode 1회
   const hasInset = words.some((w) => w.toLowerCase() === 'inset');
   const lengths = words.filter(isLengthWord);
   const blur = lengths[2];
@@ -433,10 +491,11 @@ function assertVisibleInsetShadowLayer(layerValue) {
   // (COLOR_FUNCTIONS/COLOR_KEYWORDS는 아래에서 const로 정의 — 호출 시점엔 초기화 완료돼 있어 안전.)
   const isAllowedNode = (n) => {
     if (n.type === 'word') {
-      const w = n.value.toLowerCase();
-      return w === 'inset' || isLengthWord(n.value) || w[0] === '#' || COLOR_KEYWORDS.has(w);
+      const ident = identOf(n); // I4(15R) — 값 식별자 decode 1회(escape된 inset/색키워드 인정)
+      const w = ident.toLowerCase();
+      return w === 'inset' || isLengthWord(ident) || w[0] === '#' || COLOR_KEYWORDS.has(w);
     }
-    if (n.type === 'function') return COLOR_FUNCTIONS.has(n.value.toLowerCase());
+    if (n.type === 'function') return COLOR_FUNCTIONS.has(lowerIdentOf(n));
     return false;
   };
   const malformed = nonSpace.some((n) => !isAllowedNode(n));
@@ -456,45 +515,68 @@ function assertVisibleInsetShadowLayer(layerValue) {
 // 제외돼 이전 유효 선언으로 fallback한다(evaluateIndicatorVisibility의 predicate가 소비). 레이어 전체가
 // 단일 var()면 완전 그림자로 확장되는 불투명 레이어라 내부를 볼 수 없어 유효로 간주한다(HomeTabs의
 // `var(--shadow-xs)`). var() 문법 자체가 무효면(잔여 인자) 그 레이어는 무효다.
-function isValidShadowLayer(layerValue) {
-  const nonSpace = valueParser(String(layerValue)).nodes.filter((n) => n.type !== 'space' && n.type !== 'comment');
-  if (nonSpace.length === 0) return false;
-  if (nonSpace.length === 1 && isVarFunction(nonSpace[0])) return varFunctionToken(nonSpace[0]) != null;
+//
+// I3(15R, 구조 전환) — **boolean → 선언 단위 삼분**. 이전 isValidShadowLayer는 "유효/무효" 두 값만
+// 돌려줘 성격이 정반대인 두 부류가 같은 통으로 들어갔고, 그래서 양방향 오류가 났다:
+//   · `calc(1px + 1vw)`는 **표준 <length>**(브라우저가 받아들이는 유효 선언)인데 무효로 봐 폐기했다 →
+//     그 선언이 이겨야 하는데 cascade에서 빠지고 **이전 인디케이터가 부활**했다(false-green).
+//   · `rgb(from red)`·`color-mix(in srgb)`처럼 **인자가 빠진** 색 함수는 명백한 문법 위반인데 유효로
+//     통과시켰다 → 브라우저는 선언 전체를 폐기하는데 게이트는 후행 선언을 채택했다.
+// 이제 레이어를 'valid' | 'unsupported'(표준이나 우리가 계산 못 함 — cascade 참여, fail-closed) |
+// 'invalid'(확실한 문법 위반 — 선언 폐기)로 삼분하고, 선언 값은 레이어들의 **최악값**으로 접는다
+// (invalid > unsupported > valid). deferred(well-formed var) 재분류는 호출부 classifyBoxShadowDecl가 담당.
+const SHADOW_RANK = { valid: 0, unsupported: 1, invalid: 2 };
+const worseClass = (a, b) => (SHADOW_RANK[a] >= SHADOW_RANK[b] ? a : b);
+function classifyShadowLayer(layerValue) {
+  const nonSpace = parseValue(layerValue).nodes.filter((n) => n.type !== 'space' && n.type !== 'comment');
+  if (nonSpace.length === 0) return 'invalid';
+  if (nonSpace.length === 1 && isVarFunction(nonSpace[0])) return varFunctionToken(nonSpace[0]) != null ? 'valid' : 'invalid';
   let insetCount = 0;
   let colorCount = 0;
+  let verdict = 'valid';
   const lengths = [];
   const roles = []; // I3(14R) 성분 순서 검증용 — <length>{2,4}는 연속 블록이어야 한다(중간 color/inset 삽입 불가)
   for (const n of nonSpace) {
     if (n.type === 'word') {
-      const w = n.value.toLowerCase();
+      const ident = identOf(n); // I4(15R) — 값 식별자 decode 1회
+      const w = ident.toLowerCase();
       if (w === 'inset') { insetCount += 1; roles.push('inset'); continue; }
-      if (isLengthWord(n.value)) { lengths.push(n.value); roles.push('length'); continue; }
+      if (isLengthWord(ident)) { lengths.push(ident); roles.push('length'); continue; }
       if (w[0] === '#' || COLOR_KEYWORDS.has(w)) { colorCount += 1; roles.push('color'); continue; }
-      return false; // 미지 word = 불법
+      return 'invalid'; // 미지 word = 확실한 문법 위반
     }
     if (n.type === 'function') {
-      if (isVarFunction(n)) { if (varFunctionToken(n) == null) return false; colorCount += 1; roles.push('color'); continue; } // 무효 var 문법 = 불법
-      if (COLOR_FUNCTIONS.has(n.value.toLowerCase())) { if (!isValidColorFunctionNode(n)) return false; colorCount += 1; roles.push('color'); continue; } // I3 — 색 함수 내부 문법까지 검증
-      return false; // calc 등 미지원 함수 = 불법(box-shadow 지원 밖)
+      if (n.unclosed) return 'invalid'; // 닫히지 않은 함수 = 문법 자체 파탄
+      const fn = lowerIdentOf(n);
+      if (isVarFunction(n)) { if (varFunctionToken(n) == null) return 'invalid'; colorCount += 1; roles.push('color'); continue; }
+      if (COLOR_FUNCTIONS.has(fn)) { if (!isValidColorFunctionNode(n)) return 'invalid'; colorCount += 1; roles.push('color'); continue; } // I3 — 색 함수 내부 문법(인자 개수 포함)
+      // I3(15R) — calc/min/max/clamp… 는 box-shadow의 <length> 자리에 올 수 있는 **표준** 함수다.
+      // 우리는 그 값을 계산할 수 없을 뿐이므로 폐기(invalid)가 아니라 unsupported로 cascade에 참여시킨다.
+      if (MATH_FUNCTIONS.has(fn)) { lengths.push(null); roles.push('length'); verdict = worseClass(verdict, 'unsupported'); continue; }
+      // 미지 함수 — box-shadow 문법상 성립할 여지가 있는지 우리가 판단할 수 없다 → fail-closed unsupported.
+      verdict = worseClass(verdict, 'unsupported');
+      roles.push('unknown');
+      continue;
     }
-    return false; // div(comma/slash)·string 등 = 불법
+    return 'invalid'; // div(comma/slash)·string 등 = 확실한 문법 위반
   }
-  if (insetCount > 1 || colorCount > 1 || lengths.length < 2 || lengths.length > 4) return false;
+  if (insetCount > 1 || colorCount > 1 || lengths.length < 2 || lengths.length > 4) return 'invalid';
   // I3(14R) 성분 순서 — length word 인덱스들이 연속이어야 한다(`0 red 0`처럼 color가 length 사이에 끼면 불법).
   const lenIdx = roles.map((r, i) => (r === 'length' ? i : -1)).filter((i) => i >= 0);
-  if (lenIdx[lenIdx.length - 1] - lenIdx[0] !== lenIdx.length - 1) return false;
-  // I2(14R) blur(3번째 length)는 스펙상 non-negative — 음수면 브라우저가 선언 폐기. 유효성 계약에도 반영해
-  // (assertVisibleInsetShadowLayer의 시각검사와 별개) negative blur 선언이 invalid(폐기)로 분류되게 한다 →
-  // var 없으면 이전 유효 선언 fallback(false-RED 해소), var 있으면 deferred unsupported.
-  if (lengths[2] != null && parseFloat(lengths[2]) < 0) return false;
-  return true;
+  if (lenIdx[lenIdx.length - 1] - lenIdx[0] !== lenIdx.length - 1) return 'invalid';
+  // I2(14R) blur(3번째 length)는 스펙상 non-negative — 음수면 브라우저가 선언 폐기. (calc 자리는 null이라
+  // 부호를 알 수 없으므로 검사 대상 밖 — 이미 unsupported로 fail-closed돼 있다.)
+  if (lengths[2] != null && parseFloat(lengths[2]) < 0) return 'invalid';
+  return verdict;
 }
-function isValidBoxShadow(value) {
+function classifyBoxShadowValue(value) {
   const v = String(value).trim();
-  if (v === '') return false;
-  if (v.toLowerCase() === 'none') return true; // 그림자 없음(유효, 단 토큰 레이어 없어 인디케이터엔 비가시)
-  return splitTopLevelLayers(v).every(isValidShadowLayer);
+  if (v === '') return 'invalid';
+  if (v.toLowerCase() === 'none') return 'valid'; // 그림자 없음(유효, 단 토큰 레이어 없어 인디케이터엔 비가시)
+  return splitTopLevelLayers(v).map(classifyShadowLayer).reduce(worseClass, 'valid');
 }
+// 기존 boolean 계약을 쓰는 단위 단정용 얇은 어댑터(삼분 결과의 투영).
+function isValidBoxShadow(value) { return classifyBoxShadowValue(value) === 'valid'; }
 
 // 대칭 구멍 A(컨트롤러 발견, 승격핀 6곳) — border 가시성 판정을 "네 면 cascade 합성 엔진"으로 재구축한다
 // (Important 1, 11라운드). 이전 assertVisibleBorder는 (a) BORDER_PROPS가 border-width/style·directional
@@ -612,12 +694,20 @@ const COLOR_FUNCTION_KEYWORDS = new Set([
 
 // 값이 단일 CSS-wide 키워드면 소문자 키워드를, 아니면 null을 반환(삼분 1단계).
 function cssWideKeyword(value) {
-  const nodes = valueParser(String(value)).nodes.filter((n) => n.type !== 'space' && n.type !== 'comment');
+  const nodes = parseValue(value).nodes.filter((n) => n.type !== 'space' && n.type !== 'comment');
   if (nodes.length === 1 && nodes[0].type === 'word') {
-    const w = nodes[0].value.toLowerCase();
+    const w = lowerIdentOf(nodes[0]); // I4(15R) — 값 식별자 decode 1회
     if (CSS_WIDE_KEYWORDS.has(w)) return w;
   }
   return null;
+}
+// I2(15R) — CSS-wide 키워드는 **값 전체가 그 키워드 단독일 때만** 인정된다(CSS Cascade §7.3: CSS-wide
+// keyword는 선언 값 전부를 차지해야 한다). `border-width: initial 1px`처럼 다값 문맥에 섞이면 선언
+// 전체가 불법이라 브라우저가 폐기한다. 이전엔 성분 leaf classifier(classifyComponentValue)가 셀 단위로
+// CSS-wide를 처리해 첫 셀만 initial(medium)로 적용하고 나머지를 살려버렸다(false-green: width 0이 medium으로
+// 부활). 이제 셀 안에서 CSS-wide를 만나면 **불법 신호**로 쓰고, 인정은 선언 진입부(값 전체)에서만 한다.
+function isCssWideWordNode(node) {
+  return !!node && node.type === 'word' && CSS_WIDE_KEYWORDS.has(lowerIdentOf(node));
 }
 
 function isNumberPercentAngle(word) {
@@ -631,75 +721,171 @@ function isColorWord(word) {
 // 통과시켜 `rgb(from junk r g b)`(relative-color origin이 미지 ident junk)도 유효로 오인했다(false-green).
 // 허용 = 숫자/백분율/각도, none·from·색공간/보간 키워드·채널 문자, 콤마/슬래시 구분자, 중첩 색함수·var·수학함수.
 // `from` 뒤에는 반드시 유효 <color>가 와야 한다. 미지 bare word(junk)·string은 불법.
+//
+// I3(15R) — **인자 개수 계약** 추가. 이전엔 "허용 토큰만 들어있는가"만 봐서 `rgb(from red)`(채널 0개)·
+// `color-mix(in srgb)`(피연산자 0개)처럼 **인자가 통째로 빠진** 값을 유효로 통과시켰다. 이건 미지원이
+// 아니라 명백한 문법 위반이라 브라우저는 선언 전체를 폐기한다 — invalid-discard로 내려야 한다.
+// 채널 토큰 = 숫자/백분율/각도, `none`, 채널 문자(r/g/b/h/s/l/w/a/c/x/y/z/alpha), 그리고 계산 가능한
+// 함수(var·수학함수·중첩 색함수). `from <color>`의 origin과 `color()`의 색공간 ident는 채널이 아니다.
+const COLOR_FUNCTION_MIN_CHANNELS = {
+  rgb: 3, rgba: 3, hsl: 3, hsla: 3, hwb: 3, lab: 3, lch: 3, oklab: 3, oklch: 3, color: 3,
+};
+const COLOR_CHANNEL_LETTERS = new Set(['r', 'g', 'b', 'h', 's', 'l', 'w', 'a', 'c', 'x', 'y', 'z', 'alpha']);
+// 함수 인자 노드를 top-level 콤마 기준 그룹으로 분해(색 함수 arity 판정 보조).
+function splitCommaGroups(nodes) {
+  const groups = [[]];
+  for (const n of nodes) {
+    if (n.type === 'div' && n.value === ',') groups.push([]);
+    else if (n.type !== 'space' && n.type !== 'comment') groups[groups.length - 1].push(n);
+  }
+  return groups;
+}
 function isValidColorFunctionNode(node) {
   if (isVarFunction(node)) return varFunctionToken(node) != null;
-  if (!node || node.type !== 'function' || !COLOR_FUNCTIONS.has(node.value.toLowerCase())) return false;
+  if (!node || node.type !== 'function' || node.unclosed || !COLOR_FUNCTIONS.has(lowerIdentOf(node))) return false;
+  const fn = lowerIdentOf(node);
   const inner = node.nodes.filter((n) => n.type !== 'space' && n.type !== 'comment');
+  let channels = 0;
   for (let i = 0; i < inner.length; i += 1) {
     const n = inner[i];
     if (n.type === 'div') continue; // , 또는 /
     if (n.type === 'string') return false;
     if (n.type === 'function') {
-      const nfn = n.value.toLowerCase();
-      if (isVarFunction(n)) { if (varFunctionToken(n) == null) return false; continue; }
-      if (COLOR_FUNCTIONS.has(nfn)) { if (!isValidColorFunctionNode(n)) return false; continue; }
-      if (MATH_FUNCTIONS.has(nfn)) continue;
+      if (n.unclosed) return false;
+      const nfn = lowerIdentOf(n);
+      if (isVarFunction(n)) { if (varFunctionToken(n) == null) return false; channels += 1; continue; }
+      if (COLOR_FUNCTIONS.has(nfn)) { if (!isValidColorFunctionNode(n)) return false; channels += 1; continue; }
+      if (MATH_FUNCTIONS.has(nfn)) { channels += 1; continue; }
       return false;
     }
     if (n.type === 'word') {
-      const w = n.value.toLowerCase();
+      const w = lowerIdentOf(n); // I4(15R) — 값 식별자 decode 1회
       if (w === 'from') { if (!isValidColorToken(inner[i + 1])) return false; i += 1; continue; } // relative color origin
-      if (isNumberPercentAngle(w) || COLOR_FUNCTION_KEYWORDS.has(w) || isColorWord(w)) continue;
+      if (isNumberPercentAngle(w) || w === 'none' || COLOR_CHANNEL_LETTERS.has(w)) { channels += 1; continue; }
+      if (COLOR_FUNCTION_KEYWORDS.has(w) || isColorWord(w)) continue; // 색공간/보간 키워드·색 ident(피연산자)
       return false;
     }
     return false;
   }
+  if (fn === 'color-mix') {
+    // `color-mix( <color-interpolation-method> , <color> [<percentage>]? , <color> [<percentage>]? )`
+    // → 최소 3그룹(보간법 + 색 2개). 그룹이 모자라면 인자 부족 = 문법 위반.
+    const groups = splitCommaGroups(inner);
+    if (groups.length < 3 || groups.some((g) => g.length === 0)) return false;
+    return true;
+  }
+  const min = COLOR_FUNCTION_MIN_CHANNELS[fn];
+  if (min != null && channels < min) return false;
   return true;
 }
 function isValidColorToken(node) {
   if (!node) return false;
   if (node.type === 'function') {
     if (isVarFunction(node)) return varFunctionToken(node) != null;
-    if (COLOR_FUNCTIONS.has(node.value.toLowerCase())) return isValidColorFunctionNode(node);
+    if (COLOR_FUNCTIONS.has(lowerIdentOf(node))) return isValidColorFunctionNode(node);
     return false;
   }
-  if (node.type === 'word') return isColorWord(node.value);
+  if (node.type === 'word') return isColorWord(identOf(node));
   return false;
 }
 
-// I4(14R) — border-image shorthand 삼분 분류. CSS-wide initial/unset·none → 5 longhand initial 리셋(reset).
-// inherit/revert → 모델 불가 unsupported. well-formed var 포함 → 계산시점 유예 unsupported. 유효 <image>
-// (gradient/url 등) 포함 → 도장 활성(source 설정). 그 외(junk 등 유효 image 없음) → 불법 → 폐기(invalid).
-function containsImageFunction(value) {
-  let found = false;
-  valueParser(String(value)).walk((node) => {
-    if (node.type === 'function' && IMAGE_FUNCTIONS.has(node.value.toLowerCase())) found = true;
-  });
-  return found;
+// ─────────────────────────────────────────────────────────────────────────────
+// I6(15R, 이번 라운드의 구조 전환) — border-image 판정을 **"알려진 함수 목록에 있는가"라는 휴리스틱**에서
+// **선언 전체 grammar 판정**으로 바꾼다.
+//
+// 왜 휴리스틱이 구조적으로 틀렸나: `border-image-source`의 문법은 `none | <image>`이고 `<image>`는
+// url()/그라디언트/이미지 함수류다. "함수명이 우리 목록에 있으면 이미지, 없으면 불법"은 목록을 **완결된
+// 세계**로 가정한 것이라 두 방향으로 동시에 샜다 —
+//   ① 목록 밖 실존 함수(`-webkit-image-set("a.png" 1x)`, Chrome 지원)를 invalid-discard로 흘려보내
+//      **활성 이미지를 놓쳤다**(false-green: 도장된 보더를 일반 보더로 오인).
+//   ② 목록에 없다는 이유로 무효 판정한 값(`border: foo()`)을 반대로 상위 경로에서는 "unsupported=유효
+//      선언"으로 취급해 **border-image를 reset**해버렸다(false-green).
+// 이제 값 하나하나를 다음 셋으로 **삼분**한다:
+//   (a) 문법 형태가 그 자리에 성립 가능한가 → 'active'/'reset'(우리가 해석 가능)
+//   (b) 성립하지만 우리가 해석할 수 없는가(미지 함수·수학 함수·계산시점 유예 var) → 'unsupported'
+//       (fail-closed — 선언은 적용되나 불확실성을 남긴다)
+//   (c) 명백한 문법 위반인가(bare ident·문자열·값 개수 초과·닫히지 않은 함수·슬롯 중복) → 'invalid'
+//       (브라우저가 선언 전체를 폐기 → 아무것도 건드리지 않고 **이전 상태 유지**)
+// 그리고 **무효 shorthand는 border-image를 절대 reset하지 않는다**(I4b 원칙의 일반화) — 이는 (c)뿐
+// 아니라 (b)에도 적용된다. reset은 "그 선언이 확실히 유효하다"가 전제인 부작용이기 때문이다.
+//
+// 명시 예외(과대 종결 금지): 우리는 여전히 <image> 함수의 **인자 문법**은 검사하지 않는다
+// (`url()`/`linear-gradient()`의 내부는 미검 — 형태가 <image>로 성립 가능하면 active). 또 source가
+// none이어도 slice/width/outset/repeat가 non-initial이면 fail-closed RED로 둔다(브라우저는 source가
+// none이면 도장 자체를 안 하므로 이건 의도적 과잉 안전이며, 아래 imageActive 주석에 병기).
+const VENDOR_PREFIX_RE = /^-(?:webkit|moz|ms|o|epub|khtml)-/;
+function unprefixedFn(name) { return String(name).replace(VENDOR_PREFIX_RE, ''); }
+// 노드 하나가 <image>로 성립하는가 — 'image' | 'unsupported' | 'invalid'.
+function classifyImageNode(node) {
+  if (node.type === 'function') {
+    if (node.unclosed) return 'invalid'; // 괄호가 닫히지 않음 = 문법 자체 파탄
+    const fn = unprefixedFn(lowerIdentOf(node));
+    if (IMAGE_FUNCTIONS.has(fn)) return 'image';
+    // 색/수학 함수는 <image>가 될 수 없다 → 확실한 문법 위반.
+    if (COLOR_FUNCTIONS.has(fn) || MATH_FUNCTIONS.has(fn)) return 'invalid';
+    return 'unsupported'; // 미지 함수 — <image>일 여지를 배제할 수 없다(fail-closed)
+  }
+  return 'invalid'; // bare ident(none은 호출부가 선처리)·string·div 등은 <image>가 아니다
 }
-function classifyBorderImageShorthand(value) {
-  const v = String(value).trim();
-  const cw = cssWideKeyword(v);
-  if (cw === 'initial' || cw === 'unset') return { kind: 'reset' };
-  if (cw) return { kind: 'unsupported' }; // inherit/revert/revert-layer
-  if (v.toLowerCase() === 'none') return { kind: 'reset' }; // source none + 나머지 initial
-  if (valueHasWellFormedVar(v)) return { kind: 'unsupported' }; // deferred(계산시점 유예)
-  if (containsImageFunction(v)) return { kind: 'active', source: v };
-  return { kind: 'invalid' }; // junk 등 유효 image 없음 → 폐기
+const NUMBER_RE = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i;
+const PERCENT_RE = /^[+-]?(?:\d+\.?\d*|\.\d+)%$/;
+const BORDER_IMAGE_REPEAT_KEYWORDS = new Set(['stretch', 'repeat', 'round', 'space']);
+// 성분 셀 하나의 문법 판정. 반환 'ok' | 'unsupported' | 'invalid'.
+function classifyImageComponentCell(component, node) {
+  if (node.type === 'function') {
+    if (node.unclosed) return 'invalid';
+    if (isVarFunction(node)) return varFunctionToken(node) != null ? 'unsupported' : 'invalid'; // deferred
+    return 'unsupported'; // 수학 함수(표준·계산 불가)든 미지 함수든 여기선 동일하게 fail-closed
+  }
+  if (node.type !== 'word') return 'invalid'; // string·div 등
+  const w = lowerIdentOf(node); // I4(15R) — 값 식별자 decode 1회
+  if (component === 'slice') return (NUMBER_RE.test(w) || PERCENT_RE.test(w)) ? 'ok' : 'invalid';
+  if (component === 'width') {
+    if (w === 'auto' || NUMBER_RE.test(w) || PERCENT_RE.test(w) || isLengthWord(w)) return 'ok';
+    return 'invalid';
+  }
+  if (component === 'outset') return (NUMBER_RE.test(w) || isLengthWord(w)) ? 'ok' : 'invalid';
+  return BORDER_IMAGE_REPEAT_KEYWORDS.has(w) ? 'ok' : 'invalid'; // repeat
 }
-
-// 14R 잔여2(내부 리뷰 실증, 리뷰어 probe) — border-image longhand 5종도 shorthand(classifyBorderImageShorthand)
-// 와 동일한 삼분 파이프라인을 거친다. 이전엔 raw decl.value를 검증 없이 그대로 셀에 넣어(triage 미경유)
-// 두 방향으로 어긋났다: ① `border-image-source: initial`(CSS-wide → 브라우저는 source를 initial(none)로
-// 리셋 → 일반 보더가 그대로 보임 = GREEN)을 "initial"이라는 문자열 자체를 non-none 값으로 오인해 도장
-// 활성으로 오판(false-RED, I4a shorthand의 `border-image:initial` GREEN과 비대칭). ② `border-image-source:
-// junk`(문법 위반 → 브라우저는 선언 전체를 폐기하고 이전 상태를 유지)도 raw 문자열을 그대로 값으로 채택해
-// 실제로는 아무 근거 없는 상태를 만들었다 — 이제 invalid로 분류해 아무것도 건드리지 않는다(이전 상태
-// 기준 판정). source는 shorthand와 동일하게 <image>|none 문법을 검증한다. 나머지 4개(slice/width/outset/
-// repeat)는 정밀 grammar 모델링을 새로 추가하지 않는다(기존 검증 수준 유지) — well-formed var()만
-// deferred(unsupported)로 분리하고, 그 외 비어있지 않은 값은 종전처럼 raw로 받아들인다(애매한 값은
-// 아래 imageActive 비교가 BORDER_IMAGE_INITIAL과 문자열 불일치로 자연히 non-initial 판정 → fail-closed
-// RED가 되므로 안전 방향 유지).
+const BORDER_IMAGE_MAX_CELLS = { slice: 4, width: 4, outset: 4, repeat: 2 };
+// 성분 값(셀 나열)의 문법 판정. 반환 { kind, cells } — kind는 'ok' | 'unsupported' | 'invalid'.
+function classifyImageComponentCells(component, nodes) {
+  const cells = [];
+  let verdict = 'ok';
+  let sawFill = false;
+  for (const node of nodes) {
+    if (component === 'slice' && node.type === 'word' && lowerIdentOf(node) === 'fill') {
+      if (sawFill) return { kind: 'invalid' }; // 슬롯 중복
+      sawFill = true;
+      continue;
+    }
+    if (isCssWideWordNode(node)) return { kind: 'invalid' }; // I2 — 다값 문맥의 CSS-wide = 불법
+    const c = classifyImageComponentCell(component, node);
+    if (c === 'invalid') return { kind: 'invalid' };
+    if (c === 'unsupported') verdict = 'unsupported';
+    cells.push(valueParser.stringify(node).trim().toLowerCase());
+  }
+  if (cells.length === 0 || cells.length > BORDER_IMAGE_MAX_CELLS[component]) return { kind: 'invalid' };
+  return { kind: verdict, cells, fill: sawFill };
+}
+// 4값(또는 repeat 2값) 확장 후 initial과 값 동등한가 — `1 1 1 1`·`100%`처럼 표기만 다른 initial을
+// "활성"으로 오판하지 않기 위해 숫자는 parseFloat로 비교한다.
+function sameImageCellValue(a, b) {
+  if (a === b) return true;
+  const na = parseFloat(a);
+  const nb = parseFloat(b);
+  if (Number.isNaN(na) || Number.isNaN(nb)) return false;
+  return na === nb && a.replace(/^[+-]?(?:\d+\.?\d*|\.\d+)/, '') === b.replace(/^[+-]?(?:\d+\.?\d*|\.\d+)/, '');
+}
+function imageCellsAreInitial(component, cells, fill) {
+  if (fill) return false;
+  const expanded = component === 'repeat'
+    ? (cells.length === 1 ? [cells[0], cells[0]] : cells)
+    : expandFourSides(cells);
+  const initial = String(BORDER_IMAGE_INITIAL[component]).toLowerCase();
+  return expanded.every((c) => sameImageCellValue(c, initial));
+}
+// border-image longhand 5종의 삼분 분류(reset/active/unsupported/invalid).
 function classifyBorderImageLonghand(component, value) {
   const v = String(value).trim();
   const cw = cssWideKeyword(v);
@@ -707,15 +893,95 @@ function classifyBorderImageLonghand(component, value) {
   if (cw) return { kind: 'unsupported' }; // inherit/revert/revert-layer
   if (component === 'source') {
     if (v.toLowerCase() === 'none') return { kind: 'reset' };
-    if (valueHasWellFormedVar(v)) return { kind: 'unsupported' }; // deferred(계산시점 유예)
-    if (containsImageFunction(v)) return { kind: 'active', value: v };
-    return { kind: 'invalid' }; // junk 등 유효 <image>|none 아님 → 폐기
+    const nodes = parseValue(v).nodes.filter((n) => n.type !== 'space' && n.type !== 'comment');
+    if (nodes.length !== 1) return valueHasWellFormedVar(v) ? { kind: 'unsupported' } : { kind: 'invalid' };
+    if (isVarFunction(nodes[0])) return varFunctionToken(nodes[0]) != null ? { kind: 'unsupported' } : { kind: 'invalid' };
+    const c = classifyImageNode(nodes[0]);
+    if (c === 'image') return { kind: 'active', value: v };
+    if (c === 'unsupported') return { kind: 'unsupported' };
+    return valueHasWellFormedVar(v) ? { kind: 'unsupported' } : { kind: 'invalid' };
   }
-  // slice/width/outset/repeat — 기존 검증 수준 유지(정밀 grammar 모델링 불요). well-formed var만 deferred,
-  // 빈 값만 invalid, 그 외는 종전처럼 raw 그대로("애매하면 fail-closed"는 imageActive 비교가 담당).
-  if (valueHasWellFormedVar(v)) return { kind: 'unsupported' };
-  if (v === '') return { kind: 'invalid' };
+  const groups = splitTopLevelSpaceGroups(v).map((g) => parseValue(g).nodes.filter((n) => n.type !== 'comment'));
+  if (groups.some((g) => g.length !== 1)) return valueHasWellFormedVar(v) ? { kind: 'unsupported' } : { kind: 'invalid' };
+  const res = classifyImageComponentCells(component, groups.map((g) => g[0]));
+  if (res.kind === 'invalid') return valueHasWellFormedVar(v) ? { kind: 'unsupported' } : { kind: 'invalid' };
+  if (res.kind === 'unsupported') return { kind: 'unsupported' };
+  if (imageCellsAreInitial(component, res.cells, res.fill)) return { kind: 'reset' };
   return { kind: 'active', value: v };
+}
+
+// border-image shorthand 문법:
+//   <'source'> || <'slice'> [ / <'width'> | / <'width'>? / <'outset'> ]? || <'repeat'>
+// top-level `/`로 최대 3구획(구획0=source/slice/repeat 혼합, 1=width, 2=outset)으로 나눈 뒤 각 그룹을
+// 슬롯에 배정한다. 배정 불가 그룹이 하나라도 있으면 (c) invalid, 미지 함수 등 판단 불가가 있으면
+// (b) unsupported다. 결과가 전부 initial 동등이면 reset(=5 longhand 초기화와 동치).
+function classifyBorderImageShorthand(value) {
+  const v = String(value).trim();
+  const cw = cssWideKeyword(v);
+  if (cw === 'initial' || cw === 'unset') return { kind: 'reset' };
+  if (cw) return { kind: 'unsupported' }; // inherit/revert/revert-layer
+  const deferred = valueHasWellFormedVar(v);
+  const bail = (kind) => (kind === 'invalid' && deferred ? { kind: 'unsupported' } : { kind });
+  if (v === '') return bail('invalid');
+  const top = parseValue(v).nodes.filter((n) => n.type !== 'comment');
+  const segments = [[]];
+  for (const n of top) {
+    if (n.type === 'div' && n.value === '/') segments.push([]);
+    else if (n.type === 'div') return bail('invalid'); // top-level 콤마는 border-image 문법에 없다
+    else if (n.type !== 'space') segments[segments.length - 1].push(n);
+  }
+  if (segments.length > 3) return bail('invalid');
+  let verdict = 'ok';
+  let source = null;
+  const sliceNodes = [];
+  const repeatNodes = [];
+  for (const node of segments[0]) {
+    if (isCssWideWordNode(node)) return bail('invalid'); // I2 — 다값 문맥의 CSS-wide
+    if (node.type === 'word') {
+      const w = lowerIdentOf(node);
+      if (w === 'none') { if (source != null) return bail('invalid'); source = 'none'; continue; }
+      if (BORDER_IMAGE_REPEAT_KEYWORDS.has(w)) { repeatNodes.push(node); continue; }
+      if (w === 'fill' || NUMBER_RE.test(w) || PERCENT_RE.test(w)) { sliceNodes.push(node); continue; }
+      return bail('invalid'); // 어느 슬롯도 아닌 bare ident
+    }
+    if (node.type === 'function' && isVarFunction(node)) {
+      if (varFunctionToken(node) == null) return bail('invalid');
+      verdict = 'unsupported'; // deferred — 어느 슬롯인지 계산시점에만 알 수 있다
+      continue;
+    }
+    const c = node.type === 'function' ? classifyImageNode(node) : 'invalid';
+    if (c === 'invalid') return bail('invalid');
+    if (c === 'unsupported') { verdict = 'unsupported'; continue; }
+    if (source != null) return bail('invalid'); // source 슬롯 중복
+    source = valueParser.stringify(node).trim();
+  }
+  // `/` 구획은 slice가 선행해야만 나올 수 있다(스펙).
+  if (segments.length > 1 && sliceNodes.length === 0) return bail('invalid');
+  const parts = { source, slice: null, width: null, outset: null, repeat: null };
+  const takeCells = (component, nodes) => {
+    if (nodes.length === 0) return true;
+    const res = classifyImageComponentCells(component, nodes);
+    if (res.kind === 'invalid') return false;
+    if (res.kind === 'unsupported') { verdict = 'unsupported'; return true; }
+    parts[component] = imageCellsAreInitial(component, res.cells, res.fill) ? null : nodes.map((n) => valueParser.stringify(n).trim()).join(' ');
+    return true;
+  };
+  if (!takeCells('slice', sliceNodes)) return bail('invalid');
+  if (!takeCells('repeat', repeatNodes)) return bail('invalid');
+  if (segments[1] && segments[1].length && !takeCells('width', segments[1])) return bail('invalid');
+  if (segments[2] && segments[2].length && !takeCells('outset', segments[2])) return bail('invalid');
+  if (segments.slice(1).some((s) => s.length === 0)) return bail('invalid'); // `url(x) 1 / ` 처럼 빈 구획 = 불법
+  if (verdict === 'unsupported') return { kind: 'unsupported' };
+  if (deferred) return { kind: 'unsupported' }; // well-formed var 포함 = 계산시점 유예
+  const cells = {
+    source: source == null || source.toLowerCase() === 'none' ? BORDER_IMAGE_INITIAL.source : source,
+    slice: parts.slice == null ? BORDER_IMAGE_INITIAL.slice : parts.slice,
+    width: parts.width == null ? BORDER_IMAGE_INITIAL.width : parts.width,
+    outset: parts.outset == null ? BORDER_IMAGE_INITIAL.outset : parts.outset,
+    repeat: parts.repeat == null ? BORDER_IMAGE_INITIAL.repeat : parts.repeat,
+  };
+  const allInitial = BORDER_IMAGE_LONGHANDS.every((k) => String(cells[k]).toLowerCase() === String(BORDER_IMAGE_INITIAL[k]).toLowerCase());
+  return allInitial ? { kind: 'reset' } : { kind: 'active', source: cells.source, cells };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -739,29 +1005,42 @@ function classifyBorderImageLonghand(component, value) {
 //       무효 문법(`var(--x garbage)`, I2a)뿐이면 이 재분류 대상이 아니라 기존 invalid 폐기 그대로다.
 //       CSS-wide 키워드(inherit 등)도 계산시점 유예와 이웃한 개념이지만 이미 COLOR_KEYWORDS 등 별도
 //       경로로 처리되므로 여기선 구현하지 않는다(기록성 주석).
+//   · uncertain(유효성 미확정, I6 15R): unsupported 중에서도 **선언이 유효한지 자체를 확인할 수 없는**
+//       경우(미지 함수 `foo()`). 값은 못 재고(→ fail-closed) 게다가 "유효 선언이었다면 일어났을 부작용"
+//       (border shorthand의 border-image initial 리셋)도 일으키면 안 된다 — 무효였다면 브라우저는
+//       아무것도 안 하기 때문이다. calc처럼 **표준 함수라 유효성은 확실한** unsupported와 구분된다.
 // 두 경로의 실차이는 "이전 유효 선언 fallback 여부"와 "border-image 등 부작용 발생 여부"에서 드러난다.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // shorthand의 top-level 노드 하나를 성분 슬롯으로 분류. 반환: {slot,value}(정상) | {invalid} | {unsupported}.
+// I6(15R) — 반환에 `uncertain`을 추가한다. "지원 밖"에도 두 종류가 있다:
+//   · MATH_FUNCTIONS(calc/min/max/clamp…) — <line-width> 자리에 오는 **표준** 함수라 선언이 유효함은
+//     확실하다(값만 못 잰다) → unsupported이되 선언의 부작용(border-image reset)은 정상 발생.
+//   · 미지 함수(foo()) — 선언이 유효한지 **확인할 수 없다** → unsupported + uncertain. 이때 border-image
+//     reset 같은 "유효 선언 전제 부작용"은 일으키면 안 된다(무효라면 브라우저는 아무것도 안 하므로).
 function classifyBorderShorthandNode(node) {
   if (node.type === 'word') {
-    const w = node.value.toLowerCase();
-    if (BORDER_STYLE_KEYWORDS.has(w)) return { slot: 'style', value: node.value };
-    if (BORDER_WIDTH_KEYWORDS.has(w) || isLengthWord(node.value)) return { slot: 'width', value: node.value };
-    if (w[0] === '#' || COLOR_KEYWORDS.has(w)) return { slot: 'color', value: node.value };
+    const ident = identOf(node); // I4(15R) — 값 식별자 decode 1회
+    const w = ident.toLowerCase();
+    if (CSS_WIDE_KEYWORDS.has(w)) return { invalid: true }; // I2 — 다값 문맥의 CSS-wide = 불법
+    if (BORDER_STYLE_KEYWORDS.has(w)) return { slot: 'style', value: ident };
+    if (BORDER_WIDTH_KEYWORDS.has(w) || isLengthWord(ident)) return { slot: 'width', value: ident };
+    if (w[0] === '#' || COLOR_KEYWORDS.has(w)) return { slot: 'color', value: ident };
     return { invalid: true }; // 미지 키워드·unitless 비영 length = 불법 문법(폐기)
   }
   if (node.type === 'function') {
+    if (node.unclosed) return { invalid: true }; // 닫히지 않은 함수 = 문법 자체 파탄
     if (isVarFunction(node)) { // var() 문법 검증(I2/I3) — 무효면 선언 폐기, 유효면 color 슬롯
       if (varFunctionToken(node) == null) return { invalid: true };
       return { slot: 'color', value: valueParser.stringify(node) };
     }
-    const fn = node.value.toLowerCase();
-    if (COLOR_FUNCTIONS.has(fn)) { // I3(14R) — 색 함수 내부 문법까지 검증(rgb(from junk …) 등 폐기)
+    const fn = lowerIdentOf(node);
+    if (COLOR_FUNCTIONS.has(fn)) { // I3(14R) — 색 함수 내부 문법까지 검증(rgb(from junk …)·인자 부족 등 폐기)
       if (!isValidColorFunctionNode(node)) return { invalid: true };
       return { slot: 'color', value: valueParser.stringify(node) };
     }
-    return { unsupported: true }; // calc 등 색 아닌 함수 = 유효 선언이나 지원 밖(fail-closed)
+    if (MATH_FUNCTIONS.has(fn)) return { unsupported: true }; // 표준 <length> 산출 — 유효 선언 확정
+    return { unsupported: true, uncertain: true }; // 미지 함수 — 유효성 미확정(fail-closed, 부작용 금지)
   }
   return { invalid: true }; // string·div(comma/slash) 등 = 불법(폐기)
 }
@@ -805,11 +1084,12 @@ function parseBorderShorthand(value) {
   const assigned = { width: false, style: false, color: false };
   let invalid = false; // 불법 문법 = 선언 폐기(cascade 제외)
   let unsupported = false; // 지원 밖(calc 등) = 유효 선언이나 fail-closed
-  for (const node of valueParser(String(value)).nodes) {
+  let uncertain = false; // I6(15R) — 유효성 자체가 미확정(미지 함수) = 부작용(border-image reset) 금지
+  for (const node of parseValue(value).nodes) {
     if (node.type === 'space' || node.type === 'comment') continue; // 공백/주석만 무해하게 스킵
     const c = classifyBorderShorthandNode(node);
     if (c.invalid) { invalid = true; continue; }
-    if (c.unsupported) { unsupported = true; continue; }
+    if (c.unsupported) { unsupported = true; if (c.uncertain) uncertain = true; continue; }
     if (assigned[c.slot]) { invalid = true; continue; } // 슬롯 중복 = 문법 오류(폐기)
     result[c.slot] = { value: c.value, unsupported: false };
     assigned[c.slot] = true;
@@ -825,6 +1105,9 @@ function parseBorderShorthand(value) {
   // 별도로 검사해 선언 자체를 cascade에서 제외한다(폐기) — 그때 아래 셀 값은 사용되지 않는다.
   if (invalid || unsupported) for (const slot of ['width', 'style', 'color']) result[slot].unsupported = true;
   result.invalid = invalid;
+  // I6(15R) — `uncertain`이면 "선언이 유효하다"를 전제로 한 부작용(border-image initial 리셋)을 일으키지
+  // 않는다. 무효 shorthand는 border-image를 절대 reset하지 않는다는 I4b 원칙의 일반화다.
+  result.uncertain = uncertain;
   return result;
 }
 
@@ -834,7 +1117,7 @@ function parseBorderShorthand(value) {
 function splitTopLevelSpaceGroups(value) {
   const groups = [];
   let cur = [];
-  for (const node of valueParser(String(value)).nodes) {
+  for (const node of parseValue(value).nodes) {
     if (node.type === 'space') {
       if (cur.length) { groups.push(cur); cur = []; }
     } else cur.push(node);
@@ -859,36 +1142,35 @@ function expandFourSides(cells) {
 // "junk"가 있으면 브라우저는 선언 전체를 폐기하는데도 1px 성공). 미소비 잔여(2개 이상·string·div)면
 // invalid(폐기), calc 등 지원밖 함수면 unsupported(fail-closed) — 위 폐기/미지원 구분 주석 참고.
 function classifyComponentValue(component, group) {
-  const nodes = valueParser(group).nodes.filter((n) => n.type !== 'space' && n.type !== 'comment');
-  // I1(14R) 삼분 1단계 — 단일 CSS-wide 키워드는 property 무관 공통 처리. initial/unset → 해당 성분 initial
-  // 값(예: border-style:initial → none → 비가시), inherit/revert(-layer) → 모델 불가 unsupported(fail-closed).
-  // 이전엔 initial 등이 COLOR_KEYWORDS에 섞여 color 성분에서만 "값"으로 통과하고 width/style에선 미지
-  // 키워드=invalid(폐기)로 property별로 갈렸다 — 공통 1단계로 통일.
-  if (nodes.length === 1 && nodes[0].type === 'word' && CSS_WIDE_KEYWORDS.has(nodes[0].value.toLowerCase())) {
-    const cw = nodes[0].value.toLowerCase();
-    if (cw === 'initial' || cw === 'unset') return { value: BORDER_INITIAL[component], unsupported: false };
-    return { value: group, unsupported: true }; // inherit/revert → fail-closed(폐기 아님, 계산 불가)
-  }
+  const nodes = parseValue(group).nodes.filter((n) => n.type !== 'space' && n.type !== 'comment');
+  // I2(15R) — CSS-wide 키워드는 **셀 단위로 인정하지 않는다**. 이전엔 이 leaf classifier가 `initial`을
+  // 셀 값(BORDER_INITIAL[component])으로 바꿔줘서 `border-width: initial 1px`처럼 다값 문맥에 섞인
+  // 키워드가 첫 셀에 조용히 적용됐다(false-green: 이전 width 0이 medium으로 부활). CSS-wide는 값 전체가
+  // 그 키워드 단독일 때만 유효하므로, 그 인정은 선언 진입부(parseBorderComponentLonghand/
+  // parseBorderShorthand의 cssWideKeyword 분기)에서만 하고 여기선 **불법 신호**로 쓴다.
+  if (nodes.length === 1 && isCssWideWordNode(nodes[0])) return { value: group, unsupported: true, invalid: true };
   if (nodes.length !== 1) return { value: group, unsupported: true, invalid: true }; // 미소비 잔여 = 불법(폐기)
   const node = nodes[0];
   if (node.type === 'div' || node.type === 'string') return { value: group, unsupported: true, invalid: true };
+  if (node.type === 'function' && node.unclosed) return { value: group, unsupported: true, invalid: true }; // 문법 파탄
+  const ident = node.type === 'word' ? identOf(node) : null; // I4(15R) — 값 식별자 decode 1회
   if (component === 'style') {
-    if (node.type === 'word' && BORDER_STYLE_KEYWORDS.has(node.value.toLowerCase())) return { value: node.value, unsupported: false };
+    if (ident != null && BORDER_STYLE_KEYWORDS.has(ident.toLowerCase())) return { value: ident, unsupported: false };
     if (node.type === 'function') return { value: group, unsupported: true }; // 지원밖 함수(fail-closed)
     return { value: group, unsupported: true, invalid: true }; // 미지 키워드 = 불법(폐기)
   }
   if (component === 'width') {
-    if (node.type === 'word' && (BORDER_WIDTH_KEYWORDS.has(node.value.toLowerCase()) || isLengthWord(node.value))) return { value: node.value, unsupported: false };
+    if (ident != null && (BORDER_WIDTH_KEYWORDS.has(ident.toLowerCase()) || isLengthWord(ident))) return { value: ident, unsupported: false };
     if (node.type === 'function') return { value: group, unsupported: true }; // calc 등 지원밖(fail-closed)
     return { value: group, unsupported: true, invalid: true }; // unitless 비영·미지 키워드 = 불법(폐기)
   }
   // color
   if (node.type === 'function') {
     if (isVarFunction(node)) { if (varFunctionToken(node) == null) return { value: group, unsupported: true, invalid: true }; return { value: group, unsupported: false }; }
-    if (COLOR_FUNCTIONS.has(node.value.toLowerCase())) { if (!isValidColorFunctionNode(node)) return { value: group, unsupported: true, invalid: true }; return { value: group, unsupported: false }; } // I3 색 함수 내부 문법
+    if (COLOR_FUNCTIONS.has(lowerIdentOf(node))) { if (!isValidColorFunctionNode(node)) return { value: group, unsupported: true, invalid: true }; return { value: group, unsupported: false }; } // I3 색 함수 내부 문법
     return { value: group, unsupported: true }; // 색 아닌 함수 = 지원밖(fail-closed)
   }
-  if (node.type === 'word' && (node.value[0] === '#' || COLOR_KEYWORDS.has(node.value.toLowerCase()))) return { value: node.value, unsupported: false };
+  if (ident != null && (ident[0] === '#' || COLOR_KEYWORDS.has(ident.toLowerCase()))) return { value: ident, unsupported: false };
   return { value: group, unsupported: true, invalid: true };
 }
 
@@ -897,7 +1179,16 @@ function parseBorderComponentLonghand(component, value) {
   // div(comma·slash)가 하나라도 있거나(문법 오류) 그룹 개수가 범위 밖이거나 한 그룹이라도 invalid면 선언
   // 전체가 불법 → 네 면 전부 invalid(폐기 대상). 호출부(synthesizeBorderSides)가 invalid를 검사해 이 선언을
   // cascade에서 제외한다(이전 유효값으로 fallback). 셀도 unsupported로 마킹해 기존 단위 단정을 보존한다.
-  if (valueParser(String(value)).nodes.some((n) => n.type === 'div')) {
+  // I2(15R) 삼분 1단계 — 값 **전체**가 단일 CSS-wide 키워드일 때만 CSS-wide로 인정한다. 셀 단위 인정은
+  // classifyComponentValue에서 제거했다(다값 문맥에 섞이면 선언 전체가 불법 → 폐기).
+  const cw = cssWideKeyword(value);
+  if (cw) {
+    const cell = (cw === 'initial' || cw === 'unset')
+      ? { value: BORDER_INITIAL[component], unsupported: false }
+      : { value, unsupported: true }; // inherit/revert(-layer) → 모델 불가 fail-closed
+    return [cell, cell, cell, cell];
+  }
+  if (parseValue(value).nodes.some((n) => n.type === 'div')) {
     const bad = { value, unsupported: true, invalid: true };
     return [bad, bad, bad, bad];
   }
@@ -942,16 +1233,30 @@ function synthesizeBorderSides(rules) {
   };
   // F3(12라운드) — border-image 성분도 cascade로 합성한다(!important·문서순서 반영). border shorthand는
   // 이 다섯 성분을 전부 initial로 리셋하고, border-image(-source/-slice/…) 선언은 해당 성분을 설정한다.
+  //
+  // I5(15R, state domain 분리) — border-image의 **불확실성(unsupported)을 일반 border side 셀에 기록하지
+  // 않는다**. 이전엔 `border-image: inherit`·`all: inherit`가 markPerimeterUnsupported로 side 셀에 poison을
+  // 찍었는데, side 셀과 image 셀은 서로 다른 상태 도메인이라 두 방향으로 전부 어긋났다:
+  //   ① 후행 `border-width/style/color`가 side 셀을 덮으면서 **image 불확실성까지 지워** GREEN(false-green).
+  //   ② 후행 `border-image: none`은 image 도메인만 리셋하므로 side 셀의 poison을 **못 지워** RED(false-red).
+  // 이제 5개 borderImage 셀 각각이 {value, important, unsupported}를 보관한다. image reset은 image 상태만
+  // 건드리고, 일반 border longhand는 image 불확실성에 일절 간섭하지 않는다. 최종 fail-closed 반영은
+  // 아래 imageActive/imageUncertain 집계 한 곳에서만 일어난다.
   const borderImage = {};
-  for (const k of BORDER_IMAGE_LONGHANDS) borderImage[k] = { value: BORDER_IMAGE_INITIAL[k], important: false };
-  const applyImageCell = (comp, value, important) => {
+  for (const k of BORDER_IMAGE_LONGHANDS) borderImage[k] = { value: BORDER_IMAGE_INITIAL[k], important: false, unsupported: false };
+  const applyImageCell = (comp, value, important, unsupported = false) => {
     const cell = borderImage[comp];
     if (cell.important && !important) return; // important가 후행 non-important를 이김
     cell.value = value;
+    cell.unsupported = unsupported;
     cell.important = important;
   };
   const resetBorderImage = (important) => {
-    for (const k of BORDER_IMAGE_LONGHANDS) applyImageCell(k, BORDER_IMAGE_INITIAL[k], important);
+    for (const k of BORDER_IMAGE_LONGHANDS) applyImageCell(k, BORDER_IMAGE_INITIAL[k], important, false);
+  };
+  // image 도메인 전체를 "계산 불가"로 표시(값은 원문 보존 — 진단 메시지용).
+  const markImageUnsupported = (rawValue, important) => {
+    for (const k of BORDER_IMAGE_LONGHANDS) applyImageCell(k, rawValue, important, true);
   };
   rules.forEach((rule) => {
     rule.walkDecls((decl) => {
@@ -969,18 +1274,28 @@ function synthesizeBorderSides(rules) {
       // 정밀화: initial/unset → 네 면을 border initial(style none → 비가시)로 리셋(+border-image도 리셋),
       // inherit/revert(-layer) → 모델 불가 fail-closed(전체 unsupported), 그 외(비 CSS-wide 값) → 불법 →
       // 폐기(무동작). 세 경로 모두 결과는 RED이나(가시 불가/미지원), 폐기 케이스만 예외로 이전 상태를 유지한다.
+      // I1(15R) — 두 도메인(border·indicator)이 **동일한 classifyAllDecl을 공유**한다. 이전엔 border가
+      // 여기서 cssWideKeyword를 직접 호출하고 indicator는 classifyAllDecl을 쓰는 이원화 구조라, `all`의
+      // deferred(well-formed var) 판정을 한쪽에만 넣으면 다른 쪽이 새는 형태였다. 실제로 둘 다 새 있었다:
+      // `all: var(--color-bg)`가 "비 CSS-wide → 불법 → 폐기(무동작)"로 흘러 border/box-shadow가 살아남았다
+      // (false-green). Chrome은 well-formed var를 포함한 `all`을 폐기하지 않고 cascade에 참여시킨 뒤
+      // 계산시점에 무효화한다 → border-style:none / box-shadow:none. **정의된 토큰으로도 재현**되므로
+      // "미정의 var 참조" 게이트가 대신 잡아줄 수 없다.
+      // I5(15R) — `all`은 border-image까지 함께 리셋/불확실화하므로 **두 도메인 각각에** 반영한다.
       if (prop === 'all') {
-        const cw = cssWideKeyword(decl.value.trim());
-        if (cw === 'initial' || cw === 'unset') {
+        const v = decl.value.trim();
+        const cls = classifyAllDecl(v);
+        if (cls.kind === 'valid') { // initial/unset
           for (const side of BORDER_SIDES) {
             applyCell(side, 'width', { value: BORDER_INITIAL.width, unsupported: false }, important);
             applyCell(side, 'style', { value: BORDER_INITIAL.style, unsupported: false }, important);
             applyCell(side, 'color', { value: BORDER_INITIAL.color, unsupported: false }, important);
           }
           resetBorderImage(important);
-        } else if (cw) {
-          markPerimeterUnsupported(decl.value.trim(), important); // inherit/revert → fail-closed
-        } // else: 비 CSS-wide `all` = 불법 → 폐기(무동작)
+        } else if (cls.kind === 'unsupported') { // inherit/revert(-layer) 또는 deferred var
+          markPerimeterUnsupported(v, important);
+          markImageUnsupported(v, important);
+        } // else invalid: 폐기(무동작)
         return;
       }
       // F3+I4(a) — border-image shorthand는 **5개 longhand 전부를 initial로 리셋한 뒤** 명시분을 설정한다
@@ -993,13 +1308,17 @@ function synthesizeBorderSides(rules) {
       // (inherit/revert·well-formed var) → fail-closed. invalid(junk 등) → 폐기(아무것도 리셋/설정 안 함 →
       // 이전 border-image 상태 유지). 이전엔 non-none이면 무조건 source=원문으로 둬 `initial`을 활성 이미지로
       // 오인(false-RED)하고, junk도 리셋해 이전 활성 상태를 지워버렸다(false-green).
+      // I5/I6(15R) — unsupported는 **image 도메인에만** 기록한다(일반 border side 셀 불간섭). active는
+      // 5 longhand 전부를 shorthand가 계산한 값으로 세팅한다(생략분은 initial).
       if (prop === 'border-image') {
         const v = decl.value.trim();
         const cls = classifyBorderImageShorthand(v);
-        if (cls.kind === 'invalid') return; // 폐기: 이전 상태 유지
-        if (cls.kind === 'unsupported') { markPerimeterUnsupported(v, important); return; }
+        if (cls.kind === 'invalid') return; // 폐기: 이전 상태 유지(무효 shorthand는 절대 reset하지 않는다)
+        if (cls.kind === 'unsupported') { markImageUnsupported(v, important); return; }
         resetBorderImage(important); // reset·active 공통: 5 longhand 초기화 후
-        if (cls.kind === 'active') applyImageCell('source', cls.source, important); // 명시 source 설정
+        if (cls.kind === 'active') {
+          for (const k of BORDER_IMAGE_LONGHANDS) applyImageCell(k, cls.cells[k], important, false);
+        }
         return;
       }
       // F3+14R 잔여2 — border-image-{source|slice|width|outset|repeat} longhand: shorthand와 동일한 삼분
@@ -1012,9 +1331,10 @@ function synthesizeBorderSides(rules) {
         const component = imgLong[1];
         const cls = classifyBorderImageLonghand(component, decl.value);
         if (cls.kind === 'invalid') return; // 폐기: 이전 상태 유지
-        if (cls.kind === 'unsupported') { markPerimeterUnsupported(decl.value.trim(), important); return; }
-        if (cls.kind === 'reset') { applyImageCell(component, BORDER_IMAGE_INITIAL[component], important); return; }
-        applyImageCell(component, cls.value, important); // active
+        // I5(15R) — 불확실성은 **그 image 셀에만** 기록한다(이전엔 perimeter 전체를 poison해 도메인이 섞였다).
+        if (cls.kind === 'unsupported') { applyImageCell(component, decl.value.trim(), important, true); return; }
+        if (cls.kind === 'reset') { applyImageCell(component, BORDER_IMAGE_INITIAL[component], important, false); return; }
+        applyImageCell(component, cls.value, important, false); // active
         return;
       }
       const m = BORDER_PROP_RE.exec(prop);
@@ -1037,7 +1357,9 @@ function synthesizeBorderSides(rules) {
         }
         // F3 — 유효한 전체 `border` shorthand(방향 없음)만 border-image를 initial로 리셋한다(CSS 스펙).
         // border-{side} shorthand는 border-image를 리셋하지 않는다.
-        if (!sideGroup) resetBorderImage(important);
+        // I6(15R) — `uncertain`(미지 함수라 선언 유효성 미확정)이면 리셋도 하지 않는다. reset은 "이 선언이
+        // 확실히 유효하다"를 전제로 한 부작용이고, 무효라면 브라우저는 border-image를 그대로 둔다.
+        if (!sideGroup && !parsed.uncertain) resetBorderImage(important);
       } else if (!sideGroup) {
         // 성분 longhand 전체 면: border-{width|style|color} (1~4값 확장)
         const perSide = parseBorderComponentLonghand(compGroup, value);
@@ -1053,6 +1375,15 @@ function synthesizeBorderSides(rules) {
         BORDER_SIDES.forEach((side, i) => applyCell(side, compGroup, perSide[i], important));
       } else {
         // directional 성분 longhand: border-{side}-{width|style|color} — 그 면·성분만
+        // I2(15R) — CSS-wide 인정은 값 전체가 단독 키워드일 때만(셀 단위 인정은 leaf에서 제거했다).
+        const dirCw = cssWideKeyword(value);
+        if (dirCw) {
+          const cell = (dirCw === 'initial' || dirCw === 'unset')
+            ? { value: BORDER_INITIAL[compGroup], unsupported: false }
+            : { value, unsupported: true }; // inherit/revert(-layer) → 모델 불가 fail-closed
+          applyCell(sideGroup, compGroup, cell, important);
+          return;
+        }
         let c = classifyComponentValue(compGroup, value);
         if (c.invalid) {
           // I1(14R) 삼분 — deferred 재분류: well-formed var 포함 문법위반은 폐기가 아니라 unsupported(참여·
@@ -1067,7 +1398,15 @@ function synthesizeBorderSides(rules) {
   });
   // F3 — 최종 border-image-source가 non-none이면 네 면이 이미지로 대체 도장되므로 일반 보더 색/토큰
   // 계약이 무의미 → fail-closed. 나머지 성분(slice/width/outset/repeat)이 non-initial로 남아도(effective) 동일.
-  const imageActive = String(borderImage.source.value).trim().toLowerCase() !== 'none'
+  // **명시 예외(과대 종결 금지)**: 브라우저는 source가 none이면 slice/width/outset/repeat가 무엇이든 도장을
+  // 하지 않는다. 여기서 non-initial 성분만으로 fail-closed하는 것은 의도적 과잉 안전(false-red 방향)이며,
+  // 이 계약은 12R부터의 고정 단정(`border-image-slice:5` 단독 RED)이 계속 지킨다.
+  // I5(15R) — image 도메인의 unsupported는 side 셀이 아니라 **여기서** perimeter로 접힌다. 그래서 후행
+  // 일반 border longhand가 이 불확실성을 지울 수 없고(①), 후행 `border-image:none`은 image 셀을
+  // 리셋하며 unsupported도 함께 해제한다(②).
+  const imageUncertain = BORDER_IMAGE_LONGHANDS.some((k) => borderImage[k].unsupported);
+  const imageActive = imageUncertain
+    || String(borderImage.source.value).trim().toLowerCase() !== 'none'
     || BORDER_IMAGE_LONGHANDS.some((k) => k !== 'source' && String(borderImage[k].value).trim() !== BORDER_IMAGE_INITIAL[k]);
   if (imageActive) {
     for (const side of BORDER_SIDES) {
@@ -1123,19 +1462,33 @@ function evaluateBorderVisibility(rules, token) {
 // I2(14R) — box-shadow 선언 삼분 분류. CSS-wide initial/unset → box-shadow initial(none). inherit/revert →
 // 모델 불가 unsupported. 유효 grammar → valid(값). well-formed var 포함 문법위반 → 계산시점 유예 unsupported.
 // 순수 문법 위반(var 없음, 예: negative blur `inset 0 0 -1px 1px #000`) → invalid(폐기 → 이전 유효 선언 fallback).
+// I3(15R) — boolean isValidBoxShadow 대신 **삼분 결과**(classifyBoxShadowValue)를 소비한다.
+//   valid       → 그 값이 cascade 승자 값
+//   unsupported → 표준이나 우리가 계산 못 함(calc 등) → 선언은 적용되나 fail-closed
+//   invalid     → 확실한 문법 위반(인자 부족 색함수·미지 word·negative blur 등) → 폐기(이전 선언 fallback),
+//                 단 well-formed var를 포함하면 계산시점 유예(deferred)라 unsupported로 재분류.
 function classifyBoxShadowDecl(v) {
   const cw = cssWideKeyword(v);
   if (cw === 'initial' || cw === 'unset') return { kind: 'valid', value: 'none' };
   if (cw) return { kind: 'unsupported' }; // inherit/revert(-layer)
-  if (isValidBoxShadow(v)) return { kind: 'valid', value: v };
+  const cls = classifyBoxShadowValue(v);
+  if (cls === 'valid') return { kind: 'valid', value: v };
+  if (cls === 'unsupported') return { kind: 'unsupported' };
   if (valueHasWellFormedVar(v)) return { kind: 'unsupported' }; // deferred(계산시점 유예)
   return { kind: 'invalid' }; // 폐기
 }
-// `all`은 CSS-wide만 받는다. initial/unset → box-shadow none(비인디케이터). inherit/revert → fail-closed. 그 외 → 폐기.
+// `all`은 스펙상 CSS-wide 키워드만 받는다. initial/unset → 전 프로퍼티 initial(box-shadow none/border-style
+// none). inherit/revert(-layer) → 모델 불가 fail-closed.
+// I1(15R) — 그 외를 무조건 "불법 → 폐기"로 보내던 게 false-green의 원인이었다. `all: var(--x)`처럼
+// **well-formed var를 포함**하면 CSS Variables 스펙상 parse-time 검사가 계산시점으로 유예돼 브라우저는
+// 이 선언을 폐기하지 않고 cascade에 참여시킨다(이기면 계산시점에 무효화 → 전 프로퍼티 초기/상속값).
+// 우리는 그 계산을 재현할 수 없으므로 unsupported(fail-closed)로 참여시킨다. **border·indicator 두
+// 도메인이 이 함수 하나를 공유**한다(이원화 재발 방지).
 function classifyAllDecl(v) {
   const cw = cssWideKeyword(v);
   if (cw === 'initial' || cw === 'unset') return { kind: 'valid', value: 'none' };
   if (cw) return { kind: 'unsupported' };
+  if (valueHasWellFormedVar(v)) return { kind: 'unsupported' }; // deferred(계산시점 유예)
   return { kind: 'invalid' };
 }
 // I2/I5(14R) — box-shadow 최종 유효 상태를 cascade 합성한다(box-shadow 선언 + `all` 전역 리셋을 문서
@@ -2827,5 +3180,213 @@ describe('14R 잔여2 — border-image longhand 삼분 파이프라인 정합 (�
     expect(classifyBorderImageLonghand('slice', '5')).toEqual({ kind: 'active', value: '5' });
     expect(classifyBorderImageLonghand('width', '10px')).toEqual({ kind: 'active', value: '10px' });
     expect(classifyBorderImageLonghand('outset', '').kind).toBe('invalid');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 15R — grammar 판정 근본화 + state domain 분리(I1~I6). 외부 검수가 공용 evaluator에서 16/16 불일치를
+// 재현하고 대표 벡터를 headless Chrome 계산값과 대조했다 — **브라우저 의미론이 정답 기준**이다.
+// 아래 16 mutation은 전부 공용 evaluator(evalBorderScss/evalIndicatorScss)를 경유해 PINNED 본문과
+// 동일한 체인(Sass compile → postcss.parse → findRootRules → cascade 합성 → 가시성 판정)을 탄다.
+// 각 it 위 주석의 "선재현"은 수정 전 게이트가 낸 값(= false-green/false-red의 실체)이다.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const R15_CIB = 'color-input-border';
+const R15_V = 'var(--color-input-border)';
+const R15_IND = 'color-selected-indicator';
+const R15_IV = 'var(--color-selected-indicator)';
+const r15b = (scss) => evalBorderScss(scss, R15_CIB).visible;
+const r15i = (scss) => evalIndicatorScss(scss, R15_IND).visible;
+
+describe('15R I1 — `all: var(...)`는 폐기가 아니라 deferred(계산시점 유예) → 두 도메인 공통 fail-closed', () => {
+  // M1 선재현: true(false-green). `all`이 비 CSS-wide면 무조건 invalid 폐기로 봐서 무동작이었다.
+  // Chrome: well-formed var를 포함한 `all`은 폐기되지 않고 cascade에 참여 → 계산시점에 border-style:none.
+  // **정의된 토큰**(--color-bg)으로도 재현되므로 "미정의 var 검사"가 대신 잡아줄 수 없다.
+  it('M1 RED: border — all: var(--color-bg) 는 deferred로 참여해 perimeter fail-closed', () => {
+    expect(r15b(`.X{border:1px solid ${R15_V};all:var(--color-bg)}`)).toBe(false);
+  });
+  // M2 선재현: true(false-green). Chrome: box-shadow:none.
+  it('M2 RED: indicator — all: var(--color-bg) 는 deferred로 참여해 box-shadow fail-closed', () => {
+    expect(r15i(`.X{box-shadow:inset 0 0 0 1px ${R15_IV};all:var(--color-bg)}`)).toBe(false);
+  });
+  it('M2b 단위: classifyAllDecl 삼분 — CSS-wide/deferred/invalid', () => {
+    expect(classifyAllDecl('initial')).toEqual({ kind: 'valid', value: 'none' });
+    expect(classifyAllDecl('inherit').kind).toBe('unsupported');
+    expect(classifyAllDecl('var(--color-bg)').kind).toBe('unsupported'); // deferred
+    expect(classifyAllDecl('var(--x garbage)').kind).toBe('invalid'); // well-formed var 아님 → 폐기
+    expect(classifyAllDecl('junk').kind).toBe('invalid');
+    expect(classifyAllDecl('initial 1px').kind).toBe('invalid'); // 다값 = 불법
+  });
+});
+
+describe('15R I2 — CSS-wide 키워드는 값 전체가 단독일 때만 인정(다값 longhand 셀 허용 금지)', () => {
+  // M3 선재현: true(false-green). `initial`을 첫 셀 medium으로 적용해 width 0을 되살렸다.
+  // Chrome: `border-width: initial 1px`는 선언 전체 불법 → 폐기 → width 0 유지 → 비가시.
+  it('M3 RED: border-width: initial 1px → 선언 폐기 → 이전 width 0 유지', () => {
+    expect(r15b(`.X{border:0 solid ${R15_V};border-width:initial 1px}`)).toBe(false);
+  });
+  // M4 선재현: false(false-red). `initial`을 첫 셀 none으로 적용해 top면을 없앴다.
+  // Chrome: 선언 폐기 → shorthand의 solid 유지 → 가시.
+  it('M4 GREEN: border-style: initial solid → 선언 폐기 → 이전 solid 유지 → 가시', () => {
+    expect(r15b(`.X{border:1px solid ${R15_V};border-style:initial solid}`)).toBe(true);
+  });
+});
+
+describe('15R I3 — box-shadow 삼분 양방향(표준미해석=unsupported / 문법위반=invalid-discard)', () => {
+  // M5 선재현: true(false-green). calc 레이어를 invalid 폐기로 봐 **이전 인디케이터가 부활**했다.
+  // Chrome: calc는 유효 <length> → 후행 선언이 이겨 색이 #000(토큰 아님) → 인디케이터 소실.
+  it('M5 RED: calc 포함 유효 shadow winner는 unsupported로 cascade 참여(이전 선언 부활 금지)', () => {
+    expect(r15i(`.X{box-shadow:inset 0 0 0 1px ${R15_IV};box-shadow:inset 0 0 calc(1px + 1vw) 1px #000}`)).toBe(false);
+  });
+  // M6 선재현: false. `rgb(from red)`(채널 부족)를 valid로 통과시켜 후행 선언이 이긴 것으로 봤다.
+  // Chrome: 인자 부족 = 문법 위반 → 선언 폐기 → 이전 토큰 선언 fallback(가시).
+  it('M6 GREEN: 인자 부족 색함수 rgb(from red) 는 invalid-discard → 이전 토큰 선언 fallback', () => {
+    expect(r15i(`.X{box-shadow:inset 0 0 0 1px ${R15_IV};box-shadow:inset 0 0 0 1px rgb(from red)}`)).toBe(true);
+  });
+  it('M6b GREEN: border-color: color-mix(in srgb)(피연산자 부족) 도 invalid-discard → 토큰 유지', () => {
+    expect(r15b(`.X{border:1px solid ${R15_V};border-color:color-mix(in srgb)}`)).toBe(true);
+  });
+});
+
+describe('15R I4 — 값 쪽 CSS 식별자 정규화(prop 쪽과 동일 함수 1회 적용) + 전체 <dashed-ident>', () => {
+  // M7 선재현: true(false-green). `tr\61 nsparent`를 미지 ident=폐기로 봐 이전 토큰이 살아남았다.
+  // Chrome: escaped ident는 transparent와 동일 → 토큰 소실.
+  it('M7 RED: border-color: tr\\61 nsparent → transparent override(토큰 소실)', () => {
+    expect(r15b(`.X{border:1px solid ${R15_V};border-color:tr\\61 nsparent}`)).toBe(false);
+  });
+  // M8 선재현: true(false-green). Chrome: r\65 d = red → 인디케이터 색이 토큰이 아님.
+  it('M8 RED: box-shadow … r\\65 d → red override(토큰 소실)', () => {
+    expect(r15i(`.X{box-shadow:inset 0 0 0 1px ${R15_IV};box-shadow:inset 0 0 0 1px r\\65 d}`)).toBe(false);
+  });
+  // M9 선재현: true(false-green). `--é`를 ASCII 정규식이 거부해 var가 "무효 문법"이 되고,
+  // 뒤의 "junk" 잔여와 합쳐져 순수 문법위반=폐기로 흘렀다. Chrome: `--é`는 유효 <dashed-ident>라
+  // well-formed var → 선언 전체가 deferred로 참여 → 계산시점 무효 → currentcolor(토큰 소실).
+  it('M9 RED: border-color: var(--é) "junk" → 비ASCII dashed-ident도 well-formed var → deferred', () => {
+    expect(r15b(`.X{border:1px solid ${R15_V};border-color:var(--é) "junk"}`)).toBe(false);
+  });
+});
+
+describe('15R I5 — border-image unsupported의 state domain 분리(5셀 각각 {value,important,unsupported})', () => {
+  // M10 선재현: true(false-green). `border-image:inherit`가 **일반 border side 셀**에 poison을 찍어
+  // 뒤따르는 border-width/style/color가 그 poison을 지워버렸다.
+  it('M10 RED: border-image: inherit 후 일반 border longhand가 image uncertainty를 지우지 못한다', () => {
+    expect(r15b(`.X{border-image:inherit;border-width:1px;border-style:solid;border-color:${R15_V}}`)).toBe(false);
+  });
+  // M11 선재현: false(false-red). poison이 border side 셀에 있어 `border-image:none`이 못 지웠다.
+  // Chrome: border-image:none → 도장 없음 → 일반 보더 그대로 가시.
+  it('M11 GREEN: border-image: inherit 후 border-image: none 은 image 상태만 리셋해 가시 복구', () => {
+    expect(r15b(`.X{border:1px solid ${R15_V};border-image:inherit;border-image:none}`)).toBe(true);
+  });
+  // M12 선재현: true(false-green). `all: inherit`도 border side 셀에만 poison을 찍어 후행 longhand가 지웠다.
+  // all은 border-image까지 inherit시키므로 image 도메인에도 불확실성이 남아야 한다.
+  it('M12 RED: all: inherit 는 image 도메인에도 반영돼 후행 border longhand로 지워지지 않는다', () => {
+    expect(r15b(`.X{border:1px solid ${R15_V};all:inherit;border-width:1px;border-style:solid;border-color:${R15_V}}`)).toBe(false);
+  });
+});
+
+describe('15R I6 — border-image 판정을 함수-존재 휴리스틱에서 선언 전체 grammar 삼분으로 전환', () => {
+  // M13 선재현: true(false-green). `border: foo()`를 "unsupported=유효 선언"으로 취급해
+  // **border-image를 reset**해버렸다. Chrome: foo()가 border shorthand 문법을 만족한다고 확인할 수
+  // 없고, 무효라면 선언 자체가 폐기돼 border-image는 그대로다 → 이미지 도장 유지 → 비가시.
+  it('M13 RED: 확인 불가 shorthand(border: foo())는 border-image를 절대 reset하지 않는다', () => {
+    // important는 **성분 longhand**에 건다 — `border:… !important` shorthand로 걸면 그 shorthand 자신이
+    // border-image까지 !important로 리셋해버려(스펙대로) 후행 border-image가 애초에 적용되지 못한다.
+    const scss = `.X{border-width:1px !important;border-style:solid !important;border-color:${R15_V} !important;`
+      + 'border-image:url(a.png);border:foo()}';
+    expect(r15b(scss)).toBe(false);
+  });
+  // M14 선재현: true(false-green). `-webkit-image-set(...)`가 함수 화이트리스트에 없어 invalid-discard로
+  // 흘러 **활성 이미지를 놓쳤다**. Chrome 지원 함수 → 도장 활성 → 일반 보더 계약 무의미(fail-closed).
+  it('M14 RED: -webkit-image-set 도 <image>로 성립 → 활성 도장(놓치면 false-green)', () => {
+    expect(r15b(`.X{border:1px solid ${R15_V};border-image-source:-webkit-image-set("a.png" 1x)}`)).toBe(false);
+  });
+  // M15 선재현: false(false-red). slice/width/outset/repeat가 "빈 값 외 전부 active"라 junk까지
+  // non-initial 활성으로 봤다. Chrome: junk는 slice 문법 위반 → 선언 폐기 → slice 100% 유지 → 가시.
+  it('M15 GREEN: border-image-slice: junk 는 문법 위반 → invalid-discard(활성 아님)', () => {
+    expect(r15b(`.X{border:1px solid ${R15_V};border-image-slice:junk}`)).toBe(true);
+  });
+  // M16 선재현: false(false-red). repeat는 최대 2값인데 3값도 raw active로 받았다.
+  // Chrome: 값 개수 초과 = 문법 위반 → 폐기 → repeat stretch 유지 → 가시.
+  it('M16 GREEN: border-image-repeat: 3값(최대 2 초과)은 invalid-discard', () => {
+    expect(r15b(`.X{border:1px solid ${R15_V};border-image-repeat:stretch stretch stretch}`)).toBe(true);
+  });
+});
+
+describe('15R 적대적 자가 재검토 — 구조 단정(휴리스틱 재유입·이중 디코딩·도메인 누수 차단)', () => {
+  it('I6 grammar 삼분 단위 — source: 미지 함수=unsupported(fail-closed), 닫히지 않은 함수=invalid, 벤더 접두 이미지 함수=active', () => {
+    expect(classifyBorderImageLonghand('source', 'foo()').kind).toBe('unsupported'); // (b) 성립 여지 배제 불가
+    expect(classifyBorderImageLonghand('source', '-webkit-image-set("a.png" 1x)').kind).toBe('active');
+    expect(classifyBorderImageLonghand('source', 'linear-gradient(red,blue').kind).toBe('invalid'); // (c) 괄호 미종결
+    expect(classifyBorderImageLonghand('source', 'calc(1px)').kind).toBe('invalid'); // 수학 함수는 <image>가 아니다
+    expect(classifyBorderImageLonghand('source', '"a.png"').kind).toBe('invalid'); // 문자열은 <image>가 아니다
+  });
+  it('I6 slice/width/outset/repeat 도 grammar 삼분 — 표기만 다른 initial은 reset, 개수 초과·미지 ident는 invalid', () => {
+    expect(classifyBorderImageLonghand('slice', '100% 100% 100% 100%').kind).toBe('reset'); // initial 동등
+    expect(classifyBorderImageLonghand('width', '1 1').kind).toBe('reset');
+    expect(classifyBorderImageLonghand('repeat', 'stretch stretch').kind).toBe('reset');
+    expect(classifyBorderImageLonghand('repeat', 'round').kind).toBe('active');
+    expect(classifyBorderImageLonghand('repeat', 'junk').kind).toBe('invalid');
+    expect(classifyBorderImageLonghand('slice', '1 2 3 4 5').kind).toBe('invalid'); // 4값 초과
+    expect(classifyBorderImageLonghand('outset', '1px junk').kind).toBe('invalid');
+    expect(classifyBorderImageLonghand('slice', 'calc(1px)').kind).toBe('unsupported'); // 표준이나 미해석
+  });
+  it('I6 shorthand — 무효/미확정 값은 절대 reset을 유발하지 않는다(부작용 금지 계약)', () => {
+    expect(classifyBorderImageShorthand('junk').kind).toBe('invalid');
+    expect(classifyBorderImageShorthand('foo()').kind).toBe('unsupported');
+    expect(classifyBorderImageShorthand('url(a.png) 1 /').kind).toBe('invalid'); // 빈 구획
+    expect(classifyBorderImageShorthand('url(a.png), url(b.png)').kind).toBe('invalid'); // top-level 콤마
+    expect(classifyBorderImageShorthand('none stretch').kind).toBe('reset'); // 전부 initial 동등
+  });
+  it('I3 색함수 인자 개수 계약 — 부족은 invalid, 정상 개수는 계속 valid(회귀 없음)', () => {
+    expect(isValidColorFunctionNode(valueParser('rgb(from red)').nodes[0])).toBe(false);
+    expect(isValidColorFunctionNode(valueParser('color-mix(in srgb)').nodes[0])).toBe(false);
+    expect(isValidColorFunctionNode(valueParser('rgb(1 2)').nodes[0])).toBe(false);
+    expect(isValidColorFunctionNode(valueParser('rgb(1 2 3)').nodes[0])).toBe(true);
+    expect(isValidColorFunctionNode(valueParser('color(display-p3 1 0 0)').nodes[0])).toBe(true);
+    expect(isValidColorFunctionNode(valueParser('oklch(0.7 0.1 200)').nodes[0])).toBe(true);
+  });
+  it('I3 삼분 단위 — calc 레이어=unsupported, 인자부족 색함수=invalid, 정상=valid', () => {
+    expect(classifyBoxShadowValue('inset 0 0 calc(1px + 1vw) 1px #000')).toBe('unsupported');
+    expect(classifyBoxShadowValue('inset 0 0 0 1px rgb(from red)')).toBe('invalid');
+    expect(classifyBoxShadowValue('inset 0 0 0 1px var(--t)')).toBe('valid');
+    expect(classifyBoxShadowValue('none')).toBe('valid');
+  });
+  it('I4 값 식별자 decode는 정확히 1회 — escaped 백슬래시(\\5c)가 2회 디코딩되지 않는다(음성 대조)', () => {
+    // `\5c 61` 은 1회 디코딩하면 리터럴 `\61`(= 백슬래시+"61")이고, 2회 디코딩하면 'a'가 된다.
+    // 값 경로가 1회만 적용된다는 증거: 이 ident는 색 키워드로 인정되지 않아야 한다(2회면 'a'가 되지만
+    // 그래도 색은 아니므로, 대신 결정적 문자열 단정으로 회차를 고정한다).
+    const [word] = parseValue('\\5c 61').nodes;
+    expect(identOf(word)).toBe('\\61');
+    expect(decodeCssIdentifier(identOf(word))).toBe('a'); // 2회차는 달라진다 = 1회 계약이 유의미
+  });
+  it('I4 escape 재결합은 멱등 — stringify→재파싱 왕복에도 ident 1개가 유지된다', () => {
+    const once = splitTopLevelSpaceGroups('tr\\61 nsparent');
+    expect(once).toEqual(['tr\\61 nsparent']);
+    expect(splitTopLevelSpaceGroups(once[0])).toEqual(['tr\\61 nsparent']);
+    expect(identOf(parseValue(once[0]).nodes[0])).toBe('transparent');
+  });
+  it('I4 escaped backslash는 결합 대상이 아니다(오결합 방지)', () => {
+    expect(splitTopLevelSpaceGroups('a\\\\61 b')).toEqual(['a\\\\61', 'b']);
+  });
+  it('I4 <dashed-ident> — 비ASCII/언더스코어 인정, 공백·비명칭문자는 계속 거부', () => {
+    expect(topLevelVarTokens('var(--é)')).toEqual(new Set(['é']));
+    expect(topLevelVarTokens('var(--_x)')).toEqual(new Set(['_x']));
+    expect(topLevelVarTokens('var(--\\65 x)')).toEqual(new Set(['ex'])); // escape 해석 후 이름
+    expect(topLevelVarTokens('var(--x garbage)').size).toBe(0); // I2a 계약 유지
+  });
+  it('I5 도메인 분리 — image 활성 상태는 후행 일반 border longhand로 지워지지 않는다(역방향)', () => {
+    const scss = `.X{border-image-source:linear-gradient(red,blue);border-width:1px;border-style:solid;border-color:${R15_V}}`;
+    expect(r15b(scss)).toBe(false);
+  });
+  it('I5 도메인 분리 — 반대로 border shorthand(유효)는 스펙대로 image를 리셋한다(무회귀)', () => {
+    expect(r15b(`.X{border-image:inherit;border:1px solid ${R15_V}}`)).toBe(true);
+  });
+  // 명시 예외(과대 종결 금지) — 아래 두 계약은 브라우저 의미론보다 **의도적으로 보수적**이다.
+  it('명시 예외 A: source가 none이어도 non-initial slice면 fail-closed RED(브라우저는 도장 안 함 — 의도적 과잉 안전)', () => {
+    expect(r15b(`.X{border:1px solid ${R15_V};border-image-slice:5}`)).toBe(false);
+  });
+  it('명시 예외 B: 단위만 다른 0(`outset:0px` vs initial `0`)은 initial 동등으로 접지 않는다(fail-closed)', () => {
+    expect(classifyBorderImageLonghand('outset', '0px').kind).toBe('active');
+    expect(r15b(`.X{border:1px solid ${R15_V};border-image-outset:0px}`)).toBe(false);
   });
 });
