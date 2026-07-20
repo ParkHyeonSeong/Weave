@@ -551,8 +551,27 @@ const NAMED_COLORS = new Set([
   'steelblue', 'tan', 'teal', 'thistle', 'tomato', 'turquoise', 'violet', 'wheat', 'white',
   'whitesmoke', 'yellow', 'yellowgreen',
 ]);
-// 실제 색 키워드 집합 = transparent/currentcolor + named colors(CSS-wide 키워드는 위 CSS_WIDE_KEYWORDS로 분리).
-const COLOR_KEYWORDS = new Set(['transparent', 'currentcolor', ...NAMED_COLORS]);
+// 14R 잔여1(내부 리뷰 실증, 리뷰어 probe) — CSS Color 4 §4.5 system colors + §8 deprecated system colors도
+// **유효 CSS color ident**다(사양 키워드는 ASCII case-insensitive, I3의 VAR() 정정과 동일 원칙). 이전엔
+// `border-color: AccentColor`/`box-shadow: … ButtonText` 같은 override가 미지 ident=invalid(폐기)로 처리돼
+// 이전 토큰 선언으로 fallback했다(브라우저는 override를 적용해 토큰이 실제로 소실되는데 게이트는 GREEN —
+// 이번 라운드 #3의 `border-color: red`와 동일 모양의 false-green). 유효 색으로 인정하면 "토큰 아닌 유효
+// 색 사용"이 되어 sideUsesToken/색 판정에서 자연히 토큰 미사용 → RED(정확한 방향)로 뒤집힌다. `NotAColor`
+// 같은 여전히 미지인 ident는 계속 invalid(폐기)로 남는다(회귀 없음).
+const SYSTEM_COLORS = new Set([
+  // CSS Color 4 §4.5 system colors(현행)
+  'accentcolor', 'accentcolortext', 'activetext', 'buttonborder', 'buttonface', 'buttontext',
+  'canvas', 'canvastext', 'field', 'fieldtext', 'graytext', 'highlight', 'highlighttext',
+  'linktext', 'mark', 'marktext', 'selecteditem', 'selecteditemtext', 'visitedtext',
+  // CSS Color 4 §8 deprecated system colors(여전히 유효 파싱 — 브라우저가 폐기하지 않음)
+  'activeborder', 'activecaption', 'appworkspace', 'background', 'buttonhighlight', 'buttonshadow',
+  'captiontext', 'inactiveborder', 'inactivecaption', 'inactivecaptiontext', 'infobackground',
+  'infotext', 'menu', 'menutext', 'scrollbar', 'threeddarkshadow', 'threedface', 'threedhighlight',
+  'threedlightshadow', 'threedshadow', 'window', 'windowframe', 'windowtext',
+]);
+// 실제 색 키워드 집합 = transparent/currentcolor + named colors + system colors(CSS-wide 키워드는 위
+// CSS_WIDE_KEYWORDS로 분리).
+const COLOR_KEYWORDS = new Set(['transparent', 'currentcolor', ...NAMED_COLORS, ...SYSTEM_COLORS]);
 const BORDER_INITIAL = { width: 'medium', style: 'none', color: 'currentcolor' }; // CSS 스펙 initial
 const BORDER_SIDES = ['top', 'right', 'bottom', 'left'];
 // F3(12라운드) — border-image 도장 모델. border-image-source가 non-none이면 네 면이 이미지로 대체
@@ -606,7 +625,7 @@ function isNumberPercentAngle(word) {
 }
 function isColorWord(word) {
   const w = String(word).toLowerCase();
-  return w[0] === '#' || w === 'transparent' || w === 'currentcolor' || NAMED_COLORS.has(w);
+  return w[0] === '#' || w === 'transparent' || w === 'currentcolor' || NAMED_COLORS.has(w) || SYSTEM_COLORS.has(w);
 }
 // I3(14R) — 색 함수 내부 문법 검증(재귀). 이전엔 함수명이 COLOR_FUNCTIONS에 있으면 내부를 안 보고 유효로
 // 통과시켜 `rgb(from junk r g b)`(relative-color origin이 미지 ident junk)도 유효로 오인했다(false-green).
@@ -667,6 +686,36 @@ function classifyBorderImageShorthand(value) {
   if (valueHasWellFormedVar(v)) return { kind: 'unsupported' }; // deferred(계산시점 유예)
   if (containsImageFunction(v)) return { kind: 'active', source: v };
   return { kind: 'invalid' }; // junk 등 유효 image 없음 → 폐기
+}
+
+// 14R 잔여2(내부 리뷰 실증, 리뷰어 probe) — border-image longhand 5종도 shorthand(classifyBorderImageShorthand)
+// 와 동일한 삼분 파이프라인을 거친다. 이전엔 raw decl.value를 검증 없이 그대로 셀에 넣어(triage 미경유)
+// 두 방향으로 어긋났다: ① `border-image-source: initial`(CSS-wide → 브라우저는 source를 initial(none)로
+// 리셋 → 일반 보더가 그대로 보임 = GREEN)을 "initial"이라는 문자열 자체를 non-none 값으로 오인해 도장
+// 활성으로 오판(false-RED, I4a shorthand의 `border-image:initial` GREEN과 비대칭). ② `border-image-source:
+// junk`(문법 위반 → 브라우저는 선언 전체를 폐기하고 이전 상태를 유지)도 raw 문자열을 그대로 값으로 채택해
+// 실제로는 아무 근거 없는 상태를 만들었다 — 이제 invalid로 분류해 아무것도 건드리지 않는다(이전 상태
+// 기준 판정). source는 shorthand와 동일하게 <image>|none 문법을 검증한다. 나머지 4개(slice/width/outset/
+// repeat)는 정밀 grammar 모델링을 새로 추가하지 않는다(기존 검증 수준 유지) — well-formed var()만
+// deferred(unsupported)로 분리하고, 그 외 비어있지 않은 값은 종전처럼 raw로 받아들인다(애매한 값은
+// 아래 imageActive 비교가 BORDER_IMAGE_INITIAL과 문자열 불일치로 자연히 non-initial 판정 → fail-closed
+// RED가 되므로 안전 방향 유지).
+function classifyBorderImageLonghand(component, value) {
+  const v = String(value).trim();
+  const cw = cssWideKeyword(v);
+  if (cw === 'initial' || cw === 'unset') return { kind: 'reset' };
+  if (cw) return { kind: 'unsupported' }; // inherit/revert/revert-layer
+  if (component === 'source') {
+    if (v.toLowerCase() === 'none') return { kind: 'reset' };
+    if (valueHasWellFormedVar(v)) return { kind: 'unsupported' }; // deferred(계산시점 유예)
+    if (containsImageFunction(v)) return { kind: 'active', value: v };
+    return { kind: 'invalid' }; // junk 등 유효 <image>|none 아님 → 폐기
+  }
+  // slice/width/outset/repeat — 기존 검증 수준 유지(정밀 grammar 모델링 불요). well-formed var만 deferred,
+  // 빈 값만 invalid, 그 외는 종전처럼 raw 그대로("애매하면 fail-closed"는 imageActive 비교가 담당).
+  if (valueHasWellFormedVar(v)) return { kind: 'unsupported' };
+  if (v === '') return { kind: 'invalid' };
+  return { kind: 'active', value: v };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -953,10 +1002,19 @@ function synthesizeBorderSides(rules) {
         if (cls.kind === 'active') applyImageCell('source', cls.source, important); // 명시 source 설정
         return;
       }
-      // F3 — border-image-{source|slice|width|outset|repeat} longhand: 해당 성분만 설정.
+      // F3+14R 잔여2 — border-image-{source|slice|width|outset|repeat} longhand: shorthand와 동일한 삼분
+      // 파이프라인(classifyBorderImageLonghand)을 거친 뒤 해당 성분만 설정한다. reset(initial/unset/
+      // source:none) → 해당 성분 initial. unsupported(inherit/revert·well-formed var) → 전체 perimeter
+      // fail-closed(어느 한 longhand라도 계산 불가면 도장 활성 여부를 알 수 없어 안전 방향). invalid
+      // (junk 등 문법 위반) → 폐기(아무것도 건드리지 않음 → 이전 상태 유지). active → 해당 성분에 원문 설정.
       const imgLong = BORDER_IMAGE_LONGHAND_RE.exec(prop);
       if (imgLong) {
-        applyImageCell(imgLong[1], decl.value.trim(), important);
+        const component = imgLong[1];
+        const cls = classifyBorderImageLonghand(component, decl.value);
+        if (cls.kind === 'invalid') return; // 폐기: 이전 상태 유지
+        if (cls.kind === 'unsupported') { markPerimeterUnsupported(decl.value.trim(), important); return; }
+        if (cls.kind === 'reset') { applyImageCell(component, BORDER_IMAGE_INITIAL[component], important); return; }
+        applyImageCell(component, cls.value, important); // active
         return;
       }
       const m = BORDER_PROP_RE.exec(prop);
@@ -2681,5 +2739,93 @@ describe('14R — cssWideKeyword 단위(공통 삼분 1단계)', () => {
     expect(cssWideKeyword('1px solid red')).toBeNull();
     expect(cssWideKeyword('initial initial')).toBeNull();
     expect(cssWideKeyword('red')).toBeNull();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 14R 잔여1/2(내부 리뷰 실증, 14라운드 수렴분) — 리뷰어 probe가 실증한 잔여 2건. 둘 다 공용 evaluator
+// (evalBorderScss/evalIndicatorScss)를 태워 PINNED 본문과 동일 체인에서 검증한다(I5 계약 유지).
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('14R 잔여1 — CSS 시스템 색(system colors) 유효 인정 (리뷰어 probe: false-green)', () => {
+  const CIB = 'color-input-border';
+  const V = `var(--${CIB})`;
+  const bvis = (scss) => evalBorderScss(scss, CIB).visible;
+  const IND = 'color-selected-indicator';
+  const IV = `var(--${IND})`;
+  const ivis = (scss) => evalIndicatorScss(scss, IND).visible;
+  // 선재현(RED-proof): 이 두 벡터는 수정 전엔 AccentColor/ButtonText가 미지 ident=invalid(폐기)로
+  // 처리돼 이전 토큰 선언으로 fallback했다 — 브라우저는 override를 적용해 토큰이 실제로 소실되는데
+  // 게이트는 GREEN(false-green)이었다. 이번 라운드 #3의 `border-color: red`와 동일 모양.
+  it('RED: border-color: AccentColor → 유효 시스템 색 override(토큰 아님)', () => {
+    expect(bvis(`.X{border:1px solid ${V};border-color:AccentColor}`)).toBe(false);
+  });
+  it('RED: box-shadow inset … ButtonText → 유효 시스템 색으로 인디케이터 색 대체(토큰 아님)', () => {
+    expect(ivis(`.X{box-shadow:inset 0 0 0 1px ${IV};box-shadow:inset 0 0 0 1px ButtonText}`)).toBe(false);
+  });
+  it('RED: 대소문자 변형(accentcolor, 소문자)도 동일 — 키워드는 ASCII case-insensitive', () => {
+    expect(bvis(`.X{border:1px solid ${V};border-color:accentcolor}`)).toBe(false);
+  });
+  it('RED: deprecated 시스템 색(ThreeDFace)도 유효 색으로 인정', () => {
+    expect(bvis(`.X{border:1px solid ${V};border-color:ThreeDFace}`)).toBe(false);
+  });
+  it('GREEN(대조, 회귀 없음): 여전히 미지인 ident(NotAColor)는 계속 invalid(폐기) → 이전 토큰 fallback', () => {
+    expect(bvis(`.X{border:1px solid ${V};border-color:NotAColor}`)).toBe(true);
+  });
+  it('isColorWord/COLOR_KEYWORDS 단위: 시스템 색 인정(대소문자 무관), 미지 ident는 계속 거부', () => {
+    expect(isColorWord('AccentColor')).toBe(true);
+    expect(isColorWord('buttontext')).toBe(true);
+    expect(isColorWord('THREEDFACE')).toBe(true);
+    expect(COLOR_KEYWORDS.has('accentcolor')).toBe(true);
+    expect(COLOR_KEYWORDS.has('buttontext')).toBe(true);
+    expect(isColorWord('NotAColor')).toBe(false);
+    expect(COLOR_KEYWORDS.has('notacolor')).toBe(false);
+  });
+});
+
+describe('14R 잔여2 — border-image longhand 삼분 파이프라인 정합 (리뷰어 probe: 삼분 비대칭)', () => {
+  const CIB = 'color-input-border';
+  const V = `var(--${CIB})`;
+  const bvis = (scss) => evalBorderScss(scss, CIB).visible;
+  // 기대 반전(선재현: RED → GREEN, I4a shorthand `border-image:initial` GREEN과 대칭). 사유: 이전엔
+  // longhand가 triage 미경유 raw 설정이라 "initial" 문자열 자체를 non-none 값으로 오인해 도장 활성으로
+  // 오판했다(false-RED). CSS-wide 리셋 인식 후엔 source가 none으로 리셋 → 일반 보더 가시.
+  it('기대 반전 GREEN: border-image-source: initial → source none 리셋 → 일반 보더 가시(I4a와 대칭)', () => {
+    expect(bvis(`.X{border:1px solid ${V};border-image-source:initial}`)).toBe(true);
+  });
+  // 이전엔 junk도 raw 문자열 그대로 채택돼 이전 상태(none)를 "junk"로 덮어써 도장 활성 오판(false-RED).
+  // 문법 위반 → 폐기 → 이전 상태(none) 유지가 옳다.
+  it('폐기 fallback GREEN: border-image-source: junk(이전 상태=none) → 폐기 → none 유지 → 가시', () => {
+    expect(bvis(`.X{border:1px solid ${V};border-image-source:junk}`)).toBe(true);
+  });
+  // 대조(이전 상태 기준 판정의 반대 방향, I4(b)와 동일 원칙) — 이전 상태가 활성 이미지였다면 junk는
+  // 그 활성 상태를 지우지 않는다(폐기 = 무동작이지 리셋이 아님).
+  it('폐기 fallback 대조 RED: 이전 상태=활성 이미지일 때 junk는 활성 상태를 지우지 않음(계속 비가시)', () => {
+    const scss = `.X{border:1px solid ${V};border-image-source:linear-gradient(red,blue);border-image-source:junk}`;
+    expect(bvis(scss)).toBe(false);
+  });
+  // deferred(계산시점 유예) — well-formed var 포함 문법위반은 폐기가 아니라 unsupported로 cascade 참여
+  // → 전체 perimeter fail-closed. slice/width/outset/repeat는 정밀 grammar를 새로 모델링하지 않지만
+  // well-formed var만은 명시적으로 deferred 분류한다.
+  it('deferred RED: border-image-slice: var(--x) → unsupported(fail-closed) → perimeter 비가시', () => {
+    expect(bvis(`.X{border:1px solid ${V};border-image-slice:var(--x)}`)).toBe(false);
+  });
+  it('classifyBorderImageLonghand 분류(reset/active/unsupported/invalid) — source', () => {
+    expect(classifyBorderImageLonghand('source', 'initial')).toEqual({ kind: 'reset' });
+    expect(classifyBorderImageLonghand('source', 'unset')).toEqual({ kind: 'reset' });
+    expect(classifyBorderImageLonghand('source', 'none')).toEqual({ kind: 'reset' });
+    expect(classifyBorderImageLonghand('source', 'junk').kind).toBe('invalid');
+    expect(classifyBorderImageLonghand('source', 'inherit').kind).toBe('unsupported');
+    expect(classifyBorderImageLonghand('source', 'var(--img)').kind).toBe('unsupported');
+    expect(classifyBorderImageLonghand('source', 'linear-gradient(red,blue)').kind).toBe('active');
+    expect(classifyBorderImageLonghand('source', 'url(a.png)').kind).toBe('active');
+  });
+  it('classifyBorderImageLonghand 분류 — slice/width/outset/repeat(정밀 grammar 없음, var만 deferred)', () => {
+    expect(classifyBorderImageLonghand('slice', 'initial')).toEqual({ kind: 'reset' });
+    expect(classifyBorderImageLonghand('slice', 'inherit').kind).toBe('unsupported');
+    expect(classifyBorderImageLonghand('slice', 'var(--x)').kind).toBe('unsupported');
+    expect(classifyBorderImageLonghand('slice', '5')).toEqual({ kind: 'active', value: '5' });
+    expect(classifyBorderImageLonghand('width', '10px')).toEqual({ kind: 'active', value: '10px' });
+    expect(classifyBorderImageLonghand('outset', '').kind).toBe('invalid');
   });
 });
