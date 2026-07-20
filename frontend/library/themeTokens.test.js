@@ -212,8 +212,15 @@ function findRootRules(root, targetSelectors) {
 // state 엔트리로 남아 override를 놓친다. 커스텀 프로퍼티(`--`로 시작)는 스펙상 case-sensitive이므로
 // 그대로 보존한다(`--Foo`와 `--foo`는 별개 토큰). predicate는 (decl, normalizedProp) 둘 다 받는다 —
 // 화이트리스트 비교(effectiveValue)도 정규화된 prop 기준이어야 대소문자 변형을 놓치지 않는다.
+// 12R F5(내부 리뷰 실증, 12라운드 리뷰 실증분) — decodeCssIdentifier를 먼저 통과시킨 뒤 기존 로직을
+// 적용한다. 이전엔 원문 decl.prop을 그대로 판정해 escaped 선언(`\--color-x`, `\42order` 등)이 cascade
+// predicate·state 키·BORDER_PROP_RE 매칭에서 전부 미매치로 실종됐다(hasProtectedPrefix만 자체
+// 디코딩해 이 구멍 밖이었다). decodeCssIdentifier는 이 파일 내 유일한 decode 지점으로 normalizeProp
+// 진입부에 단일화돼 있다 — hasProtectedPrefix는 별도 입력(raw decl.prop)에 독립 호출하므로 이중
+// 디코딩 경로가 아니다(멱등성은 아래 12R F5 synthetic이 직접 단정).
 function normalizeProp(prop) {
-  return prop.startsWith('--') ? prop : prop.toLowerCase();
+  const decoded = decodeCssIdentifier(prop);
+  return decoded.startsWith('--') ? decoded : decoded.toLowerCase();
 }
 function reduceEffectiveDecls(rules, predicate) {
   const state = {};
@@ -1747,5 +1754,64 @@ describe('12R F3/F4 — border-image·성분 grammar 단위', () => {
     expect(isLengthWord('1%')).toBe(false);
     expect(isLengthWord('1px')).toBe(true);
     expect(isLengthWord('0')).toBe(true);
+  });
+});
+
+// F1(923행)의 decodeCssIdentifier는 hasProtectedPrefix에만 배선되고 normalizeProp(cascade predicate·
+// state 키)에는 미적용이었다(내부 리뷰 실증, 12라운드 리뷰 실증분) — escaped 선언이 reduceEffectiveDecls/
+// synthesizeBorderSides 양쪽에서 predicate 탈락·BORDER_PROP_RE 미매치로 cascade에서 통째로 실종됐다.
+// normalizeProp이 decodeCssIdentifier로 먼저 디코딩하도록 고치면 두 소비처(다크 cascade·border cascade)가
+// 한 번에 닫힌다. findUnprotectedDeclarations는 hasProtectedPrefix 자체 디코딩 경로라 애초에 무관했지만
+// (구현자 노트로만 남았던 P3 역방향 우려) 회귀 안전 확인용으로 같이 고정한다.
+describe('12R F5 — normalizeProp CSS 식별자 디코더 선통과 (F1 cascade 실종·BORDER_PROP_RE 우회 폐쇄)', () => {
+  const escapedIndicatorThemes = `
+    :root { --color-bg: #FFFFFF; --color-selected-indicator: transparent; }
+    html[data-theme=dark] {
+      --color-bg: #0E0F11;
+      --color-selected-indicator: #6B7280;
+      \\--color-selected-indicator: transparent;
+    }
+    :root { --color-alias-unused: 0; }
+  `;
+
+  it('다크 블록: 후행 escaped 선언(\\--color-selected-indicator: transparent)이 cascade에서 승리 — stale #6B7280이 아니라 transparent가 최종값', () => {
+    const darkValues = buildDarkValues(escapedIndicatorThemes);
+    expect(darkValues['color-selected-indicator']).toBe('transparent');
+  });
+
+  it('위 escaped 후행 선언 채택 시 인디케이터 vs bg 대비가 3:1 미만(RED) — transparent 합성이 대비 단정을 실제로 무너뜨린다', () => {
+    const darkValues = buildDarkValues(escapedIndicatorThemes);
+    expect(contrastOverBg(darkValues['color-selected-indicator'], darkValues['color-bg'])).toBeLessThan(3);
+  });
+
+  it('border: 후행 \\42order:none(디코딩=border, 핀 아날로그) 선언이 perimeter를 무보호로 되돌린다(BORDER_PROP_RE 우회 폐쇄)', () => {
+    const V = 'var(--color-input-border)';
+    const cssText = `.X{border:1px solid ${V};\\42order:none}`;
+    const visible = assertPerimeterVisible(
+      synthesizeBorderSides(findRootRules(postcss.parse(cssText), '.X')),
+      'color-input-border',
+    ).visible;
+    expect(visible).toBe(false);
+  });
+
+  // 회귀 안전 확인(코드 변경과 무관 — hasProtectedPrefix가 이미 자체 디코딩) — P3 역방향도 escaped
+  // 비보호 토큰을 놓치지 않는다.
+  it('findUnprotectedDeclarations: escaped 비보호 토큰(--\\75 nprotected-x=--unprotected-x)도 검출', () => {
+    const root = postcss.parse(':root { --color-a: 1; --\\75 nprotected-x: 2; }');
+    const offenders = findUnprotectedDeclarations([root.first]);
+    expect(offenders).toEqual(['--\\75 nprotected-x@1행']);
+  });
+
+  it('멱등성: decodeCssIdentifier/normalizeProp을 이미 디코딩된(또는 1회 디코딩된) 식별자에 재적용해도 무변화 — 이중 디코딩 지점 없음 보증', () => {
+    const alreadyDecoded = ['--color-selected-indicator', 'border', 'border-top-color', '--Foo-Bar', 'all'];
+    for (const ident of alreadyDecoded) {
+      expect(decodeCssIdentifier(decodeCssIdentifier(ident))).toBe(decodeCssIdentifier(ident));
+      expect(normalizeProp(normalizeProp(ident))).toBe(normalizeProp(ident));
+    }
+    // 현실 escape 패턴(leading-hyphen escape) 1회 디코딩 결과에는 백슬래시가 남지 않으므로 재통과해도
+    // 무변화 — decode 지점이 정확히 한 곳(normalizeProp 진입부)이면 이중 호출 경로가 생겨도 안전하다.
+    const onceDecoded = decodeCssIdentifier('\\--color-selected-indicator');
+    expect(onceDecoded).toBe('--color-selected-indicator');
+    expect(decodeCssIdentifier(onceDecoded)).toBe(onceDecoded);
   });
 });
