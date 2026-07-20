@@ -306,6 +306,26 @@ function topLevelVarTokens(value) {
   return tokens;
 }
 
+// 13R 잔여1(내부 리뷰 실증, css-variables deferred validation) — CSS 스펙: 선언 값에 **well-formed
+// var()**가(깊이 무관, I2a=varFunctionToken 기준 유효한 var() 참조) 하나라도 있으면 parse-time
+// 문법검사가 computed-value time으로 유예된다 — 브라우저는 이런 선언을 폐기하지 않고 유효 선언으로
+// cascade에 참여시킨다(승리하면 계산시점에 invalid-at-computed-value로 처리돼 초기값/상속값으로
+// 귀결 — "이전 선언으로 fallback"이 아니라 "이 선언이 이겨서 계산시점에 무효화"). 아래 classifyBorder-
+// ShorthandNode/parseBorderShorthand·isValidBoxShadow 계열이 "지원 grammar 불일치"를 발견했을 때 이
+// 함수로 값 전체를 재검사해 invalid(폐기)를 unsupported(fail-closed)로 재분류한다.
+// var() 노드를 찾으면 그 자식(fallback)은 미방문 처리한다(outermostVarTokens와 동일 관례 — 존재
+// 여부만 필요하므로 fallback 내부까지 볼 필요 없고, 형제 노드 순회는 walk가 그대로 계속한다). calc()
+// 등 var 아닌 함수 노드는 자식을 계속 방문해 중첩 var(예: `calc(1px + var(--x))`)도 정상 검출한다.
+function valueHasWellFormedVar(value) {
+  let found = false;
+  valueParser(String(value)).walk((node) => {
+    if (node.type !== 'function' || node.value !== 'var') return;
+    if (varFunctionToken(node) != null) found = true;
+    return false;
+  });
+  return found;
+}
+
 // box-shadow 값을 "최상위(depth-0) 콤마" 기준으로 레이어 분해한다. postcss-value-parser는 함수 인자
 // 내부 콤마를 이미 그 함수 노드의 자식으로 묶어두므로, 최상위 노드 배열에 남아 있는 'div'(,) 노드만
 // 레이어 경계다(중첩 fallback 콤마와 혼동 불가) — Important 2(인디케이터 가시성 구조 단정)가 소비.
@@ -492,6 +512,18 @@ const BORDER_PROP_RE = /^border(?:-(top|right|bottom|left))?(?:-(width|style|col
 //       계산·해석할 수 없는 지원 범위 밖 문법**. 선언은 정상 적용(리셋·설정 발생)하되 해당 성분을
 //       unsupported로 표시해 fail-closed RED. (예: `border: calc(100% - 2px) solid var(…)`는 유효 선언이라
 //       border-image를 리셋하고 width를 세팅하지만, calc를 못 재므로 unsupported → RED.)
+//   · deferred(계산시점 유예 재분류, 13R 잔여1): 위 기준으로는 invalid(문법 위반)로 판정될 값이라도
+//       **well-formed var()를 하나라도 포함**하면(valueHasWellFormedVar, I2a 재사용) CSS 스펙상
+//       parse-time 문법검사가 computed-value time으로 유예돼 브라우저는 폐기하지 않고 유효 선언으로
+//       cascade에 참여시킨다(이겼다면 이전 선언을 대체 — fallback이 아니라 "이 선언이 이겨서 계산시점에
+//       무효화"). 우리 엔진은 계산시점 재파싱을 재현할 수 없으므로 이 경로는 invalid가 아니라
+//       unsupported로 재분류한다(두 번째 항목과 동일하게 처리 — 적용은 되지만 fail-closed).
+//       (예: `box-shadow: inset 0 0 0 1px var(--i); box-shadow: inset 0 0 0 var(--zero) var(--i);`의
+//       후행은 spread 자리에 var가 있어 우리 grammar로는 위반이지만 well-formed var 포함 → unsupported
+//       → 후행이 cascade 승리해 RED. var()가 전혀 없거나(순수 문법 위반) var()가 있어도 그 var() 자체가
+//       무효 문법(`var(--x garbage)`, I2a)뿐이면 이 재분류 대상이 아니라 기존 invalid 폐기 그대로다.
+//       CSS-wide 키워드(inherit 등)도 계산시점 유예와 이웃한 개념이지만 이미 COLOR_KEYWORDS 등 별도
+//       경로로 처리되므로 여기선 구현하지 않는다(기록성 주석).
 // 두 경로의 실차이는 "이전 유효 선언 fallback 여부"와 "border-image 등 부작용 발생 여부"에서 드러난다.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -543,6 +575,13 @@ function parseBorderShorthand(value) {
     result[c.slot] = { value: c.value, unsupported: false };
     assigned[c.slot] = true;
   }
+  // 13R 잔여1(deferred 재분류) — invalid로 판정됐어도 값 전체(value, 어떤 노드가 위반을 냈는지 무관)에
+  // well-formed var()가 하나라도 있으면 parse-time 문법검사가 계산시점으로 유예된다 — 폐기(invalid)가
+  // 아니라 unsupported로 재분류해 cascade 참여(적용은 하되 fail-closed)로 전환한다. 위 분류 이분법
+  // 주석의 3번째 축 참고. 예: `border: var(--w) solid var(--t)`는 var(--w)가 classifyBorderShorthandNode에서
+  // 항상 color 슬롯으로 분류돼(현 모델은 var()의 위치별 의미를 구분하지 않음) var(--t)와 슬롯이 중복되며
+  // (기존이라면 invalid=true), 값 전체에 well-formed var()가 있으므로 unsupported로 재분류된다.
+  if (invalid && valueHasWellFormedVar(value)) { invalid = false; unsupported = true; }
   // 불법이든 지원밖이든 세 성분을 fail-closed로도 마킹(단위 단정 보존). 단 invalid는 호출부가
   // 별도로 검사해 선언 자체를 cascade에서 제외한다(폐기) — 그때 아래 셀 값은 사용되지 않는다.
   if (invalid || unsupported) for (const slot of ['width', 'style', 'color']) result[slot].unsupported = true;
@@ -793,11 +832,23 @@ function evaluateBorderVisibility(rules, token) {
   return { visible, perSide };
 }
 function evaluateIndicatorVisibility(rules, token) {
-  // 유효한 box-shadow 선언만 cascade(I2 폐기 의미론) — 무효 선언은 브라우저처럼 폐기돼 predicate에서
-  // 탈락하므로 이전 유효 선언으로 fallback한다. 최종 유효값을 콤마 레이어로 분해해 기대 토큰을 직접
-  // top-level var로 쓰는 레이어를 찾고(wrapper 색함수 fail-closed, F2), 그 레이어의 구조적 가시성을 본다.
-  const final = reduceEffectiveDecls(rules, (decl, prop) => INDICATOR_PROPS.has(prop) && isValidBoxShadow(decl.value));
+  // 유효한 box-shadow 선언 **또는** well-formed var()를 포함한 선언만 cascade(I2 폐기 의미론 +
+  // 13R 잔여1 deferred 재분류). var()가 전혀 없거나 있어도 무효 문법(I2a)뿐인 선언은 브라우저처럼
+  // 폐기돼 predicate에서 탈락하므로 이전 유효 선언으로 fallback한다. well-formed var()를 포함한
+  // 문법 위반 선언은 parse-time엔 유효(계산시점 유예)라 cascade에 참여시키되(폐기·fallback 아님),
+  // 최종 승자가 우리 grammar에 안 맞으면(strict) 계산시점을 재현할 수 없으므로 아래에서 즉시
+  // unsupported로 fail-closed 처리한다.
+  const final = reduceEffectiveDecls(
+    rules,
+    (decl, prop) => INDICATOR_PROPS.has(prop) && (isValidBoxShadow(decl.value) || valueHasWellFormedVar(decl.value)),
+  );
   const finalValues = Object.values(final).map((v) => v.value);
+  if (finalValues.some((v) => !isValidBoxShadow(v))) {
+    // 최종 승자가 well-formed var() 유예로만 cascade에 들어왔다(strict grammar 위반) — unsupported.
+    return { visible: false, reason: 'unsupported box-shadow(well-formed var 포함, 계산시점 유예)', finalValues };
+  }
+  // 최종 유효값을 콤마 레이어로 분해해 기대 토큰을 직접 top-level var로 쓰는 레이어를 찾고(wrapper
+  // 색함수 fail-closed, F2), 그 레이어의 구조적 가시성을 본다.
   const layer = finalValues.flatMap(splitTopLevelLayers).find((l) => topLevelVarTokens(l).has(token));
   if (!layer) return { visible: false, reason: '직접 var 인디케이터 레이어 미발견', finalValues };
   const shape = assertVisibleInsetShadowLayer(layer);
@@ -2083,5 +2134,81 @@ describe('13R M1 — 표준 <length> 단위 집합(%는 계속 거부)', () => {
   });
   it('신규 단위가 실제 소비처(box-shadow spread)에서도 유효 length로 인정된다', () => {
     expect(assertVisibleInsetShadowLayer('inset 0 0 0 1lh var(--x)').visible).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 13R 잔여1(내부 리뷰 실증, 13라운드 수렴분) — css-variables deferred validation. CSS 스펙상 well-formed
+// var()를 포함한 선언은 parse-time 문법검사가 computed-value time으로 유예돼, 우리 grammar와 안 맞아도
+// 브라우저에선 유효 선언으로 cascade에 참여한다(승리하면 계산시점에 무효화 — 이전 선언 fallback이
+// 아니다). 이전 모델은 지원 grammar 불일치를 well-formed var() 포함 여부와 무관하게 전부 invalid(폐기)로
+// 분류해, 후행의 grammar-위반+var-포함 선언이 이전 유효 선언으로 fallback돼 false-green을 냈다. 이
+// describe는 valueHasWellFormedVar 단위 계약과, box-shadow/border 양쪽에서의 재분류를 공용 evaluator
+// (evalIndicatorScss/evalBorderScss)로 고정한다.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('13R 잔여1 — css-variables deferred validation: well-formed var() 포함 문법위반 재분류(invalid→unsupported)', () => {
+  describe('valueHasWellFormedVar — 단위 계약(I2a 재사용 경계)', () => {
+    it('well-formed var()는 true', () => {
+      expect(valueHasWellFormedVar('var(--x)')).toBe(true);
+      expect(valueHasWellFormedVar('var(--x, #ccc)')).toBe(true);
+    });
+    it('형제(top-level 나열) well-formed var 2개도 true', () => {
+      expect(valueHasWellFormedVar('inset 0 0 0 var(--zero) var(--ind)')).toBe(true);
+    });
+    it('중첩(calc() 안 var())도 true — deferred validity는 깊이 무관', () => {
+      expect(valueHasWellFormedVar('calc(1px + var(--x))')).toBe(true);
+    });
+    it('var() 자체가 없으면 false', () => {
+      expect(valueHasWellFormedVar('1px solid red')).toBe(false);
+      expect(valueHasWellFormedVar('junk')).toBe(false);
+    });
+    it('well-formed 아닌 var(콤마 없는 잔여 인자)만 있으면 false(I2a 계약 무충돌)', () => {
+      expect(valueHasWellFormedVar('var(--x garbage)')).toBe(false);
+    });
+  });
+
+  describe('RED — 후행이 well-formed var() 포함 grammar 위반이면 unsupported로 cascade 승리(fail-closed)', () => {
+    const IND = 'color-selected-indicator';
+    it('box-shadow(리뷰어 probe): spread 자리 var(--zero) → 후행이 unsupported로 이겨 비가시', () => {
+      const scss = `.X{box-shadow:inset 0 0 0 1px var(--${IND});box-shadow:inset 0 0 0 var(--zero) var(--${IND})}`;
+      expect(evalIndicatorScss(scss, IND).visible).toBe(false);
+    });
+
+    const TOKEN = 'color-input-border';
+    const V = `var(--${TOKEN})`;
+    it('border 아날로그: width 자리 var(--w) → 슬롯 중복(invalid였던 것)이 unsupported로 재분류돼 후행이 이겨 비가시', () => {
+      const scss = `.X{border:1px solid ${V};border:var(--w) solid ${V}}`;
+      expect(evalBorderScss(scss).visible).toBe(false);
+    });
+  });
+
+  describe('무회귀 — var() 없는 grammar 위반은 기존대로 폐기(invalid) → 이전 유효 선언 fallback(GREEN)', () => {
+    const IND = 'color-selected-indicator';
+    it('box-shadow: var() 전혀 없는 위반(length 5개 초과)은 폐기 → 이전 선언 유지, 가시', () => {
+      const scss = `.X{box-shadow:inset 0 0 0 1px var(--${IND});box-shadow:inset 0 0 0 1px 2px}`;
+      expect(evalIndicatorScss(scss, IND).visible).toBe(true);
+    });
+
+    const TOKEN = 'color-input-border';
+    const V = `var(--${TOKEN})`;
+    it('border: var() 전혀 없는 위반(width 슬롯 중복)은 폐기 → 이전 선언 유지, 가시', () => {
+      const scss = `.X{border:1px solid ${V};border:1px 2px solid}`;
+      expect(evalBorderScss(scss).visible).toBe(true);
+    });
+  });
+
+  describe('무회귀 — well-formed 아닌 var(예: var(--x garbage))만 포함한 위반은 기존 invalid 폐기 유지(I2a 계약 무충돌)', () => {
+    const IND = 'color-selected-indicator';
+    it('box-shadow: 값 전체에 var()가 var(--zero garbage) 하나뿐(무효 문법)이면 폐기 → 이전 선언 유지, 가시', () => {
+      const scss = `.X{box-shadow:inset 0 0 0 1px var(--${IND});box-shadow:inset 0 0 0 var(--zero garbage)}`;
+      expect(evalIndicatorScss(scss, IND).visible).toBe(true);
+    });
+
+    const TOKEN = 'color-input-border';
+    const V = `var(--${TOKEN})`;
+    it('border: 값 전체에 var()가 var(--w garbage) 하나뿐(무효 문법)이면 폐기 → 이전 선언 유지, 가시', () => {
+      const scss = `.X{border:1px solid ${V};border:solid var(--w garbage)}`;
+      expect(evalBorderScss(scss).visible).toBe(true);
+    });
   });
 });
