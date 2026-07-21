@@ -603,7 +603,13 @@ function classifyShadowLayer(layerValue) {
       if (n.unclosed) return 'invalid'; // 닫히지 않은 함수 = 문법 자체 파탄
       const fn = lowerIdentOf(n);
       if (isVarFunction(n)) { if (varFunctionToken(n) == null) return 'invalid'; colorCount += 1; roles.push('color'); continue; }
-      if (COLOR_FUNCTIONS.has(fn)) { if (!isValidColorFunctionNode(n)) return 'invalid'; colorCount += 1; roles.push('color'); continue; } // I3 — 색 함수 내부 문법(인자 개수 포함)
+      // I3 — 색 함수 내부 문법(인자 개수 포함), 17R 삼분(known-fn 미확정은 discard 아닌 unsupported)
+      if (COLOR_FUNCTIONS.has(fn)) {
+        const cv = classifyColorFunctionNode(n);
+        if (cv === 'invalid') return 'invalid';
+        if (cv === 'unsupported') verdict = worseClass(verdict, 'unsupported');
+        colorCount += 1; roles.push('color'); continue;
+      }
       // I3(15R) — calc/min/max/clamp… 는 box-shadow의 <length> 자리에 올 수 있는 **표준** 함수다.
       // 우리는 그 값을 계산할 수 없을 뿐이므로 폐기(invalid)가 아니라 unsupported로 cascade에 참여시킨다.
       if (MATH_FUNCTIONS.has(fn)) { lengths.push(null); roles.push('length'); verdict = worseClass(verdict, 'unsupported'); continue; }
@@ -812,46 +818,73 @@ function colorFunctionSeparatorsValid(inner) {
   }
   return slashes <= 1;
 }
-function isValidColorFunctionNode(node) {
-  if (isVarFunction(node)) return varFunctionToken(node) != null;
-  if (!node || node.type !== 'function' || node.unclosed || !COLOR_FUNCTIONS.has(lowerIdentOf(node))) return false;
+// I3(17R, 삼분 완결 — 내부 리뷰 16라운드 수렴분) — known-color-fn 내부 판정을 boolean(valid/invalid)에서
+// valid/unsupported/invalid **삼분**으로 올린다. 근본1(whitelist 반전)은 미지 top-level 입력을 전부
+// unsupported/invalid로 안전 착지시켰지만, **COLOR_FUNCTIONS에 든 이미 아는 함수**의 내부 문법이 우리
+// grammar로 확정 불가능한 경우까지 이전엔 전부 `return false`(= 호출부가 invalid-discard)로 뭉뚱그렸다.
+// discard는 "선언이 브라우저에도 무효라 폐기되고 **이전 유효 선언으로 fallback**한다"는 뜻인데, 우리
+// grammar가 불완전할 뿐 실제로는 유효한 known-fn 문법이라면 이 fallback이 **핀 부활 false-green**이 된다.
+// 예: `rgb(sqrt(4) 2 3)` — sqrt()는 CSS Values 4의 실재 <calc-function>이지만 MATH_FUNCTIONS(calc/min/
+// max/clamp/round/mod/rem/sin/cos/tan/abs/sign)에 없는 채널 함수라 "미지 중첩 함수"로 떨어진다. 이건
+// "명백한 위반"이 아니라 "우리가 확정 못 함"이므로 invalid가 아니라 **unsupported**로 낙착시켜 cascade에
+// 참여(부작용 발생·fail-closed RED)시킨다 — discard(=fallback 가능성)를 원천 차단하는 안전 방향 반전이다.
+// 반대로 아래는 여전히 **명백한 문법 위반**이라 invalid(폐기)로 남는다(회귀 없음): 닫히지 않은 함수·
+// 구분자 오류(colorFunctionSeparatorsValid)·문자열 인자·미지 **bare word**(word는 CSS 파싱상 함수처럼
+// forward-compat 확장 여지가 없다 — 명시 예외, 아래 참고)·아자리티 부족·color-mix 그룹 개수 위반.
+function classifyColorFunctionNode(node) {
+  if (isVarFunction(node)) return varFunctionToken(node) != null ? 'valid' : 'invalid';
+  if (!node || node.type !== 'function' || node.unclosed || !COLOR_FUNCTIONS.has(lowerIdentOf(node))) return 'invalid';
   const fn = lowerIdentOf(node);
   const inner = node.nodes.filter((n) => n.type !== 'space' && n.type !== 'comment');
-  if (!colorFunctionSeparatorsValid(inner)) return false; // I3(16R) — 구분자 구조 먼저 검증
+  if (!colorFunctionSeparatorsValid(inner)) return 'invalid'; // I3(16R) — 구분자 구조 먼저 검증
   let channels = 0;
+  let verdict = 'valid';
   for (let i = 0; i < inner.length; i += 1) {
     const n = inner[i];
     if (n.type === 'div') continue; // , 또는 /
-    if (n.type === 'string') return false;
+    if (n.type === 'string') return 'invalid';
     if (n.type === 'function') {
-      if (n.unclosed) return false;
+      if (n.unclosed) return 'invalid';
       const nfn = lowerIdentOf(n);
-      if (isVarFunction(n)) { if (varFunctionToken(n) == null) return false; channels += 1; continue; }
-      if (COLOR_FUNCTIONS.has(nfn)) { if (!isValidColorFunctionNode(n)) return false; channels += 1; continue; }
+      if (isVarFunction(n)) { if (varFunctionToken(n) == null) return 'invalid'; channels += 1; continue; }
+      if (COLOR_FUNCTIONS.has(nfn)) {
+        const nested = classifyColorFunctionNode(n); // 재귀 — 중첩 색함수의 불확실성도 삼분 그대로 전파
+        if (nested === 'invalid') return 'invalid';
+        if (nested === 'unsupported') verdict = worseClass(verdict, 'unsupported');
+        channels += 1; continue;
+      }
       if (MATH_FUNCTIONS.has(nfn)) { channels += 1; continue; }
-      return false;
+      // 미지 중첩 함수 — CSS Values 4 수학 함수(sqrt/pow/hypot/log/exp/atan2 등 MATH_FUNCTIONS 미등재분) ·
+      // 미래 채널 함수일 여지를 배제할 수 없다. 17R 전: return false(invalid-discard). 17R 후: unsupported로
+      // 낙착(채널 1개로 계상 — 값을 재지는 못해도 슬롯은 채운 것으로 간주해 arity 계약과 충돌하지 않는다).
+      verdict = worseClass(verdict, 'unsupported'); channels += 1; continue;
     }
     if (n.type === 'word') {
       const w = lowerIdentOf(n); // I4(15R) — 값 식별자 decode 1회
-      if (w === 'from') { if (!isValidColorToken(inner[i + 1])) return false; i += 1; continue; } // relative color origin
+      if (w === 'from') { if (!isValidColorToken(inner[i + 1])) return 'invalid'; i += 1; continue; } // relative color origin
       if (isNumberPercentAngle(w) || w === 'none' || COLOR_CHANNEL_LETTERS.has(w)) { channels += 1; continue; }
       if (COLOR_FUNCTION_KEYWORDS.has(w) || isColorWord(w)) continue; // 색공간/보간 키워드·색 ident(피연산자)
-      return false;
+      return 'invalid'; // 미지 bare word = 확실한 문법 위반(명시 예외 — 함수와 달리 unsupported 승격 안 함)
     }
-    return false;
+    return 'invalid';
   }
   if (fn === 'color-mix') {
     // `color-mix( <color-interpolation-method> , <color> [<percentage>]? , <color> [<percentage>]? )`
     // → **정확히 3그룹**(보간법 + 색 2개). I3(16R): 이전엔 `>= 3`이라 `color-mix(in srgb, red, blue, green)`
     // (색 3개=4그룹)를 valid로 통과시켰다 — color-mix는 정확히 2색만 받으므로 3그룹 초과·미만 모두 문법 위반.
     const groups = splitCommaGroups(inner);
-    if (groups.length !== 3 || groups.some((g) => g.length === 0)) return false;
-    return true;
+    if (groups.length !== 3 || groups.some((g) => g.length === 0)) return 'invalid';
+    return verdict;
   }
   const min = COLOR_FUNCTION_MIN_CHANNELS[fn];
-  if (min != null && channels < min) return false;
-  return true;
+  if (min != null && channels < min) return 'invalid';
+  return verdict;
 }
+// 기존 boolean 계약을 쓰는 단위 단정·호출부용 얇은 어댑터 — valid만 true(unsupported도 false로 접힘).
+// 회귀 없음: 기존 벡터는 전부 valid 아니면 invalid뿐이라 신설 unsupported 경로를 건드리지 않는다.
+// invalid/unsupported를 구분해야 하는 호출부(classifyShadowLayer·classifyBorderShorthandNode·
+// classifyComponentValue)는 이 어댑터가 아니라 classifyColorFunctionNode를 직접 소비한다.
+function isValidColorFunctionNode(node) { return classifyColorFunctionNode(node) === 'valid'; }
 function isValidColorToken(node) {
   if (!node) return false;
   if (node.type === 'function') {
@@ -1109,8 +1142,12 @@ function classifyBorderShorthandNode(node) {
       return { slot: 'color', value: valueParser.stringify(node) };
     }
     const fn = lowerIdentOf(node);
-    if (COLOR_FUNCTIONS.has(fn)) { // I3(14R) — 색 함수 내부 문법까지 검증(rgb(from junk …)·인자 부족 등 폐기)
-      if (!isValidColorFunctionNode(node)) return { invalid: true };
+    // I3(14R)+17R 삼분 — 명백한 위반(rgb(from junk …)·인자 부족 등)만 invalid, known-fn 내부 미확정
+    // 문법은 unsupported(폐기 아님 — 선언은 유효로 간주돼 border-image reset 등 부작용 정상 발생).
+    if (COLOR_FUNCTIONS.has(fn)) {
+      const cv = classifyColorFunctionNode(node);
+      if (cv === 'invalid') return { invalid: true };
+      if (cv === 'unsupported') return { unsupported: true };
       return { slot: 'color', value: valueParser.stringify(node) };
     }
     if (MATH_FUNCTIONS.has(fn)) return { unsupported: true }; // 표준 <length> 산출 — 유효 선언 확정
@@ -1241,7 +1278,15 @@ function classifyComponentValue(component, group) {
   // color
   if (node.type === 'function') {
     if (isVarFunction(node)) { if (varFunctionToken(node) == null) return { value: group, unsupported: true, invalid: true }; return { value: group, unsupported: false }; }
-    if (COLOR_FUNCTIONS.has(lowerIdentOf(node))) { if (!isValidColorFunctionNode(node)) return { value: group, unsupported: true, invalid: true }; return { value: group, unsupported: false }; } // I3 색 함수 내부 문법
+    // I3+17R 삼분(내부 리뷰 16라운드 수렴분·리뷰어 실증 지점) — known-fn 내부 문법을 확정 못 하는 경우는
+    // invalid-discard가 아니라 unsupported로 낙착시킨다. 이전엔 이 자리가 boolean만 봐서 known 색함수의
+    // grammar 모델 공백이 그대로 discard→fallback(핀 부활 false-green) 방향으로 샜다 — 이제 unsupported는
+    // cascade에 참여(값 채택·fail-closed RED)시켜 fallback을 막는다(방향 반전: false-green → false-RED).
+    if (COLOR_FUNCTIONS.has(lowerIdentOf(node))) {
+      const cv = classifyColorFunctionNode(node);
+      if (cv === 'invalid') return { value: group, unsupported: true, invalid: true };
+      return { value: group, unsupported: cv === 'unsupported' };
+    }
     return { value: group, unsupported: true }; // 색 아닌 함수 = 지원밖(fail-closed)
   }
   if (ident != null && (isHexColor(ident) || COLOR_KEYWORDS.has(ident.toLowerCase()))) return { value: ident, unsupported: false }; // I2(16R) strict hex
@@ -3649,5 +3694,72 @@ describe('16R 근본2 — 미지-입력 fuzz 배터리(다음 라운드 선제 �
       expect(evalIndicatorScss(s.bsAlone, IND).visible, `bs-red:${U}`).toBe(false);
       expect(evalIndicatorScss(s.bsColor, IND).visible, `bs-color-red:${U}`).toBe(false);
     }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 17R(내부 리뷰 16라운드 수렴분 — 리뷰어 실증) — known-color-fn 내부 판정을 boolean(valid/invalid)에서
+// valid/unsupported/invalid **삼분**으로 완결한다. 근본1(whitelist 반전)은 미지 top-level 입력을 전부
+// 안전 착지시켰지만, **COLOR_FUNCTIONS에 든 이미 아는 함수**의 내부 문법을 우리 grammar가 확정 못 하는
+// 경우(예: CSS Values 4 수학 함수 중 MATH_FUNCTIONS에 없는 sqrt/pow/hypot/log/atan2가 채널 자리에 옴)까지
+// 이전엔 invalid-discard로 뭉뚱그려 **이전 유효 선언으로 fallback**했다 — 핀 부활 false-green 방향.
+// 아래는 discard가 아니라 unsupported(cascade 참여·fail-closed RED·부작용은 정상 발생)로 낙착함을
+// 단정한다 — 오모델이 있어도 이제는 false-green이 아니라 false-RED(과엄격) 방향으로만 샌다(안전 반전).
+// "선재현" 표기는 수정 전 게이트(classifyColorFunctionNode 신설 전, boolean만 쓰던 구 isValidColorFunctionNode)가
+// 냈을 값이다.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('17R — known-fn 내부 미확정 문법: invalid-discard → unsupported(fail-closed) 재분류', () => {
+  // known-fn 내부에 우리가 안 다루는 유효 CSS 형태 대표(다음 라운드 방어) — 전부 unsupported로 낙착해야
+  // 한다(valid도 invalid도 아님). 마지막 항은 중첩 색함수 내부의 미확정이 재귀로 전파되는지도 겸해 본다.
+  const KNOWN_FN_UNCERTAIN_BATTERY = [
+    'rgb(sqrt(4) 2 3)', // CSS Values 4 sqrt() — MATH_FUNCTIONS 미등재 채널 함수
+    'hsl(pow(2, 8) 50% 50%)', // pow() 동일
+    'color(display-p3 hypot(3, 4) 0 0)', // hypot()
+    'oklch(0.7 0.1 atan2(1, 1))', // atan2()
+    'color-mix(in oklch, rgb(log(10) 0 0), blue)', // 중첩 색함수 내부의 미확정 — 재귀 전파 확인
+  ];
+  it(`대표 ${KNOWN_FN_UNCERTAIN_BATTERY.length}종 — classifyColorFunctionNode는 valid도 invalid도 아닌 unsupported`, () => {
+    for (const v of KNOWN_FN_UNCERTAIN_BATTERY) {
+      const node = valueParser(v).nodes[0];
+      expect(classifyColorFunctionNode(node), v).toBe('unsupported');
+      expect(isValidColorFunctionNode(node), v).toBe(false); // 기존 boolean 어댑터 무회귀(valid만 true)
+    }
+  });
+  it('대조 — 명백한 문법 위반(구분자 오류·from 인자 부족·color-mix 그룹 초과)은 여전히 invalid(회귀 없음)', () => {
+    expect(classifyColorFunctionNode(valueParser('rgb(1 2 3 / / 1)').nodes[0])).toBe('invalid');
+    expect(classifyColorFunctionNode(valueParser('rgb(from red)').nodes[0])).toBe('invalid');
+    expect(classifyColorFunctionNode(valueParser('color-mix(in srgb, red, blue, green)').nodes[0])).toBe('invalid');
+    expect(classifyColorFunctionNode(valueParser('rgb(1 2 3)').nodes[0])).toBe('valid'); // 정상 무회귀
+  });
+  it('classifyComponentValue(border-color leaf, 리뷰어 실증 지점 1244행 부근) — unsupported이지 invalid 아님(폐기 금지)', () => {
+    const cv = classifyComponentValue('color', 'rgb(sqrt(4) 2 3)');
+    expect(cv.unsupported).toBe(true);
+    expect(cv.invalid).toBeUndefined(); // invalid:true였다면 폐기(discard) — 재분류로 더는 아니다
+  });
+  it('classifyBorderShorthandNode — color 슬롯 확정 대신 unsupported(선언은 유효 취급, border-image reset 등 부작용 정상 발생)', () => {
+    const node = valueParser('rgb(sqrt(4) 2 3)').nodes[0];
+    expect(classifyBorderShorthandNode(node)).toEqual({ unsupported: true });
+  });
+  it('classifyShadowLayer/classifyBoxShadowValue — 레이어가 unsupported로 접혀 선언 최종값도 unsupported(invalid 아님)', () => {
+    expect(classifyBoxShadowValue('inset 0 0 0 1px rgb(sqrt(4) 2 3)')).toBe('unsupported');
+  });
+  // 명시 예외(과대 종결 금지) — 아래는 r15i(=SCSS→Sass compileString 경유)가 아니라 evaluatePinnedContract를
+  // **raw CSS 텍스트에 직접** 태운다. 실측 확인: Dart Sass는 `rgb(sqrt(4) 2 3)`을 컴파일 단계에서 이미
+  // `rgb(2, 2, 3)`으로 **선-상수접기**(sqrt/pow/hypot/log 등 CSS Values 4 수학 함수를 Sass 자체가 채택)하거나,
+  // 우리 MATH_FUNCTIONS에도 없고 Sass도 못 접는 진짜 미지 함수(`foo(4)` 등)는 Sass의 전역 rgb()가 인자
+  // 검증에 실패해 **컴파일 자체를 에러**낸다 — 어느 쪽이든 이 경계는 SCSS→Sass PINNED 실경로엔 애초에
+  // 도달하지 못한다(UNKNOWN_INPUT_BATTERY 절의 "Sass 선-거부 벡터는 분류기 층에서만" 명시 예외와 동일
+  // 구조). 이 게이트는 컴파일된 CSS **텍스트**를 postcss AST로 분석하는 도구이고 P4 스윕은 raw .css
+  // 파일도 그대로 훑으므로, Sass를 거치지 않는 원시 CSS 텍스트(수기 .css·향후 non-Sass 파이프라인)가
+  // 실제 입력일 가능성은 여전히 유효하다 — evaluatePinnedContract를 직접 태워 그 경로를 검증한다.
+  it('방향 반전(공용 evaluator, raw CSS 직접 — Sass 선-접기/선-거부 우회) — 선재현: true(false-green, discard→'
+    + 'fallback으로 이전 토큰이 부활). 수정 후: known-fn 미확정 override가 cascade에 참여해 false(RED)', () => {
+    const rawCss = '.X{box-shadow:inset 0 0 0 1px var(--color-selected-indicator);'
+      + 'box-shadow:inset 0 0 0 1px rgb(sqrt(4) 2 3)}';
+    const result = evaluatePinnedContract(rawCss, '.X', { kind: 'indicator', token: 'color-selected-indicator' });
+    expect(result.visible).toBe(false);
+  });
+  it('대조(방향 반전 아님·회귀 없음) — 진짜 무효 색함수(이중 슬래시)는 여전히 invalid-discard로 이전 토큰 fallback 유지(true)', () => {
+    expect(r15i(`.X{box-shadow:inset 0 0 0 1px ${R15_IV};box-shadow:inset 0 0 0 1px rgb(1 2 3 / / 1)}`)).toBe(true);
   });
 });
