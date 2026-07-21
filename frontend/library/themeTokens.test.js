@@ -4,14 +4,42 @@ import { resolve } from 'node:path';
 import { compile, compileString } from 'sass';
 import postcss from 'postcss';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// I1(18R) — **CSS 공백 전용 정규화**. CSS 스펙의 whitespace는 정확히 5종(space·tab·LF·FF·CR)이다.
+// JS `\s`와 `String#trim()`은 NBSP(U+00A0)·EM SPACE(U+2003)·ZWNBSP(U+FEFF)·vertical tab(U+000B)까지
+// 공백으로 취급하는데, 이들은 CSS에서 공백이 **아니다**(앞 셋은 ident 문자, U+000B는 아예 불법 문자).
+// 그래서 기존 `/\s+/`·`trim()` 정규화는 브라우저가 "다른 셀렉터" 또는 "무효 선언(계산값 none)"으로
+// 보는 입력을 게이트가 **canonical로 고쳐서 통과**시켰다 — 손실 정규화형 false-green.
+// 18R 선재현 실측(현행 HEAD): 4종 공백 × (셀렉터 / box-shadow 값 / border 값) = **12/12 false-green**
+// (`.X<NBSP>`가 rulesFound=1로 핀에 수집, `inset<NBSP>0 0 0 1px var(…)`가 canonical/visible=true).
+// 이후 이 파일의 모든 CSS 텍스트 정규화는 아래 두 헬퍼만 쓴다(JS `\s`·`trim()` 직접 사용 금지).
+const CSS_WS_CLASS = ' \\t\\n\\f\\r';
+const CSS_WS_RE = new RegExp(`[${CSS_WS_CLASS}]+`, 'g');
+const CSS_WS_EDGE_RE = new RegExp(`^[${CSS_WS_CLASS}]+|[${CSS_WS_CLASS}]+$`, 'g');
+const cssTrim = (s) => String(s).replace(CSS_WS_EDGE_RE, '');
+const normalizeCssWhitespace = (s) => cssTrim(String(s).replace(CSS_WS_RE, ' '));
+// "JS는 공백으로 보지만 CSS는 아닌" 코드포인트 — postcss의 `rule.selectors`(list.comma)가 각 파트에
+// **JS trim**을 적용하므로 이 문자가 셀렉터 경계에 있으면 우리 손에 닿기 전에 이미 삭제된다(파서
+// 레벨 손실 정규화). 따라서 정규화만 고쳐선 부족하고, 이런 코드포인트를 포함한 셀렉터는 매칭
+// 후보에서 통째로 배제한다(fail-closed — 실제로 다른 셀렉터를 같은 것으로 오인할 여지를 없앤다).
+const JS_ONLY_WS_RE = new RegExp(`[^\\S${CSS_WS_CLASS}]`);
+// ─────────────────────────────────────────────────────────────────────────────
+
 // _themes.scss 계약: 컴파일 결과에 flat 블록 3개 —
 //   [0] :root(라이트) [1] html[data-theme='dark'](다크) [2] :root(테마불변 별칭)
 // [0]/[1]의 --키 집합이 다르면 한쪽 테마에서 반대 테마 값이 상속 누출된다.
 const css = compile(resolve(__dirname, '../styles/_themes.scss')).css;
 // ⚠️ sass 1.97은 attribute selector의 불필요한 따옴표를 제거한다: html[data-theme=dark]
 //    (따옴표 필수 매칭이면 별칭 블록을 dark로 오인 — 리뷰 재현 [52,5]) — unquoted 허용 필수.
-const blocks = [...css.matchAll(/(?::root|html\[data-theme=(?:dark|["']dark["'])\])\s*\{([^}]*)\}/g)]
-  .map((m) => new Set([...m[1].matchAll(/--([a-z0-9-]+)\s*:/g)].map((k) => k[1])));
+// I1 적용: 키 추출의 `\s*`도 CSS 공백 5종 전용이다 — `--color-bg<NBSP>: #fff`는 실제로는 이름이
+// `--color-bg<NBSP>`인 **별개 토큰**인데 `\s*`는 이를 `--color-bg`로 오인해 대칭/베이스라인 검사를
+// 통째로 우회시켰다. 이제 매치 자체가 실패해 키가 집합에서 빠지고 대칭 단정이 RED가 된다.
+const THEME_BLOCK_RE = new RegExp(`(?::root|html\\[data-theme=(?:dark|["']dark["'])\\])[${CSS_WS_CLASS}]*\\{([^}]*)\\}`, 'g');
+// 블록 본문 → 선언된 --토큰 키 집합(접두 `--` 제외). 공백은 CSS 5종만 허용한다(I1).
+function extractTokenKeys(blockBody) {
+  return new Set([...String(blockBody).matchAll(new RegExp(`--([a-z0-9-]+)[${CSS_WS_CLASS}]*:`, 'g'))].map((k) => k[1]));
+}
+const blocks = [...css.matchAll(THEME_BLOCK_RE)].map((m) => extractTokenKeys(m[1]));
 const [light, dark, aliases = new Set()] = blocks;
 
 describe('_themes.scss 토큰 대칭', () => {
@@ -65,9 +93,10 @@ const LIGHT_BASELINE = {
 
 describe('라이트 값 무변화 — 컴파일된 :root 값이 현행 팔레트와 동일', () => {
   it('코어 30토큰 값 일치', () => {
-    const rootBlock = css.match(/:root\s*\{([^}]*)\}/)[1];
+    const rootBlock = css.match(new RegExp(`:root[${CSS_WS_CLASS}]*\\{([^}]*)\\}`))[1];
     const values = Object.fromEntries(
-      [...rootBlock.matchAll(/--([a-z0-9-]+)\s*:\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]),
+      [...rootBlock.matchAll(new RegExp(`--([a-z0-9-]+)[${CSS_WS_CLASS}]*:[${CSS_WS_CLASS}]*([^;]+);`, 'g'))]
+        .map((m) => [m[1], cssTrim(m[2])]),
     );
     for (const [k, v] of Object.entries(LIGHT_BASELINE)) {
       expect(values[k], `--${k}`).toBe(v);
@@ -90,10 +119,12 @@ describe('브리지 완전성 — 모든 $color-*/$shadow-* 선언이 동일명 
   // 새 토큰이 리터럴로 추가되면(브리지 우회) 여기서 잡힌다 — warning-bg 사후 추가 재발 방지.
   it('리터럴 잔존 없음', () => {
     const bridge = readFileSync(resolve(__dirname, '../styles/_variables.scss'), 'utf8');
-    const decls = [...bridge.matchAll(/^\$((?:color|shadow)-[a-z0-9-]+)\s*:\s*([^;]+);/gm)];
+    // I1(18R): 값 비교 trim도 CSS 공백 전용 — `var(--color-x)<NBSP>`는 Sass가 NBSP를 포함한 별개
+    // 문자열로 내보내 브리지가 조용히 깨지는데 JS trim은 정상으로 둔갑시켰다(같은 손실 정규화 클래스).
+    const decls = [...bridge.matchAll(new RegExp(`^\\$((?:color|shadow)-[a-z0-9-]+)[${CSS_WS_CLASS}]*:[${CSS_WS_CLASS}]*([^;]+);`, 'gm'))];
     expect(decls.length).toBeGreaterThan(30);
-    const bad = decls.filter((m) => m[2].trim() !== `var(--${m[1]})`)
-      .map((m) => `${m[1]} = ${m[2].trim()}`);
+    const bad = decls.filter((m) => cssTrim(m[2]) !== `var(--${m[1]})`)
+      .map((m) => `${m[1]} = ${cssTrim(m[2])}`);
     expect(bad).toEqual([]);
   });
 });
@@ -154,10 +185,10 @@ describe('전 SCSS var(--…) 참조 커버리지', () => {
 describe('track 로컬 별칭 완전성 — $track-x는 동일명 var(--track-x)', () => {
   it('별칭 잔존/오기 없음', () => {
     const src = readFileSync(resolve(__dirname, '../styles/components/track/track.scss'), 'utf8');
-    const decls = [...src.matchAll(/^\$track-([a-z0-9-]+)\s*:\s*([^;]+);/gm)];
+    const decls = [...src.matchAll(new RegExp(`^\\$track-([a-z0-9-]+)[${CSS_WS_CLASS}]*:[${CSS_WS_CLASS}]*([^;]+);`, 'gm'))];
     expect(decls.length).toBe(7);
-    const bad = decls.filter((m) => m[2].trim() !== `var(--track-${m[1]})`);
-    expect(bad.map((m) => `track-${m[1]} = ${m[2].trim()}`)).toEqual([]);
+    const bad = decls.filter((m) => cssTrim(m[2]) !== `var(--track-${m[1]})`); // I1: CSS 공백 전용 trim
+    expect(bad.map((m) => `track-${m[1]} = ${cssTrim(m[2])}`)).toEqual([]);
   });
 });
 
@@ -176,9 +207,14 @@ function compiledSiteCss(relPath) {
 // postcss 자체 셀렉터 리스트 파서라 괄호 안 콤마를 보존해 이 오매치를 구조적으로 막는다.
 // 각 파트는 공백 정규화 후 완전 동일 문자열로만 비교한다 — 부분/접두 매칭·의사클래스 연속
 // (`:hover` 등)·자손 결합자 전부 불허(`SELECTOR:hover` != `SELECTOR`).
+// I1(18R) — 공백 정규화를 CSS 공백 5종 전용으로 교체하고, 그 위에 파서-레벨 손실까지 막는 가드를 둔다.
+// postcss `rule.selectors`는 내부적으로 각 콤마 파트에 **JS trim**을 걸어 NBSP/EM SPACE/ZWNBSP/VT를
+// 경계에서 지운다 — 즉 `.X<NBSP>`가 `.X`로 도착한다. 정규화 함수만 고쳐도 이 손실은 남으므로,
+// 셀렉터 원문에 CSS-비공백 JS-공백 코드포인트가 하나라도 있으면 매칭 자체를 거부한다(fail-closed).
 function selectorMatches(rule, targetSelectors) {
+  if (JS_ONLY_WS_RE.test(rule.selector)) return false;
   const targets = new Set(Array.isArray(targetSelectors) ? targetSelectors : [targetSelectors]);
-  return rule.selectors.some((part) => targets.has(part.replace(/\s+/g, ' ').trim()));
+  return rule.selectors.some((part) => targets.has(normalizeCssWhitespace(part)));
 }
 
 // target 셀렉터를 가진 "root 직속" 규칙만 postcss AST로 찾는다. rule.parent.type이 'root'가
@@ -229,7 +265,9 @@ function reduceEffectiveDecls(rules, predicate) {
       if (!predicate(decl, prop)) return;
       const cur = state[prop];
       if (cur && cur.important && !decl.important) return; // important가 후행 non-important를 이김
-      state[prop] = { value: decl.value.trim(), important: !!decl.important };
+      // I1(18R): JS trim은 NBSP 등 CSS ident 문자를 값 경계에서 지워 `#6B7280<NBSP>`(브라우저에선
+      // 무효 → 토큰 미적용)를 정상 hex로 둔갑시켰다 — CSS 공백 전용 trim으로 교체(fail-closed).
+      state[prop] = { value: cssTrim(decl.value), important: !!decl.important };
     });
   });
   return state;
@@ -263,8 +301,17 @@ function effectiveValue(rules, props) {
 //     제거**했다(정적 회귀 게이트에서 non-canonical CSS는 그 자체로 실패다) — "이전 유효 선언 부활"
 //     클래스가 소멸한다.
 //
-// 결과: **false-green이 원리적으로 불가능**하다(게이트는 canonical 외 전부 RED로 수렴). false-RED는
-// 늘지만 회귀 게이트로선 올바른 방향이다 — 실제 코드가 canonical을 벗어나면 개발자가 알아야 한다.
+// 결과(문구 축소, 18R): 이 게이트가 보장하는 것은 **"exact selector + 정적 styles 인벤토리 범위
+// 내에서" canonical 외 전부 RED로 수렴한다**는 것뿐이다. 17R 주석의 "false-green이 원리적으로
+// 불가능"은 과대 주장이었다 — 18R 선재현이 그 주석 아래에서 손실 정규화(I1)·과대 허용(I2)·이름
+// 비대칭(I3)·inventory 누락(I4) 네 부류의 false-green을 실측했다. **범위 밖 = 명시 예외**이며
+// 전수는 아래 "명시 예외 전수" describe가 단정과 함께 고정한다:
+//   ① 셀렉터 동치성(`.a.b` 대 `.b.a`, `:is()` 표기 변형) — selector 의미론 모델 없음
+//   ② 타 셀렉터·타 파일에서 오는 cascade(더 높은 specificity의 override)
+//   ③ 로컬 custom property 재정의 — 핀 게이트 단독으론 GREEN, P4 보호 네임스페이스 스윕과의 **합성**에 의존
+//   ④ JS 런타임 `CSS.registerProperty()` — 정적 styles 인벤토리 밖(@property at-rule은 I4로 폐쇄됨)
+// false-RED는 늘지만 회귀 게이트로선 올바른 방향이다 — 실제 코드가 canonical을 벗어나면 개발자가
+// 알아야 한다. 수렴 선언은 하지 않는다.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // 층 1 원자 — 전부 "정확한 리터럴 형태"만 인정하는 anchored whitelist. 부분 매칭·문자열 분해가 없으므로
@@ -276,18 +323,46 @@ function effectiveValue(rules, props) {
 //   · 스타일: 가시 border-style 키워드만. `none`/`hidden`은 의도적으로 canonical 밖(RED)이다.
 const CANON_VISIBLE_BORDER_STYLES = ['solid', 'dashed', 'dotted', 'double', 'groove', 'ridge', 'inset', 'outset'];
 const CANON_LEN_SRC = '(?:0|[0-9]+(?:\\.[0-9]+)?(?:px|rem|em))';
-const CANON_VAR_SRC = 'var\\(--[a-z0-9-]+\\)';
 const CANON_STYLE_SRC = `(?:${CANON_VISIBLE_BORDER_STYLES.join('|')})`;
-// 캡처판(모델 추출용) — 판정은 항상 아래 CANONICAL_DECLS.re(anchored)로만 한다.
-const CANON_BORDER_RE = new RegExp(`^(${CANON_LEN_SRC}) (${CANON_STYLE_SRC}) var\\(--([a-z0-9-]+)\\)$`);
-const CANON_SHADOW_OPAQUE_LAYER_RE = new RegExp(`^var\\(--([a-z0-9-]+)\\)$`);
-const CANON_SHADOW_INSET_LAYER_RE = new RegExp(
-  `^inset (${CANON_LEN_SRC}) (${CANON_LEN_SRC}) (${CANON_LEN_SRC}) (${CANON_LEN_SRC}) var\\(--([a-z0-9-]+)\\)$`,
-);
-const CANON_SHADOW_LAYER_SRC = `(?:${CANON_VAR_SRC}|inset ${CANON_LEN_SRC} ${CANON_LEN_SRC} ${CANON_LEN_SRC} ${CANON_LEN_SRC} ${CANON_VAR_SRC})`;
+// **needle 파서 전용** 매처(판정기 아님) — PINNED 표의 `needle: 'var(--token)'` 문자열에서 토큰 이름을
+// 뽑는 데만 쓴다. 선언 값이 canonical인지 여부는 오직 CANONICAL_DECLS.re가 결정한다.
+const CANON_VAR_REF_RE = /^var\(--([a-z0-9-]+)\)$/;
 
-// CANONICAL_DECLS — **핀 8곳의 실제 컴파일 값에서 도출**한 canonical 형태 집합. 각 항목의 `pins`가
-// 도출 근거다(아래 "CANONICAL_DECLS 도출 근거 고정" describe가 이 대응을 실파일로 재검증한다).
+// ─── I2(18R) — box-shadow canonical을 **실측 전체 문자열**로 좁힌다 ─────────────────────────────
+// 이전 형태는 opaque layer를 `var(--<아무 이름>)`으로, 전체 값을 "canonical 레이어의 임의 콤마 나열"로
+// 허용하고, 최종 판정은 "기대 inset layer 하나 존재"만 봤다. 그 결과 참조 토큰의 **의미가 전혀
+// 검증되지 않았다**(선재현 실측, 현행 HEAD):
+//   · `var(--does-not-exist), inset 0 0 0 1px var(--color-selected-indicator)` → visible=true
+//     (브라우저는 첫 레이어가 무효라 **선언 전체를 폐기** — 실렌더 box-shadow: none)
+//   · `var(--shadow-md), inset …` → visible=true (핀이 쓰지 않는 토큰인데 통과)
+//   · `_themes.scss`에서 `--shadow-xs: none`으로 바꾸면 실 CSS가 `none, inset …` = **계산값 none**인데
+//     선언 문자열은 그대로라 296/296 GREEN
+// 처방은 문법 모델 추가가 **아니라** 실측값으로 좁히기다. 넓은 패턴을 하나라도 남기면 whitelist가
+// 다시 작은 CSS 문법이 되고, 그 문법의 오차가 곧 다음 라운드의 false-green이 된다.
+//   · 허용 opaque layer: 정확히 `var(--shadow-xs)` 하나
+//   · 허용 indicator layer: 정확히 `inset 0 0 0 1px var(--color-selected-indicator)` 하나
+//   · 허용 전체 값: 위 두 레이어로 만들어지는 **실핀 2가지 전체 문자열**뿐(레이어 조합·순서 포함)
+// `var(--shadow-xs)`가 opaque layer로 성립한다는 전제(=완전 그림자로 확장되는 유효 값)는 아래
+// "--shadow-xs exact baseline" describe가 라이트·다크 값 자체를 고정해 지킨다 — 토큰 값이 `none`
+// 이나 무효 값으로 바뀌면 그 describe가 RED가 된다.
+const CANON_SHADOW_OPAQUE_LAYER = 'var(--shadow-xs)';
+const CANON_SHADOW_INDICATOR_LAYER = 'inset 0 0 0 1px var(--color-selected-indicator)';
+const CANON_SHADOW_VALUES = [
+  CANON_SHADOW_INDICATOR_LAYER,                                          // .MyTasks__ScopeBtn--active
+  `${CANON_SHADOW_OPAQUE_LAYER}, ${CANON_SHADOW_INDICATOR_LAYER}`,       // .HomeTabs__Tab.is-on
+];
+// 실측 값에 대응하는 레이어 모델(층 2 가시성 계산 입력). 상수이므로 매번 사본을 낸다.
+const SHADOW_OPAQUE_LAYER_MODEL = () => ({ kind: 'opaque-var', token: 'shadow-xs' });
+const SHADOW_INDICATOR_LAYER_MODEL = () =>
+  ({ kind: 'inset', offsetX: 0, offsetY: 0, blur: 0, spread: 1, token: 'color-selected-indicator' });
+// 리터럴 전체 문자열 → anchored exact 정규식(정규식 메타문자 이스케이프). 패턴 확장 여지 0.
+const exactValueRe = (literal) => new RegExp(`^${literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
+
+// CANONICAL_DECLS — **핀 8곳의 실제 컴파일 값에서 도출**한 canonical 형태 집합이자 층 1의 **유일한
+// 판정 테이블**이다. M1(18R): 이전엔 classifyRelevantDecl()이 이 배열을 조회하지 않고 별도 regex를
+// 썼기 때문에 entry의 prop/re를 망가뜨려도 결과가 그대로였다 — 즉 "single source"라는 주석이 사실이
+// 아니었다. 이제 classifier가 이 배열을 직접 dispatch한다(아래 mutation 테스트가 그 단일화를 증명).
+// 각 항목의 `pins`가 도출 근거이고, 아래 "CANONICAL_DECLS 도출 근거 고정" describe가 실파일로 재검증한다.
 // 여기 없는 형태는 전부 비-canonical이며 게이트는 그 유효성을 **판단하지 않는다**.
 const CANONICAL_DECLS = [
   {
@@ -295,34 +370,32 @@ const CANONICAL_DECLS = [
     level: 'value', // 선언 값 전체가 이 형태여야 한다
     prop: 'border',
     form: 'border: <length> <visible-style> var(--<token>)',
-    re: new RegExp(`^${CANON_LEN_SRC} ${CANON_STYLE_SRC} ${CANON_VAR_SRC}$`),
-    // 근거(실측 컴파일 값, 전부 `1px solid var(--color-input-border)`):
+    re: new RegExp(`^(${CANON_LEN_SRC}) (${CANON_STYLE_SRC}) var\\(--([a-z0-9-]+)\\)$`),
+    build: (m) => ({ form: 'border', border: { width: parseFloat(m[1]), style: m[2], token: m[3] } }),
+    // 근거(실측 컴파일 값, 전부 `1px solid var(--color-input-border)`). 색 자리 토큰은 층 2가
+    // contract.token과 대조하므로(=핀별 기대 토큰) 임의 토큰이 통과하지 않는다.
     pins: ['.CanvasEditor', '.CanvasEditorToolbar__ColorSwatch', '.FilterBuilder__OpToggle',
       '.MyTasks__ScopeToggle', '.HomeTabs', '.BrowseBranches__JoinBtn--joined'],
   },
   {
-    id: 'box-shadow-inset-indicator-layer',
-    level: 'box-shadow-layer', // box-shadow 값의 한 레이어(최상위 콤마 구분)
+    id: 'box-shadow-indicator-only',
+    level: 'value',
     prop: 'box-shadow',
-    form: 'inset <length> <length> <length> <length> var(--<token>)',
-    re: CANON_SHADOW_INSET_LAYER_RE,
-    // 근거: 두 인디케이터 핀이 공통으로 쓰는 레이어 — 실측 `inset 0 0 0 1px var(--color-selected-indicator)`.
-    pins: ['.MyTasks__ScopeBtn--active', '.HomeTabs__Tab.is-on'],
+    form: CANON_SHADOW_VALUES[0], // 실측 전체 문자열(패턴 아님)
+    re: exactValueRe(CANON_SHADOW_VALUES[0]),
+    build: () => ({ form: 'box-shadow', layers: [SHADOW_INDICATOR_LAYER_MODEL()] }),
+    pins: ['.MyTasks__ScopeBtn--active'],
   },
   {
-    id: 'box-shadow-opaque-var-layer',
-    level: 'box-shadow-layer',
+    id: 'box-shadow-opaque-then-indicator',
+    level: 'value',
     prop: 'box-shadow',
-    form: 'var(--<token>)',
-    re: CANON_SHADOW_OPAQUE_LAYER_RE,
-    // 근거: HomeTabs 다중 그림자의 첫 레이어 — 실측 `var(--shadow-xs)`(완전 그림자로 확장되는 불투명 레이어).
+    form: CANON_SHADOW_VALUES[1], // 실측 전체 문자열(레이어 조합·순서 포함)
+    re: exactValueRe(CANON_SHADOW_VALUES[1]),
+    build: () => ({ form: 'box-shadow', layers: [SHADOW_OPAQUE_LAYER_MODEL(), SHADOW_INDICATOR_LAYER_MODEL()] }),
     pins: ['.HomeTabs__Tab.is-on'],
   },
 ];
-// box-shadow 선언 값 전체 = canonical 레이어의 콤마 나열. **분해 없이** anchored 정규식으로 먼저
-// 전체를 판정하므로(그 다음에야 모델 추출용 분해를 한다) "순진한 split이 canonical처럼 보이는 조각을
-// 만들어내는" 부류의 우회가 구조적으로 불가능하다.
-const CANON_SHADOW_VALUE_RE = new RegExp(`^${CANON_SHADOW_LAYER_SRC}(?:, ${CANON_SHADOW_LAYER_SRC})*$`);
 
 // CSS-wide 키워드 — 층 2가 계산하는 유일한 non-canonical-form 입력. 정확히 소문자 단독일 때만 인정한다
 // (명시 예외: `INITIAL` 같은 대문자 변형은 스펙상 유효하지만 여기선 비-canonical=RED로 fail-closed).
@@ -352,45 +425,41 @@ function isRelevantProp(prop) {
   return !IRRELEVANT_BORDER_PROP_RE.test(deprefixed);
 }
 
-// 값 정규화 — 공백 축약/trim **만** 한다(소문자화·escape 디코딩·토큰 분해 전부 없음). 대소문자와
+// 값 정규화 — **CSS 공백**(5종) 축약/trim만 한다(소문자화·escape 디코딩·토큰 분해 전부 없음). 대소문자와
 // escape가 canonical 판정에 그대로 노출되므로 `VAR(--x)`·`tr\61 nsparent` 류는 자동으로 RED다.
+// I1(18R): 이전엔 JS `\s`/`trim()`이라 NBSP·EM SPACE·ZWNBSP·VT를 ASCII space로 **바꿔서** 통과시켰다.
 function normalizeDeclValue(value) {
-  return String(value).trim().replace(/\s+/g, ' ');
+  return normalizeCssWhitespace(value);
 }
 
-// box-shadow canonical 값 → 레이어 모델 배열(전체가 이미 canonical로 증명된 뒤에만 호출).
+// box-shadow canonical 값 → 레이어 모델 배열. 판정은 classifyRelevantDecl(=CANONICAL_DECLS dispatch)
+// 하나로 단일화돼 있으므로 여기서 별도 분해·별도 정규식을 두지 않는다(M1: 판정 경로 이중화 금지).
 function canonicalShadowLayers(value) {
-  if (!CANON_SHADOW_VALUE_RE.test(value)) return null;
-  return value.split(', ').map((layer) => {
-    const inset = CANON_SHADOW_INSET_LAYER_RE.exec(layer);
-    if (inset) {
-      return {
-        kind: 'inset',
-        offsetX: parseFloat(inset[1]),
-        offsetY: parseFloat(inset[2]),
-        blur: parseFloat(inset[3]),
-        spread: parseFloat(inset[4]),
-        token: inset[5],
-      };
-    }
-    return { kind: 'opaque-var', token: CANON_SHADOW_OPAQUE_LAYER_RE.exec(layer)[1] };
-  });
+  const cls = classifyRelevantDecl('box-shadow', value);
+  return cls.syntax === 'canonical' && cls.form === 'box-shadow' ? cls.layers : null;
 }
 
 // 층 1 판정기 — relevant 선언 하나를 `canonical`(+form) 또는 `non-canonical`로 **이분**한다.
 // 상태 모델(층 2 내부에서만 의미를 갖는다): syntax = canonical | non-canonical.
 // non-canonical은 어느 분기에서든 RED이고 **어떤 부작용도 내지 않는다**(border-image reset 금지 포함 —
 // 검수 finding 3의 `border: RGB(foo(1) 2 3)` 케이스가 이걸로 닫힌다).
+//
+// I3(18R) — **벤더 프리픽스 relevant 선언은 무조건 non-canonical**. 이전엔 isRelevantProp()만 deprefix해
+// 수집하고 classifier에는 raw `-webkit-box-shadow`가 전달돼 **이름 비대칭**이 생겼다: `initial`/`unset`이
+// CSS-wide canonical로 인정된 뒤 `prop === 'box-shadow'`에 미매치 → 마지막 분기에서 shadow가 아닌
+// **border 셀을 초기화**해, 인디케이터 핀은 기존 shadow가 그대로 남아 GREEN이었다(선재현 실측:
+// `-webkit-box-shadow: initial !important`·`-webkit-box-shadow: unset` 둘 다 visible=true).
+// 실핀이 쓰지 않는 형태이므로 alias 의미를 계산할 이유가 없다 — 존재 자체를 RED로 접는다(fail-closed).
+// M1(18R) — 아래 루프가 CANONICAL_DECLS를 **직접** dispatch하는 유일 판정 경로다. 배열 entry의
+// prop/re를 훼손하면 판정 결과가 즉시 달라진다(= 배열이 진짜 single source임을 mutation으로 증명 가능).
 function classifyRelevantDecl(prop, rawValue) {
   const value = normalizeDeclValue(rawValue);
+  if (PROP_VENDOR_PREFIX_RE.test(prop)) return { syntax: 'non-canonical', prop, value };
   if (CANON_CSS_WIDE_RE.test(value)) return { syntax: 'canonical', form: 'css-wide', keyword: value, value };
-  if (prop === 'border') {
-    const m = CANON_BORDER_RE.exec(value);
-    if (m) return { syntax: 'canonical', form: 'border', value, border: { width: parseFloat(m[1]), style: m[2], token: m[3] } };
-  }
-  if (prop === 'box-shadow') {
-    const layers = canonicalShadowLayers(value);
-    if (layers) return { syntax: 'canonical', form: 'box-shadow', value, layers };
+  for (const entry of CANONICAL_DECLS) {
+    if (entry.prop !== prop) continue;
+    const m = entry.re.exec(value);
+    if (m) return { syntax: 'canonical', id: entry.id, value, ...entry.build(m) };
   }
   return { syntax: 'non-canonical', prop, value };
 }
@@ -486,9 +555,11 @@ const evalBorderCss = (cssText, token = 'color-input-border') =>
   evaluatePinnedContract(cssText, '.X', { kind: 'border', token });
 const evalIndicatorCss = (cssText, token) =>
   evaluatePinnedContract(cssText, '.X', { kind: 'indicator', token });
-// needle(`var(--token)`)도 canonical 원자 매처로 토큰화한다 — 별도 파서 없음(정합성 보장).
+// needle(`var(--token)`)을 토큰명으로 바꾼다 — 별도 파서 없이 CANON_VAR_REF_RE 하나만 쓴다.
+// ⚠️ 이 매처는 **needle 파싱 전용**이며 canonical 판정에는 관여하지 않는다(I2: 선언 값 쪽 opaque
+// layer는 `var(--shadow-xs)` 정확일치뿐 — 여기의 일반형 `var(--name)`과 혼동 금지).
 function canonicalNeedleToken(needle) {
-  const m = CANON_SHADOW_OPAQUE_LAYER_RE.exec(normalizeDeclValue(needle));
+  const m = CANON_VAR_REF_RE.exec(normalizeDeclValue(needle));
   if (!m) throw new Error(`PINNED needle이 canonical var(--token) 형태가 아님: ${needle}`);
   return m[1];
 }
@@ -671,6 +742,17 @@ describe('styles/ 전체 컴파일/AST 스윕 — 비핀 파일 보호 토큰 �
     expect(allCss.some((f) => !mutated.includes(f))).toBe(true);
   });
 
+  // 적대적 자가 재검토(18R, inventory 누락 클래스 — I4와 동종) — isProtectedSweepTarget은 `.scss`/`.css`
+  // **두 확장자만** 대상으로 삼는다. 그래서 styles/ 아래에 다른 스타일 확장자(`.sass` 들여쓰기 문법,
+  // `.less`, `.pcss` 등)가 추가되면 10R에 fonts.css가 그랬던 것과 **정확히 같은 방식으로** 스윕 밖으로
+  // 새 나간다(파일은 로드되는데 게이트는 못 본다). 확장자 화이트리스트를 열어두는 대신, styles/ 아래
+  // 실제 확장자 인벤토리 자체를 고정한다 — 새 확장자가 등장하면 여기서 먼저 RED가 나고 개발자가
+  // isProtectedSweepTarget 확장 여부를 의식적으로 결정하게 된다(silent 누락 → 명시 결정으로 전환).
+  it('styles/ 아래 확장자 인벤토리 고정 — .scss/.css 외 확장자가 생기면 RED(스윕 밖 silent 누락 방지)', () => {
+    const exts = new Set(allFiles.filter((f) => f.includes('.')).map((f) => f.slice(f.lastIndexOf('.'))));
+    expect([...exts].sort()).toEqual(['.css', '.scss']);
+  });
+
   it('.scss 전부(컴파일 후 AST)+.css 전부(정규화 후 파싱)가 --color-/--track-/--shadow- 를 선언하지 않는다', () => {
     const offenders = targetFiles.flatMap(sweepFileForProtectedDeclarations);
     expect(offenders, `보호 토큰 선언(또는 컴파일 실패) 발견: ${offenders.join('; ')}`).toEqual([]);
@@ -683,7 +765,9 @@ describe('styles/ 전체 컴파일/AST 스윕 — 비핀 파일 보호 토큰 �
 // RED가 된다(다크 인디케이터 투명 회귀 검출).
 const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 function parseColor(value) {
-  const str = String(value).trim();
+  // I1(18R, 적대적 자가 재검토에서 실측 발견): JS trim이면 `#6B7280<NBSP>`(브라우저에선 무효 값이라
+  // 토큰이 적용되지 않는다)를 정상 hex로 둔갑시켜 대비 3.97로 통과했다 — CSS 공백 전용 trim으로 교체.
+  const str = cssTrim(value);
   const hex = /^#([0-9a-fA-F]{6})$/.exec(str);
   if (hex) {
     const n = parseInt(hex[1], 16);
@@ -693,7 +777,11 @@ function parseColor(value) {
   // 브라우저는 이 선언을 폐기해 box-shadow가 none처럼 무효화된다)도 매치해 Number('1.')===1로
   // 정상 색상 취급했다(외부 검수 8라운드 실증). `\d+(?:\.\d+)?`(정수/소수)와 `\.\d+`(선행 점만) 두
   // 형태만 인정 — trailing dot·다중 소수점(`1.2.3`)·빈 채널은 전부 매치 실패로 null.
-  const rgba = /^rgba?\(\s*(\d+(?:\.\d+)?|\.\d+)\s*,\s*(\d+(?:\.\d+)?|\.\d+)\s*,\s*(\d+(?:\.\d+)?|\.\d+)\s*(?:,\s*(\d+(?:\.\d+)?|\.\d+)\s*)?\)$/.exec(str);
+  // I1(18R, 적대적 자가 재검토): 구분자 공백도 CSS 5종만 허용한다. JS `\s*`는 `rgba(107,<NBSP>114,…)`
+  // (브라우저는 무효 → 토큰 미적용)를 정상 색으로 파싱해 대비 단정을 통과시켰다 — 같은 과대 허용 클래스.
+  const N = '(?:\\d+(?:\\.\\d+)?|\\.\\d+)';
+  const W = `[${CSS_WS_CLASS}]*`;
+  const rgba = new RegExp(`^rgba?\\(${W}(${N})${W},${W}(${N})${W},${W}(${N})${W}(?:,${W}(${N})${W})?\\)$`).exec(str);
   if (rgba) {
     // 브라우저 의미론대로 clamp — a는 [0,1], RGB 채널은 [0,255]. clamp 없이 Number()만 쓰면
     // `rgba(60,60,60,10)`(a=10)처럼 스펙 밖 값이 합성 수학을 붕괴시킨다: compositeOver의
@@ -799,6 +887,26 @@ function hasProtectedPrefix(prop) {
   return PROTECTED_TOKEN_PREFIXES.some((p) => decoded.startsWith(p));
 }
 
+// I4(18R) — @property 등록 스윕. 이전까지 모든 스캔(findProtectedDeclarations·structuralGate·
+// findUnprotectedDeclarations)은 **일반 declaration(decl.prop)만** 봤다. CSS `@property --color-x {
+// syntax:"<color>"; inherits:false; initial-value:transparent; }`는 이름이 `atrule.params`에 있고 내부는
+// syntax/inherits/initial-value라는 별개 디스크립터라 어느 스캔에도 잡히지 않았다(선재현 실측:
+// offenders 0). 등록되면 그 토큰은 **더 이상 :root에서 상속되지 않고** initial-value를 쓰므로 자식
+// 핀의 경계가 통째로 소실되는데 PINNED 선언 문자열은 그대로라 전 GREEN이다 — inventory 누락형
+// false-green이다. 등록 **값**은 계산하지 않는다(문법 모델 추가 금지): 보호 접두 이름의 등록 자체를
+// 금지한다. at-rule 이름도 escape/대소문자 변형(`@PROPERTY`, `@\70 roperty`)이 가능하므로 이 파일의
+// 유일 디코더(decodeCssIdentifier)를 통과시킨 뒤 비교한다 — I3와 같은 "이름 비대칭" 재발 방지.
+function findProtectedPropertyRegistrations(root) {
+  const offenders = [];
+  root.walkAtRules((atrule) => {
+    if (decodeCssIdentifier(atrule.name).toLowerCase() !== 'property') return;
+    const name = cssTrim(atrule.params);
+    if (!hasProtectedPrefix(name)) return;
+    offenders.push(`@property ${name}@${atrule.source?.start?.line}행(위치: ${describeLocation(atrule.parent)})`);
+  });
+  return offenders;
+}
+
 // FAIL 메시지에 위반 위치를 selector/atrule 체인(바깥→안, 예: `@media (min-width:0) > :root`)으로
 // 이어붙인다 — 구조 게이트·컴포넌트 선언 금지 검사가 공유한다.
 function describeLocation(node) {
@@ -846,9 +954,13 @@ function structuralGate(themesCss) {
   }
 
   const [lightRule, darkRule, aliasRule] = rootRules;
-  const isPlainRoot = (rule) => rule.selectors.length === 1 && rule.selectors[0].trim() === ':root';
+  // I1(18R): selectorMatches와 동일한 CSS 공백 전용 정규화 + 파서-레벨 JS trim 손실 가드를 적용한다.
+  // `html[data-theme=dark]<NBSP>`가 JS trim으로 다크 블록으로 오인되던 경로를 fail-closed로 닫는다.
+  const cssSafeSelector = (rule) =>
+    (JS_ONLY_WS_RE.test(rule.selector) ? null : normalizeCssWhitespace(rule.selectors[0] ?? ''));
+  const isPlainRoot = (rule) => rule.selectors.length === 1 && cssSafeSelector(rule) === ':root';
   const isDarkForm = (rule) =>
-    rule.selectors.length === 1 && DARK_SELECTORS.includes(rule.selectors[0].replace(/\s+/g, ' ').trim());
+    rule.selectors.length === 1 && DARK_SELECTORS.includes(cssSafeSelector(rule));
 
   if (!isPlainRoot(lightRule)) {
     throw new Error(`_themes.scss 3블록 계약 위반: 1번째 블록(라이트)은 ':root' 단독이어야 하는데 "${lightRule.selector}"(${lightRule.source?.start?.line}행)`);
@@ -872,9 +984,11 @@ function structuralGate(themesCss) {
     if (inLegitBlock) return;
     offenders.push(`${decl.prop}@${decl.source?.start?.line}행(위치: ${describeLocation(decl.parent)})`);
   });
+  // I4(18R): @property 등록은 3블록(rule 노드) 안에 있을 수 없는 at-rule이므로 발견 즉시 위반이다.
+  offenders.push(...findProtectedPropertyRegistrations(root));
   if (offenders.length > 0) {
     throw new Error(
-      `_themes.scss 3블록 계약 위반: 보호 토큰(${PROTECTED_TOKEN_PREFIXES.join('/')}) 선언이 3블록 밖에서 ` +
+      `_themes.scss 3블록 계약 위반: 보호 토큰(${PROTECTED_TOKEN_PREFIXES.join('/')}) 선언/등록이 3블록 밖에서 ` +
       `발견됨 — ${offenders.join('; ')}`,
     );
   }
@@ -885,6 +999,7 @@ function structuralGate(themesCss) {
 // 핀 대상 컴포넌트(및 임의 사이트 파일)가 보호 네임스페이스를 "선언"하는지 전수 검사한다(9라운드).
 // 이 파일들은 var(--color-x) 같은 소비만 정상이고, `.Foo { --color-x: … }`처럼 조상 스코프에
 // 재선언하면 그 서브트리 전체의 캐스케이드 값을 오염시킨다 — 컴포넌트는 소비 전용 계약이다.
+// I4(18R): 일반 declaration에 더해 @property 등록(atrule.params)도 같은 계약으로 금지한다.
 function findProtectedDeclarations(cssText) {
   const root = postcss.parse(cssText);
   const offenders = [];
@@ -892,6 +1007,7 @@ function findProtectedDeclarations(cssText) {
     if (!hasProtectedPrefix(decl.prop)) return;
     offenders.push(`${decl.prop}@${decl.source?.start?.line}행(위치: ${describeLocation(decl.parent)})`);
   });
+  offenders.push(...findProtectedPropertyRegistrations(root));
   return offenders;
 }
 
@@ -920,12 +1036,12 @@ function findUnprotectedDeclarations(rules) {
   return offenders;
 }
 
-// P2(내부 리뷰, 기록만·코드 변경 없음): 위 스캔들(findProtectedDeclarations·structuralGate·
-// findUnprotectedDeclarations)은 전부 decl.prop(일반 선언)만 본다 — CSS `@property --color-x {
-// syntax: '<color>'; inherits: false; initial-value: #fff; }` 같은 typed custom property 등록
-// at-rule은 프로퍼티명이 atrule.params에 있고 내부는 syntax/inherits/initial-value라는 별개
-// 디스크립터 decl이라 이 형태를 아무도 감지하지 못한다. 현재 레포에 @property 사용처가 없어 실피해는
-// 없으나, 도입 시 이 구멍이 열린다 — 향후 과제로만 기록, 이번 라운드는 미대응.
+// P2(내부 리뷰) → **I4(18R)에서 폐쇄**. `@property --color-x { … }` 등록 at-rule은 프로퍼티명이
+// atrule.params에 있어 decl.prop 기반 스캔 셋 모두가 놓쳤다(선재현 offenders 0). 이제
+// findProtectedPropertyRegistrations가 findProtectedDeclarations(핀 5파일·P4 styles/ 전체 스윕)와
+// structuralGate 양쪽에 배선돼 있다. **남는 명시 예외**: JS 런타임 `CSS.registerProperty({name:
+// '--color-x', …})`는 CSS 텍스트가 아니라 이 정적 게이트의 입력 인벤토리(styles/**/*.{scss,css}) **밖**
+// 이다 — 아래 "명시 예외 전수" describe가 이 범위를 문서·단정으로 고정한다(현재 레포 사용처 0건).
 
 // structuralGate가 보장한 darkRule 하나에 cascade(reduceEffectiveDecls — !important 우선, 동급은
 // 후행 승리)를 적용해 "다크 블록의 최종 유효 커스텀 프로퍼티 값" 맵을 만든다. 다크 selected-indicator
@@ -953,6 +1069,38 @@ describe('3블록 내 모든 custom property는 보호 접두 3종 중 하나 (P
       offenders,
       `보호 접두 밖 토큰 발견 — 새 토큰 패밀리면 PROTECTED_TOKEN_PREFIXES에 추가하라: ${offenders.join('; ')}`,
     ).toEqual([]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// I2(18R) — canonical opaque layer가 참조하는 `--shadow-xs`의 **값 자체**를 exact baseline으로 고정한다.
+// 층 1은 `var(--shadow-xs)`를 "완전 그림자로 확장되는 불투명 레이어"로 **전제**하고 통과시킨다. 그
+// 전제는 토큰 값에 달려 있는데 이전엔 아무도 검사하지 않았다: `_themes.scss`에서 `--shadow-xs: none`
+// 으로 바꾸면 실 CSS가 `box-shadow: none, inset …`이 되어 **Chrome 계산값이 none**(레이어 문법 위반으로
+// 선언 전체 폐기)인데도 선언 문자열은 그대로라 296/296 GREEN이었다. LIGHT_BASELINE과 동일한 방식으로
+// 라이트·다크 두 값을 리터럴 고정한다 — 값이 바뀌면(none·무효값·톤 변경) 여기서 즉시 RED다.
+// ─────────────────────────────────────────────────────────────────────────────
+const SHADOW_XS_BASELINE = {
+  light: '0 1px 2px rgba(0, 0, 0, 0.04)',
+  dark: '0 1px 2px rgba(0, 0, 0, 0.4)',
+};
+describe('--shadow-xs exact baseline (I2 — canonical opaque layer 전제 보호)', () => {
+  it('canonical opaque layer는 정확히 var(--shadow-xs) 하나다(전제의 대상 고정)', () => {
+    expect(CANON_SHADOW_OPAQUE_LAYER).toBe('var(--shadow-xs)');
+  });
+  it('라이트 값이 실측 리터럴과 일치 — none/무효값 치환 시 RED', () => {
+    const rootBlock = css.match(new RegExp(`:root[${CSS_WS_CLASS}]*\\{([^}]*)\\}`))[1];
+    const m = new RegExp(`--shadow-xs[${CSS_WS_CLASS}]*:[${CSS_WS_CLASS}]*([^;]+);`).exec(rootBlock);
+    expect(m, '라이트 :root 블록에 --shadow-xs 선언이 없다').not.toBeNull();
+    expect(cssTrim(m[1])).toBe(SHADOW_XS_BASELINE.light);
+  });
+  it('다크 값이 실측 리터럴과 일치 — none/무효값 치환 시 RED', () => {
+    expect(buildDarkValues(css)['shadow-xs']).toBe(SHADOW_XS_BASELINE.dark);
+  });
+  it('두 값 모두 파싱 가능한 그림자 값이다(빈 값·none류 회귀 이중 방어)', () => {
+    for (const [k, v] of Object.entries(SHADOW_XS_BASELINE)) {
+      expect(v, k).toMatch(/^0 1px 2px rgba\(0, 0, 0, 0\.[0-9]+\)$/);
+    }
   });
 });
 
@@ -985,7 +1133,9 @@ describe('다크 selected-indicator 값 시맨틱 고정 (SC 1.4.11 비텍스트
   function resolveColorValue(value, darkValuesMap, depth = 0) {
     if (value == null || depth > 5) return null;
     if (parseColor(value)) return value;
-    const m = /^var\(\s*--([a-z0-9-]+)\s*(?:,[\s\S]*)?\)$/i.exec(value.trim());
+    // I1(18R): 여기의 `\s`·trim도 CSS 공백 5종 전용으로 교체한다(같은 손실 정규화 클래스).
+    const m = new RegExp(`^var\\([${CSS_WS_CLASS}]*--([a-z0-9-]+)[${CSS_WS_CLASS}]*(?:,[\\s\\S]*)?\\)$`, 'i')
+      .exec(cssTrim(value));
     if (!m) return null;
     const next = darkValuesMap[m[1]];
     if (next == null) return null;
@@ -1276,7 +1426,7 @@ describe('게이트 자체 검증 (synthetic CSS)', () => {
       ['언더스코어 dashed-ident(14R I3)', 'var(--_name)'],
       ['escape 포함 이름(15R I4)', 'var(--\\65 x)'],
     ])('%s 는 canonical 토큰 참조가 아니다 → border color 자리에서 RED', (_label, value) => {
-      expect(CANON_SHADOW_OPAQUE_LAYER_RE.test(normalizeDeclValue(value))).toBe(false);
+      expect(CANON_VAR_REF_RE.test(normalizeDeclValue(value))).toBe(false);
       expect(classifyRelevantDecl('border', `1px solid ${value}`).syntax).toBe('non-canonical');
     });
     it('GREEN(무회귀): 정확한 var(--name)만 canonical 토큰 참조', () => {
@@ -1287,10 +1437,15 @@ describe('게이트 자체 검증 (synthetic CSS)', () => {
   });
 
   describe('canonical box-shadow 레이어 분해 — 구 splitTopLevelLayers 계약 이관', () => {
-    it('단일 레이어(핀 형태)는 레이어 1개로 모델링', () => {
-      const layers = canonicalShadowLayers('inset 0 0 0 1px var(--x)');
+    // 기대 갱신(18R I2): 이전엔 임의 토큰(`var(--x)`)도 canonical 레이어였다. 이제 허용 indicator
+    // layer는 실측 전체 문자열 하나뿐이라 토큰 이름까지 고정된다.
+    it('단일 레이어(핀 실측 전체 문자열)는 레이어 1개로 모델링', () => {
+      const layers = canonicalShadowLayers(CANON_SHADOW_INDICATOR_LAYER);
       expect(layers).toHaveLength(1);
-      expect(layers[0]).toEqual({ kind: 'inset', offsetX: 0, offsetY: 0, blur: 0, spread: 1, token: 'x' });
+      expect(layers[0]).toEqual({ kind: 'inset', offsetX: 0, offsetY: 0, blur: 0, spread: 1, token: 'color-selected-indicator' });
+    });
+    it('임의 토큰 레이어(inset 0 0 0 1px var(--x))는 더 이상 canonical이 아니다 — 18R I2 축소', () => {
+      expect(canonicalShadowLayers('inset 0 0 0 1px var(--x)')).toBeNull();
     });
     it('다중 그림자(HomeTabs 핀)는 최상위 콤마로만 분해 — var() 내부 콤마와 혼동 없음(fallback var는 애초에 canonical 아님)', () => {
       const layers = canonicalShadowLayers('var(--shadow-xs), inset 0 0 0 1px var(--color-selected-indicator)');
@@ -1308,8 +1463,14 @@ describe('게이트 자체 검증 (synthetic CSS)', () => {
   describe('canonical 인디케이터 가시성 — 구 assertVisibleInsetShadowLayer 계약 이관(10~13R 벡터 보존)', () => {
     const IND = 'color-selected-indicator';
     const ivis = (value) => evalIndicatorCss(`.X{box-shadow:${value}}`, IND).visible;
-    it('정상 형태(inset+4 length+spread>0)는 visible', () => {
-      expect(ivis(`inset 0 0 0 2px var(--${IND})`)).toBe(true);
+    it('정상 형태(핀 실측 전체 문자열)는 visible', () => {
+      expect(ivis(CANON_SHADOW_INDICATOR_LAYER)).toBe(true);
+    });
+    // 기대 갱신(18R I2, GREEN→RED): `inset 0 0 0 2px var(--…)`는 층 2 가시성 계산상 spread>0이지만
+    // **실핀에 없는 전체 문자열**이라 canonical 밖이다. "임의 길이·임의 레이어 조합 허용"이 곧 whitelist를
+    // 작은 CSS 문법으로 되돌리는 경로였으므로(I2), 폭 변경도 개발자가 알아야 할 신호로 남긴다.
+    it('실핀 밖 spread(2px)는 canonical 밖 — RED(18R I2 축소, 이전 GREEN)', () => {
+      expect(ivis(`inset 0 0 0 2px var(--${IND})`)).toBe(false);
     });
     it.each([
       ['var(--t) 단독 레이어(치환 후 불법값이면 선언 무효화)', 'var(--color-selected-indicator)'],
@@ -1326,14 +1487,19 @@ describe('게이트 자체 검증 (synthetic CSS)', () => {
     ])('RED: %s', (_label, value) => {
       expect(ivis(value)).toBe(false);
     });
-    it('spread 0은 canonical이지만 층 2 가시성 계산에서 탈락한다(층 분리 확인)', () => {
+    // 기대 갱신(18R I2): spread 0 레이어는 이제 canonical 판정 단계에서 이미 탈락한다(실측 문자열 밖).
+    // 층 분리(canonical 판정 ≠ 가시성 계산)는 border 도메인에서 계속 단정된다(width 0은 canonical).
+    it('spread 0은 canonical 밖(18R I2) — 판정 단계에서 이미 RED', () => {
       const cls = classifyRelevantDecl('box-shadow', `inset 0 0 0 0 var(--${IND})`);
-      expect(cls.syntax).toBe('canonical');
-      expect(cls.layers[0].spread).toBe(0);
+      expect(cls.syntax).toBe('non-canonical');
       expect(ivis(`inset 0 0 0 0 var(--${IND})`)).toBe(false);
     });
-    it('무회귀: 단위 있는 spread(1px)는 offset/blur가 0이어도 계속 visible', () => {
+    it('무회귀: 핀 실측 spread(1px) 형태는 계속 visible', () => {
       expect(ivis(`inset 0 0 0 1px var(--${IND})`)).toBe(true);
+    });
+    // 층 2 가시성 계산(spread>0)이 공허하지 않음을 유지 — CANONICAL_DECLS의 레이어 모델을 직접 단정한다.
+    it('canonical indicator layer 모델의 spread는 1(>0) — 층 2 가시성 입력 고정', () => {
+      expect(canonicalShadowLayers(CANON_SHADOW_INDICATOR_LAYER)[0].spread).toBeGreaterThan(0);
     });
   });
 
@@ -1992,30 +2158,312 @@ describe('17R 적대적 자가 재검토 — canonical 매칭 우회 경로 폐�
   it('셀렉터 미발견은 GREEN이 아니다(rulesFound 0 → RED)', () => {
     expect(evalBorderCss('.Y{border:1px solid var(--color-input-border)}', CIB).visible).toBe(false);
   });
-  // 명시 예외(과대 종결 금지) — 아래 두 경로는 이번 라운드에서 닫지 **못했다**. 기록만 남긴다.
-  //  ① 셀렉터 동치성: 완전 동일 문자열 비교라 `.is-on.HomeTabs__Tab`처럼 **순서만 다른 동일 복합
-  //     셀렉터**나 `:is()` 표기 변형으로 쓴 규칙은 후보에 들어오지 않는다(selector 의미론 모델 미구현).
-  //     핀 실파일은 단일 표기라 현재 실피해는 없다.
-  //  ② 다른 셀렉터·다른 파일에서 오는 cascade(더 높은 specificity의 `.Foo .HomeTabs { border: none }`)는
-  //     여전히 범위 밖이다 — 이 게이트는 "핀 셀렉터 자신의 선언이 canonical인가"만 본다.
-  //  ③ (내부 리뷰 실증) 로컬 custom property 재정의: `.X{border:… var(--color-input-border);
-  //     --color-input-border:transparent}` — 핀 게이트(evalBorderCss/evalIndicatorCss)는 border/
-  //     box-shadow 선언 자체의 canonical 형태만 보고, 그 안 `var()`가 **같은 규칙 안에서 나중에
-  //     재정의**되는지는 추적하지 않는다. 그래서 이 벡터는 핀 게이트 **단독으로는 GREEN**이다(canonical
-  //     border 셀은 그대로 유지) — 실렌더는 토큰이 transparent로 재정의돼 도장이 소멸하는데도. 이 파일
-  //     서두에 적은 "false-green이 원리적으로 불가능"은 핀 게이트 **더하기** P4 보호 네임스페이스 스윕
-  //     (findProtectedDeclarations — 아래 P4 describe)이 이 재정의 선언 자체를 별도로 걸러 전체 스위트를
-  //     RED로 만드는 **합성**에 의존한다. P4가 약화되거나(대상 파일 판정 밖) 우회되면 이 구멍이 그대로
-  //     열린다 — 핀 게이트만으로 닫힌 계약이 아님을 기록한다.
-  it('명시 예외 기록: 순서만 다른 복합 셀렉터는 후보에 안 들어온다(미폐쇄 경로 고정)', () => {
-    const res = evalBorderCss(`.X{border:1px solid ${V}}.b.a{border:none}`, CIB);
-    expect(res.visible).toBe(true); // ← 이 GREEN은 계약이 아니라 **알려진 한계**의 고정이다
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 명시 예외 **전수**(문구 축소, 18R) — 이 게이트의 보장은 "exact selector + 정적 styles 인벤토리
+// (styles/**/*.{scss,css}) 범위 내"로 한정된다. 아래 4건은 그 범위 **밖**이며 이번 라운드에서도 닫지
+// 못했다. 각 항목은 "알려진 한계"를 단정으로 고정한 것이지 계약이 아니다 — 수렴 선언 금지.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('명시 예외 전수 — 게이트 범위 밖 경로(알려진 한계 고정, 계약 아님)', () => {
+  // ① 셀렉터 동치성. M2(18R) 정정: 이전 테스트는 `.X` 핀에 무관한 `.b.a` 규칙을 붙여 "순서만 다른
+  //    동일 복합 셀렉터"를 전혀 재현하지 못했다(그냥 남남인 셀렉터라 GREEN은 당연). 실제 동치 예외는
+  //    **`.a.b` 대 `.b.a`** — CSS 의미론상 같은 요소를 고르는데 문자열 비교로는 다른 셀렉터다.
+  it('① 셀렉터 동치성: .a.b 핀에 대해 .b.a 의 override는 후보에 안 들어온다', () => {
+    const cssText = `.a.b{border:1px solid ${V}}.b.a{border:none}`;
+    const res = evaluatePinnedContract(cssText, '.a.b', { kind: 'border', token: CIB });
+    expect(res.rulesFound).toBe(1); // `.b.a` 규칙은 수집되지 않았다
+    expect(res.visible).toBe(true); // ← 알려진 한계(실렌더는 border:none)
+    // 대조: 문자열이 같으면 정상 수집돼 RED가 된다(위 GREEN이 "아무거나 GREEN"이 아님을 확인).
+    expect(evaluatePinnedContract(`.a.b{border:1px solid ${V}}.a.b{border:none}`, '.a.b',
+      { kind: 'border', token: CIB }).visible).toBe(false);
   });
-  it('명시 예외 기록: 로컬 custom property 재정의는 핀 게이트 단독으론 GREEN — false-green 불가능은 P4 합성에 의존', () => {
+  it('② 타 셀렉터 cascade: 더 높은 specificity의 override는 범위 밖', () => {
+    const cssText = `.X{border:1px solid ${V}}.Foo .X{border:none}`;
+    expect(evalBorderCss(cssText, CIB).visible).toBe(true); // ← 알려진 한계
+  });
+  it('③ 로컬 custom property 재정의: 핀 게이트 단독으론 GREEN — 폐쇄는 P4 스윕과의 합성에 의존', () => {
     const cssText = `.X{border:1px solid ${V};--color-input-border:transparent}`;
-    // 핀 게이트만 보면 canonical border 셀이 그대로라 GREEN — 계약이 아니라 **알려진 한계**의 고정이다.
-    expect(evalBorderCss(cssText, CIB).visible).toBe(true);
+    expect(evalBorderCss(cssText, CIB).visible).toBe(true); // ← 알려진 한계
     // 전체 스위트가 RED로 수렴하는 건 이 재정의 자체를 잡는 P4가 별도로 있기 때문(합성 의존).
+    // P4가 약화되거나(대상 파일 판정 밖) 우회되면 이 구멍이 그대로 열린다.
     expect(findProtectedDeclarations(cssText).length).toBeGreaterThan(0);
+  });
+  it('④ JS 런타임 CSS.registerProperty()는 정적 styles 인벤토리 밖 — @property at-rule만 폐쇄됨(I4)', () => {
+    // CSS 텍스트 경로(@property)는 I4에서 닫혔다.
+    expect(findProtectedDeclarations('@property --color-input-border{syntax:"<color>";inherits:false;initial-value:transparent}')
+      .length).toBeGreaterThan(0);
+    // 반면 동일 효과를 내는 JS 호출은 이 게이트의 입력(styles/**/*.{scss,css})에 아예 나타나지 않는다.
+    // 현재 레포 사용처 0건이라 실피해는 없으나, 도입 시 이 경로는 열려 있다 — 기록만 남긴다.
+    expect(isProtectedSweepTarget('library/theme.js')).toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 18R 상설 회귀 벡터 — I1~I4 각각의 "선재현 실측(현행 HEAD에서 false-green)" ↔ "수정 후 RED"를 그대로
+// 테스트로 굳힌다. 선재현 근거는 각 describe 머리주석에 실측값으로 기록돼 있다.
+// ─────────────────────────────────────────────────────────────────────────────
+// CSS가 공백으로 보지 않는(=ident 문자이거나 아예 불법인) JS-공백 코드포인트. 선재현에서 이 4종 각각이
+// 셀렉터·box-shadow 값·border 값 3자리 모두에서 false-green이었다(12/12).
+const NON_CSS_WS = {
+  'NBSP U+00A0': '\u00A0',
+  'EM SPACE U+2003': '\u2003',
+  'ZWNBSP U+FEFF': '\uFEFF',
+  'VERTICAL TAB U+000B': '\u000B',
+};
+describe('I1(18R) — CSS 공백 전용 정규화(손실 정규화 폐쇄)', () => {
+  it('CSS 공백 5종만 공백으로 취급한다(헬퍼 단위 계약)', () => {
+    expect(normalizeCssWhitespace(' \t\n\f\r a \t\n\f\r ')).toBe('a');
+    for (const [name, w] of Object.entries(NON_CSS_WS)) {
+      expect(cssTrim(`a${w}`), name).toBe(`a${w}`);           // trim이 삼키지 않는다
+      expect(normalizeCssWhitespace(`a${w}b`), name).toBe(`a${w}b`); // space로 바뀌지 않는다
+      expect(JS_ONLY_WS_RE.test(w), name).toBe(true);
+    }
+    expect(JS_ONLY_WS_RE.test('.HomeTabs__Tab.is-on')).toBe(false); // 실핀 셀렉터는 무영향
+  });
+
+  it.each(Object.entries(NON_CSS_WS))('셀렉터 %s: 브라우저 기준 다른 셀렉터 → 핀에 수집되지 않는다(rulesFound 0)', (_name, w) => {
+    // 선재현: 4종 전부 rulesFound=1(=`.X`로 오인해 PINNED 수집) → false-green의 진입점이었다.
+    const res = evaluatePinnedContract(`.X${w}{border:1px solid ${V}}`, '.X', { kind: 'border', token: CIB });
+    expect(res.rulesFound ?? 0).toBe(0);
+    expect(res.visible).toBe(false);
+  });
+
+  it.each(Object.entries(NON_CSS_WS))('box-shadow 값 %s: 브라우저 계산값 none인데 canonical이었다 → non-canonical RED', (_name, w) => {
+    const value = `inset${w}0 0 0 1px ${IV}`;
+    expect(classifyRelevantDecl('box-shadow', value).syntax).toBe('non-canonical');
+    expect(evalIndicatorCss(`.X{box-shadow:${value}}`, IND).visible).toBe(false);
+  });
+
+  it.each(Object.entries(NON_CSS_WS))('border 값 %s: 동일 — non-canonical RED', (_name, w) => {
+    const value = `1px${w}solid ${V}`;
+    expect(classifyRelevantDecl('border', value).syntax).toBe('non-canonical');
+    expect(evalBorderCss(`.X{border:${value}}`, CIB).visible).toBe(false);
+  });
+
+  it('토큰 값 경계의 비-CSS 공백도 JS trim으로 지워지지 않는다 — 다크 대비 단정이 RED로 떨어진다', () => {
+    // `--color-selected-indicator: #6B7280<NBSP>`는 브라우저에서 무효(토큰 미적용)인데 JS trim은
+    // 정상 hex로 둔갑시켰다. 이제 파싱 실패 → contrastOverBg 0 → 3:1 단정 RED.
+    const themes = `
+      :root { --color-bg: #FFFFFF; --color-selected-indicator: transparent; }
+      html[data-theme=dark] { --color-bg: #0E0F11; --color-selected-indicator: #6B7280\u00A0; }
+      :root { --color-alias-unused: 0; }
+    `;
+    const darkValues = buildDarkValues(themes);
+    expect(darkValues['color-selected-indicator']).toBe('#6B7280\u00A0');
+    expect(contrastOverBg(darkValues['color-selected-indicator'], darkValues['color-bg'])).toBe(0);
+  });
+
+  it('parseColor도 CSS 공백 전용 — 값 경계·구분자 NBSP는 null(과대 허용 폐쇄, 자가 재검토 발견분)', () => {
+    // 발견 경위: I1 수정 후에도 `#6B7280<NBSP>`의 다크 대비가 3.97로 통과했다 — parseColor가 여전히
+    // JS trim을 쓰고 rgba 구분자를 `\s*`로 받고 있었다(같은 클래스의 잔존 인스턴스).
+    expect(parseColor('#6B7280\u00A0')).toBeNull();                 // 값 경계
+    expect(parseColor('rgba(107,\u00A0114,128,1)')).toBeNull();     // 구분자 NBSP
+    expect(parseColor('rgba(107,\u2003114,128,1)')).toBeNull();     // 구분자 EM SPACE
+    // CSS 공백은 그대로 허용(과잉 RED 방지)
+    expect(parseColor('  #6B7280\t')).toEqual({ r: 107, g: 114, b: 128, a: 1 });
+    expect(parseColor('rgba(107,\t114,\n128, 1)')).toEqual({ r: 107, g: 114, b: 128, a: 1 });
+  });
+
+  it('_themes.scss 블록 키 추출도 CSS 공백 전용 — `--color-bg<NBSP>:`는 별개 토큰이라 키에서 빠진다', () => {
+    expect([...extractTokenKeys('--color-bg: #fff; --color-x : #000;')]).toEqual(['color-bg', 'color-x']);
+    expect([...extractTokenKeys('--color-bg\u00A0: #fff;')]).toEqual([]); // 매치 실패 → 대칭 단정이 RED
+  });
+
+  it('structuralGate 블록 형태 판정도 CSS 공백 전용 — NBSP 붙은 다크 셀렉터는 다크로 인정되지 않는다', () => {
+    const cssText = `:root{--color-a:1}html[data-theme='dark']\u00A0{--color-a:2}:root{--color-b:3}`;
+    expect(() => structuralGate(cssText)).toThrow(/2번째 블록\(다크\)/);
+    const lightNbsp = `:root\u00A0{--color-a:1}html[data-theme='dark']{--color-a:2}:root{--color-b:3}`;
+    expect(() => structuralGate(lightNbsp)).toThrow(/1번째 블록\(라이트\)/);
+  });
+});
+
+describe('I2(18R) — canonical box-shadow를 실측 전체 문자열로 축소(과대 허용 폐쇄)', () => {
+  it('허용 전체 값은 정확히 2가지 실측 문자열뿐 — 목록 고정', () => {
+    expect(CANON_SHADOW_VALUES).toEqual([
+      'inset 0 0 0 1px var(--color-selected-indicator)',
+      'var(--shadow-xs), inset 0 0 0 1px var(--color-selected-indicator)',
+    ]);
+    // 이 2가지가 곧 핀 8곳 중 box-shadow 핀 2곳의 실측 값이다(아래 "도출 근거 고정" describe와 대응).
+    expect(CANONICAL_DECLS.filter((e) => e.prop === 'box-shadow').map((e) => e.form)).toEqual(CANON_SHADOW_VALUES);
+  });
+  it('2가지 실측 문자열은 canonical + visible (무회귀)', () => {
+    for (const value of CANON_SHADOW_VALUES) {
+      expect(classifyRelevantDecl('box-shadow', value).syntax, value).toBe('canonical');
+      expect(evalIndicatorCss(`.X{box-shadow:${value}}`, IND).visible, value).toBe(true);
+    }
+  });
+  it.each([
+    ['미정의 토큰 opaque layer(브라우저는 선언 전체 폐기)', `var(--does-not-exist), ${CANON_SHADOW_INDICATOR_LAYER}`],
+    ['다른 shadow 토큰(--shadow-md)', `var(--shadow-md), ${CANON_SHADOW_INDICATOR_LAYER}`],
+    ['다른 shadow 토큰(--shadow-lg)', `var(--shadow-lg), ${CANON_SHADOW_INDICATOR_LAYER}`],
+    ['보호 접두 밖 토큰', `var(--anything), ${CANON_SHADOW_INDICATOR_LAYER}`],
+    ['레이어 순서 반전', `${CANON_SHADOW_INDICATOR_LAYER}, ${CANON_SHADOW_OPAQUE_LAYER}`],
+    ['opaque layer 중복', `${CANON_SHADOW_OPAQUE_LAYER}, ${CANON_SHADOW_OPAQUE_LAYER}, ${CANON_SHADOW_INDICATOR_LAYER}`],
+    ['indicator layer 중복', `${CANON_SHADOW_INDICATOR_LAYER}, ${CANON_SHADOW_INDICATOR_LAYER}`],
+    ['opaque layer 단독(인디케이터 소실)', CANON_SHADOW_OPAQUE_LAYER],
+    ['indicator 토큰만 다름', 'inset 0 0 0 1px var(--color-border)'],
+    ['spread만 다름(2px)', 'inset 0 0 0 2px var(--color-selected-indicator)'],
+    ['offset만 다름(1px)', 'inset 1px 0 0 1px var(--color-selected-indicator)'],
+    ['단위만 다름(0.0625rem)', 'inset 0 0 0 0.0625rem var(--color-selected-indicator)'],
+    ['콤마 뒤 공백 없음', `${CANON_SHADOW_OPAQUE_LAYER},${CANON_SHADOW_INDICATOR_LAYER}`],
+  ])('RED: %s', (_label, value) => {
+    // 선재현: 앞 두 벡터는 현행 HEAD에서 visible=true(false-green)였다.
+    expect(classifyRelevantDecl('box-shadow', value).syntax, value).toBe('non-canonical');
+    expect(evalIndicatorCss(`.X{box-shadow:${value}}`, IND).visible, value).toBe(false);
+  });
+  it('opaque layer 자리에는 var(--shadow-xs) 정확일치만 — 일반 var(--name) 패턴은 판정에 쓰이지 않는다', () => {
+    // CANON_VAR_REF_RE(needle 파서)는 var(--does-not-exist)를 여전히 매치한다 — 그러나 그 사실이
+    // 선언 값 판정에 아무 영향을 주지 않는다는 것이 I2 축소의 요지다.
+    expect(CANON_VAR_REF_RE.test('var(--does-not-exist)')).toBe(true);
+    expect(classifyRelevantDecl('box-shadow', `var(--does-not-exist), ${CANON_SHADOW_INDICATOR_LAYER}`).syntax)
+      .toBe('non-canonical');
+  });
+});
+
+describe('I3(18R) — 벤더 프리픽스 relevant 선언은 전부 non-canonical(이름 비대칭 폐쇄)', () => {
+  // 선재현: `-webkit-box-shadow: initial !important`·`-webkit-box-shadow: unset`이 인디케이터 핀에서
+  // visible=true였다 — CSS-wide로 인정된 뒤 `prop === 'box-shadow'`에 미매치해 **border 셀**을 초기화하고
+  // shadow 셀은 손대지 않았기 때문(relevance는 deprefix, evaluator는 raw 이름 = 비대칭).
+  it.each([
+    ['-webkit-box-shadow', 'initial'],
+    ['-webkit-box-shadow', 'unset'],
+    ['-webkit-box-shadow', 'inherit'],
+    ['-webkit-box-shadow', 'none'],
+    ['-moz-box-shadow', 'initial'],
+    ['-moz-border-image', 'initial'],
+    ['-webkit-border-image', 'unset'],
+    ['-o-border-width', 'initial'],
+    ['-ms-border-color', 'unset'],
+    ['-webkit-box-shadow', 'inset 0 0 0 1px var(--color-selected-indicator)'], // 값이 canonical이어도 RED
+    ['-webkit-border-image', 'url(a.png)'],
+  ])('%s: %s 는 non-canonical', (prop, value) => {
+    const cls = classifyRelevantDecl(prop, value);
+    expect(cls).toEqual({ syntax: 'non-canonical', prop, value: normalizeDeclValue(value) });
+  });
+
+  it('인디케이터 핀: -webkit-box-shadow의 CSS-wide 리셋은 이제 RED (선재현 visible=true)', () => {
+    for (const decl of ['-webkit-box-shadow:initial !important', '-webkit-box-shadow:unset', '-moz-border-image:initial']) {
+      const res = evalIndicatorCss(`.X{box-shadow:${CANON_SHADOW_INDICATOR_LAYER};${decl}}`, IND);
+      expect(res.visible, decl).toBe(false);
+      expect(res.nonCanonical.length, decl).toBeGreaterThan(0); // border 셀 초기화 부작용이 아니라 canonical 위반으로 RED
+    }
+  });
+
+  it('border 핀도 동일 — RED의 이유가 nonCanonical이다(부작용 경유 아님)', () => {
+    const res = evalBorderCss(`.X{border:1px solid ${V};-moz-border-image:initial}`, CIB);
+    expect(res.visible).toBe(false);
+    expect(res.nonCanonical.join(' ')).toMatch(/-moz-border-image: initial/);
+    expect(res.border).toEqual({ width: 1, style: 'solid', token: CIB }); // 부작용 없음(셀 그대로)
+  });
+
+  it('수집(relevance)은 계속 deprefix한다 — 수집 누락(층 1 무력화)과 판정 거부는 별개 계약', () => {
+    expect(isRelevantProp('-webkit-box-shadow')).toBe(true);
+    expect(isRelevantProp('-moz-border-image')).toBe(true);
+    expect(isRelevantProp('-ms-border-radius')).toBe(false);
+    expect(isRelevantProp('--webkit-color-x')).toBe(false); // 커스텀 프로퍼티는 deprefix 무영향
+  });
+
+  it('프리픽스 없는 실핀 형태는 무회귀 GREEN', () => {
+    expect(classifyRelevantDecl('box-shadow', CANON_SHADOW_INDICATOR_LAYER).syntax).toBe('canonical');
+    expect(classifyRelevantDecl('border', `1px solid ${V}`).syntax).toBe('canonical');
+  });
+});
+
+describe('I4(18R) — @property 등록 스윕(inventory 누락 폐쇄)', () => {
+  const AT = (name) => `@property ${name} { syntax: "<color>"; inherits: false; initial-value: transparent; }`;
+  it.each([
+    ['--color-input-border'],
+    ['--color-selected-indicator'],
+    ['--shadow-xs'],
+    ['--track-x'],
+  ])('보호 접두 등록 %s 는 offender (선재현: offenders 0)', (name) => {
+    const offenders = findProtectedDeclarations(AT(name));
+    expect(offenders).toHaveLength(1);
+    expect(offenders[0]).toMatch(/@property/);
+  });
+  it('at-rule 이름 대문자 변형(@PROPERTY)도 동일하게 검출 — I3식 이름 비대칭 재발 방지', () => {
+    expect(findProtectedDeclarations('@PROPERTY --color-x{syntax:"*";inherits:false}')).toHaveLength(1);
+  });
+  it('at-rule 이름 escape(@\\70 roperty)는 postcss가 파싱 거부 — P4 스윕이 offender로 표면화(fail-closed)', () => {
+    // 디코더를 통과시켜도 도달할 수 없는 경로다: postcss.parse가 "At-rule without name"으로 throw한다.
+    // 침묵 스킵이 아니라 sweepFileForProtectedDeclarations의 try/catch가 offender로 올려 RED가 된다.
+    expect(() => findProtectedDeclarations('@\\70 roperty --color-x{syntax:"*";inherits:false}')).toThrow();
+  });
+  it('등록 이름 자체가 escape돼도 디코딩 후 검출', () => {
+    expect(findProtectedDeclarations('@property \\--color-x{syntax:"*";inherits:false}')).toHaveLength(1);
+    expect(findProtectedDeclarations('@property --\\63 olor-x{syntax:"*";inherits:false}')).toHaveLength(1);
+  });
+  it('@media 등으로 감싸도 walkAtRules 전수 방문으로 검출', () => {
+    expect(findProtectedDeclarations(`@media (min-width:0){${AT('--color-x')}}`)).toHaveLength(1);
+  });
+  it('보호 접두 밖 이름(--brand-x)·대문자(--Color-x)는 미검출(오검출 방지)', () => {
+    expect(findProtectedDeclarations(AT('--brand-x'))).toEqual([]);
+    expect(findProtectedDeclarations(AT('--Color-x'))).toEqual([]);
+  });
+  it('다른 at-rule(@supports/@font-face)은 대상 아님', () => {
+    expect(findProtectedDeclarations('@supports (display:block){.Foo{color:red}}')).toEqual([]);
+    expect(findProtectedDeclarations('@font-face{font-family:X;src:url(a.woff2)}')).toEqual([]);
+  });
+  it('structuralGate도 @property 등록을 3블록 계약 위반으로 throw', () => {
+    const cssText = `:root{--color-a:1}html[data-theme='dark']{--color-a:2}:root{--color-b:3}${AT('--color-input-border')}`;
+    expect(() => structuralGate(cssText)).toThrow(/보호 토큰|3블록/);
+  });
+  it('P4 스윕 경로(sweepFileForProtectedDeclarations 판정 로직)와 동일 함수를 공유한다', () => {
+    // findProtectedDeclarations가 단일 판정 지점이므로 styles/ 전체 스윕도 자동으로 @property를 본다.
+    expect(findProtectedDeclarations(AT('--color-x')).length).toBeGreaterThan(0);
+  });
+  it('실 레포 styles/ 전체에 보호 접두 @property 등록이 없다(현행 0건 고정)', () => {
+    const stylesDir = resolve(__dirname, '../styles');
+    const offenders = readdirSync(stylesDir, { recursive: true }).map(String)
+      .filter(isProtectedSweepTarget)
+      .flatMap((f) => {
+        try { return findProtectedPropertyRegistrations(postcss.parse(siteCssText(f))).map((o) => `${f}: ${o}`); }
+        catch (e) { return [`${f}: 파싱 실패 — ${String((e && e.message) || e).split('\n')[0]}`]; }
+      });
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe('M1(18R) — classifyRelevantDecl이 CANONICAL_DECLS를 직접 dispatch한다(단일 정본 증명)', () => {
+  // 이전 classifier는 배열을 조회하지 않고 별도 regex(CANON_BORDER_RE 등)를 썼다 — entry의 prop/re를
+  // 훼손해도 판정이 그대로여서 "CANONICAL_DECLS가 정본"이라는 주석이 사실이 아니었다. 아래 mutation이
+  // 판정 결과를 실제로 바꾼다는 것이 단일화의 증거다(mutation 후 반드시 원복).
+  const withMutated = (id, patch, fn) => {
+    const entry = CANONICAL_DECLS.find((e) => e.id === id);
+    const backup = { ...entry };
+    try { Object.assign(entry, patch); fn(); } finally { Object.assign(entry, backup); }
+  };
+  it('canonical 결과에 판정한 entry.id가 실려 나온다(추적 가능성)', () => {
+    expect(classifyRelevantDecl('border', `1px solid ${V}`).id).toBe('border-shorthand');
+    expect(classifyRelevantDecl('box-shadow', CANON_SHADOW_VALUES[0]).id).toBe('box-shadow-indicator-only');
+    expect(classifyRelevantDecl('box-shadow', CANON_SHADOW_VALUES[1]).id).toBe('box-shadow-opaque-then-indicator');
+  });
+  it('entry.re 훼손 → border 판정이 canonical에서 non-canonical로 바뀐다', () => {
+    expect(classifyRelevantDecl('border', `1px solid ${V}`).syntax).toBe('canonical');
+    withMutated('border-shorthand', { re: /^__never__$/ }, () => {
+      expect(classifyRelevantDecl('border', `1px solid ${V}`).syntax).toBe('non-canonical');
+      expect(evalBorderCss(`.X{border:1px solid ${V}}`, CIB).visible).toBe(false);
+    });
+    expect(classifyRelevantDecl('border', `1px solid ${V}`).syntax).toBe('canonical'); // 원복 확인
+  });
+  it('entry.prop 훼손 → 같은 값이 더 이상 box-shadow에서 매치되지 않는다', () => {
+    withMutated('box-shadow-indicator-only', { prop: '__never__' }, () => {
+      expect(classifyRelevantDecl('box-shadow', CANON_SHADOW_VALUES[0]).syntax).toBe('non-canonical');
+    });
+    expect(classifyRelevantDecl('box-shadow', CANON_SHADOW_VALUES[0]).syntax).toBe('canonical');
+  });
+  it('entry.build 훼손 → 층 2 가시성 계산 입력(모델)이 바뀌어 GREEN이 무너진다', () => {
+    withMutated('box-shadow-indicator-only', { build: () => ({ form: 'box-shadow', layers: [] }) }, () => {
+      expect(evalIndicatorCss(`.X{box-shadow:${CANON_SHADOW_VALUES[0]}}`, IND).visible).toBe(false);
+    });
+    expect(evalIndicatorCss(`.X{box-shadow:${CANON_SHADOW_VALUES[0]}}`, IND).visible).toBe(true);
+  });
+  it('배열 항목 수·prop 커버리지 고정 — 근거 없는 확장 금지', () => {
+    expect(CANONICAL_DECLS.map((e) => e.id)).toEqual([
+      'border-shorthand', 'box-shadow-indicator-only', 'box-shadow-opaque-then-indicator',
+    ]);
+    expect([...new Set(CANONICAL_DECLS.map((e) => e.prop))]).toEqual(['border', 'box-shadow']);
+    for (const e of CANONICAL_DECLS) expect(typeof e.build, e.id).toBe('function');
   });
 });
