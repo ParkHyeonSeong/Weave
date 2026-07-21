@@ -334,11 +334,22 @@ const BORDER_IMAGE_PROP_RE = /^border-image(?:-(?:source|slice|width|outset|repe
 // 경계 무관이 확실한 것(radius/collapse/spacing)만 제외하고 전부 relevant다 — 논리 프로퍼티
 // (border-inline-*/border-block-*)·border-image 계열·미지의 `border-*` 신설 프로퍼티까지 자동으로
 // relevant에 들어와 canonical이 아니면 RED가 된다(15R "논리 프로퍼티 fail-closed" 계약의 일반화).
+//
+// 벤더 프리픽스 정규화(내부 리뷰 실증, 17R 이후) — 진입부에서 먼저 `-webkit-`/`-moz-`/`-ms-`/`-o-` 등
+// (`/^-[a-z]+-/`)을 벗긴 뒤 판정한다. 벗기기 전엔 `-webkit-border-image`/`-webkit-box-shadow` 같은
+// alias가 `prop.startsWith('border')`/`=== 'box-shadow'`에 안 걸려 relevant 밖으로 새 나갔다 —
+// **층 1 자체가 무력화되는 수집 누락**(선언을 relevant로 못 보면 canonical 판정이 실행되지 않아
+// 항상 GREEN). 커스텀 프로퍼티(`--foo`)는 두 번째 문자가 `-`라 `/^-[a-z]+-/`에 애초에 안 걸려 안전
+// (deprefix 무영향). 호출부는 normalizeProp(decode → lowercase)을 먼저 거친 prop을 넘기므로 파이프라인
+// 순서는 decode → lowercase → deprefix. 15R의 동명 아이디어(함수명용 VENDOR_PREFIX_RE/unprefixedFn,
+// <image> 문법 판정용)가 17R 삭제분에 함께 사라졌던 것과 별개로, 여기는 **프로퍼티 이름**용이다.
 const IRRELEVANT_BORDER_PROP_RE = /^border-(?:collapse|spacing)$|-radius$/;
+const PROP_VENDOR_PREFIX_RE = /^-[a-z]+-/;
 function isRelevantProp(prop) {
-  if (prop === 'box-shadow' || prop === 'all') return true;
-  if (!prop.startsWith('border')) return false;
-  return !IRRELEVANT_BORDER_PROP_RE.test(prop);
+  const deprefixed = prop.replace(PROP_VENDOR_PREFIX_RE, '');
+  if (deprefixed === 'box-shadow' || deprefixed === 'all') return true;
+  if (!deprefixed.startsWith('border')) return false;
+  return !IRRELEVANT_BORDER_PROP_RE.test(deprefixed);
 }
 
 // 값 정규화 — 공백 축약/trim **만** 한다(소문자화·escape 디코딩·토큰 분해 전부 없음). 대소문자와
@@ -1361,6 +1372,17 @@ describe('게이트 자체 검증 (synthetic CSS)', () => {
       expect(isRelevantProp('color')).toBe(false);
       expect(isRelevantProp('--dead-border')).toBe(false);
     });
+    // 내부 리뷰 실증 — 벗기기 전엔 `-webkit-border-image`/`-webkit-box-shadow`가 startsWith('border')/
+    // ===' box-shadow'에 안 걸려 relevant 밖으로 샜다(층 1 자체가 무력화되는 false-green). 커스텀
+    // 프로퍼티(`--foo`)는 두 번째 문자가 `-`라 deprefix가 무영향임을 함께 고정한다.
+    it('벤더 프리픽스(-webkit-/-moz-/-ms-/-o-)를 벗긴 뒤 판정 — alias도 relevant, 커스텀 프로퍼티는 무영향', () => {
+      expect(isRelevantProp('-webkit-border-image')).toBe(true);
+      expect(isRelevantProp('-webkit-box-shadow')).toBe(true);
+      expect(isRelevantProp('-moz-box-shadow')).toBe(true);
+      expect(isRelevantProp('-ms-border-radius')).toBe(false); // 벗겨도 radius는 여전히 경계 무관
+      expect(isRelevantProp('-o-border-width')).toBe(true);
+      expect(isRelevantProp('--webkit-color-x')).toBe(false); // 커스텀 프로퍼티(두 번째 문자 '-')는 deprefix 무영향
+    });
     it('border-radius만 있으면 border 선언이 전무 → initial(비가시) RED', () => {
       expect(evalBorderScss('.X{border-radius:8px;border-collapse:collapse}', TOKEN).visible).toBe(false);
     });
@@ -1921,6 +1943,22 @@ describe('17R 적대적 자가 재검토 — canonical 매칭 우회 경로 폐�
     expect(res.visible).toBe(false);
     expect(res.nonCanonical.join(' ')).toMatch(/ox-shadow: none/);
   });
+  // 내부 리뷰 실증 — isRelevantProp이 `prop.startsWith('border')`/`=== 'box-shadow'`로만 판정하던 동안
+  // `-webkit-border-image`/`-webkit-box-shadow` 같은 벤더 프리픽스 alias는 relevant 수집에서 아예
+  // 빠졌다(=층 1이 그 선언을 못 보고 지나침 → canonical 위반 판정 자체가 실행 안 돼 항상 GREEN이었다).
+  // Chrome/Safari 둘 다 이 alias를 지원하므로 실제 렌더는 도장/그림자 소멸인데 게이트는 GREEN — 상설
+  // 회귀 벡터로 고정한다(styles/ 현재 사용 0건이라 latent이나, 15R VENDOR_PREFIX_RE/unprefixedFn이 17R
+  // 삭제분에 함께 사라진 결과로 재발한 구멍이다).
+  it('relevant 수집 누락 없음: 벤더 프리픽스 alias(-webkit-border-image)도 relevant로 복원돼 RED — 이전엔 미수집 false-green', () => {
+    const res = evalBorderCss(`.X{border:1px solid ${V};-webkit-border-image:url(a.png)}`, CIB);
+    expect(res.visible).toBe(false);
+    expect(res.nonCanonical.join(' ')).toMatch(/-webkit-border-image: url\(a\.png\)/);
+  });
+  it('relevant 수집 누락 없음: 벤더 프리픽스 alias(-webkit-box-shadow)도 relevant로 복원돼 RED — 이전엔 미수집 false-green', () => {
+    const res = evalIndicatorCss(`.X{box-shadow:inset 0 0 0 1px ${IV};-webkit-box-shadow:none}`, IND);
+    expect(res.visible).toBe(false);
+    expect(res.nonCanonical.join(' ')).toMatch(/-webkit-box-shadow: none/);
+  });
   it('relevant 수집 누락 없음: 대문자 프로퍼티(BORDER)도 normalizeProp로 통합돼 판정된다', () => {
     expect(evalBorderCss(`.X{border:1px solid ${V};BORDER-COLOR:red}`, CIB).visible).toBe(false);
   });
@@ -1960,8 +1998,24 @@ describe('17R 적대적 자가 재검토 — canonical 매칭 우회 경로 폐�
   //     핀 실파일은 단일 표기라 현재 실피해는 없다.
   //  ② 다른 셀렉터·다른 파일에서 오는 cascade(더 높은 specificity의 `.Foo .HomeTabs { border: none }`)는
   //     여전히 범위 밖이다 — 이 게이트는 "핀 셀렉터 자신의 선언이 canonical인가"만 본다.
+  //  ③ (내부 리뷰 실증) 로컬 custom property 재정의: `.X{border:… var(--color-input-border);
+  //     --color-input-border:transparent}` — 핀 게이트(evalBorderCss/evalIndicatorCss)는 border/
+  //     box-shadow 선언 자체의 canonical 형태만 보고, 그 안 `var()`가 **같은 규칙 안에서 나중에
+  //     재정의**되는지는 추적하지 않는다. 그래서 이 벡터는 핀 게이트 **단독으로는 GREEN**이다(canonical
+  //     border 셀은 그대로 유지) — 실렌더는 토큰이 transparent로 재정의돼 도장이 소멸하는데도. 이 파일
+  //     서두에 적은 "false-green이 원리적으로 불가능"은 핀 게이트 **더하기** P4 보호 네임스페이스 스윕
+  //     (findProtectedDeclarations — 아래 P4 describe)이 이 재정의 선언 자체를 별도로 걸러 전체 스위트를
+  //     RED로 만드는 **합성**에 의존한다. P4가 약화되거나(대상 파일 판정 밖) 우회되면 이 구멍이 그대로
+  //     열린다 — 핀 게이트만으로 닫힌 계약이 아님을 기록한다.
   it('명시 예외 기록: 순서만 다른 복합 셀렉터는 후보에 안 들어온다(미폐쇄 경로 고정)', () => {
     const res = evalBorderCss(`.X{border:1px solid ${V}}.b.a{border:none}`, CIB);
     expect(res.visible).toBe(true); // ← 이 GREEN은 계약이 아니라 **알려진 한계**의 고정이다
+  });
+  it('명시 예외 기록: 로컬 custom property 재정의는 핀 게이트 단독으론 GREEN — false-green 불가능은 P4 합성에 의존', () => {
+    const cssText = `.X{border:1px solid ${V};--color-input-border:transparent}`;
+    // 핀 게이트만 보면 canonical border 셀이 그대로라 GREEN — 계약이 아니라 **알려진 한계**의 고정이다.
+    expect(evalBorderCss(cssText, CIB).visible).toBe(true);
+    // 전체 스위트가 RED로 수렴하는 건 이 재정의 자체를 잡는 P4가 별도로 있기 때문(합성 의존).
+    expect(findProtectedDeclarations(cssText).length).toBeGreaterThan(0);
   });
 });
