@@ -387,22 +387,49 @@ function topLevelVarTokens(value) {
   return tokens;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// I1(16R, substitution 공용 분류기) — 이전엔 계산시점 유예(deferred) 판정이 **var() 전용**이라 `env()`·
+// (지원범위)`attr()` 같은 다른 substitution 함수를 몰라 `all: env(safe-area-inset-top)`·
+// `box-shadow: inset 0 0 env(…) 1px red`를 invalid(폐기)로 흘려보냈다 → 브라우저는 이들을 유효 선언으로
+// cascade에 참여시키는데(계산시점 무효화) 게이트는 폐기해 **이전 핀이 부활**했다(false-green). CSS
+// substitution 함수(var/env/attr)는 전부 parse-time 문법검사를 computed-value time으로 유예시킨다 —
+// var()만 보던 검사를 공용 분류기로 일반화한다.
+// **파이프라인 순서 계약(한 번 unsupported면 끝까지 unsupported)**: 소비처(classifyBoxShadowDecl/
+// classifyAllDecl/parseBorderShorthand·border longhand·border-image 계열)는 전부 **구조검사 뒤에**
+// valueHasWellFormedVar를 두므로, 구조검사가 낸 invalid는 여기서 unsupported로 재분류될 뿐 그 역
+// (unsupported→invalid 재강등)은 일어나지 않는다.
+// 명시 예외(과대 종결 금지): var()는 첫 인자 <dashed-ident>+콤마 잔여까지 엄격 검증하지만(varFunctionToken),
+// env/attr는 첫 인자가 이름 ident인지만 확인하는 **최소 well-formedness**다 — 과대인식은 fail-closed(RED)
+// 방향이라 안전하고, env 인덱스·attr 타입 문법의 정밀 모델은 미구현(향후 과제).
+const SUBSTITUTION_FUNCTIONS = new Set(['var', 'env', 'attr']);
+function isSubstitutionFunction(node) {
+  return !!node && node.type === 'function' && SUBSTITUTION_FUNCTIONS.has(lowerIdentOf(node)); // 함수명 case-insensitive
+}
+function substitutionWellFormed(node) {
+  if (!isSubstitutionFunction(node)) return false;
+  if (node.unclosed) return false;
+  if (lowerIdentOf(node) === 'var') return varFunctionToken(node) != null; // var는 엄격 검증(I2/I3 재사용)
+  const args = node.nodes.filter((n) => n.type !== 'space' && n.type !== 'comment');
+  if (args.length === 0) return false;
+  const first = args[0];
+  return first.type === 'word' && !identOf(first).startsWith('--'); // env/attr 이름 = 비-dashed ident(최소 well-formedness)
+}
 // 13R 잔여1(내부 리뷰 실증, css-variables deferred validation) — CSS 스펙: 선언 값에 **well-formed
-// var()**가(깊이 무관, I2a=varFunctionToken 기준 유효한 var() 참조) 하나라도 있으면 parse-time
-// 문법검사가 computed-value time으로 유예된다 — 브라우저는 이런 선언을 폐기하지 않고 유효 선언으로
-// cascade에 참여시킨다(승리하면 계산시점에 invalid-at-computed-value로 처리돼 초기값/상속값으로
-// 귀결 — "이전 선언으로 fallback"이 아니라 "이 선언이 이겨서 계산시점에 무효화"). 아래 classifyBorder-
-// ShorthandNode/parseBorderShorthand·isValidBoxShadow 계열이 "지원 grammar 불일치"를 발견했을 때 이
-// 함수로 값 전체를 재검사해 invalid(폐기)를 unsupported(fail-closed)로 재분류한다.
-// var() 노드를 찾으면 그 자식(fallback)은 미방문 처리한다(outermostVarTokens와 동일 관례 — 존재
-// 여부만 필요하므로 fallback 내부까지 볼 필요 없고, 형제 노드 순회는 walk가 그대로 계속한다). calc()
-// 등 var 아닌 함수 노드는 자식을 계속 방문해 중첩 var(예: `calc(1px + var(--x))`)도 정상 검출한다.
+// substitution(var/env/attr)**이(깊이 무관) 하나라도 있으면 parse-time 문법검사가 computed-value time으로
+// 유예된다 — 브라우저는 이런 선언을 폐기하지 않고 유효 선언으로 cascade에 참여시킨다(승리하면 계산시점에
+// invalid-at-computed-value로 처리돼 초기값/상속값으로 귀결 — "이전 선언으로 fallback"이 아니라 "이 선언이
+// 이겨서 계산시점에 무효화"). 아래 classifyBorderShorthandNode/parseBorderShorthand·isValidBoxShadow 계열이
+// "지원 grammar 불일치"를 발견했을 때 이 함수로 값 전체를 재검사해 invalid(폐기)를 unsupported(fail-closed)로
+// 재분류한다. (함수명 valueHasWellFormedVar는 계약 안정성을 위해 유지 — 본문은 I1에서 substitution 전반으로 일반화.)
+// substitution 노드를 찾으면 그 자식(fallback)은 미방문 처리한다(존재 여부만 필요하므로 fallback 내부까지
+// 볼 필요 없고, 형제 노드 순회는 walk가 그대로 계속한다). calc() 등 substitution 아닌 함수 노드는 자식을
+// 계속 방문해 중첩 substitution(예: `calc(1px + var(--x))`)도 정상 검출한다.
 function valueHasWellFormedVar(value) {
   let found = false;
   parseValue(value).walk((node) => {
-    if (!isVarFunction(node)) return; // 함수명 case-insensitive(I3)
-    if (varFunctionToken(node) != null) found = true;
-    return false;
+    if (node.type !== 'function') return; // 비함수 노드는 계속 순회
+    if (isSubstitutionFunction(node)) { if (substitutionWellFormed(node)) found = true; return false; }
+    return; // calc 등 substitution 아닌 함수는 자식(중첩 substitution) 계속 방문
   });
   return found;
 }
@@ -463,6 +490,33 @@ function wordsOf(value) {
   return parseValue(value).nodes.filter((n) => n.type === 'word').map(identOf); // I4(15R) decode 1회
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// I2(16R, 판정 기본값 반전) — **strict hex 판정 공용화**. 이전엔 `w[0]==='#'` 5곳(assertVisibleInset-
+// ShadowLayer·classifyShadowLayer·isColorWord·classifyBorderShorthandNode·classifyComponentValue)이
+// **`#`으로 시작하면 전부 유효 색**으로 인정하는 blocklist였다 — `#xyz`(비-hex 문자)·`#12`(2자리)·
+// `#12345`(5자리) 같은 무효 hex가 유효 shorthand로 오인돼 border-image reset 등 **부작용**을 냈고
+// (Chrome은 이들을 폐기해 이전 상태 유지), shadow에선 무효 색이 유효 레이어로 통과했다. "증명된 hex만
+// 유효"로 반전(whitelist): CSS <hex-color>는 정확히 3/4/6/8 hex digit이다(대소문자 무관). 자릿수 불일치·
+// 비-hex 문자·`#` 단독은 색이 아님(false) → 각 소비처에서 폐기/미지 처리로 흘러 fail-closed된다.
+const STRICT_HEX_RE = /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+function isHexColor(word) { return STRICT_HEX_RE.test(String(word)); }
+// ─────────────────────────────────────────────────────────────────────────────
+// [근본 1](16R) 판정 기본값 반전 — **whitelist-first**. 매 라운드 새 false-green의 공통 근본은 엔진이
+// "모르는 입력"을 확정 판정하는 것이다(env 미인식·`#`=hex 인정·색함수 구분자 무시). 원칙: **증명된 것만
+// valid, 증명된 위반만 invalid, 그 외 전부 uncertain(부작용 없음 + 가시성 fail-closed RED)**.
+// 이 파일의 leaf 판정은 두 층으로 이 계약을 실현한다:
+//   · **구조 삼분 classifier**(classifyShadowLayer·classifyBorderShorthandNode·classifyComponentValue·
+//     classifyImageNode·classifyBorderImage{Longhand,Shorthand})는 valid | unsupported(=uncertain:
+//     부작용 금지·fail-closed) | invalid(폐기)를 직접 반환한다. 미지 word/함수의 **기본 낙착지는 invalid
+//     또는 unsupported**이지 valid가 아니다(위 함수들의 default 분기가 이를 강제).
+//   · **순수 whitelist leaf**(isHexColor·isColorWord·isLengthWord·isValidColorFunctionNode)는 "증명된
+//     valid만 true"인 boolean이다 — false는 위 3분 classifier가 invalid(순수 문법 위반→폐기) 또는
+//     unsupported(substitution 포함→deferred, valueHasWellFormedVar 재분류)로 소비한다. 즉 boolean leaf의
+//     false가 3번째 값(uncertain)으로 자연 승격된다.
+// I1(env 미인식)·I2(`#` strict hex)·I3(구분자/인자수)가 이 반전의 구체 사례다. 아래 fuzz 배터리(근본2)가
+// 이 기본값이 미래 입력에도 유지되는지(미지 입력이 절대 valid로 확정되지 않는지) 자동 방어한다.
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Important 2(외부 검수 10라운드) — outermostVarTokens만으로는 "토큰을 쓰는지"만 볼 뿐 그 결과가
 // 실제로 눈에 보이는 인디케이터인지는 안 본다. `box-shadow: var(--t)`(치환 후 불법값이면 선언 자체가
 // 무효화돼 box-shadow가 `none`처럼 작동)나 `inset 0 0 0 0 var(--t)`(spread 0 — 색이 뭐든 렌더 폭이
@@ -493,7 +547,7 @@ function assertVisibleInsetShadowLayer(layerValue) {
     if (n.type === 'word') {
       const ident = identOf(n); // I4(15R) — 값 식별자 decode 1회(escape된 inset/색키워드 인정)
       const w = ident.toLowerCase();
-      return w === 'inset' || isLengthWord(ident) || w[0] === '#' || COLOR_KEYWORDS.has(w);
+      return w === 'inset' || isLengthWord(ident) || isHexColor(w) || COLOR_KEYWORDS.has(w); // I2(16R) strict hex
     }
     if (n.type === 'function') return COLOR_FUNCTIONS.has(lowerIdentOf(n));
     return false;
@@ -542,8 +596,8 @@ function classifyShadowLayer(layerValue) {
       const w = ident.toLowerCase();
       if (w === 'inset') { insetCount += 1; roles.push('inset'); continue; }
       if (isLengthWord(ident)) { lengths.push(ident); roles.push('length'); continue; }
-      if (w[0] === '#' || COLOR_KEYWORDS.has(w)) { colorCount += 1; roles.push('color'); continue; }
-      return 'invalid'; // 미지 word = 확실한 문법 위반
+      if (isHexColor(w) || COLOR_KEYWORDS.has(w)) { colorCount += 1; roles.push('color'); continue; } // I2(16R) strict hex
+      return 'invalid'; // 미지 word = 확실한 문법 위반(무효 hex 포함)
     }
     if (n.type === 'function') {
       if (n.unclosed) return 'invalid'; // 닫히지 않은 함수 = 문법 자체 파탄
@@ -715,7 +769,7 @@ function isNumberPercentAngle(word) {
 }
 function isColorWord(word) {
   const w = String(word).toLowerCase();
-  return w[0] === '#' || w === 'transparent' || w === 'currentcolor' || NAMED_COLORS.has(w) || SYSTEM_COLORS.has(w);
+  return isHexColor(w) || w === 'transparent' || w === 'currentcolor' || NAMED_COLORS.has(w) || SYSTEM_COLORS.has(w); // I2(16R) strict hex
 }
 // I3(14R) — 색 함수 내부 문법 검증(재귀). 이전엔 함수명이 COLOR_FUNCTIONS에 있으면 내부를 안 보고 유효로
 // 통과시켜 `rgb(from junk r g b)`(relative-color origin이 미지 ident junk)도 유효로 오인했다(false-green).
@@ -740,11 +794,30 @@ function splitCommaGroups(nodes) {
   }
   return groups;
 }
+// I3(16R, 판정 기본값 반전) — 색 함수 top-level **구분자(콤마/슬래시) 구조** 검증. 이전엔 채널 loop가 모든
+// div를 위치·개수 무관 `continue`로 무시해 `rgb(1 2 3 / / 1)`·`hsl(0 50% 50% / / 1)`(이중 슬래시)·`rgb(1,,3)`
+// (이중 콤마) 같은 명백한 문법 위반을 valid로 통과시켰다(최소 채널 개수만 맞으면 인정하는 blocklist). CSS
+// 색 함수의 구분자는 **반드시 값 사이에 하나씩** 온다 — 선행/후행/연속 구분자는 불법이고, 슬래시(alpha
+// 구분자)는 COLOR_FUNCTIONS 전 함수에서 한 함수 안에 최대 1개다. "증명된 구분자 배치만 유효"로 반전(whitelist).
+// (inner는 space/comment가 제거된 top-level 노드 — 중첩 함수의 구분자는 그 자식 노드 안이라 무관.)
+function colorFunctionSeparatorsValid(inner) {
+  let slashes = 0;
+  for (let i = 0; i < inner.length; i += 1) {
+    const n = inner[i];
+    if (n.type !== 'div') continue;
+    if (n.value === '/') slashes += 1;
+    const prev = inner[i - 1];
+    const next = inner[i + 1];
+    if (!prev || prev.type === 'div' || !next || next.type === 'div') return false; // 선행/후행/연속 구분자 = 불법
+  }
+  return slashes <= 1;
+}
 function isValidColorFunctionNode(node) {
   if (isVarFunction(node)) return varFunctionToken(node) != null;
   if (!node || node.type !== 'function' || node.unclosed || !COLOR_FUNCTIONS.has(lowerIdentOf(node))) return false;
   const fn = lowerIdentOf(node);
   const inner = node.nodes.filter((n) => n.type !== 'space' && n.type !== 'comment');
+  if (!colorFunctionSeparatorsValid(inner)) return false; // I3(16R) — 구분자 구조 먼저 검증
   let channels = 0;
   for (let i = 0; i < inner.length; i += 1) {
     const n = inner[i];
@@ -769,9 +842,10 @@ function isValidColorFunctionNode(node) {
   }
   if (fn === 'color-mix') {
     // `color-mix( <color-interpolation-method> , <color> [<percentage>]? , <color> [<percentage>]? )`
-    // → 최소 3그룹(보간법 + 색 2개). 그룹이 모자라면 인자 부족 = 문법 위반.
+    // → **정확히 3그룹**(보간법 + 색 2개). I3(16R): 이전엔 `>= 3`이라 `color-mix(in srgb, red, blue, green)`
+    // (색 3개=4그룹)를 valid로 통과시켰다 — color-mix는 정확히 2색만 받으므로 3그룹 초과·미만 모두 문법 위반.
     const groups = splitCommaGroups(inner);
-    if (groups.length < 3 || groups.some((g) => g.length === 0)) return false;
+    if (groups.length !== 3 || groups.some((g) => g.length === 0)) return false;
     return true;
   }
   const min = COLOR_FUNCTION_MIN_CHANNELS[fn];
@@ -1025,8 +1099,8 @@ function classifyBorderShorthandNode(node) {
     if (CSS_WIDE_KEYWORDS.has(w)) return { invalid: true }; // I2 — 다값 문맥의 CSS-wide = 불법
     if (BORDER_STYLE_KEYWORDS.has(w)) return { slot: 'style', value: ident };
     if (BORDER_WIDTH_KEYWORDS.has(w) || isLengthWord(ident)) return { slot: 'width', value: ident };
-    if (w[0] === '#' || COLOR_KEYWORDS.has(w)) return { slot: 'color', value: ident };
-    return { invalid: true }; // 미지 키워드·unitless 비영 length = 불법 문법(폐기)
+    if (isHexColor(w) || COLOR_KEYWORDS.has(w)) return { slot: 'color', value: ident }; // I2(16R) strict hex
+    return { invalid: true }; // 미지 키워드·무효 hex·unitless 비영 length = 불법 문법(폐기)
   }
   if (node.type === 'function') {
     if (node.unclosed) return { invalid: true }; // 닫히지 않은 함수 = 문법 자체 파탄
@@ -1170,7 +1244,7 @@ function classifyComponentValue(component, group) {
     if (COLOR_FUNCTIONS.has(lowerIdentOf(node))) { if (!isValidColorFunctionNode(node)) return { value: group, unsupported: true, invalid: true }; return { value: group, unsupported: false }; } // I3 색 함수 내부 문법
     return { value: group, unsupported: true }; // 색 아닌 함수 = 지원밖(fail-closed)
   }
-  if (ident != null && (ident[0] === '#' || COLOR_KEYWORDS.has(ident.toLowerCase()))) return { value: ident, unsupported: false };
+  if (ident != null && (isHexColor(ident) || COLOR_KEYWORDS.has(ident.toLowerCase()))) return { value: ident, unsupported: false }; // I2(16R) strict hex
   return { value: group, unsupported: true, invalid: true };
 }
 
@@ -3388,5 +3462,192 @@ describe('15R 적대적 자가 재검토 — 구조 단정(휴리스틱 재유�
   it('명시 예외 B: 단위만 다른 0(`outset:0px` vs initial `0`)은 initial 동등으로 접지 않는다(fail-closed)', () => {
     expect(classifyBorderImageLonghand('outset', '0px').kind).toBe('active');
     expect(r15b(`.X{border:1px solid ${R15_V};border-image-outset:0px}`)).toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 16R — 3건 수리 + 판정 기본값 반전(whitelist-first). 외부 검수가 세 false-green을 headless Chrome
+// 계산값과 대조했다 — **브라우저 의미론이 정답 기준**이다. 아래 전이는 전부 공용 evaluator를 경유한다.
+// 각 it 위 "선재현"은 수정 전 게이트가 낸 값(= false-green/false-red의 실체)이다.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('16R I1 — substitution 함수(var/env/attr) 공용 인식 — env/attr도 deferred(계산시점 유예)', () => {
+  // I1a 선재현: true(false-green). `all: env(safe-area-inset-top)`가 var-only deferred 검사에 안 걸려
+  // "비 CSS-wide → 불법 → 폐기(무동작)"로 흘러 border가 살아남았다. Chrome: env 포함 all은 폐기되지 않고
+  // cascade 참여 → 계산시점에 border-style:none.
+  it('I1a RED: border — all: env(...) 는 deferred로 참여해 perimeter fail-closed', () => {
+    expect(r15b(`.X{border:1px solid ${R15_V};all:env(safe-area-inset-top)}`)).toBe(false);
+  });
+  // I1b 선재현: true(false-green). box-shadow도 동일.
+  it('I1b RED: indicator — all: env(...) 는 deferred로 참여해 box-shadow fail-closed', () => {
+    expect(r15i(`.X{box-shadow:inset 0 0 0 1px ${R15_IV};all:env(safe-area-inset-top)}`)).toBe(false);
+  });
+  // I1c 선재현: true(false-green). env가 length 자리에 오면 게이트는 unknown role로 두고 length 연속성
+  // 검사에서 invalid로 강등 → 폐기 → 이전 토큰 shadow 부활. Chrome: env 포함 선언은 유효 winner로 적용.
+  it('I1c RED: 후행 box-shadow에 env(length 자리) — deferred로 이겨 이전 토큰 shadow 부활 금지', () => {
+    expect(r15i(`.X{box-shadow:inset 0 0 0 1px ${R15_IV};box-shadow:inset 0 0 env(safe-area-inset-top,3px) 1px red}`)).toBe(false);
+  });
+});
+describe('16R I2 — strict hex 판정(정확히 3/4/6/8 digit) — `#` blocklist 반전', () => {
+  // I2 선재현: true(false-green). `border: #xyz`가 유효 shorthand로 오인 → 활성 border-image reset →
+  // important 토큰 longhand가 드러나 GREEN. Chrome: `#xyz` 폐기(비-hex 문자) → 선언 폐기 → border-image
+  // 유지 → 도장 활성 → 비가시. (important는 성분 longhand에 건다 — M13 패턴.)
+  it('I2 RED: 무효 hex(#xyz) shorthand는 활성 border-image를 reset하지 않는다', () => {
+    const scss = `.X{border-width:1px !important;border-style:solid !important;border-color:${R15_V} !important;`
+      + 'border-image:url(a.png);border:#xyz}';
+    expect(r15b(scss)).toBe(false);
+  });
+  it('I2 GREEN(대조): 유효 hex(#abc)는 여전히 유효 색 — shorthand 정상(무회귀)', () => {
+    // 유효 hex는 색 슬롯으로 인정되어야 한다(색이 토큰이 아니므로 perimeter는 여전히 RED지만, 무효 강등은 안 됨).
+    expect(classifyBorderShorthandNode(valueParser('#abc').nodes[0])).toEqual({ slot: 'color', value: '#abc' });
+    expect(classifyBorderShorthandNode(valueParser('#aabbccdd').nodes[0])).toEqual({ slot: 'color', value: '#aabbccdd' });
+  });
+});
+describe('16R I3 — 색함수 구분자·인자수 grammar — 무시 반전', () => {
+  // I3a 선재현: true(false-green). `rgb(1 2 3 / / 1)`(이중 슬래시)가 유효 색으로 오인 → border-image reset.
+  // Chrome: 이중 슬래시 = 문법 위반 → 선언 폐기 → border-image 유지 → 비가시.
+  it('I3a RED(무효 shorthand→border-image 유지): 이중 슬래시 색함수는 reset하지 않는다', () => {
+    const scss = `.X{border-width:1px !important;border-style:solid !important;border-color:${R15_V} !important;`
+      + 'border-image:url(a.png);border:rgb(1 2 3 / / 1)}';
+    expect(r15b(scss)).toBe(false);
+  });
+  // I3b 선재현: false(false-red). 후행 `hsl(0 50% 50% / / 1)`가 유효로 오인돼 cascade 승리(색=hsl, 토큰 아님)
+  // → RED. Chrome: 이중 슬래시 폐기 → 이전 토큰 shadow가 fallback으로 살아남 → 가시.
+  it('I3b GREEN(무효 후행 shadow→이전 토큰 fallback): 이중 슬래시 색함수는 폐기돼 이전 토큰이 이긴다', () => {
+    expect(r15i(`.X{box-shadow:inset 0 0 0 1px ${R15_IV};box-shadow:inset 0 0 0 1px hsl(0 50% 50% / / 1)}`)).toBe(true);
+  });
+  // I3c 선재현: true(false-green). `color-mix(in srgb, red, blue, green)`(색 3개=4그룹)가 유효로 오인 → reset.
+  // Chrome: color-mix는 정확히 2색 → 4그룹은 문법 위반 → 폐기 → border-image 유지 → 비가시.
+  it('I3c RED(색 개수 초과 color-mix→border-image 유지)', () => {
+    const scss = `.X{border-width:1px !important;border-style:solid !important;border-color:${R15_V} !important;`
+      + 'border-image:url(a.png);border:color-mix(in srgb, red, blue, green)}';
+    expect(r15b(scss)).toBe(false);
+  });
+  it('I3d GREEN(정상값 무회귀): 유효 토큰 shorthand는 그대로 가시', () => {
+    expect(r15b(`.X{border:1px solid ${R15_V}}`)).toBe(true);
+  });
+});
+describe('16R 근본1 — 판정 기본값 반전(whitelist-first) leaf 단위', () => {
+  it('isHexColor: 정확히 3/4/6/8 hex digit만 유효(자릿수·비-hex 문자 반전)', () => {
+    for (const g of ['#abc', '#abcd', '#aabbcc', '#aabbccdd', '#ABC', '#AABBCC', '#AbCd']) expect(isHexColor(g), g).toBe(true);
+    for (const r of ['#xyz', '#12', '#12345', '#1234567', '#', '#gggggg', '#abcde', '#ab', 'abc', '#abcg']) expect(isHexColor(r), r).toBe(false);
+  });
+  it('isColorWord: strict hex 반영 — #xyz는 색 아님, #abc는 색(named/system은 무회귀)', () => {
+    expect(isColorWord('#abc')).toBe(true);
+    expect(isColorWord('#xyz')).toBe(false);
+    expect(isColorWord('#12')).toBe(false);
+    expect(isColorWord('red')).toBe(true);
+    expect(isColorWord('AccentColor')).toBe(true); // 시스템 색 무회귀
+  });
+  it('substitution 공용 분류기: var/env/attr well-formed 인식(대소문자·fallback 무관), 이름 없으면 미인식', () => {
+    expect(isSubstitutionFunction(valueParser('env(x)').nodes[0])).toBe(true);
+    expect(isSubstitutionFunction(valueParser('ATTR(x)').nodes[0])).toBe(true);
+    expect(isSubstitutionFunction(valueParser('calc(1px)').nodes[0])).toBe(false);
+    expect(substitutionWellFormed(valueParser('env(safe-area-inset-top)').nodes[0])).toBe(true);
+    expect(substitutionWellFormed(valueParser('env(safe-area-inset-top, 3px)').nodes[0])).toBe(true);
+    expect(substitutionWellFormed(valueParser('attr(data-x)').nodes[0])).toBe(true);
+    expect(substitutionWellFormed(valueParser('env()').nodes[0])).toBe(false); // 이름 없음
+    expect(substitutionWellFormed(valueParser('env(--x)').nodes[0])).toBe(false); // dashed는 env 이름꼴 아님
+    expect(substitutionWellFormed(valueParser('calc(1px)').nodes[0])).toBe(false); // substitution 아님
+  });
+  it('valueHasWellFormedVar: env/attr도 deferred 신호로 일반화(var 계약 무회귀)', () => {
+    expect(valueHasWellFormedVar('env(safe-area-inset-top)')).toBe(true);
+    expect(valueHasWellFormedVar('attr(data-x)')).toBe(true);
+    expect(valueHasWellFormedVar('calc(1px + env(safe-area-inset-top))')).toBe(true); // 중첩
+    expect(valueHasWellFormedVar('var(--x)')).toBe(true); // 무회귀
+    expect(valueHasWellFormedVar('var(--x, #ccc)')).toBe(true);
+    expect(valueHasWellFormedVar('1px solid red')).toBe(false);
+    expect(valueHasWellFormedVar('env()')).toBe(false); // 이름 없는 substitution은 deferred 아님
+    expect(valueHasWellFormedVar('var(--x garbage)')).toBe(false); // 무효 var 문법(I2a 계약 유지)
+  });
+  it('I3 색함수 구분자 grammar — 이중/선행/후행 구분자·2슬래시 거부, 정상 배치 인정', () => {
+    for (const r of ['rgb(1 2 3 / / 1)', 'rgb(1,,3)', 'hsl(0 50% 50% / / 1)', 'rgb(/1 2 3)', 'rgb(1 2 3/)', 'rgb(1 2 3 / 0.5 / 0.5)'])
+      expect(isValidColorFunctionNode(valueParser(r).nodes[0]), r).toBe(false);
+    for (const g of ['rgb(1 2 3)', 'rgb(1, 2, 3)', 'rgb(1 2 3 / 0.5)', 'rgba(94, 106, 210, 0.1)', 'hsl(0 50% 50%)', 'rgb(from red r g b / 0.5)'])
+      expect(isValidColorFunctionNode(valueParser(g).nodes[0]), g).toBe(true);
+  });
+  it('I3 color-mix 인자수 — 정확히 3그룹만(초과·미만 거부)', () => {
+    expect(isValidColorFunctionNode(valueParser('color-mix(in srgb, red, blue)').nodes[0])).toBe(true);
+    expect(isValidColorFunctionNode(valueParser('color-mix(in srgb, red 40%, blue)').nodes[0])).toBe(true);
+    expect(isValidColorFunctionNode(valueParser('color-mix(in srgb, red, blue, green)').nodes[0])).toBe(false); // 4그룹
+    expect(isValidColorFunctionNode(valueParser('color-mix(in srgb, red)').nodes[0])).toBe(false); // 2그룹
+    expect(isValidColorFunctionNode(valueParser('color-mix(in srgb)').nodes[0])).toBe(false); // 1그룹
+  });
+});
+// ─────────────────────────────────────────────────────────────────────────────
+// [근본 2](16R) 미지-입력 fuzz 배터리 — 다음 라운드 선제 방어선. 확장 가능한 상수 배열을 각 분류기와
+// 공용 evaluator에 투입해 (a) 어느 것도 valid로 확정되지 않고 (b) evaluator에서 부작용(border-image
+// reset) 없이 (c) 가시성이 fail-closed RED임을 단정한다. 새 CSS 문법(미래 색함수·미지 단위 등)이 나와도
+// 이 게이트가 있으면 자동으로 안전 착지한다. **새 미지 벡터는 이 배열에 추가만 하면 전 분류기·evaluator에
+// 자동 투입된다.**
+// 명시 예외(과대 종결 금지): Sass가 컴파일 단계에서 선(先)거부하는 벡터(무효 길이 hex `#12`·raw 이중
+// 구분자 `,,`·`/ /` 등)는 PINNED 실경로(항상 Sass compile)에 애초에 도달할 수 없으므로 **분류기 층에서만**
+// 검증하고 evaluator 층은 Sass 표현 가능한 부분집합에만 투입한다(compiles 필터).
+// ─────────────────────────────────────────────────────────────────────────────
+const UNKNOWN_INPUT_BATTERY = [
+  // 존재하지 않는 함수
+  'zzz()', 'foobar()', 'qux(1, 2)', 'attrx(data-x)', 'foo-bar-baz()',
+  // 미래형/미등록 색·이미지 함수(실존이라도 우리 목록 밖 → fail-closed)
+  'oklab4()', 'lch2(1 2 3)', 'color-contrast(red vs blue)', 'light-dark(#fff, #000)', 'super-gradient(red, blue)',
+  // 색함수 구분자/인자수 위반
+  'rgb(1 2 3 / / 1)', 'hsl(0 50% 50% / / 1)', 'rgb(1,,3)', 'color-mix(in srgb, red, blue, green)', 'color-mix(in srgb)', 'rgb(from red)',
+  // 무효 hex(자릿수·비-hex 문자)
+  '#xyz', '#12', '#12345', '#1234567', '#', '#gggggg',
+  // 미지 단위·각도 오용·미지 ident
+  '5xyz', '10flex', '3quux', '123deg', 'notacolor', 'bluish', 'foo-bar-baz',
+  // near-miss CSS-wide(오타)
+  'inherits', 'initiall',
+  // 비정상 구분자·잔여 토큰·문자열
+  ',,', '/ /', '/ 1 /', 'url(x) url(y)', '"astring"',
+];
+describe('16R 근본2 — 미지-입력 fuzz 배터리(다음 라운드 선제 방어)', () => {
+  it(`배터리 크기 ≥ 30 (현재 ${UNKNOWN_INPUT_BATTERY.length}종, 확장 가능)`, () => {
+    expect(UNKNOWN_INPUT_BATTERY.length).toBeGreaterThanOrEqual(30);
+  });
+  it('분류기 층 — 미지 입력은 절대 valid로 확정되지 않는다(색함수·hex·색·길이·box-shadow·border·border-image·성분)', () => {
+    for (const U of UNKNOWN_INPUT_BATTERY) {
+      const first = valueParser(U).nodes[0];
+      // 순수 whitelist leaf — 증명된 valid만 true
+      expect(isValidColorFunctionNode(first), `colorfn:${U}`).toBe(false);
+      expect(isHexColor(U), `hex:${U}`).toBe(false);
+      expect(isColorWord(U), `color:${U}`).toBe(false);
+      expect(isLengthWord(U), `len:${U}`).toBe(false);
+      // box-shadow 값 — 절대 valid 아님(invalid 또는 unsupported)
+      expect(classifyBoxShadowValue(U), `bs:${U}`).not.toBe('valid');
+      expect(classifyBoxShadowValue(`inset 0 0 0 1px ${U}`), `bs-color:${U}`).not.toBe('valid');
+      // border shorthand — clean 유효 배정 금지(invalid 또는 성분 unsupported)
+      const pb = parseBorderShorthand(U);
+      expect(pb.invalid || pb.width.unsupported || pb.style.unsupported || pb.color.unsupported, `border:${U}`).toBe(true);
+      // border-image — 부작용(active 도장/reset) 절대 금지 → invalid 또는 unsupported만
+      expect(['active', 'reset'], `bi-short:${U}`).not.toContain(classifyBorderImageShorthand(U).kind);
+      expect(['active', 'reset'], `bi-source:${U}`).not.toContain(classifyBorderImageLonghand('source', U).kind);
+      // 성분 값 — clean 유효 금지
+      const cv = classifyComponentValue('color', U);
+      expect(cv.invalid || cv.unsupported, `component:${U}`).toBe(true);
+    }
+  });
+  it('공용 evaluator 층 — Sass 표현 가능한 미지 입력은 부작용 없음 + 가시성 RED', () => {
+    const T = 'color-input-border';
+    const TV = 'var(--color-input-border)';
+    const IND = 'color-selected-indicator';
+    const compiles = (scss) => { try { compileString(scss); return true; } catch { return false; } };
+    // evaluator 루프가 쓰는 4개 SCSS 구성이 전부 Sass 컴파일되는 벡터만 추린다(나머지는 분류기 층에서 검증됨).
+    const build = (U) => ({
+      noReset: `.X{border-width:1px !important;border-style:solid !important;border-color:${TV} !important;border-image:url(a.png);border:${U}}`,
+      borderAlone: `.X{border:1px solid ${U}}`,
+      bsAlone: `.X{box-shadow:${U}}`,
+      bsColor: `.X{box-shadow:inset 0 0 0 1px ${U}}`,
+    });
+    const safe = UNKNOWN_INPUT_BATTERY.filter((U) => Object.values(build(U)).every(compiles));
+    expect(safe.length, 'Sass 표현 가능 벡터 다수').toBeGreaterThanOrEqual(20);
+    for (const U of safe) {
+      const s = build(U);
+      // 부작용 없음 — 활성 border-image를 절대 reset하지 않는다(리셋됐다면 important 토큰 longhand가
+      // 드러나 GREEN이 됐을 것 → visible===false가 무-리셋의 증거, M13 패턴).
+      expect(evalBorderScss(s.noReset, T).visible, `no-reset:${U}`).toBe(false);
+      // 가시성 RED — 미지 입력은 절대 가시 보더/인디케이터를 조작하지 않는다.
+      expect(evalBorderScss(s.borderAlone, T).visible, `border-red:${U}`).toBe(false);
+      expect(evalIndicatorScss(s.bsAlone, IND).visible, `bs-red:${U}`).toBe(false);
+      expect(evalIndicatorScss(s.bsColor, IND).visible, `bs-color-red:${U}`).toBe(false);
+    }
   });
 });
