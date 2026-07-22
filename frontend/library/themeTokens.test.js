@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { createHash } from 'node:crypto';
 import { compile, compileString } from 'sass';
 import postcss from 'postcss';
 
@@ -31,16 +32,19 @@ const JS_ONLY_WS_RE = new RegExp(`[^\\S${CSS_WS_CLASS}]`);
 const css = compile(resolve(__dirname, '../styles/_themes.scss')).css;
 // ⚠️ sass 1.97은 attribute selector의 불필요한 따옴표를 제거한다: html[data-theme=dark]
 //    (따옴표 필수 매칭이면 별칭 블록을 dark로 오인 — 리뷰 재현 [52,5]) — unquoted 허용 필수.
-// I1 적용: 키 추출의 `\s*`도 CSS 공백 5종 전용이다 — `--color-bg<NBSP>: #fff`는 실제로는 이름이
-// `--color-bg<NBSP>`인 **별개 토큰**인데 `\s*`는 이를 `--color-bg`로 오인해 대칭/베이스라인 검사를
-// 통째로 우회시켰다. 이제 매치 자체가 실패해 키가 집합에서 빠지고 대칭 단정이 RED가 된다.
-const THEME_BLOCK_RE = new RegExp(`(?::root|html\\[data-theme=(?:dark|["']dark["'])\\])[${CSS_WS_CLASS}]*\\{([^}]*)\\}`, 'g');
-// 블록 본문 → 선언된 --토큰 키 집합(접두 `--` 제외). 공백은 CSS 5종만 허용한다(I1).
+// I1(20R) — 토큰 identity 디코딩 단일화. 이전엔 라이트/다크/별칭 키 집합을 이 **raw 정규식**
+// (extractTokenKeys)으로 뽑았는데, shape 검사·baseline 추출은 decodeCssIdentifier로 escape를 디코딩해
+// 읽어서 **같은 토큰이 두 표현으로 갈렸다**: 별칭 블록의 `-\-color-bg`(실이름 --color-bg)는 raw 텍스트에
+// `--`가 연속으로 안 남아 별칭 키에서 빠져 배타성 검사를 통과했다(라이트 재정의 침묵 오염 = false-green).
+// 이제 light/dark/aliases는 아래 decodedThemeKeySets(structuralGate 3블록 + buildBlockValues 디코딩)로
+// **단일 파생**되고 — shape·대칭·배타성·baseline이 전부 한 키 맵을 공유한다 — extractTokenKeys는 그
+// false-green을 대조하는 **선재현 witness 전용**으로만 남는다(파생 경로 아님). 공백은 CSS 5종만 허용한다
+// (I1(18R)) — `--color-bg<NBSP>:`는 별개 토큰이라 키에서 빠진다.
 function extractTokenKeys(blockBody) {
   return new Set([...String(blockBody).matchAll(new RegExp(`--([a-z0-9-]+)[${CSS_WS_CLASS}]*:`, 'g'))].map((k) => k[1]));
 }
-const blocks = [...css.matchAll(THEME_BLOCK_RE)].map((m) => extractTokenKeys(m[1]));
-const [light, dark, aliases = new Set()] = blocks;
+// ⚠️ light/dark/aliases 파생은 structuralGate/buildBlockValues 정의 이후로 이동했다(decodedThemeKeySets,
+//    아래 buildDarkValues 직후). 이 describe들은 전부 deferred it() 안에서 참조하므로 전방 선언이어도 안전.
 
 describe('_themes.scss 토큰 대칭', () => {
   it('라이트/다크 블록이 존재하고 비어있지 않다', () => {
@@ -60,13 +64,56 @@ function keyIntersection(setA, setB) {
   return [...setA].filter((k) => setB.has(k));
 }
 
-describe('별칭 블록(3번째) 키가 라이트 블록과 배타적이다 (P1 — specificity 재선언 침묵 방지)', () => {
+describe('별칭 블록(3번째) 키가 라이트·다크 블록과 배타적이다 (P1 — specificity 재선언 침묵 방지)', () => {
   // 별칭 블록은 라이트와 동일하게 ':root' 단독 셀렉터라 specificity가 같다 — 별칭이 라이트 키를
   // 재선언하면 파일 순서상 후행인 별칭 값이 라이트 실렌더를 조용히 덮어써도 아무 에러도 안 난다.
   // 위 대칭 검사는 라이트/다크만 비교해 이 경로를 못 잡는다 — 내부 리뷰 P1 지적. 별칭 키 집합과
-  // 라이트 키 집합의 교집합이 비어 있어야 함을 직접 단정한다(현행 별칭 5토큰 전부 배타 — 즉시 통과).
+  // 라이트/다크 키 집합의 교집합이 비어 있어야 함을 직접 단정한다(현행 별칭 5토큰 전부 배타 — 즉시 통과).
+  // I1(20R): aliases/light/dark가 이제 shape·baseline과 **동일한 디코딩 AST 키 맵**(decodedThemeKeySets)이라
+  // escaped 선행하이픈(`-\-color-bg`)이 별칭에서 라이트 토큰을 덮어써도 실이름으로 복원돼 교집합에 잡힌다
+  // (아래 'I1(20R)' describe가 선재현↔RED 대조 — 옛 raw 정규식 파생은 이 escape를 놓쳐 통과했다).
   it('별칭 키 ∩ 라이트 키 = ∅', () => {
     expect(keyIntersection(aliases, light)).toEqual([]);
+  });
+  it('별칭 키 ∩ 다크 키 = ∅', () => {
+    expect(keyIntersection(aliases, dark)).toEqual([]);
+  });
+});
+
+describe('I1(20R) — 토큰 identity 디코딩 단일화 (escaped 별칭 재정의 선재현↔RED)', () => {
+  // 선재현(옛 raw 정규식 파생): 별칭 블록의 `-\-color-bg: red`는 실이름 `--color-bg`(라이트 재정의, 별칭이
+  // 후행 :root라 동일 specificity에서 침묵 승리)인데, 배타성 검사가 raw 정규식 키(extractTokenKeys)를 봐서
+  // 별칭 집합에서 빠졌다 → keyIntersection(aliases, light) === [] → 통과(false-green). shape 검사는 블록
+  // 내부 중복만 봐서 못 잡았고, **두 경로가 다른 키 표현**을 봤다. Fix: 디코딩 AST 키 맵(decodedThemeKeySets)
+  // 하나를 shape·대칭·배타성·baseline이 공유 → 별칭에 실이름 color-bg가 복원돼 교집합이 비지 않는다(RED).
+  const mkThemes = (escapedName) => `
+    :root { --color-bg: #FFFFFF; --color-selected-indicator: transparent; --shadow-xs: 0 1px 2px rgba(0,0,0,0.04); }
+    html[data-theme=dark] { --color-bg: #0E0F11; --color-selected-indicator: #6B7280; --shadow-xs: 0 1px 2px rgba(0,0,0,0.4); }
+    :root { --color-alias-ok: 0; ${escapedName}: red; }
+  `;
+  // 실이름이 전부 --color-bg로 복원되는 4가지 escape 표현(선행하이픈·선행백슬래시·hex 이중하이픈·hex+리터럴).
+  const ESCAPED_BG = ['-\\-color-bg', '\\--color-bg', '\\2d\\2d color-bg', '\\2d-color-bg'];
+  it.each(ESCAPED_BG.map((n) => [n, n]))(
+    '별칭 %s(실이름 --color-bg) 재정의: 디코딩 AST 키 맵이 라이트와 교집합으로 잡는다(배타성 단정이면 RED)',
+    (_l, name) => {
+      const { light: L, aliases: A } = decodedThemeKeySets(mkThemes(name));
+      expect(A.has('color-bg'), '별칭 디코딩 키에 color-bg 복원').toBe(true);
+      expect(keyIntersection(A, L)).toContain('color-bg'); // 실 배타성 단정(∩=∅)이면 RED로 떨어진다
+    });
+  it('선재현 witness: 옛 raw 정규식 파생(extractTokenKeys)은 `--`가 연속으로 안 남는 escape를 놓쳐 별칭 집합에서 뺐다(=배타성 통과)', () => {
+    // `-\-color-bg`·`\2d\2d color-bg`·`\2d-color-bg`는 raw 텍스트에 `--`가 연속으로 없어 매치 실패 →
+    // color-bg가 별칭 키에서 빠짐 → keyIntersection === [] (옛 코드가 통과했던 정확한 지점).
+    for (const name of ['-\\-color-bg', '\\2d\\2d color-bg', '\\2d-color-bg']) {
+      expect([...extractTokenKeys(`--color-alias-ok: 0; ${name}: red;`)], name).not.toContain('color-bg');
+    }
+    // 대조: escape 없는 재정의(`--color-bg`)나 리터럴 `--`가 남는 `\--color-bg`는 raw도 잡았다 — 구멍은
+    // 오직 `--`가 연속으로 안 남는 escape 표현이었고, 그래서 raw/디코딩 두 표현이 갈렸다.
+    expect([...extractTokenKeys('--color-alias-ok: 0; --color-bg: red;')]).toContain('color-bg');
+    expect([...extractTokenKeys('--color-alias-ok: 0; \\--color-bg: red;')]).toContain('color-bg');
+  });
+  it('실 _themes.scss 파생은 디코딩 키 맵으로 배타성을 만족한다(별칭 ∩ 라이트·다크 = ∅)', () => {
+    expect(keyIntersection(aliases, light)).toEqual([]);
+    expect(keyIntersection(aliases, dark)).toEqual([]);
   });
 });
 
@@ -1140,6 +1187,20 @@ function buildDarkValues(themesCss) {
   return buildBlockValues(structuralGate(themesCss).darkRule);
 }
 
+// I1(20R) — 디코딩 AST 키 맵(단일 원천). structuralGate가 3블록·shape를 강제한 뒤 각 블록의 custom
+// property 키를 buildBlockValues(decodeCssIdentifier)로 실이름 복원해 수집한다 — shape·대칭·배타성·
+// baseline이 전부 이 한 경로를 공유한다(raw 정규식 키 집합 파생 폐기). escaped 선행하이픈/hex escape가
+// 라이트를 덮어써도 실이름으로 복원돼 배타성 교집합에 잡힌다(위 'I1(20R)' describe가 선재현↔RED 고정).
+// 키는 buildBlockValues와 동일하게 `--` 접두를 뗀 형태(예: 'color-bg').
+function decodedThemeKeySets(themesCss) {
+  const { lightRule, darkRule, aliasRule } = structuralGate(themesCss);
+  const keys = (rule) => new Set(Object.keys(buildBlockValues(rule)));
+  return { light: keys(lightRule), dark: keys(darkRule), aliases: keys(aliasRule) };
+}
+// 실 _themes.scss 파생 — 이전 raw 정규식 `const [light,dark,aliases]`를 대체한다. 모든 소비처
+// (대칭·배타성·브리지/var 커버리지)가 이 디코딩 집합을 쓴다. 실 파일엔 escape가 없어 값은 동일(GREEN 유지).
+const { light, dark, aliases } = decodedThemeKeySets(css);
+
 describe('_themes.scss 구조 계약 — flat 3블록 강제 (selector 매칭→구조 게이트 전환, 9라운드)', () => {
   it('실 파일이 3블록 계약을 만족한다(형태·순서·보호 토큰 3블록 밖 배타성)', () => {
     expect(() => structuralGate(css)).not.toThrow();
@@ -2159,6 +2220,187 @@ describe('I2(19R) — CORPUS exact ordered manifest + uniqueness (삭제/중복 
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// I2(20R) — CORPUS **payload 무결성**. 위 manifest는 ID 존재·순서·uniqueness만 보장하고 각 entry의
+// payload(kind/src/visible/token)는 안 봤다. 선재현(옛 게이트): 11R-A1의 ID를 유지한 채 src를 11R-A2와
+// 동일 교체하면 border-width:0 벡터가 사실상 삭제(border-style:none 중복)되는데도 ID·순서·개수·GREEN
+// 목록 전부 유지 → 통과(false-green). 처방: entry별 정규화 fingerprint(있는 필드만 {id,kind,src,token,
+// visible}을 고정 필드순 결정적 직렬화 → SHA-256)를 상수로 고정한다. payload swap·visible 반전·src 변조가
+// 해시 불일치로 RED. label/note는 서술 필드라 fingerprint에서 제외(의미 벡터만 잠근다). 새 벡터 추가 시
+// CORPUS_FINGERPRINTS도 갱신해야 통과(무결성 잠금 — 그게 의도).
+// ─────────────────────────────────────────────────────────────────────────────
+const CORPUS_FP_FIELDS = ['id', 'kind', 'src', 'token', 'visible']; // 고정 필드순 = 결정적 직렬화
+function corpusEntrySerialize(c) {
+  const obj = {};
+  for (const k of CORPUS_FP_FIELDS) if (c[k] !== undefined) obj[k] = c[k];
+  return JSON.stringify(obj, CORPUS_FP_FIELDS); // replacer 배열 = 키 화이트리스트+순서(존재 필드만)
+}
+const corpusEntryFingerprint = (c) => createHash('sha256').update(corpusEntrySerialize(c)).digest('hex');
+
+// entry별 payload SHA-256(고정 필드순 직렬화 도출). 새 벡터·payload 변경 시 이 상수도 갱신해야 통과.
+const CORPUS_FINGERPRINTS = {
+  // 11R
+  '11R-A1': 'dc46a16329c15203b613a4afbd18022163234b2f52d56c08f052d844c21aac38',
+  '11R-A2': '0d44e72d05066b97cde4bd6ad2bfb27990d53637ee8bafecdb6e71ba697992ba',
+  '11R-A3': '3b04fa5dfa13e7ba79fe2ae9d1feeaacb3ca8f3c8296b780eda6632efb0b4bff',
+  '11R-A4': '14fa936b488dd1f459e31e6322ed4b32acccb620227803f119bbef5b686c5f1b',
+  '11R-A5': '5bd25d404602357564a1d4e54be763be1366dc3073e6a13eaea9bebd809720f3',
+  '11R-A6': '8d271ecd31cb9856a848347380d837f54bc9d7b62fd7d9fe951293dc4bf497fe',
+  '11R-A7': '4e6d059cdd3fcfbf8b59f4db5fb6db470168e444a6443d3fe9811511a5fb4476',
+  '11R-A8': 'a389c137d9af006d375e3909f2403363576fcd668fdfcf1e127b2d8239c3b473',
+  '11R-A9': '982dd362a14b752f5ebb82212377d928b272f6ed076ac72bd0857ff3f75e1ce9',
+  '11R-A10': 'edc89a68d98805496c053dc4db8482a6aaa2c9a094a91fd23647829e894ed1b2',
+  '11R-B1': '0352f268f483f47f6baa9c818a80bba353e53b0e2d2c68fe9fd2a5dc36523500',
+  '11R-B2': '916220b5afe31ea3b20f104f964a515ec87eb46ce7da4b75240d608eff3c6db1',
+  '11R-B3': '2b78d7e60802905b49a2cd5f3533c162ec710971eb289b229b81c9c92b35a58e',
+  '11R-B4': '0a64188ebbf9ad056f16e4488c3a7fa6093dc77479498cbd7e8417eddee595f0',
+  // 12R
+  '12R-F2a': 'd4b2bbb64cfd8e5ffb0a760054582803adbba22dcb190ccc5fe9bce04417f995',
+  '12R-F2b': 'b47e2ae1d797b43a882b4e667ccac1e5ab40990b9b2b5073411f10af60fa7586',
+  '12R-F2c': '49c707d50d238f705a1bd329261ca5324346924cff53caf87fa2edc52d5a059c',
+  '12R-F2d': '119a63ce8fa2a7adcd6e7223d6a88801353dbaee8fbc7d50270fbab2fa3e58f0',
+  '12R-F2-GREEN': '85ad33943fec81e5ece2791c23ee00e611711587adc9594ae0d73023246f2b6a',
+  '12R-F3a': '0cc930b2877c1935c4c7551640a7a22c5d79b66d76b9ba87d64e991da841a8e6',
+  '12R-F3b': '76317d74865fb3b936a8cac48bf6a6e242335178944fed8c61bd1901aad2c190',
+  '12R-F3c': '0313ff92d2f06ca2f588755ad521d3cfa6c7d7c8f093064ce23d3945d460deeb',
+  '12R-F3d': '38c81bbd61aaefe4bfdc513d3e786345c8db2b8bb70323ab009801693b726bad',
+  '12R-F3e': 'e460481bfb8bc68296cbed8d1956151e1376c6a3e39c5b0bf775aff29765e3ee',
+  '12R-F3f': '67ea2c292fd3f04f42411897a972cf6bd22087acc696ccf1022ceb2e706b34d7',
+  '12R-F3g': 'f315c4283ff02df4fd8fa60e5083fa78e69d7df75c3921c348f8f88f8e402c8c',
+  '12R-F4a': '1c00016553c09834c2a1d437c100be63a82f3ca4f36b41edb23c7b978f36fe95',
+  '12R-F4b': 'd3204f37b5633ed22f5564ee71d6c66a6198d4a8b6d9253b5194a05cd099c280',
+  '12R-F4c': '215a13ff83eb9b94cfb0f3461a21c85151bcbef6e17e2b1cf78ba5a8da64ee07',
+  '12R-F4d': '7fa2980bd7d6edbfa30d00ee50b64ef60885a39057379f2bb968c6f1cfe05eb8',
+  '12R-F4e': 'd9126692e3837121f0ff29e8587ecdbfdae202dba37188a60c7dae185c2618d1',
+  '12R-F4f': 'ff33787475cdda9ff5e8ca93451e3ca74312ef82bf94f320328f3ee428d7e63e',
+  // 13R
+  '13R-I2a': '17cb2a1e26c08d6c38c58b4a69dbbf934829101730b6b253b2c5224c9f255990',
+  '13R-I2b1': 'f83e9975c6206bc146127fd71f98123c7277b81e87ac4d248b51963244d49163',
+  '13R-I2b2': '626f6c66f57edb9babd9b5cb3390f46419c990394d90e62c0b1b32e733661a67',
+  '13R-I2b3': 'ea87674585c3d2cad7625480f3c90146b1489baad19e0ec4421dc6d8ec461b4d',
+  '13R-I2b-G1': 'e652719b5ca1bffa5235aeeb7def2925f6fb8f8b340d276ce88e81bb0f8e1fbd',
+  '13R-I2b-G2': 'e24e7d730d67bd86eb8d50234ea84434b1041824bef70aaeed53d3250f3367a9',
+  '13R-I2b-G3': 'bae92da0f6d2777c7797c59f51f14bfc10e0ff712e0056b6f84cc325bc1ee3bf',
+  '13R-I3a': '42e5d4fbc8cba1f6c74d9ee721ca8b70c67272608836197ec105cd15022d3f94',
+  '13R-I3b': '023e693a33e0a4a71cf91f7d2879363cfcbe63a556116d7300256f442255f053',
+  '13R-I4a': 'ce7583886731d5ec507ecd38c0a6afb64267ff0d4fc1f566cc66577ea0970e79',
+  '13R-I4b': 'd7bb7e3ad15cd87845168730af025750819fafe6f5d1da4df68696a88bef58c9',
+  '13R-I4c': '976db31c02f37e7af54defc68e075895632540bca14d0b3ca369aebb76b13f7b',
+  '13R-D1': 'af42d113e6e985088a251e5b273d9898eb25aaa9433db048df4ff5e6eae068ea',
+  '13R-D2': 'bcfb08c087e7f74876a59049002a96e82591cc340211ce8073ec73ba1fdc42ce',
+  '13R-D3': '54b9fe05a36e32edfae5dca406b312dd8301824d60a0b5fb4a12192625be0146',
+  '13R-D4': '5a5322e201ef67e1bc4a506ec3c4b990e03dd0ef5154010ebe5ababe6c579b68',
+  '13R-D5': 'ab003274f2a8f25964b0d8ba5e420c6102af98b048213ef80d3a2c0c8b30c4d5',
+  '13R-D6': 'b81f48feee042aaab35650d69fb2fde790ae091746cbc040e15aed3f9943aa0d',
+  // 14R
+  '14R-I1a': '6084bfe477bc54f6d7d79178cd6f2ae81a0bb5b0158b6029d9ed5769e2fe9c9b',
+  '14R-I1b': '65738176ea33f7fa586e16b3aca5dd26788aedfb92b2621e7b25f376529e893c',
+  '14R-I1c': '35ecd33ba6b87d93d90f46ca5159ed210bd375004228622621dbfbef3945fd90',
+  '14R-I1d': '52e9d12552d10d83b5d962d0fa92fc4ab4ebfe6c84ac0686e61695f515d5b101',
+  '14R-I1e': '2d921233ff92e7988c3058dbc1fbb5a94e5567d95c4f60316b9bd9cb79f30d9e',
+  '14R-I1f': 'b1c5999c5f1382361dfd34ac92e921b989076a715d0330e25d4ccc1647d6546a',
+  '14R-I1g': '893fc0480b65397d266898e78d51dbe04622f3b3e4dd29b2bf5f1b6b7e962138',
+  '14R-I1h': '714ff3c26f8af0331e4848e9ee7e90ce8e3b8c8d269fa25cad104026eec4abd5',
+  '14R-I2a': '97b3aaf2ccaa75f64d2d42cf9c0aac0f00a55751e0b398588d5104fbda7b6e3f',
+  '14R-I2b': '64f1cd69c8f770fedf2fec23c624c89761fb82cd184bd67b453f021d7d0df964',
+  '14R-I2c': 'c7709e4bf0ef870634c7e84faaa528bbe22da749b51ed008fdb0a0684d06ab8c',
+  '14R-I2d': 'af2fdeb540abf233627fd49ab559ae865097c1c5659da9aa71c4272e98f9e2dd',
+  '14R-I2e': '7012acd165dbb61ee159f3c5cd7b3fb8ce8dc17fc99e8ddf4f9cf3cf1c1dfc53',
+  '14R-I2f': '86f30d0dbbe8fabe888f378a9b5750ef82e8139eb09fc2ca12919203949b3aec',
+  '14R-I3a': 'b397e5e700eb39ff98c9c4d5213a062ca746730beae0daf7a3d44a9206025fc0',
+  '14R-I3b': '07931d9411b26c28d45c92095c06937f0b1598f866330b7741d37d11706b4e43',
+  '14R-I3c': '763cb046273ab58fc11de5db8fceb2c8f0666fc6551dcf09be7e80e9a903abe3',
+  '14R-I3d': '5e3df8ae8f5a73f7bcdd4c2a14cacc3e52ce12bcadb3d3c648504fbccbcc555c',
+  '14R-I4a': 'e12ce021482ae3d20ad39ec533d1d54894a0a5a33be4b5273e1ef35d4ba55182',
+  '14R-I4b': 'b2c6d254ab72c604777fe095d82e4f004879030cfbb8ff8e953880ee53255432',
+  '14R-I4c': 'fde44249a5aa118e6564a1c604357eaec806def300a0e2edd700e3781e05d119',
+  '14R-I5-1b': '1dcf9c99e6e50167756a0b900d444d7f04e2facb316e723d84a0537a86e6175a',
+  '14R-I5-1i': '34936138f3f76cba7f1a431440f8407ec35b62cb6a95de59593fe801c0b3422e',
+  '14R-I5-2b': 'a74c79a601e046fa868e13971a1b781e23db321efcb9b7f76423f9262b62f523',
+  '14R-I5-2i': 'bcad33f3abb7770063b95eabaaaf46cc19350ab7cbb4666a76d35445fab372fc',
+  '14R-I5-3b': '2c42dd570d958f4244067ff80d275893e329d17fb0637973d6c8732f12cc5958',
+  '14R-I5-3i': '9effa78108f2827be66a6fdc20724716ad0261f923ec55a40ac4e0970b547ac1',
+  '14R-R1a': 'f4702c05c1a32374e1f8b768548b6534f10ff4b2dbc8b847e72adce9b510db1d',
+  '14R-R1b': '9bb661f41a2890735a8ad04a0429dae57b7463cee5496359b663d79e04f89ae1',
+  '14R-R1c': '23aacb78f3a7edcb72d19967bda51c140abd1d17828d485f2b06ed749acd33d5',
+  '14R-R1d': '5c7cc428d0e822555e244672ba10976b76dbd4a73642dd8af25d0c2a7404ca90',
+  '14R-R1e': '089607391bfedab11aa6b9e8240e5f6e16d657fb5198bef2809d4009b02d4879',
+  '14R-R2a': '1b3ea3fcc863e65d3de774e83a5202ef80e1d4d9b751e1a016a9753cee392fac',
+  '14R-R2b': 'aeeb8a271ba072b919bcb4b901959d42413ac79c5a0cf37afb4202d8a0f36a23',
+  '14R-R2c': '6736cd50108a328a62e7977581a2f21aaf85e545cbf2fd822e3efd03b787318f',
+  // 15R
+  '15R-M1': '862fb9a31af02451d9ed963db08cd31ac408bd2596c965a54dca6cb10784db82',
+  '15R-M2': 'b9d6439c338ffd97fd44cddfe687dea6d1dcefb96af584ae9e718c1124026f5d',
+  '15R-M3': 'aaee8e20316f003422ef50fc73ffeb41def897f200a384c7b6a7acb0337a2ab1',
+  '15R-M4': 'e22b82b328ff1eda664659edec33fedbc5a6fb748069082d20e255c212752e8c',
+  '15R-M5': '9a12f01f9fd70f8c9bb3fedc7f1e8df009705c049486466eb354a852c56d6b71',
+  '15R-M6': '417ea19a9cb4d0325fff3fe5ff62b7c5b10129806178c8958dab9ac30c8d1d35',
+  '15R-M6b': '61eeb97a8838a87809de3296b8f6c8ff9ed477434fe8e2e49030f4b33daae88e',
+  '15R-M7': '637ea456acb94e65f6753dbe138de7b1a4762671b61fe084f80120d4f8e015a3',
+  '15R-M8': 'f2d4741fbc50663b2d6ad9ec6524670be5faddd67ed0b9913a337753928e0005',
+  '15R-M9': '6338a71bf1af7d9c67d82634f1bff0e5cf1720649c9bf702de8b071e85c562cf',
+  '15R-M10': 'b29ee4b711cd368cccd855c5ae39d47ef5fca1c4cb19b407d0158fb66a4023dc',
+  '15R-M11': '05d80260928a197b6797beefdbdb782702f8a31617a97d24e7312ff1b907a22f',
+  '15R-M12': '846bc7cc0c46b37c88f311e699f73005342c111627c4be819805dfa3ded5ca08',
+  '15R-M13': 'e1d2873a8d99cfc809b6cac59a0a264c844e3c9e73c19bdf282b8f5f80c79a6f',
+  '15R-M14': 'ec62bd932e3620502803c8057d437f24da7b3a5250fa3ba4cbf708f00b7b65c3',
+  '15R-M15': 'e1903df67fd98d486d43275849edb9d4cf8bd4e979bbfa0ee6d107155a40dfcb',
+  '15R-M16': '824c1c4b107f5f53ab0019876c1151371ef902e0eebb5b953e8baa05d8c9ed4a',
+  '15R-ADV1': 'fe336c9a24e0b031194adfe5cc765b12d3f05b75ddd8c58af7ea752d3dfa7ea8',
+  '15R-ADV2': 'c79c0c8efdc7b421c9a6eb485c50aaa01ddf3e47be61f64a40f5e7caaa3ccdc1',
+  '15R-EXC-A': 'c425f8ccaae0e92d38ae01e555fa6cd84dfb39f3155504c556560d9b3f20ffda',
+  '15R-EXC-B': '06585dc0f356f6ce14772cc8baa85adf139ccf0f7fe70a4e5f88f3b374d162e5',
+  // 16R
+  '16R-I1a': '7f19672bfd2411431f3d73d46f721d1933d68941d149f5a94e832a9a0fd7065c',
+  '16R-I1b': 'dbe56cf2cbb556863d77fefccb22ef84e25dfdbb1c22c80f1fca97ecc30cd650',
+  '16R-I1c': '2c35678efda57dbb5e25b0befb047572f2dd34c47d92d6b49212fa6ac31e693f',
+  '16R-I2': 'aa8e67f46aace26e55d560e1132e353cf528f6b6a59db4b8663e1ff229d96f23',
+  '16R-I3a': '2a5567f381db64867ea8e381104ccc1525dc4cc79fa13fcd90d421959de48342',
+  '16R-I3b': '28a790afe3f1f3d81d9f1d7c246c9b9e605928ef88764004fb6f2f1117f2361d',
+  '16R-I3c': '0d2726797fa76f901cd56072a26769f309701f7b7b537da0bdbf7caa5fe1a8c3',
+  '16R-I3d': '22e06f9c4562c01aadcc01228628ebd519c87ca36c607b3c4d9dad13a7f83eb6',
+};
+
+describe('I2(20R) — CORPUS entry별 payload fingerprint (swap/visible반전/src변조/token 폐쇄)', () => {
+  it('fingerprint 맵 키 === manifest (누락·잉여 entry 없음)', () => {
+    expect(Object.keys(CORPUS_FINGERPRINTS).sort()).toEqual([...CORPUS_MANIFEST].sort());
+  });
+
+  it('각 CORPUS entry의 payload fingerprint가 고정 상수와 일치한다 (src/kind/visible/token 변조 시 RED)', () => {
+    for (const c of CORPUS) {
+      expect(corpusEntryFingerprint(c), `${c.id} payload 변조(kind/src/visible/token) 또는 상수 미갱신`).toBe(CORPUS_FINGERPRINTS[c.id]);
+    }
+  });
+
+  it('직렬화 결정성 — 필드 순서 무관·존재 필드만·label/note 제외', () => {
+    const a = { id: 'X', kind: 'border', src: '.X{}', visible: false, token: 't', label: 'L', note: 'N' };
+    const b = { note: 'DIFF', label: 'DIFF', token: 't', visible: false, src: '.X{}', kind: 'border', id: 'X' };
+    expect(corpusEntrySerialize(a)).toBe(corpusEntrySerialize(b));       // 키 순서·label/note 무관
+    expect(corpusEntrySerialize(a)).toBe('{"id":"X","kind":"border","src":".X{}","token":"t","visible":false}');
+    // token 없는 entry는 필드가 빠진다(있는 필드만 직렬화).
+    expect(corpusEntrySerialize({ id: 'Y', kind: 'border', src: '.Y{}', visible: true }))
+      .toBe('{"id":"Y","kind":"border","src":".Y{}","visible":true}');
+  });
+
+  it('선재현↔RED: 11R-A1 ID 유지 + src를 11R-A2로 교체(payload swap) → manifest는 통과하지만 fingerprint 불일치', () => {
+    const a1 = CORPUS.find((c) => c.id === '11R-A1');
+    const a2 = CORPUS.find((c) => c.id === '11R-A2');
+    const swapped = { ...a1, src: a2.src }; // ID·순서·개수 그대로, payload(src)만 오염
+    // 선재현: ID 인벤토리는 그대로라 manifest·GREEN목록·uniqueness가 전부 통과한다(옛 게이트가 놓친 지점).
+    const idsAfterSwap = CORPUS.map((c) => (c.id === '11R-A1' ? swapped.id : c.id));
+    expect(idsAfterSwap).toEqual(CORPUS_MANIFEST);
+    // fingerprint는 src 변조를 즉시 검출한다.
+    expect(corpusEntryFingerprint(swapped)).not.toBe(CORPUS_FINGERPRINTS['11R-A1']);
+  });
+
+  it('선재현↔RED: visible 반전·token 변조도 fingerprint 불일치로 RED', () => {
+    const green = CORPUS.find((c) => c.id === '12R-F2-GREEN'); // visible:true 벡터
+    expect(corpusEntryFingerprint({ ...green, visible: false })).not.toBe(CORPUS_FINGERPRINTS['12R-F2-GREEN']);
+    const ind = CORPUS.find((c) => c.id === '13R-I2b-G1');     // token 미설정(기본 IND)
+    expect(corpusEntryFingerprint({ ...ind, token: 'color-border' })).not.toBe(CORPUS_FINGERPRINTS['13R-I2b-G1']);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 17R 최소 회귀 벡터 상설화 — 외부 검수가 "모델이 정답 판정기라서" 뚫린다고 실증한 8종. 전환 **전**
 // 이 8종은 전부 GREEN이었다(선재현 확인: 현행 HEAD 사본에 8 단정을 붙여 8/8 통과 = false-green 확정).
 // 전환 후에는 canonical이 아니라는 이유 하나로 전부 RED다 — 개별 grammar 판정이 사라졌으므로 이 부류의
@@ -2397,8 +2639,8 @@ describe('명시 예외 전수 — 게이트 범위 밖 경로(알려진 한계 
     // P4가 약화되거나(대상 파일 판정 밖) 우회되면 이 구멍이 그대로 열린다.
     expect(findProtectedDeclarations(cssText).length).toBeGreaterThan(0);
   });
-  it('④ JS 런타임 CSS 쓰기(registerProperty·style.setProperty·JSX inline style·동적 <style> 텍스트)는 정적 styles 인벤토리 밖 — @property at-rule만 폐쇄(I4), 리터럴 JS 쓰기는 M1 스윕이 0건 고정', () => {
-    // M1(18R→19R) 확장 기록: 예외④는 CSS.registerProperty **하나**가 아니라 런타임 생성 CSS/custom-property
+  it('④ JS 런타임 CSS 쓰기(registerProperty·style.setProperty·JSX inline style·동적 <style> 텍스트)는 정적 styles 인벤토리 밖 — @property at-rule만 폐쇄(I4), 리터럴 **단일행** JS 쓰기만 M1 스윕이 0건 고정(줄바꿈/브래킷 형태는 미보장)', () => {
+    // M1(18R→20R) 확장 기록: 예외④는 CSS.registerProperty **하나**가 아니라 런타임 생성 CSS/custom-property
     // 쓰기 **전체**다 — (a) el.style.setProperty('--color-x', …), (b) JSX `style={{ '--color-x': … }}`,
     // (c) 동적 <style> 텍스트 주입, (d) CSS.registerProperty. 이들은 styles/**/*.{scss,css}에 나타나지 않아
     // 이 정적 게이트의 입력 밖이다. CSS 텍스트 경로(@property)는 I4에서 닫혔지만 위 JS 경로는 열려 있다.
@@ -2407,26 +2649,31 @@ describe('명시 예외 전수 — 게이트 범위 밖 경로(알려진 한계 
     // .js 파일은 어떤 것도 스윕 대상이 아니다(styles 밖·확장자 밖 둘 다).
     expect(isProtectedSweepTarget('library/theme.js')).toBe(false);
     expect(isProtectedSweepTarget('components/Canvas/CanvasPageView.js')).toBe(false);
-    // 단, "보호 토큰 이름을 JS에서 리터럴로 쓰는" 가장 흔한 회귀 경로만은 M1(19R) 인벤토리 스윕이 별도로
-    // 0건 고정한다(아래 describe). 현행 근거: 레포의 유일한 setProperty는 --sticky-header-h(비보호)뿐.
+    // 단, "보호 토큰 이름을 JS에서 리터럴로 **단일행** 대입하는" 가장 흔한 회귀 경로만은 M1 인벤토리 스윕이
+    // 0건 고정한다(아래 describe). M1(20R) 주장 범위 축소: 완전 커버는 JS AST 스캔이 필요하고 그건 스코프
+    // 밖이므로 — 줄바꿈된 setProperty(…\n '--color-x')·브래킷 접근(style['--color-x']=)은 정규식 증설로
+    // 흉내내지 않고 **명시적 미보장**으로 남긴다(아래 describe가 그 미보장 경계를 단정으로 기록).
   });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// M1(19R) — 예외④ 보강: components/·pages/ JS에서 **보호 토큰 리터럴 쓰기 0건**을 인벤토리로 잠근다.
-// 런타임 CSS 쓰기 전면 폐쇄는 이 정적 게이트의 범위 밖이지만(예외④), 리터럴 보호 토큰 이름을 JS에서
-// 직접 대입하는 가장 흔한 회귀 경로(inline style 키·setProperty·registerProperty·동적 <style>)만은
-// grep 인벤토리로 0건 고정한다. 비보호 런타임 주입(--branch-color/--status-color/--accent/
+// M1(19R→20R) — 예외④ 보강: components/·pages/ JS에서 **보호 토큰 리터럴 단일행 대입 0건**을 인벤토리로
+// 잠근다. M1(20R) 주장 범위 축소: 런타임 CSS 쓰기 전면 폐쇄는 이 정적 게이트의 범위 밖이고(예외④),
+// 완전한 커버는 JS AST 스캔을 요구하므로 — 이 grep 스윕이 **보장**하는 것은 정확히 "리터럴 보호 토큰
+// 이름을 **한 줄 안에서** 대입하는 형태(inline style 키·단일행 setProperty·registerProperty)"뿐이다.
+// **명시적 미보장**(정규식 증설로 흉내내지 않음): 줄바꿈된 setProperty(…\n '--color-x', …)·브래킷 접근
+// (style['--color-x']=)·문자열 연결로 조립한 토큰 이름. 아래 '미보장 경계' it이 이 한계를 단정으로 기록해
+// 스윕을 "완전 보호"로 오인하지 못하게 한다. 비보호 런타임 주입(--branch-color/--status-color/--accent/
 // --sticky-header-h)은 보호 접두(--color-/--track-/--shadow-)가 아니라 자연히 제외된다.
 // ─────────────────────────────────────────────────────────────────────────────
-describe('M1(19R) — components/·pages/ JS 리터럴 보호 토큰 쓰기 0건 스윕 (예외④ 보강)', () => {
+describe('M1(20R) — components/·pages/ JS 리터럴 보호 토큰 단일행 대입 0건 스윕 (예외④ 보강·주장 범위 축소)', () => {
   const repoRoot = resolve(__dirname, '..');
   const jsFiles = ['components', 'pages'].flatMap((d) => {
     const dir = resolve(repoRoot, d);
     return readdirSync(dir, { recursive: true }).map(String)
       .filter((f) => f.endsWith('.js')).map((f) => resolve(dir, f));
   });
-  // 보호 토큰 "쓰기"만 매치한다(소비 var(--color-x)는 제외). 세 형태:
+  // 보호 토큰 "쓰기"만 매치한다(소비 var(--color-x)는 제외). 단일행 세 형태:
   const WRITE_RES = [
     /--(?:color|track|shadow)-[a-z0-9-]+["'`]?\s*:/,             // 객체 키/CSS 선언: '--color-x': 또는 --color-x:
     /\.setProperty\(\s*["'`]--(?:color|track|shadow)-/,           // el.style.setProperty('--color-x', …)
@@ -2435,7 +2682,7 @@ describe('M1(19R) — components/·pages/ JS 리터럴 보호 토큰 쓰기 0건
   it('컴포넌트/페이지 JS가 충분히 수집된다(스윕 공허 방지)', () => {
     expect(jsFiles.length).toBeGreaterThan(100);
   });
-  it('보호 토큰(--color-/--track-/--shadow-)을 리터럴로 쓰는 JS가 0건', () => {
+  it('보호 토큰(--color-/--track-/--shadow-)을 리터럴로 단일행 대입하는 JS가 0건', () => {
     const offenders = [];
     for (const f of jsFiles) {
       readFileSync(f, 'utf8').split('\n').forEach((line, i) => {
@@ -2443,9 +2690,9 @@ describe('M1(19R) — components/·pages/ JS 리터럴 보호 토큰 쓰기 0건
         if (WRITE_RES.some((re) => re.test(code))) offenders.push(`${f.replace(repoRoot + '/', '')}:${i + 1}`);
       });
     }
-    expect(offenders, `JS 리터럴 보호 토큰 쓰기 발견(런타임 주입은 게이트 밖 — 신설 시 명시 결정 필요): ${offenders.join('; ')}`).toEqual([]);
+    expect(offenders, `JS 리터럴 보호 토큰 단일행 대입 발견(런타임 주입은 게이트 밖 — 신설 시 명시 결정 필요): ${offenders.join('; ')}`).toEqual([]);
   });
-  it('스윕 검출력(공허하지 않음): 합성 write는 잡고, read/비보호는 안 잡는다', () => {
+  it('스윕 검출력(공허하지 않음): 합성 단일행 write는 잡고, read/비보호는 안 잡는다', () => {
     const writes = [
       `style={{ '--color-x': v }}`,
       `el.style.setProperty('--track-y', z)`,
@@ -2459,6 +2706,20 @@ describe('M1(19R) — components/·pages/ JS 리터럴 보호 토큰 쓰기 0건
       'var(--branch-color)',                              // 비보호 소비
     ];
     for (const s of nonWrites) expect(WRITE_RES.some((re) => re.test(s)), s).toBe(false);
+  });
+  it('미보장 경계(M1(20R) 명시 기록): 줄바꿈 setProperty·브래킷 접근·문자열 조립 토큰은 단일행 스윕이 **못 잡는다**', () => {
+    // 이 형태들은 "보호한다"는 주장 밖이다 — 정규식 증설로 흉내내지 않고(그래도 leaky) 미보장으로 남긴다.
+    // 완전 커버는 JS AST 스캔이 필요하며 이 정적 grep 게이트의 스코프 밖(예외④와 동종).
+    const UNGUARDED = [
+      "el.style.setProperty(\n  '--color-x', v)",   // 줄바꿈된 setProperty(다음 줄에 토큰)
+      "el.style['--color-x'] = v",                   // 브래킷 접근 대입(: 아님)
+      "el.style.setProperty('--' + 'color-x', v)",   // 문자열 연결로 조립한 토큰 이름
+    ];
+    for (const s of UNGUARDED) {
+      // split('\n') 단일행 스캔과 동일하게 라인 단위로 판정 — 어느 라인도 매치하지 않음을 단정(미보장 명시).
+      const anyLineMatched = s.split('\n').some((line) => WRITE_RES.some((re) => re.test(line)));
+      expect(anyLineMatched, `미보장이어야 하는 형태가 잡혔다(주장 범위 재검토 필요): ${JSON.stringify(s)}`).toBe(false);
+    }
   });
 });
 
@@ -2596,6 +2857,27 @@ describe('M2(19R) — NON_CSS_WS 완전성(ECMAScript \\s − CSS 5종 20문자)
     expect(resolveColorValue('var(--color-x )', dv)).toBeNull();  // 토큰 뒤 NBSP
     expect(resolveColorValue(' var(--color-x)', dv)).toBeNull();  // 값 경계 NBSP(trim 안 됨)
     expect(resolveColorValue('var(--color-x) ', dv)).toBeNull();  // 값 경계 EM SPACE
+  });
+  // M2(20R) — 20문자 완전 집합을 var() **앞·내부(괄호 뒤/토큰 뒤)·뒤** 위치로 매개변수화해 resolver에
+  // 직접 연결한다. 이전엔 NBSP/EM SPACE 2종만 걸어 resolveColorValue의 공백 클래스를 U+1680 등으로
+  // 약화해도(예: `[css-ws]`→`\s`) 이 describe가 못 잡았다 — 이제 20문자 전 위치가 null 단정이라 약화 시 RED.
+  it.each(JS_ONLY_WS_CHARS.map((w) => [hex4(w), w]))(
+    '완전 집합 %s: var() 앞·내부(여는 괄호 뒤/토큰 뒤)·뒤 4위치 모두 resolveColorValue가 null (resolver 연결 — 약화 시 RED)',
+    (_n, w) => {
+      const dvw = { 'color-x': '#6B7280' };
+      expect(resolveColorValue(`${w}var(--color-x)`, dvw), 'var 앞(값 경계)').toBeNull();
+      expect(resolveColorValue(`var(${w}--color-x)`, dvw), '여는 괄호 뒤(내부)').toBeNull();
+      expect(resolveColorValue(`var(--color-x${w})`, dvw), '토큰 뒤(내부)').toBeNull();
+      expect(resolveColorValue(`var(--color-x)${w}`, dvw), 'var 뒤(값 경계)').toBeNull();
+    });
+  it('대조(과잉 RED 방지): 동일 4위치의 CSS 공백 5종은 정상 해석 — 20문자 null 단정이 공허하지 않음', () => {
+    const dvw = { 'color-x': '#6B7280' };
+    for (const w of [' ', '\t', '\n', '\f', '\r']) {
+      expect(resolveColorValue(`${w}var(--color-x)`, dvw), `앞 ${JSON.stringify(w)}`).toBe('#6B7280');
+      expect(resolveColorValue(`var(${w}--color-x)`, dvw), `괄호 뒤 ${JSON.stringify(w)}`).toBe('#6B7280');
+      expect(resolveColorValue(`var(--color-x${w})`, dvw), `토큰 뒤 ${JSON.stringify(w)}`).toBe('#6B7280');
+      expect(resolveColorValue(`var(--color-x)${w}`, dvw), `뒤 ${JSON.stringify(w)}`).toBe('#6B7280');
+    }
   });
   it('미정의 토큰·복합 표현식·null은 null(판정 불가 → 호출부 RED 유도)', () => {
     expect(resolveColorValue('var(--missing)', dv)).toBeNull();
