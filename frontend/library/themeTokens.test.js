@@ -1342,6 +1342,56 @@ function decodedThemeKeySets(themesCss) {
 // (대칭·배타성·브리지/var 커버리지)가 이 디코딩 집합을 쓴다. 실 파일엔 escape가 없어 값은 동일(GREEN 유지).
 const { light, dark, aliases } = decodedThemeKeySets(css);
 
+// ─────────────────────────────────────────────────────────────────────────────
+// I1(22R) — color-scheme 구조 계약. 21R manifest(buildBlockValues)는 **custom property만** 수집해
+// (디코딩값 `--` 시작 아닌 선언 제외) 같은 블록의 `color-scheme` 값이 무방비였다: 외부 검수 격리 실증에서
+// `:root{color-scheme:light}` ↔ `html[data-theme=dark]{color-scheme:dark}` 값 swap이 461/461 통과했다
+// (토큰 색은 유지되나 **네이티브 입력 컨트롤·스크롤바의 라이트/다크가 반대로 적용**되는 실제 제품 회귀).
+// 브라우저 의미론 모델을 추가하지 않고(17R 교훈) 세 블록의 non-custom-property 선언을 **구조 계약**으로만
+// 좁게 고정한다:
+//   · light 블록: `color-scheme: light` 정확히 1개
+//   · dark 블록 : `color-scheme: dark`  정확히 1개
+//   · alias 블록: `color-scheme` 없음
+//   · 그 외 — 중복·삭제(부재)·!important·color-scheme 아닌 다른 일반 선언 = RED
+//     (테마 블록의 non-custom-property 선언은 color-scheme 외 등장 자체가 offender다).
+// 값은 리터럴이라 디코딩/파싱 불요. 블록 3판정은 structuralGate를 **재사용**한다(새 블록 파서 없음).
+// custom property(디코딩값 `--` 시작)는 manifest·shape contract가 담당하므로 여기선 손대지 않는다.
+// structuralGate 본체에 넣지 않고 **인접 전용 단정**으로 둔다 — 다른 mutation describe의 합성 SCSS는
+// color-scheme를 안 실어서, 게이트에 병합하면 그 describe들이 전부 throw로 깨진다(현행 461 계약 보존).
+const COLOR_SCHEME_CONTRACT = [
+  ['라이트', 'light'],
+  ['다크', 'dark'],
+  ['별칭', null], // color-scheme 금지
+];
+function colorSchemeOffenders(themesCss) {
+  const { lightRule, darkRule, aliasRule } = structuralGate(themesCss);
+  const rules = { 라이트: lightRule, 다크: darkRule, 별칭: aliasRule };
+  const offenders = [];
+  for (const [blockName, expected] of COLOR_SCHEME_CONTRACT) {
+    const schemeDecls = [];
+    rules[blockName].walkDecls((decl) => {
+      const name = decodeCssIdentifier(decl.prop);
+      if (name.startsWith('--')) return; // custom property는 manifest/shape가 담당
+      if (name.toLowerCase() !== 'color-scheme') {
+        offenders.push(`${blockName} 블록 비허용 일반 선언 ${decl.prop}@${decl.source?.start?.line}행`);
+        return;
+      }
+      schemeDecls.push({ value: cssTrim(decl.value).toLowerCase(), important: !!decl.important, line: decl.source?.start?.line });
+    });
+    if (expected === null) {
+      for (const d of schemeDecls) offenders.push(`${blockName} 블록 color-scheme 금지인데 존재(${d.line}행)`);
+      continue;
+    }
+    if (schemeDecls.length === 0) offenders.push(`${blockName} 블록 color-scheme 누락(기대 ${expected})`);
+    if (schemeDecls.length > 1) offenders.push(`${blockName} 블록 color-scheme 중복 ${schemeDecls.length}개(${schemeDecls.map((d) => `${d.line}행`).join('·')})`);
+    for (const d of schemeDecls) {
+      if (d.important) offenders.push(`${blockName} 블록 color-scheme !important(${d.line}행)`);
+      if (d.value !== expected) offenders.push(`${blockName} 블록 color-scheme 값 오류: 기대 ${expected}, 실제 ${d.value}(${d.line}행)`);
+    }
+  }
+  return offenders;
+}
+
 describe('_themes.scss 구조 계약 — flat 3블록 강제 (selector 매칭→구조 게이트 전환, 9라운드)', () => {
   it('실 파일이 3블록 계약을 만족한다(형태·순서·보호 토큰 3블록 밖 배타성)', () => {
     expect(() => structuralGate(css)).not.toThrow();
@@ -1477,6 +1527,72 @@ describe('I1(21R) manifest 선재현↔RED mutation — 값 기준 무결성(소
   it('⑤ Sass 표현만 변경·컴파일 값 동일 → GREEN (값 기준, 소스 무관)', () => {
     const mut = manifestOf({ tpL: '#F9FAFB' }); // `#{$_s}` → 리터럴, 둘 다 #F9FAFB로 컴파일
     expect(mut).toEqual(base);
+  });
+});
+
+describe('color-scheme 구조 계약 — 세 블록 non-custom-property 선언 고정 (I1 22R)', () => {
+  it('실 _themes.scss: light=color-scheme:light·dark=color-scheme:dark·alias=없음, 그 외 일반 선언 0 (offender 0)', () => {
+    expect(colorSchemeOffenders(css)).toEqual([]);
+  });
+  it('적대적 재검토: 세 블록의 non-custom-property 선언은 color-scheme뿐이다(값 미검증 다른 일반 선언 부재)', () => {
+    // 같은 클래스의 미래 회귀 방지 — 블록에 color-scheme 외 non-custom-property 선언이 실제로 있는지 확인.
+    // 있으면 계약(COLOR_SCHEME_CONTRACT)에 포함해야 하지만, 현행 3블록엔 color-scheme 외 일반 선언이 없다.
+    const { lightRule, darkRule, aliasRule } = structuralGate(css);
+    const nonCustom = (rule) => {
+      const out = [];
+      rule.walkDecls((d) => { const n = decodeCssIdentifier(d.prop); if (!n.startsWith('--')) out.push(n.toLowerCase()); });
+      return out;
+    };
+    expect(nonCustom(lightRule)).toEqual(['color-scheme']);
+    expect(nonCustom(darkRule)).toEqual(['color-scheme']);
+    expect(nonCustom(aliasRule)).toEqual([]);
+  });
+});
+
+describe('I1(22R) color-scheme 선재현↔RED mutation — manifest 밖 non-custom-property 회귀', () => {
+  // 합성 3블록 SCSS를 compileString→(structuralGate 재사용)→colorSchemeOffenders로 실제 컴파일 경로 그대로
+  // 통과시켜, swap/delete/duplicate/!important 4형태가 값 manifest에는 안 보이고(선재현: 현행 461 통과 경로가
+  // 무방비) color-scheme 계약에서만 RED로 갈리는 지점을 고정한다.
+  const synth = (o = {}) => {
+    const { lightScheme = 'color-scheme: light;', darkScheme = 'color-scheme: dark;', aliasScheme = '', lightExtra = '' } = o;
+    return `:root { ${lightScheme} --color-bg: #FFFFFF; --shadow-xs: 0 1px 2px rgba(0,0,0,0.04); ${lightExtra} }
+      html[data-theme='dark'] { ${darkScheme} --color-bg: #0E0F11; --shadow-xs: 0 1px 2px rgba(0,0,0,0.4); }
+      :root { ${aliasScheme} --color-alias: var(--color-bg); }`;
+  };
+  const compiledOf = (o) => compileString(synth(o)).css;
+  const offendersOf = (o) => colorSchemeOffenders(compiledOf(o));
+  const baseCss = compiledOf();
+
+  it('base 합성이 color-scheme 계약을 통과한다(offender 0)', () => {
+    expect(offendersOf()).toEqual([]);
+  });
+
+  // 선재현(왜 현행 461이 무방비였나): swap은 custom property만 수집하는 값 manifest에 안 보인다.
+  it('선재현: light↔dark swap이 값 manifest deep-equal에는 GREEN(buildBlockValues가 custom property만 수집)', () => {
+    const swapped = compiledOf({ lightScheme: 'color-scheme: dark;', darkScheme: 'color-scheme: light;' });
+    expect(themeValueManifest(swapped)).toEqual(themeValueManifest(baseCss)); // ← 옛 값 게이트 blind (false-green)
+  });
+
+  it('① swap(light↔dark 값) → color-scheme 계약 RED(양쪽 값 오류)', () => {
+    const offs = offendersOf({ lightScheme: 'color-scheme: dark;', darkScheme: 'color-scheme: light;' });
+    expect(offs.length).toBeGreaterThan(0);
+    expect(offs.join(' ')).toMatch(/라이트 블록 color-scheme 값 오류/);
+    expect(offs.join(' ')).toMatch(/다크 블록 color-scheme 값 오류/);
+  });
+  it('② delete(light color-scheme 삭제) → RED(누락)', () => {
+    expect(offendersOf({ lightScheme: '' }).join(' ')).toMatch(/라이트 블록 color-scheme 누락/);
+  });
+  it('③ duplicate(light color-scheme 2개) → RED(중복)', () => {
+    expect(offendersOf({ lightScheme: 'color-scheme: light; color-scheme: light;' }).join(' ')).toMatch(/라이트 블록 color-scheme 중복 2개/);
+  });
+  it('④ !important(light color-scheme !important) → RED', () => {
+    expect(offendersOf({ lightScheme: 'color-scheme: light !important;' }).join(' ')).toMatch(/라이트 블록 color-scheme !important/);
+  });
+  it('⑤ alias 블록에 color-scheme 등장 → RED(별칭 금지)', () => {
+    expect(offendersOf({ aliasScheme: 'color-scheme: dark;' }).join(' ')).toMatch(/별칭 블록 color-scheme 금지인데 존재/);
+  });
+  it('⑥ 테마 블록에 color-scheme 아닌 다른 일반 선언(accent-color) → RED(비허용 일반 선언)', () => {
+    expect(offendersOf({ lightExtra: 'accent-color: red;' }).join(' ')).toMatch(/라이트 블록 비허용 일반 선언 accent-color/);
   });
 });
 
@@ -2871,7 +2987,7 @@ describe('명시 예외 전수 — 게이트 범위 밖 경로(알려진 한계 
     // P4가 약화되거나(대상 파일 판정 밖) 우회되면 이 구멍이 그대로 열린다.
     expect(findProtectedDeclarations(cssText).length).toBeGreaterThan(0);
   });
-  it('④ JS 런타임 CSS 쓰기(registerProperty·style.setProperty·JSX inline style·동적 <style> 텍스트)는 정적 styles 인벤토리 밖 — @property at-rule만 폐쇄(I4), 리터럴 **단일행** JS 쓰기만 M1 스윕이 0건 고정(줄바꿈/브래킷 형태는 미보장)', () => {
+  it('④ JS 런타임 CSS 쓰기(registerProperty·style.setProperty·JSX inline style·동적 <style> 텍스트)는 정적 styles 인벤토리 밖 — @property at-rule만 폐쇄(I4), M1 스윕은 WRITE_RES 세 정규식의 lexical match만 0건 고정(semantic write 아님·줄바꿈/브래킷 형태는 미보장)', () => {
     // M1(18R→20R) 확장 기록: 예외④는 CSS.registerProperty **하나**가 아니라 런타임 생성 CSS/custom-property
     // 쓰기 **전체**다 — (a) el.style.setProperty('--color-x', …), (b) JSX `style={{ '--color-x': … }}`,
     // (c) 동적 <style> 텍스트 주입, (d) CSS.registerProperty. 이들은 styles/**/*.{scss,css}에 나타나지 않아
@@ -2889,12 +3005,17 @@ describe('명시 예외 전수 — 게이트 범위 밖 경로(알려진 한계 
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// M1(19R→21R) — 예외④ 보강: components/·pages/ JS에서 **보호 토큰 리터럴 단일행 대입 0건**을 인벤토리로
-// 잠근다. M1(21R) 주장 범위 재축소(외부 검수 정정): 이 grep 스윕이 **보장**하는 것은 정확히 "**현재 세
-// 정규식(WRITE_RES)의 정확한 lexical form**"뿐이다 — 그 이상(런타임 CSS 쓰기 일반, 유효하지만 형태가
-// 다른 단일행 쓰기)은 보장하지 않으며 완전 커버는 JS AST 스캔을 요구하므로 스코프 밖(예외④와 동종).
-// **명시적 미보장**(정규식 증설로 흉내내지 않음) — 전부 유효한 런타임 쓰기이지만 세 정규식의 lexical form
-// 밖이라 못 잡는 사례를 아래 '미보장 경계' it이 단정으로 고정한다:
+// M1(19R→22R) — 예외④ 보강: components/·pages/ JS에서 **WRITE_RES 세 정규식의 lexical match 0건**을
+// 인벤토리로 잠근다. M1(22R) 문구 정직화(외부 검수 정정): 이 grep 스윕이 **보장**하는 것은 "semantic write
+// (실제 런타임 CSS 쓰기)"가 아니라 정확히 "**현재 세 정규식(WRITE_RES)의 lexical form 매치**"뿐이다.
+//   · **under-match(미보장)**: 유효한 런타임 쓰기라도 세 정규식의 lexical form을 벗어나면 못 잡는다(아래
+//     '미보장 경계' it). 완전 커버는 JS AST 스캔을 요구하므로 스코프 밖(예외④와 동종).
+//   · **over-match(false-positive)**: 반대로 실제 write가 아닌 **문자열·블록주석**(`const note='--color-x: docs'`
+//     / `/* --color-x: docs */`)도 세 정규식에 걸린다 — 스윕이 lexical match이지 semantic write가 아니라는
+//     계약의 정확한 성격이다(아래 'false-positive 경계' it이 단정으로 고정 — 현재 repo엔 그런 라인이 없어
+//     실 스윕은 0건이지만 계약의 성격을 못박는다). 정규식 증설로 어느 쪽도 흉내내지 않는다.
+// **명시적 미보장**(under-match) — 전부 유효한 런타임 쓰기이지만 세 정규식의 lexical form 밖이라 못 잡는
+// 사례를 아래 '미보장 경계' it이 단정으로 고정한다:
 //   · `setProperty (` — 함수명과 `(` 사이 공백(정규식은 `.setProperty(` 인접만)
 //   · `setProperty(/*c*/'--x'` — `(` 뒤 블록주석(정규식은 `(` 뒤 즉시 따옴표만)
 //   · `registerProperty?.({name:'--x'})` — optional chaining `?.`(정규식은 `registerProperty(` 인접만)
@@ -2903,7 +3024,7 @@ describe('명시 예외 전수 — 게이트 범위 밖 경로(알려진 한계 
 // 이로써 스윕을 "완전 보호"로 오인하지 못하게 한다. 비보호 런타임 주입(--branch-color/--status-color/
 // --accent/--sticky-header-h)은 보호 접두(--color-/--track-/--shadow-)가 아니라 자연히 제외된다.
 // ─────────────────────────────────────────────────────────────────────────────
-describe('M1(21R) — components/·pages/ JS 리터럴 보호 토큰 단일행 대입 0건 스윕 (예외④ 보강·주장 범위=세 정규식 lexical form)', () => {
+describe('M1(22R) — components/·pages/ JS WRITE_RES lexical match 0건 스윕 (예외④ 보강·주장 범위=세 정규식 lexical form, semantic write 아님)', () => {
   const repoRoot = resolve(__dirname, '..');
   const jsFiles = ['components', 'pages'].flatMap((d) => {
     const dir = resolve(repoRoot, d);
@@ -2919,7 +3040,7 @@ describe('M1(21R) — components/·pages/ JS 리터럴 보호 토큰 단일행 �
   it('컴포넌트/페이지 JS가 충분히 수집된다(스윕 공허 방지)', () => {
     expect(jsFiles.length).toBeGreaterThan(100);
   });
-  it('보호 토큰(--color-/--track-/--shadow-)을 리터럴로 단일행 대입하는 JS가 0건', () => {
+  it('WRITE_RES 세 정규식의 lexical match가 components/·pages/ JS에 0건 (semantic write 주장 아님)', () => {
     const offenders = [];
     for (const f of jsFiles) {
       readFileSync(f, 'utf8').split('\n').forEach((line, i) => {
@@ -2927,7 +3048,7 @@ describe('M1(21R) — components/·pages/ JS 리터럴 보호 토큰 단일행 �
         if (WRITE_RES.some((re) => re.test(code))) offenders.push(`${f.replace(repoRoot + '/', '')}:${i + 1}`);
       });
     }
-    expect(offenders, `JS 리터럴 보호 토큰 단일행 대입 발견(런타임 주입은 게이트 밖 — 신설 시 명시 결정 필요): ${offenders.join('; ')}`).toEqual([]);
+    expect(offenders, `WRITE_RES lexical match 발견(semantic write 보장 아님·런타임 주입은 게이트 밖 — 신설 시 명시 결정 필요): ${offenders.join('; ')}`).toEqual([]);
   });
   it('스윕 검출력(공허하지 않음): 합성 단일행 write는 잡고, read/비보호는 안 잡는다', () => {
     const writes = [
@@ -2971,6 +3092,23 @@ describe('M1(21R) — components/·pages/ JS 리터럴 보호 토큰 단일행 �
     for (const s of GUARDED) {
       expect(WRITE_RES.some((re) => re.test(s.split('//')[0])), s).toBe(true);
     }
+  });
+  it('false-positive 경계(M1(22R) 명시 기록): 실제 write가 아닌 문자열·블록주석도 WRITE_RES에 걸린다 — 스윕은 semantic write가 아니라 lexical match다', () => {
+    // over-match 방향의 정직화: 아래는 **런타임 write가 아닌데도** 세 정규식에 매치되는 false-positive다.
+    // 스윕이 semantic write를 보장하지 않고 오직 lexical form을 본다는 계약의 정확한 성격을 못박는다.
+    // 현재 repo엔 이런 라인이 없어 실 스윕(위 0건 it)은 통과하지만, 이런 문자열/주석이 추가되면 write가
+    // 아니어도 offender로 잡힌다(계약상 허용되는 오탐 — 정규식으로 배제하지 않는다).
+    const FALSE_POSITIVES = [
+      "const note = '--color-x: docs'",  // ① 문자열 리터럴 — CSS 선언이 아님
+      "/* --color-x: docs */",           // ② 블록주석(라인주석 아님 → line.split('//')[0]이 못 벗긴다)
+    ];
+    for (const s of FALSE_POSITIVES) {
+      // 실 스윕과 동일 파이프라인(line.split('//')[0] → WRITE_RES)으로 판정 — 블록주석이 //-스트립을 통과함을 재현.
+      const matched = s.split('\n').some((line) => WRITE_RES.some((re) => re.test(line.split('//')[0])));
+      expect(matched, `false-positive여야 하는 형태가 안 잡혔다(계약 성격 재검토 필요): ${JSON.stringify(s)}`).toBe(true);
+    }
+    // 대조: 라인주석(`//` 접두)은 line.split('//')[0]이 벗겨 잡히지 않는다 — false-positive가 "아무거나 매치"가 아님을 확인.
+    expect(WRITE_RES.some((re) => re.test("// --color-x: docs".split('//')[0]))).toBe(false);
   });
 });
 
