@@ -100,16 +100,22 @@ describe('I1(20R) — 토큰 identity 디코딩 단일화 (escaped 별칭 재정
       expect(A.has('color-bg'), '별칭 디코딩 키에 color-bg 복원').toBe(true);
       expect(keyIntersection(A, L)).toContain('color-bg'); // 실 배타성 단정(∩=∅)이면 RED로 떨어진다
     });
-  it('선재현 witness: 옛 raw 정규식 파생(extractTokenKeys)은 `--`가 연속으로 안 남는 escape를 놓쳐 별칭 집합에서 뺐다(=배타성 통과)', () => {
-    // `-\-color-bg`·`\2d\2d color-bg`·`\2d-color-bg`는 raw 텍스트에 `--`가 연속으로 없어 매치 실패 →
-    // color-bg가 별칭 키에서 빠짐 → keyIntersection === [] (옛 코드가 통과했던 정확한 지점).
-    for (const name of ['-\\-color-bg', '\\2d\\2d color-bg', '\\2d-color-bg']) {
-      expect([...extractTokenKeys(`--color-alias-ok: 0; ${name}: red;`)], name).not.toContain('color-bg');
+  it('선재현 witness(실경로 재현): 옛 경로 `Sass compile → raw 정규식(extractTokenKeys)`은 컴파일 후에도 `--`가 연속으로 안 남는 escape만 놓쳤다', () => {
+    // M2(21R) 정정: 옛 경로는 **컴파일된** CSS에 raw 정규식을 걸었다(미컴파일 문자열이 아니다). Sass가
+    // 선행하이픈 escape를 재직렬화하므로 실제 누락 여부는 compileString 출력으로만 판정할 수 있다.
+    //   `-\-color-bg`·`-\2d color-bg` → 둘 다 `-\-color-bg`로 직렬화(리터럴 `--` 없음) → 옛 regex 놓침(진짜 구멍)
+    //   `\2d\2d color-bg`·`\2d-color-bg` → `\--color-bg`로 직렬화(리터럴 `--color-bg` 포함) → 옛 regex 검출(구멍 아님)
+    const compiledKeys = (escapedName) =>
+      [...extractTokenKeys(compileString(`:root { --color-alias-ok: 0; ${escapedName}: red; }`).css)];
+    // 실제 누락형만 — 컴파일 후 `-\-color-bg`라 옛 regex가 놓친다(이 두 형태가 옛 게이트의 false-green 지점).
+    for (const name of ['-\\-color-bg', '-\\2d color-bg']) {
+      expect(compiledKeys(name), name).not.toContain('color-bg');
     }
-    // 대조: escape 없는 재정의(`--color-bg`)나 리터럴 `--`가 남는 `\--color-bg`는 raw도 잡았다 — 구멍은
-    // 오직 `--`가 연속으로 안 남는 escape 표현이었고, 그래서 raw/디코딩 두 표현이 갈렸다.
-    expect([...extractTokenKeys('--color-alias-ok: 0; --color-bg: red;')]).toContain('color-bg');
-    expect([...extractTokenKeys('--color-alias-ok: 0; \\--color-bg: red;')]).toContain('color-bg');
+    // 대조: 컴파일 후 리터럴 `--color-bg`/`\--color-bg`가 남는 형태는 옛 regex도 검출했다(구멍 아님) —
+    // 이전 witness가 `\2d\2d …`·`\2d-…`를 "누락형"으로 쓴 건 **미컴파일 문자열**에만 성립하던 오재현이었다.
+    for (const name of ['\\2d\\2d color-bg', '\\2d-color-bg', '\\--color-bg', '--color-bg']) {
+      expect(compiledKeys(name), name).toContain('color-bg');
+    }
   });
   it('실 _themes.scss 파생은 디코딩 키 맵으로 배타성을 만족한다(별칭 ∩ 라이트·다크 = ∅)', () => {
     expect(keyIntersection(aliases, light)).toEqual([]);
@@ -117,26 +123,161 @@ describe('I1(20R) — 토큰 identity 디코딩 단일화 (escaped 별칭 재정
   });
 });
 
-// 라이트 무변화(핵심 수용 기준)를 값 수준으로 고정 — 키 대칭만으로는 라이트 값 오타를 못 잡는다.
-// 기존 30토큰의 현행 리터럴(코어 팔레트)만 단정: 파생 토큰은 sass가 결정론 계산하므로 원본 고정으로 충분.
-const LIGHT_BASELINE = {
-  'color-bg': '#FFFFFF', 'color-surface': '#F9FAFB', 'color-surface-hover': '#F3F4F6',
-  'color-primary': '#5E6AD2', 'color-primary-hover': '#4F5BC0',
-  'color-primary-subtle': 'rgba(94, 106, 210, 0.08)',
-  'color-text': '#1C1C1C', 'color-text-secondary': '#6B7280', 'color-text-tertiary': '#6B7280',
-  'color-text-inverse': '#FFFFFF',
-  'color-border': '#E5E5E5', 'color-border-hover': '#D1D5DB',
-  'color-input-bg': '#FFFFFF', 'color-input-border': '#E5E5E5',
-  'color-input-border-hover': '#D1D5DB',
-  'color-selected-indicator': 'transparent',
-  'color-error': '#DC2626', 'color-error-bg': '#FEF2F2',
-  'color-success': '#16A34A', 'color-success-bg': '#F0FDF4',
-  'color-warning': '#D97706', 'color-warning-bg': '#FFFBEB',
-  'color-code-bg': '#F1F3F5', 'color-code-text': '#EB5757', 'color-code-block-bg': '#F6F8FA',
-  'color-ref-doc': '#C2410C', 'color-ref-doc-bg': '#FFF7ED',
-  'color-ref-issue': '#8B5CF6', 'color-ref-issue-bg': '#F5F3FF',
-  'color-status-in-progress': '#1E40AF', 'color-status-in-progress-bg': '#DBEAFE',
+// ─────────────────────────────────────────────────────────────────────────────
+// I1(21R) — **전체 테마 값 manifest(단일 원천)**. 20R까진 값 계약이 부분 baseline(코어 팔레트 +
+// shadow-xs)에 머물러, 라이트·다크 `--track-paper`를 둘 다 `transparent`로 바꿔도 452/452 통과했다
+// (외부 검수 격리 실증: track.scss 다수 배경이 소비하는 토큰이 투명해지는 **제품 UI 회귀**를 게이트가
+// 놓침 — 게이트 결함이 아니라 진짜 회귀를 놓치는 것이라 실질적으로 중요). 부분 baseline을 증설하는
+// 대신, buildBlockValues()가 읽는 **light/dark/alias 전체 토큰의 {key,value}**(컴파일 결과)를 이 상수
+// 하나로 고정하고 기존 LIGHT_BASELINE·SHADOW_XS_BASELINE을 이 원천에서 **파생**시켜 중복 리터럴을 없앤다.
+//   · 값은 결정적(핀 8곳 고정 컴파일 결과)이라 리터럴 상수로 둔다 — 새 토큰 추가/값 변경 시 이 manifest도
+//     갱신해야 아래 무결성 describe가 통과한다(의도된 무결성 잠금). 현행 값 그대로 고정이라 452는 GREEN 유지.
+//   · 별칭 블록은 var() 참조값(`var(--color-primary)` 등)이라 리터럴 색이 아니다 — manifest가 그 **참조
+//     문자열**을 값으로 고정한다(디코딩 후 — buildBlockValues가 실이름 복원해 읽는다).
+//   · 판정은 **값 기준**(컴파일 결과)이지 소스 기준이 아니다: Sass 표현만 바뀌고 컴파일 값이 같으면 GREEN
+//     (예: `#{$_l-surface}` vs `#F9FAFB`) — buildBlockValues가 컴파일 출력을 읽으므로 자연 성립(아래 mutation).
+// ─────────────────────────────────────────────────────────────────────────────
+const THEME_VALUE_MANIFEST = {
+  light: {
+    'color-bg': '#FFFFFF',
+    'color-surface': '#F9FAFB',
+    'color-surface-hover': '#F3F4F6',
+    'color-primary': '#5E6AD2',
+    'color-primary-hover': '#4F5BC0',
+    'color-primary-subtle': 'rgba(94, 106, 210, 0.08)',
+    'color-text': '#1C1C1C',
+    'color-text-secondary': '#6B7280',
+    'color-text-tertiary': '#6B7280',
+    'color-text-inverse': '#FFFFFF',
+    'color-border': '#E5E5E5',
+    'color-border-hover': '#D1D5DB',
+    'color-input-bg': '#FFFFFF',
+    'color-input-border': '#E5E5E5',
+    'color-input-border-hover': '#D1D5DB',
+    'color-selected-indicator': 'transparent',
+    'color-error': '#DC2626',
+    'color-error-bg': '#FEF2F2',
+    'color-success': '#16A34A',
+    'color-success-bg': '#F0FDF4',
+    'color-warning': '#D97706',
+    'color-warning-bg': '#FFFBEB',
+    'color-code-bg': '#F1F3F5',
+    'color-code-text': '#EB5757',
+    'color-code-block-bg': '#F6F8FA',
+    'color-ref-doc': '#C2410C',
+    'color-ref-doc-bg': '#FFF7ED',
+    'color-ref-issue': '#8B5CF6',
+    'color-ref-issue-bg': '#F5F3FF',
+    'color-status-in-progress': '#1E40AF',
+    'color-status-in-progress-bg': '#DBEAFE',
+    'color-primary-strong': 'rgb(70.0844660194, 83.8669902913, 203.3155339806)',
+    'color-primary-border-soft': 'rgb(233.5072815534, 235.109223301, 248.9927184466)',
+    'color-primary-wash': 'rgb(230.85, 232.65, 248.25)',
+    'color-error-strong': 'rgb(187.0333333333, 30.1666666667, 30.1666666667)',
+    'color-warning-strong': 'rgb(187.2233183857, 102.6708520179, 5.1766816143)',
+    'color-surface-sunken': 'rgb(245.94, 247.45, 248.96)',
+    'color-surface-raised': 'rgb(252.06, 252.55, 253.04)',
+    'color-bg-sunken': 'rgb(252.45, 252.45, 252.45)',
+    'color-text-soft': 'rgb(114.25, 114.25, 114.25)',
+    'color-border-faint': 'rgb(236.65, 236.65, 236.65)',
+    'shadow-xs': '0 1px 2px rgba(0, 0, 0, 0.04)',
+    'shadow-sm': '0 1px 3px rgba(0, 0, 0, 0.06)',
+    'shadow-md': '0 4px 12px rgba(0, 0, 0, 0.08)',
+    'shadow-lg': '0 8px 24px rgba(0, 0, 0, 0.12)',
+    'track-paper': '#F9FAFB',
+    'track-paper-edge': '#F3F4F6',
+    'track-ink-soft': '#4B5563',
+    'track-border-soft': 'rgb(241.75, 241.75, 241.75)',
+    'track-paper-raised': 'rgb(252.06, 252.55, 253.04)',
+    'track-paper-raised-05': 'rgb(250.53, 251.275, 252.02)',
+    'track-paper-sunken-1': 'rgb(245.94, 247.45, 248.96)',
+    'track-paper-sunken-15': 'rgb(244.41, 246.175, 247.94)',
+    'track-paper-sunken-2': 'rgb(242.88, 244.9, 246.92)',
+  },
+  dark: {
+    'color-bg': '#0E0F11',
+    'color-surface': '#17181C',
+    'color-surface-hover': '#1E2025',
+    'color-primary': '#7C8AEA',
+    'color-primary-hover': '#8B98F0',
+    'color-primary-subtle': 'rgba(124, 138, 234, 0.08)',
+    'color-text': '#E6E8EB',
+    'color-text-secondary': '#9CA3AF',
+    'color-text-tertiary': '#828A99',
+    'color-text-inverse': '#0E0F11',
+    'color-border': '#26282E',
+    'color-border-hover': '#33363E',
+    'color-input-bg': '#17181C',
+    'color-input-border': '#6B7280',
+    'color-input-border-hover': '#7A8290',
+    'color-selected-indicator': '#6B7280',
+    'color-error': '#F0666B',
+    'color-error-bg': '#2A1518',
+    'color-success': '#4CC38A',
+    'color-success-bg': '#12281C',
+    'color-warning': '#E5A54B',
+    'color-warning-bg': '#2A2110',
+    'color-code-bg': '#1E2126',
+    'color-code-text': '#F07178',
+    'color-code-block-bg': '#14161A',
+    'color-ref-doc': '#E8845A',
+    'color-ref-doc-bg': '#2A1D12',
+    'color-ref-issue': '#A78BFA',
+    'color-ref-issue-bg': '#201A2E',
+    'color-status-in-progress': '#7EA6F4',
+    'color-status-in-progress-bg': '#14213B',
+    'color-primary-strong': '#6D7BE0',
+    'color-primary-border-soft': '#3A4160',
+    'color-primary-wash': '#1E2340',
+    'color-error-strong': '#E0575C',
+    'color-warning-strong': '#D19335',
+    'color-surface-sunken': '#131418',
+    'color-surface-raised': '#1B1D22',
+    'color-bg-sunken': '#0B0C0E',
+    'color-text-soft': '#8B93A1',
+    'color-border-faint': '#2C2E35',
+    'shadow-xs': '0 1px 2px rgba(0, 0, 0, 0.4)',
+    'shadow-sm': '0 1px 3px rgba(0, 0, 0, 0.5)',
+    'shadow-md': '0 4px 12px rgba(0, 0, 0, 0.55)',
+    'shadow-lg': '0 8px 24px rgba(0, 0, 0, 0.65)',
+    'track-paper': '#17181C',
+    'track-paper-edge': '#1E2025',
+    'track-ink-soft': '#A8B0BC',
+    'track-border-soft': '#2C2E35',
+    'track-paper-raised': '#1B1D22',
+    'track-paper-raised-05': '#191B1F',
+    'track-paper-sunken-1': '#141518',
+    'track-paper-sunken-15': '#121316',
+    'track-paper-sunken-2': '#101114',
+  },
+  aliases: {
+    'color-border-focus': 'var(--color-primary)',
+    'shadow-focus': '0 0 0 3px var(--color-primary-subtle)',
+    'track-ink': 'var(--color-text)',
+    'track-ink-mute': 'var(--color-text-tertiary)',
+    'track-border': 'var(--color-border)',
+  },
 };
+
+// 라이트 무변화(핵심 수용 기준)의 코어 팔레트 뷰 — **manifest의 부분집합**(중복 리터럴 제거, 값은 위
+// 단일 원천에서 파생). 파생 rgb() 토큰 앞의 원본 리터럴 팔레트만 골라 코어 팔레트 오타에 집중된 신호를
+// 유지한다(전체 값 고정은 아래 '전체 테마 값 manifest' describe가 담당).
+const LIGHT_BASELINE_KEYS = [
+  'color-bg', 'color-surface', 'color-surface-hover',
+  'color-primary', 'color-primary-hover', 'color-primary-subtle',
+  'color-text', 'color-text-secondary', 'color-text-tertiary', 'color-text-inverse',
+  'color-border', 'color-border-hover',
+  'color-input-bg', 'color-input-border', 'color-input-border-hover',
+  'color-selected-indicator',
+  'color-error', 'color-error-bg', 'color-success', 'color-success-bg',
+  'color-warning', 'color-warning-bg',
+  'color-code-bg', 'color-code-text', 'color-code-block-bg',
+  'color-ref-doc', 'color-ref-doc-bg', 'color-ref-issue', 'color-ref-issue-bg',
+  'color-status-in-progress', 'color-status-in-progress-bg',
+];
+const LIGHT_BASELINE = Object.fromEntries(
+  LIGHT_BASELINE_KEYS.map((k) => [k, THEME_VALUE_MANIFEST.light[k]]),
+);
 
 describe('라이트 값 무변화 — 컴파일된 :root 값이 현행 팔레트와 동일', () => {
   it('코어 30토큰 값 일치', () => {
@@ -1226,9 +1367,10 @@ describe('3블록 내 모든 custom property는 보호 접두 3종 중 하나 (P
 // 선언 전체 폐기)인데도 선언 문자열은 그대로라 296/296 GREEN이었다. LIGHT_BASELINE과 동일한 방식으로
 // 라이트·다크 두 값을 리터럴 고정한다 — 값이 바뀌면(none·무효값·톤 변경) 여기서 즉시 RED다.
 // ─────────────────────────────────────────────────────────────────────────────
+// I1(21R): 리터럴 중복 제거 — THEME_VALUE_MANIFEST 단일 원천에서 파생(값 동일, GREEN 유지).
 const SHADOW_XS_BASELINE = {
-  light: '0 1px 2px rgba(0, 0, 0, 0.04)',
-  dark: '0 1px 2px rgba(0, 0, 0, 0.4)',
+  light: THEME_VALUE_MANIFEST.light['shadow-xs'],
+  dark: THEME_VALUE_MANIFEST.dark['shadow-xs'],
 };
 describe('--shadow-xs exact baseline (I2 — canonical opaque layer 전제 보호)', () => {
   it('canonical opaque layer는 정확히 var(--shadow-xs) 하나다(전제의 대상 고정)', () => {
@@ -1245,6 +1387,96 @@ describe('--shadow-xs exact baseline (I2 — canonical opaque layer 전제 보�
     for (const [k, v] of Object.entries(SHADOW_XS_BASELINE)) {
       expect(v, k).toMatch(/^0 1px 2px rgba\(0, 0, 0, 0\.[0-9]+\)$/);
     }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// I1(21R) — 전체 테마 값 manifest 검증 + 선재현↔RED mutation. buildBlockValues(shape 강제 유일 선언 값)를
+// 3블록 전부에 적용해 {key,value} 전체를 THEME_VALUE_MANIFEST 단일 원천과 대조한다. LIGHT_BASELINE/
+// SHADOW_XS_BASELINE은 이 manifest에서 파생되므로(위) 부분 baseline이 곧 이 원천의 부분집합이다.
+// ─────────────────────────────────────────────────────────────────────────────
+function themeValueManifest(themesCss) {
+  const { lightRule, darkRule, aliasRule } = structuralGate(themesCss);
+  return {
+    light: buildBlockValues(lightRule),
+    dark: buildBlockValues(darkRule),
+    aliases: buildBlockValues(aliasRule),
+  };
+}
+
+describe('전체 테마 값 manifest — light/dark/alias 전 토큰 {key,value} 단일 원천 고정 (I1 21R)', () => {
+  const actual = themeValueManifest(css);
+  it('실 _themes.scss 3블록 값 전체가 manifest와 정확히 일치한다 (deep-equal — 무결성 잠금)', () => {
+    // toEqual은 키·값 양방향 exact 대조라 (a) 값 변경 (b) 토큰 추가/삭제 (c) manifest 미고정 토큰을 전부
+    // 잡는다. 라이트·다크 `--track-paper` transparent 회귀가 여기서 RED가 된다(선재현: 부분 baseline은 통과).
+    expect(actual).toEqual(THEME_VALUE_MANIFEST);
+  });
+  it('블록별 토큰 커버리지 — manifest가 buildBlockValues 키 집합을 정확히 덮는다 (미고정 토큰 0)', () => {
+    // 적대적 자가 재검토: 값이 고정되지 않은 토큰이 하나라도 있으면 여기서 드러난다(대칭 커버리지 대조).
+    // deep-equal(위)의 부분집합이지만 독립 신호로 남긴다 — 본 assertion이 약화돼도 3블록 키셋을 각각 지킨다.
+    // 카디널리티는 하드코딩하지 않고 manifest(단일 원천)에서 파생 — 토큰 증감 시 손으로 동기화할 리터럴 없음.
+    for (const block of ['light', 'dark', 'aliases']) {
+      expect(Object.keys(actual[block]).sort(), block).toEqual(Object.keys(THEME_VALUE_MANIFEST[block]).sort());
+    }
+  });
+  it('부분 baseline 뷰(LIGHT_BASELINE·SHADOW_XS_BASELINE)는 전체 manifest 키의 부분집합이다 (통합·중복 제거 확인)', () => {
+    // 부분 baseline은 이제 manifest에서 파생되므로 리터럴 중복이 없다 — orphan 키(=undefined 파생) 0을 단정한다.
+    const lightKeys = new Set(Object.keys(THEME_VALUE_MANIFEST.light));
+    for (const k of LIGHT_BASELINE_KEYS) expect(lightKeys.has(k), k).toBe(true);
+    expect(Object.values(LIGHT_BASELINE).every((v) => v !== undefined)).toBe(true);
+    expect('shadow-xs' in THEME_VALUE_MANIFEST.light).toBe(true);
+    expect('shadow-xs' in THEME_VALUE_MANIFEST.dark).toBe(true);
+  });
+});
+
+describe('I1(21R) manifest 선재현↔RED mutation — 값 기준 무결성(소스 무관)', () => {
+  // 합성 3블록 SCSS를 compileString→structuralGate→buildBlockValues로 **실제 컴파일 경로 그대로** 통과시켜
+  // base manifest를 얻고, 각 mutation이 deep-equal(=무결성 게이트)에서 RED/GREEN으로 갈리는 지점을 고정한다.
+  // `#{$_s}`(보간)와 `#F9FAFB`(리터럴)가 같은 값으로 컴파일되므로 "소스 표현만 다르면 GREEN"이 실증된다.
+  const synth = (o = {}) => {
+    const { tpL = '#{$_s}', tpD = '#17181C', aliasVal = 'var(--color-bg)', bgL = '#FFFFFF' } = o;
+    return `$_s: #F9FAFB;
+      :root { color-scheme: light; --color-bg: ${bgL}; --track-paper: ${tpL}; --shadow-xs: 0 1px 2px rgba(0,0,0,0.04); }
+      html[data-theme='dark'] { --color-bg: #0E0F11; --track-paper: ${tpD}; --shadow-xs: 0 1px 2px rgba(0,0,0,0.4); }
+      :root { --color-alias: ${aliasVal}; }`;
+  };
+  const manifestOf = (o) => themeValueManifest(compileString(synth(o)).css);
+  const base = manifestOf();
+
+  it('base 합성이 실 파이프라인(compile→structuralGate→buildBlockValues)을 통과한다', () => {
+    expect(base.light['track-paper']).toBe('#F9FAFB');   // #{$_s} 보간 결과
+    expect(base.dark['track-paper']).toBe('#17181C');
+    expect(base.aliases['color-alias']).toBe('var(--color-bg)'); // 별칭 참조 문자열 그대로
+  });
+  it('① 라이트 값만 변경 → manifest deep-equal RED (다크는 격리)', () => {
+    const mut = manifestOf({ tpL: '#EEEEEE' });
+    expect(mut).not.toEqual(base);
+    expect(mut.dark).toEqual(base.dark);
+  });
+  it('② 다크 값만 변경 → RED (라이트는 격리)', () => {
+    const mut = manifestOf({ tpD: '#222222' });
+    expect(mut).not.toEqual(base);
+    expect(mut.light).toEqual(base.light);
+  });
+  it('③ 별칭(var 참조 문자열) 값만 변경 → RED', () => {
+    const mut = manifestOf({ aliasVal: 'var(--color-surface)' });
+    expect(mut).not.toEqual(base);
+    expect(mut.aliases['color-alias']).toBe('var(--color-surface)');
+  });
+  it('④ --track-paper 양쪽 동일 오값(transparent) → RED (제품 회귀 — 부분 baseline은 GREEN이었다)', () => {
+    const mut = manifestOf({ tpL: 'transparent', tpD: 'transparent' });
+    expect(mut).not.toEqual(base);                       // ← 전체 manifest는 RED
+    expect(mut.light['track-paper']).toBe('transparent');
+    expect(mut.dark['track-paper']).toBe('transparent');
+    // 선재현(왜 부분 baseline이 놓쳤나): (a) 키 대칭 통과(양 블록 동일 키셋) (b) LIGHT_BASELINE에 track-paper 없음.
+    expect(Object.keys(mut.light).sort()).toEqual(Object.keys(base.light).sort()); // 옛 대칭 게이트 GREEN
+    expect(LIGHT_BASELINE['track-paper']).toBeUndefined();                          // 옛 부분 baseline 미검사
+    expect('track-paper' in THEME_VALUE_MANIFEST.light).toBe(true);                 // 이제 전체 manifest가 고정
+    expect('track-paper' in THEME_VALUE_MANIFEST.dark).toBe(true);
+  });
+  it('⑤ Sass 표현만 변경·컴파일 값 동일 → GREEN (값 기준, 소스 무관)', () => {
+    const mut = manifestOf({ tpL: '#F9FAFB' }); // `#{$_s}` → 리터럴, 둘 다 #F9FAFB로 컴파일
+    expect(mut).toEqual(base);
   });
 });
 
@@ -2657,16 +2889,21 @@ describe('명시 예외 전수 — 게이트 범위 밖 경로(알려진 한계 
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// M1(19R→20R) — 예외④ 보강: components/·pages/ JS에서 **보호 토큰 리터럴 단일행 대입 0건**을 인벤토리로
-// 잠근다. M1(20R) 주장 범위 축소: 런타임 CSS 쓰기 전면 폐쇄는 이 정적 게이트의 범위 밖이고(예외④),
-// 완전한 커버는 JS AST 스캔을 요구하므로 — 이 grep 스윕이 **보장**하는 것은 정확히 "리터럴 보호 토큰
-// 이름을 **한 줄 안에서** 대입하는 형태(inline style 키·단일행 setProperty·registerProperty)"뿐이다.
-// **명시적 미보장**(정규식 증설로 흉내내지 않음): 줄바꿈된 setProperty(…\n '--color-x', …)·브래킷 접근
-// (style['--color-x']=)·문자열 연결로 조립한 토큰 이름. 아래 '미보장 경계' it이 이 한계를 단정으로 기록해
-// 스윕을 "완전 보호"로 오인하지 못하게 한다. 비보호 런타임 주입(--branch-color/--status-color/--accent/
-// --sticky-header-h)은 보호 접두(--color-/--track-/--shadow-)가 아니라 자연히 제외된다.
+// M1(19R→21R) — 예외④ 보강: components/·pages/ JS에서 **보호 토큰 리터럴 단일행 대입 0건**을 인벤토리로
+// 잠근다. M1(21R) 주장 범위 재축소(외부 검수 정정): 이 grep 스윕이 **보장**하는 것은 정확히 "**현재 세
+// 정규식(WRITE_RES)의 정확한 lexical form**"뿐이다 — 그 이상(런타임 CSS 쓰기 일반, 유효하지만 형태가
+// 다른 단일행 쓰기)은 보장하지 않으며 완전 커버는 JS AST 스캔을 요구하므로 스코프 밖(예외④와 동종).
+// **명시적 미보장**(정규식 증설로 흉내내지 않음) — 전부 유효한 런타임 쓰기이지만 세 정규식의 lexical form
+// 밖이라 못 잡는 사례를 아래 '미보장 경계' it이 단정으로 고정한다:
+//   · `setProperty (` — 함수명과 `(` 사이 공백(정규식은 `.setProperty(` 인접만)
+//   · `setProperty(/*c*/'--x'` — `(` 뒤 블록주석(정규식은 `(` 뒤 즉시 따옴표만)
+//   · `registerProperty?.({name:'--x'})` — optional chaining `?.`(정규식은 `registerProperty(` 인접만)
+//   · `const u='https://x'; setProperty('--x',v)` — 문자열 내 `//`를 `line.split('//')[0]`가 잘라 놓침
+//   · 줄바꿈된 setProperty(…\n '--x')·브래킷 접근(style['--x']=)·문자열 연결로 조립한 토큰 이름
+// 이로써 스윕을 "완전 보호"로 오인하지 못하게 한다. 비보호 런타임 주입(--branch-color/--status-color/
+// --accent/--sticky-header-h)은 보호 접두(--color-/--track-/--shadow-)가 아니라 자연히 제외된다.
 // ─────────────────────────────────────────────────────────────────────────────
-describe('M1(20R) — components/·pages/ JS 리터럴 보호 토큰 단일행 대입 0건 스윕 (예외④ 보강·주장 범위 축소)', () => {
+describe('M1(21R) — components/·pages/ JS 리터럴 보호 토큰 단일행 대입 0건 스윕 (예외④ 보강·주장 범위=세 정규식 lexical form)', () => {
   const repoRoot = resolve(__dirname, '..');
   const jsFiles = ['components', 'pages'].flatMap((d) => {
     const dir = resolve(repoRoot, d);
@@ -2707,18 +2944,32 @@ describe('M1(20R) — components/·pages/ JS 리터럴 보호 토큰 단일행 �
     ];
     for (const s of nonWrites) expect(WRITE_RES.some((re) => re.test(s)), s).toBe(false);
   });
-  it('미보장 경계(M1(20R) 명시 기록): 줄바꿈 setProperty·브래킷 접근·문자열 조립 토큰은 단일행 스윕이 **못 잡는다**', () => {
-    // 이 형태들은 "보호한다"는 주장 밖이다 — 정규식 증설로 흉내내지 않고(그래도 leaky) 미보장으로 남긴다.
-    // 완전 커버는 JS AST 스캔이 필요하며 이 정적 grep 게이트의 스코프 밖(예외④와 동종).
+  it('미보장 경계(M1(21R) 명시 기록): 공백·블록주석·optional chaining·문자열 내 //·줄바꿈·브래킷·문자열 조립은 세 정규식 lexical form 밖이라 스윕이 **못 잡는다**', () => {
+    // 아래는 전부 **유효한** 런타임 보호토큰 쓰기인데 세 정규식의 정확한 lexical form을 벗어나 미보장이다
+    // (정규식 증설로 흉내내지 않음 — 완전 커버는 JS AST 스캔, 스코프 밖). 앞 4건은 M1(21R) 신규 고정.
     const UNGUARDED = [
-      "el.style.setProperty(\n  '--color-x', v)",   // 줄바꿈된 setProperty(다음 줄에 토큰)
-      "el.style['--color-x'] = v",                   // 브래킷 접근 대입(: 아님)
-      "el.style.setProperty('--' + 'color-x', v)",   // 문자열 연결로 조립한 토큰 이름
+      "el.style.setProperty ('--color-x', v)",         // ① 함수명과 '(' 사이 공백 — `.setProperty(` 인접만 매치
+      "el.style.setProperty(/*c*/'--color-x', v)",     // ② '(' 뒤 블록주석 — `(` 뒤 즉시 따옴표만 매치
+      "CSS.registerProperty?.({ name: '--color-x' })", // ③ optional chaining `?.` — `registerProperty(` 인접만 매치
+      "const url = 'https://x'; el.style.setProperty('--color-x', v)", // ④ 문자열 내 `//` → split('//')[0]가 setProperty 앞에서 자름
+      "el.style.setProperty(\n  '--color-x', v)",      // 줄바꿈된 setProperty(다음 줄에 토큰)
+      "el.style['--color-x'] = v",                     // 브래킷 접근 대입(: 아님)
+      "el.style.setProperty('--' + 'color-x', v)",     // 문자열 연결로 조립한 토큰 이름
     ];
     for (const s of UNGUARDED) {
-      // split('\n') 단일행 스캔과 동일하게 라인 단위로 판정 — 어느 라인도 매치하지 않음을 단정(미보장 명시).
-      const anyLineMatched = s.split('\n').some((line) => WRITE_RES.some((re) => re.test(line)));
+      // 실제 스윕과 **동일한 파이프라인**(줄 분리 → line.split('//')[0] → WRITE_RES)으로 판정한다 — 문자열 내
+      // // 사례가 //-스트립 때문에 미보장임을 faithfully 재현하려면 이 전처리가 필수다.
+      const anyLineMatched = s.split('\n').some((line) => WRITE_RES.some((re) => re.test(line.split('//')[0])));
       expect(anyLineMatched, `미보장이어야 하는 형태가 잡혔다(주장 범위 재검토 필요): ${JSON.stringify(s)}`).toBe(false);
+    }
+    // 대조: 정확한 lexical form(공백/주석/`?.` 없는 인접 형태)은 잡힌다 — 위 미보장이 "아무거나 통과"가 아님을 확인.
+    const GUARDED = [
+      "el.style.setProperty('--color-x', v)",
+      "CSS.registerProperty({ name: '--color-x' })",
+      "style={{ '--color-x': v }}",
+    ];
+    for (const s of GUARDED) {
+      expect(WRITE_RES.some((re) => re.test(s.split('//')[0])), s).toBe(true);
     }
   });
 });
