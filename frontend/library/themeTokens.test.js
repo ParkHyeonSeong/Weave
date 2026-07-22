@@ -93,11 +93,9 @@ const LIGHT_BASELINE = {
 
 describe('라이트 값 무변화 — 컴파일된 :root 값이 현행 팔레트와 동일', () => {
   it('코어 30토큰 값 일치', () => {
-    const rootBlock = css.match(new RegExp(`:root[${CSS_WS_CLASS}]*\\{([^}]*)\\}`))[1];
-    const values = Object.fromEntries(
-      [...rootBlock.matchAll(new RegExp(`--([a-z0-9-]+)[${CSS_WS_CLASS}]*:[${CSS_WS_CLASS}]*([^;]+);`, 'g'))]
-        .map((m) => [m[1], cssTrim(m[2])]),
-    );
+    // I1(19R): 이전엔 raw css 정규식 + Object.fromEntries(후행 승리)로 읽어 라이트 블록의 중복·!important를
+    // 못 봤다(cascade winner 미반영). 이제 shape contract가 강제된 buildLightValues(유일 선언 AST 값)로 읽는다.
+    const values = buildLightValues(css);
     for (const [k, v] of Object.entries(LIGHT_BASELINE)) {
       expect(values[k], `--${k}`).toBe(v);
     }
@@ -639,6 +637,36 @@ describe('컨트롤 보더/인디케이터 재분류 고정 — canonical 구조
       expect(typeof entry.form, entry.id).toBe('string');
     }
   });
+
+  // M3(19R) — pins를 분류 결과에 **연결**한다(제거 대신 load-bearing화). 이전엔 pins가 순수 메타데이터라
+  // 두 shadow entry의 pins를 서로 바꿔도 372 통과했다(=기능 없는 주석). 이제 각 핀 셀렉터의 relevant
+  // 선언을 실제로 분류해 얻은 cls.id로 {id → [selector]} 맵을 역구성하고, CANONICAL_DECLS[].pins가 그것과
+  // 정확히 일치함을 단정한다 — pins를 swap하면 여기서 RED가 난다.
+  it('M3(19R): CANONICAL_DECLS[].pins ↔ 실제 분류 결과 정합 (핀 셀렉터의 cls.id = 그 셀렉터를 담은 entry.id, swap 시 RED)', () => {
+    const selectorToId = {};
+    for (const { selector, file } of PINNED) {
+      const root = postcss.parse(compiledSiteCss(file));
+      const { rootRules } = collectPinnedRules(root, selector);
+      const ids = [];
+      rootRules.forEach((rule) => rule.walkDecls((decl) => {
+        const prop = normalizeProp(decl.prop);
+        if (!isRelevantProp(prop)) return;
+        const cls = classifyRelevantDecl(prop, decl.value);
+        expect(cls.syntax, `${selector} { ${decl.prop}: ${decl.value} }`).toBe('canonical');
+        ids.push(cls.id);
+      }));
+      expect(ids, `${selector}: relevant 선언 정확히 1개(도출 근거 describe가 보장)`).toHaveLength(1);
+      selectorToId[selector] = ids[0];
+    }
+    // 분류 실측 → {id: [정렬된 selector]} 역구성
+    const pinsFromClassification = {};
+    for (const [selector, id] of Object.entries(selectorToId)) (pinsFromClassification[id] ||= []).push(selector);
+    for (const id of Object.keys(pinsFromClassification)) pinsFromClassification[id].sort();
+    // 메타데이터 → 동형
+    const pinsFromMetadata = {};
+    for (const entry of CANONICAL_DECLS) pinsFromMetadata[entry.id] = [...entry.pins].sort();
+    expect(pinsFromClassification).toEqual(pinsFromMetadata);
+  });
 });
 
 describe('핀 대상 컴포넌트 5파일 — 보호 토큰 네임스페이스 "선언" 전면 금지 (조상 스코프 오염 차단, 9라운드)', () => {
@@ -840,6 +868,21 @@ function contrastOverBg(fgValue, bgValue) {
   return contrastRatio(composited, bgValue);
 }
 
+// M2(19R) — 모듈 스코프 승격(이전엔 다크 indicator describe 안의 지역 함수라 mutation으로 안 잠겼다).
+// 최종 색값 해석: 리터럴(hex/rgba)이면 그대로, `var(--token)`이면 darkValuesMap으로 재귀 해석, 그 외는 null.
+// var() 매치의 공백은 **CSS 5종 전용**이다(I1 손실 정규화 클래스) — 옛 `\s`/`trim()`으로 되돌리면 NBSP 등이
+// 통과해 M2 직접 테스트가 RED가 된다. 순환 참조는 depth>5로 끊어 null(무한재귀 방지).
+function resolveColorValue(value, darkValuesMap, depth = 0) {
+  if (value == null || depth > 5) return null;
+  if (parseColor(value)) return value;
+  const m = new RegExp(`^var\\([${CSS_WS_CLASS}]*--([a-z0-9-]+)[${CSS_WS_CLASS}]*(?:,[\\s\\S]*)?\\)$`, 'i')
+    .exec(cssTrim(value));
+  if (!m) return null;
+  const next = darkValuesMap[m[1]];
+  if (next == null) return null;
+  return resolveColorValue(next, darkValuesMap, depth + 1);
+}
+
 // 다크 셀렉터가 매칭 가능한 3가지 quote 변형(Sass 버전별 unquoted 출력 포함) — 파일 상단 주석 참고.
 const DARK_SELECTORS = ['html[data-theme=dark]', "html[data-theme='dark']", 'html[data-theme="dark"]'];
 
@@ -993,6 +1036,35 @@ function structuralGate(themesCss) {
     );
   }
 
+  // I1(19R) shape contract — cascade winner를 **계산**하는 대신 "cascade가 자명해지는 형태"만 통과시킨다.
+  // 각 블록에서 보호 토큰은 정확히 1개 선언(2개 이상=중복 offender)이고 !important를 쓰지 않는다(offender).
+  // 이 유일 선언의 AST 값이 곧 baseline이다(buildBlockValues). 선재현(수정 전 현행 HEAD): LIGHT_BASELINE은
+  // Object.fromEntries(후행 승리), SHADOW_XS_BASELINE.light는 정규식 .exec(첫 매치), buildDarkValues는
+  // 다크 블록만 봐서 — 라이트에 `--shadow-xs: none !important` 중복이나 indicator `transparent !important`
+  // 중복을 주입해도 372/372 통과했다(Chrome 계산값과 baseline이 어긋나는 false-green). 중복·!important
+  // 자체를 offender로 접으면 "cascade가 자명"해져 첫/후행/중요도 어느 것을 읽든 결과가 같아진다 —
+  // 그래서 게이트가 브라우저 cascade를 재구현할 필요가 없다(17R가 폐기한 실패 모드로 되돌아가지 않는다).
+  // "0개"는 여기서 잡지 않는다: 모든 토큰이 모든 블록에 있는 게 아니며, 특정 토큰의 부재는 baseline
+  // 단정(undefined ≠ 기대 리터럴)이 RED로 잡는다. escaped 이름(`\--color-x`)도 decodeCssIdentifier로
+  // 실이름 그룹핑해 중복을 세므로 I3식 이름 비대칭 우회가 불가능하다.
+  const shapeOffenders = [];
+  for (const [blockName, rule] of [['라이트', lightRule], ['다크', darkRule], ['별칭', aliasRule]]) {
+    const byToken = new Map(); // 디코딩된 실이름 → [{ important, line }]
+    rule.walkDecls((decl) => {
+      if (!hasProtectedPrefix(decl.prop)) return;
+      const name = decodeCssIdentifier(decl.prop);
+      if (!byToken.has(name)) byToken.set(name, []);
+      byToken.get(name).push({ important: !!decl.important, line: decl.source?.start?.line });
+    });
+    for (const [name, ds] of byToken) {
+      if (ds.length > 1) shapeOffenders.push(`${blockName} 블록 ${name} 선언 ${ds.length}개(중복 — cascade 비자명, ${ds.map((d) => `${d.line}행`).join('·')})`);
+      for (const d of ds) if (d.important) shapeOffenders.push(`${blockName} 블록 ${name} !important(${d.line}행 — cascade 비자명)`);
+    }
+  }
+  if (shapeOffenders.length > 0) {
+    throw new Error(`_themes.scss shape contract 위반(보호 토큰 블록당 1선언·!important 금지): ${shapeOffenders.join('; ')}`);
+  }
+
   return { root, lightRule, darkRule, aliasRule };
 }
 
@@ -1043,16 +1115,29 @@ function findUnprotectedDeclarations(rules) {
 // '--color-x', …})`는 CSS 텍스트가 아니라 이 정적 게이트의 입력 인벤토리(styles/**/*.{scss,css}) **밖**
 // 이다 — 아래 "명시 예외 전수" describe가 이 범위를 문서·단정으로 고정한다(현재 레포 사용처 0건).
 
-// structuralGate가 보장한 darkRule 하나에 cascade(reduceEffectiveDecls — !important 우선, 동급은
-// 후행 승리)를 적용해 "다크 블록의 최종 유효 커스텀 프로퍼티 값" 맵을 만든다. 다크 selected-indicator
-// 대비 단정(아래)과 대칭 구멍 B의 --color-input-border(-hover) 대비 단정이 이 헬퍼를 공유한다(로직
-// 중복·drift 방지) — prop 키는 "--" 접두를 뗀 형태(예: "color-bg")로 정규화해 둔다.
-function buildDarkValues(themesCss) {
-  const { darkRule } = structuralGate(themesCss);
-  const darkState = reduceEffectiveDecls([darkRule], (decl, prop) => prop.startsWith('--'));
+// I1(19R) — 한 블록의 "유일 선언 AST 값" 맵. shape contract(structuralGate)가 보호 토큰 블록당 1선언·
+// !important 금지를 이미 강제했으므로, cascade를 계산할 필요 없이 그 유일 선언의 값을 그대로 읽는다
+// (17R가 폐기한 cascade 재구현으로 돌아가지 않는다). 이전 buildDarkValues는 reduceEffectiveDecls로
+// cascade winner를 **계산**했는데, 그건 "다른 baseline이 cascade에 취약"하다는 진단의 정확한 대상이었다.
+// prop 키는 "--" 접두를 뗀 형태(예: "color-bg"). decodeCssIdentifier로 escaped 이름을 실이름으로 복원해
+// 읽는다(shape contract의 중복 그룹핑과 동일 경로). custom property가 아닌 선언(color-scheme 등)은 제외.
+function buildBlockValues(rule) {
   const values = {};
-  for (const [prop, { value }] of Object.entries(darkState)) values[prop.slice(2)] = value;
+  rule.walkDecls((decl) => {
+    const name = decodeCssIdentifier(decl.prop);
+    if (!name.startsWith('--')) return;
+    values[name.slice(2)] = cssTrim(decl.value);
+  });
   return values;
+}
+// 라이트/다크 블록 baseline — structuralGate가 shape contract를 강제하므로, 중복·!important가 있으면
+// 여기 도달하기 전에 throw한다(= 잘못된 baseline을 읽지 않는다). LIGHT_BASELINE·SHADOW_XS_BASELINE·
+// 다크 대비 단정 전부가 이 두 진입점을 공유한다(로직 중복·drift 방지).
+function buildLightValues(themesCss) {
+  return buildBlockValues(structuralGate(themesCss).lightRule);
+}
+function buildDarkValues(themesCss) {
+  return buildBlockValues(structuralGate(themesCss).darkRule);
 }
 
 describe('_themes.scss 구조 계약 — flat 3블록 강제 (selector 매칭→구조 게이트 전환, 9라운드)', () => {
@@ -1089,10 +1174,8 @@ describe('--shadow-xs exact baseline (I2 — canonical opaque layer 전제 보�
     expect(CANON_SHADOW_OPAQUE_LAYER).toBe('var(--shadow-xs)');
   });
   it('라이트 값이 실측 리터럴과 일치 — none/무효값 치환 시 RED', () => {
-    const rootBlock = css.match(new RegExp(`:root[${CSS_WS_CLASS}]*\\{([^}]*)\\}`))[1];
-    const m = new RegExp(`--shadow-xs[${CSS_WS_CLASS}]*:[${CSS_WS_CLASS}]*([^;]+);`).exec(rootBlock);
-    expect(m, '라이트 :root 블록에 --shadow-xs 선언이 없다').not.toBeNull();
-    expect(cssTrim(m[1])).toBe(SHADOW_XS_BASELINE.light);
+    // I1(19R): .exec 첫 매치(선재현 우회 지점) 대신 shape 강제 유일 선언 경로(buildLightValues)로 읽는다.
+    expect(buildLightValues(css)['shadow-xs']).toBe(SHADOW_XS_BASELINE.light);
   });
   it('다크 값이 실측 리터럴과 일치 — none/무효값 치환 시 RED', () => {
     expect(buildDarkValues(css)['shadow-xs']).toBe(SHADOW_XS_BASELINE.dark);
@@ -1104,17 +1187,71 @@ describe('--shadow-xs exact baseline (I2 — canonical opaque layer 전제 보�
   });
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// I1(19R) — baseline은 "유일 선언 AST 값"이다(shape contract). cascade winner를 계산하지 않는다.
+// 선재현↔RED 대응표(각 mutation은 수정 전 현행 HEAD에서 372/372 통과 = false-green이었다):
+//   (a) 라이트 --shadow-xs 뒤 `none !important` 중복 → SHADOW_XS_BASELINE.light가 .exec 첫 매치라 선행
+//       '0 1px 2px…'를 읽어 통과(Chrome 계산값은 none). 이제 중복+important 둘 다 shape offender → throw.
+//   (b) 라이트 indicator `transparent !important` 선행 중복 → LIGHT_BASELINE이 Object.fromEntries(후행
+//       승리)라 후행 normal을 읽어 통과. 이제 중복+important shape offender → throw.
+//   (c) 순서 반전(normal→important, important→normal) 양방향 → 어느 쪽도 중복이라 throw.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('I1(19R) shape contract — 보호 토큰 블록당 1선언·!important 금지 (선재현↔RED)', () => {
+  // 다크/별칭은 정상(각 1선언·important 없음)으로 고정하고 라이트 블록만 변형한다.
+  const wrap = (lightBody) => `:root{${lightBody}}html[data-theme=dark]{--color-selected-indicator:#6B7280;--shadow-xs:0 1px 2px rgba(0,0,0,0.4)}:root{--color-b:3}`;
+  const OK_LIGHT = '--color-selected-indicator:transparent;--shadow-xs:0 1px 2px rgba(0,0,0,0.04)';
+
+  it('정상 형태(각 보호 토큰 1선언·!important 없음)는 통과하고 유일 선언 값을 읽는다', () => {
+    const themes = wrap(OK_LIGHT);
+    expect(() => structuralGate(themes)).not.toThrow();
+    // 유일 선언 AST 값을 verbatim으로 읽는다(정규화·재포맷 없음 — 입력 그대로).
+    expect(buildLightValues(themes)['shadow-xs']).toBe('0 1px 2px rgba(0,0,0,0.04)');
+    expect(buildLightValues(themes)['color-selected-indicator']).toBe('transparent');
+    expect(buildDarkValues(themes)['shadow-xs']).toBe('0 1px 2px rgba(0,0,0,0.4)');
+  });
+
+  it.each([
+    ['(a) shadow-xs 뒤 none !important 중복', '--shadow-xs:0 1px 2px rgba(0,0,0,0.04);--shadow-xs:none !important'],
+    ['(a\') shadow-xs 단순 중복(중요도 없이도 cascade 비자명)', '--shadow-xs:0 1px 2px rgba(0,0,0,0.04);--shadow-xs:0 2px 4px rgba(0,0,0,0.04)'],
+    ['(b) indicator transparent !important 선행 중복', '--color-selected-indicator:transparent !important;--color-selected-indicator:transparent'],
+    ['(b\') indicator 단일 !important', '--color-selected-indicator:transparent !important'],
+    ['(c) 순서 normal→important', '--color-selected-indicator:transparent;--color-selected-indicator:red !important'],
+    ['(c\') 순서 important→normal', '--color-selected-indicator:red !important;--color-selected-indicator:transparent'],
+  ])('shape 위반 %s → structuralGate throw (선재현: 현행 HEAD baseline은 통과)', (_l, body) => {
+    expect(() => structuralGate(wrap(body))).toThrow(/shape contract/);
+  });
+
+  it('baseline 빌더도 유일 선언 경로 — 라이트 중복 주입 시 buildLightValues가 값을 잘못 읽지 않고 throw', () => {
+    const mutated = wrap('--color-bg:#FFFFFF;--shadow-xs:0 1px 2px rgba(0,0,0,0.04);--shadow-xs:none !important');
+    expect(() => buildLightValues(mutated)).toThrow(/shape contract/);
+  });
+
+  it('escaped 이름 중복도 디코딩해 동일 토큰으로 그룹 — 우회 불가(I3식 이름 비대칭 방지)', () => {
+    // raw `--shadow-xs`와 escaped `\--shadow-xs`(디코딩 결과 동일)는 같은 토큰 → 중복 offender.
+    expect(() => structuralGate(wrap('--shadow-xs:0 1px 2px rgba(0,0,0,0.04);\\--shadow-xs:none'))).toThrow(/shape contract/);
+  });
+
+  it('실 _themes.scss는 shape contract를 만족한다(라이트/다크/별칭 전부 보호 토큰 1선언·!important 0)', () => {
+    expect(() => structuralGate(css)).not.toThrow();
+  });
+
+  it('비보호 토큰(--x)은 shape contract 대상 아님 — 중복·!important 허용(대칭/역방향 게이트가 별도 처리)', () => {
+    // structuralGate는 보호 접두(--color-/--track-/--shadow-)만 shape로 본다. --x 중복은 통과.
+    const themes = `:root{--color-a:1;--x:A !important;--x:B}html[data-theme=dark]{--color-a:2}:root{--color-b:3}`;
+    expect(() => structuralGate(themes)).not.toThrow();
+  });
+});
+
 describe('다크 selected-indicator 값 시맨틱 고정 (SC 1.4.11 비텍스트 대비 3:1)', () => {
   // 9라운드: dark 블록의 존재·유일성·root-직속 여부·형태(selector 문자열)는 이제 structuralGate
   // (flat 3블록 계약, 파일 상단 참고)가 구조적으로 보장한다 — 위반 시 이 시점에 즉시 throw(위치
   // 포함 명시 메시지)한다. 구 collectDarkSelectorRules의 selector 열거 방식은 폐기됐다: 그 방식은
   // "감시할 selector 문자열 목록"에 의존해 목록 밖 selector(`:root`, `html[...]:root` 등)로 감싼
   // 우회를 놓쳤지만, structuralGate는 selector가 무엇이든 3블록 밖 보호 토큰 선언 자체를 금지하므로
-  // 우회 불가능하다. 여기서는 구조가 보장된 darkRule 하나에 캐스케이드(reduceEffectiveDecls —
-  // !important 우선, 동급은 후행 승리 — 실제 CSS cascade와 동일)를 적용해 darkValues를 합성한다 —
-  // darkRule "내부"의 중복 선언에도 !important가 개입할 수 있어 단순 후행 승리로는 부족하다(외부
-  // 검수 7라운드 실증). buildDarkValues는 대칭 구멍 B(아래 --color-input-border 대비 describe)와
-  // 공유하는 모듈 헬퍼다.
+  // 우회 불가능하다. I1(19R): darkRule "내부"의 중복 선언·!important는 이제 shape contract가 offender로
+  // 접으므로(cascade가 자명), buildDarkValues는 cascade를 계산하지 않고 유일 선언 AST 값을 그대로 읽는다
+  // (buildBlockValues). 7라운드째 문제였던 "다크 블록 내부 !important 개입"은 값 계산 이전에 structuralGate
+  // throw로 막힌다. buildDarkValues는 대칭 구멍 B(아래 --color-input-border 대비 describe)와 공유하는 모듈 헬퍼다.
   const darkValues = buildDarkValues(css);
 
   // ScopeToggle 실제 인접 합성색 — .MyTasks__ScopeBtn--active의 background를 컴파일된 myTasks
@@ -1127,20 +1264,9 @@ describe('다크 selected-indicator 값 시맨틱 고정 (SC 1.4.11 비텍스트
   const myTasksRoot = postcss.parse(compiledSiteCss('components/myTasks/myTasks.scss'));
   const scopeBtnActiveRules = findRootRules(myTasksRoot, '.MyTasks__ScopeBtn--active');
   const scopeBgFinal = effectiveValue(scopeBtnActiveRules, new Set(['background']))['background']?.value ?? null;
-  // 최종값이 rgba/hex 리터럴이면 그대로 쓰고, `var(--token)` 참조면 darkValues(위 take-last 합성)로
-  // 재귀 해석한다. 리터럴도 아니고 darkValues에 없는 토큰 참조도 아닌(복합 표현식 등) 값은 null —
-  // 판정 불가를 "통과"가 아니라 "RED"로 떨어뜨리는 보수적 실패(호출부의 not.toBeNull() 단정).
-  function resolveColorValue(value, darkValuesMap, depth = 0) {
-    if (value == null || depth > 5) return null;
-    if (parseColor(value)) return value;
-    // I1(18R): 여기의 `\s`·trim도 CSS 공백 5종 전용으로 교체한다(같은 손실 정규화 클래스).
-    const m = new RegExp(`^var\\([${CSS_WS_CLASS}]*--([a-z0-9-]+)[${CSS_WS_CLASS}]*(?:,[\\s\\S]*)?\\)$`, 'i')
-      .exec(cssTrim(value));
-    if (!m) return null;
-    const next = darkValuesMap[m[1]];
-    if (next == null) return null;
-    return resolveColorValue(next, darkValuesMap, depth + 1);
-  }
+  // resolveColorValue는 M2(19R)에서 모듈 스코프로 승격됐다(헬퍼 직접 테스트 대상 — 파일 상단 정의).
+  // 최종값이 rgba/hex 리터럴이면 그대로, `var(--token)` 참조면 darkValues(shape 강제 유일 선언 값)로 재귀
+  // 해석한다. 리터럴도 토큰 참조도 아닌(복합 표현식 등) 값은 null → 호출부 not.toBeNull()이 RED로 떨어뜨린다.
   const scopeBgResolved = resolveColorValue(scopeBgFinal, darkValues);
   const scopeToggleAdjacent = scopeBgResolved != null
     ? compositeOver(scopeBgResolved, darkValues['color-surface'])
@@ -1651,14 +1777,22 @@ describe('12R F5 — normalizeProp CSS 식별자 디코더 선통과 (relevant �
     :root { --color-alias-unused: 0; }
   `;
 
-  it('다크 블록: 후행 escaped 선언(\\--color-selected-indicator: transparent)이 cascade에서 승리 — stale #6B7280이 아니라 transparent가 최종값', () => {
-    const darkValues = buildDarkValues(escapedIndicatorThemes);
-    expect(darkValues['color-selected-indicator']).toBe('transparent');
+  it('19R 기대 갱신(cascade 계산→shape 위반): 다크 블록 escaped 중복(\\--color-selected-indicator)은 buildDarkValues가 값을 계산하기 전에 shape contract로 throw — escaped 이름도 디코딩해 동일 토큰으로 중복 카운트', () => {
+    // 기대 갱신: 이전엔 buildDarkValues가 reduceEffectiveDecls로 후행 transparent를 cascade winner로 읽어
+    // 회귀를 값으로 잡았다(=cascade 계산 의존). 19R shape contract는 보호 토큰 블록당 1선언을 강제하므로
+    // 이 escaped 중복은 값 계산 이전에 구조 위반으로 접힌다(cascade 재구현 없이 더 강한 폐쇄). 디코더가
+    // 중복 그룹핑에도 쓰이므로 raw `--color-selected-indicator`와 escaped `\--…`가 같은 토큰으로 묶인다.
+    expect(() => buildDarkValues(escapedIndicatorThemes)).toThrow(/shape contract/);
+    expect(() => structuralGate(escapedIndicatorThemes)).toThrow(/shape contract/);
   });
 
-  it('위 escaped 후행 선언 채택 시 인디케이터 vs bg 대비가 3:1 미만(RED) — transparent 합성이 대비 단정을 실제로 무너뜨린다', () => {
-    const darkValues = buildDarkValues(escapedIndicatorThemes);
-    expect(contrastOverBg(darkValues['color-selected-indicator'], darkValues['color-bg'])).toBeLessThan(3);
+  it('normalizeProp 디코딩 계약 유지(cascade 레이어): reduceEffectiveDecls는 escaped prop(\\--color-x)을 실이름으로 디코딩해 동일 키로 통합한다 — effectiveValue 등 소비처가 여전히 escaped 선언을 놓치지 않는다', () => {
+    // 12R-F5의 본래 관심사(normalizeProp가 decodeCssIdentifier를 선통과)는 reduceEffectiveDecls 층에서
+    // 그대로 유지된다(effectiveValue·직접 소비처가 공유). _themes 층은 shape contract가 별도로 막는다.
+    const root = postcss.parse('.x { --color-x: #6B7280; \\--color-x: transparent; }');
+    const state = reduceEffectiveDecls([root.first], (decl, prop) => prop.startsWith('--'));
+    expect(Object.keys(state)).toEqual(['--color-x']); // 두 선언이 같은 키로 통합
+    expect(state['--color-x'].value).toBe('transparent'); // 후행 승리(cascade는 여전히 정확)
   });
 
   it('border: 후행 \\42order:none(디코딩=border)이 relevant 선언으로 수집돼 canonical 위반 RED가 된다', () => {
@@ -1953,6 +2087,78 @@ describe('11R~17R 회귀 벡터 코퍼스 — canonical 게이트 기대로 이�
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// I2(19R) — CORPUS "삭제 금지"를 실제로 보장한다. 이전엔 `CORPUS.length >= 90` count만 검사해서, 격리
+// 사본에서 11R-A1 한 건을 삭제해도 113개가 여전히 >= 90이라 371/371 통과했다(RED 벡터라 GREEN ID 목록
+// 에도 안 걸렸다 = 어디에도 안 잡힘). 처방: 114개 ID를 **순서까지** 고정한 exact manifest로 전체 인벤토리
+// 비교 + ID uniqueness 단정(삭제 후 다른 ID 중복으로 개수 맞추는 우회 차단). 각 ID가 어느 라운드 계약
+// 인지 그룹 주석으로 표기하고, 라운드별 개수도 고정한다. RED 벡터도 manifest에 포함되므로 삭제 시 걸린다.
+// ─────────────────────────────────────────────────────────────────────────────
+const CORPUS_MANIFEST = [
+  // 11R 대칭 구멍 A(border 4면 cascade)/B (14)
+  '11R-A1', '11R-A2', '11R-A3', '11R-A4', '11R-A5', '11R-A6', '11R-A7', '11R-A8', '11R-A9', '11R-A10',
+  '11R-B1', '11R-B2', '11R-B3', '11R-B4',
+  // 12R F2 색함수 wrapper / F3 border-image 도장 / F4 border 문법 전 노드 소비 (18)
+  '12R-F2a', '12R-F2b', '12R-F2c', '12R-F2d', '12R-F2-GREEN',
+  '12R-F3a', '12R-F3b', '12R-F3c', '12R-F3d', '12R-F3e', '12R-F3f', '12R-F3g',
+  '12R-F4a', '12R-F4b', '12R-F4c', '12R-F4d', '12R-F4e', '12R-F4f',
+  // 13R I2 var/box-shadow 유효성 / I3 directional 잔여 / I4 border-image 양방향 / D deferred (18)
+  '13R-I2a', '13R-I2b1', '13R-I2b2', '13R-I2b3', '13R-I2b-G1', '13R-I2b-G2', '13R-I2b-G3',
+  '13R-I3a', '13R-I3b',
+  '13R-I4a', '13R-I4b', '13R-I4c',
+  '13R-D1', '13R-D2', '13R-D3', '13R-D4', '13R-D5', '13R-D6',
+  // 14R I1 longhand 삼분 / I2 indicator CSS-wide / I3 재귀 var / I4 border-image / I5 전이 / R1 시스템색 / R2 border-image longhand (35)
+  '14R-I1a', '14R-I1b', '14R-I1c', '14R-I1d', '14R-I1e', '14R-I1f', '14R-I1g', '14R-I1h',
+  '14R-I2a', '14R-I2b', '14R-I2c', '14R-I2d', '14R-I2e', '14R-I2f',
+  '14R-I3a', '14R-I3b', '14R-I3c', '14R-I3d',
+  '14R-I4a', '14R-I4b', '14R-I4c',
+  '14R-I5-1b', '14R-I5-1i', '14R-I5-2b', '14R-I5-2i', '14R-I5-3b', '14R-I5-3i',
+  '14R-R1a', '14R-R1b', '14R-R1c', '14R-R1d', '14R-R1e',
+  '14R-R2a', '14R-R2b', '14R-R2c',
+  // 15R M(헤드리스 Chrome 대조) / ADV(역방향) / EXC(명시 예외) (21)
+  '15R-M1', '15R-M2', '15R-M3', '15R-M4', '15R-M5', '15R-M6', '15R-M6b', '15R-M7', '15R-M8', '15R-M9',
+  '15R-M10', '15R-M11', '15R-M12', '15R-M13', '15R-M14', '15R-M15', '15R-M16',
+  '15R-ADV1', '15R-ADV2', '15R-EXC-A', '15R-EXC-B',
+  // 16R I1 env / I2 무효 hex / I3 색함수 구분자 (8)
+  '16R-I1a', '16R-I1b', '16R-I1c', '16R-I2', '16R-I3a', '16R-I3b', '16R-I3c', '16R-I3d',
+];
+const CORPUS_ROUND_COUNTS = { '11R': 14, '12R': 18, '13R': 18, '14R': 35, '15R': 21, '16R': 8 };
+
+describe('I2(19R) — CORPUS exact ordered manifest + uniqueness (삭제/중복 우회 폐쇄)', () => {
+  it('manifest 자체가 114개·ID 중복 없음·라운드별 개수 고정', () => {
+    expect(CORPUS_MANIFEST).toHaveLength(114);
+    expect(new Set(CORPUS_MANIFEST).size).toBe(114);
+    const byRound = {};
+    for (const id of CORPUS_MANIFEST) { const r = id.match(/^(\d+R)/)[1]; byRound[r] = (byRound[r] || 0) + 1; }
+    expect(byRound).toEqual(CORPUS_ROUND_COUNTS);
+    expect(Object.values(CORPUS_ROUND_COUNTS).reduce((a, b) => a + b, 0)).toBe(114);
+  });
+
+  it('CORPUS 실제 ID 인벤토리 === manifest (순서 포함) — 삭제·재배치·추가 전부 RED', () => {
+    // count만 보던 이전 게이트가 놓친 것을 여기서 잡는다: 배열 자체를 순서까지 비교한다.
+    expect(CORPUS.map((c) => c.id)).toEqual(CORPUS_MANIFEST);
+  });
+
+  it('CORPUS ID uniqueness — 삭제 후 다른 ID 중복으로 개수 맞추는 우회 차단', () => {
+    const ids = CORPUS.map((c) => c.id);
+    const dups = ids.filter((id, i) => ids.indexOf(id) !== i);
+    expect(new Set(ids).size, `중복 ID: ${dups.join(', ')}`).toBe(ids.length);
+  });
+
+  it('선재현↔RED: 임의 1건(11R-A1) 삭제는 count-only(>=90)로는 못 잡지만 인벤토리·uniqueness가 잡는다', () => {
+    const deleted = CORPUS.filter((c) => c.id !== '11R-A1').map((c) => c.id);
+    // 선재현: 현행 HEAD의 `CORPUS.length >= 90`은 113개도 통과했다.
+    expect(deleted.length).toBeGreaterThanOrEqual(90);
+    // 인벤토리 비교는 삭제를 즉시 검출한다.
+    expect(deleted).not.toEqual(CORPUS_MANIFEST);
+    // 삭제 후 다른 ID를 중복해 개수(114)를 맞추는 우회도 uniqueness + 순서 비교가 잡는다.
+    const deletedThenDup = [...deleted, '11R-A2'];
+    expect(deletedThenDup).toHaveLength(114);
+    expect(new Set(deletedThenDup).size).not.toBe(deletedThenDup.length); // uniqueness RED
+    expect(deletedThenDup).not.toEqual(CORPUS_MANIFEST);                  // 순서 비교 RED
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 17R 최소 회귀 벡터 상설화 — 외부 검수가 "모델이 정답 판정기라서" 뚫린다고 실증한 8종. 전환 **전**
 // 이 8종은 전부 GREEN이었다(선재현 확인: 현행 HEAD 사본에 8 단정을 붙여 8/8 통과 = false-green 확정).
 // 전환 후에는 canonical이 아니라는 이유 하나로 전부 RED다 — 개별 grammar 판정이 사라졌으므로 이 부류의
@@ -1989,6 +2195,8 @@ describe('17R 8 회귀 벡터 상설화 — 전환 전 false-green 8/8 → 전�
   });
   it('8종 전부 canonical 판정 자체가 non-canonical이다(값 유효성은 판단하지 않는다)', () => {
     expect(R17_REGRESSION_VECTORS).toHaveLength(8);
+    // 적대적 재검토(I2와 동종 인벤토리 클래스): 8종 ID를 순서까지 고정 — 삭제/재배치 시 RED.
+    expect(R17_REGRESSION_VECTORS.map((v) => v.id)).toEqual(['V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8']);
     const values = [
       ['all', 'env(--x, initial)'],
       ['all', 'if(style(--flag: true): initial)'],
@@ -2189,13 +2397,68 @@ describe('명시 예외 전수 — 게이트 범위 밖 경로(알려진 한계 
     // P4가 약화되거나(대상 파일 판정 밖) 우회되면 이 구멍이 그대로 열린다.
     expect(findProtectedDeclarations(cssText).length).toBeGreaterThan(0);
   });
-  it('④ JS 런타임 CSS.registerProperty()는 정적 styles 인벤토리 밖 — @property at-rule만 폐쇄됨(I4)', () => {
-    // CSS 텍스트 경로(@property)는 I4에서 닫혔다.
+  it('④ JS 런타임 CSS 쓰기(registerProperty·style.setProperty·JSX inline style·동적 <style> 텍스트)는 정적 styles 인벤토리 밖 — @property at-rule만 폐쇄(I4), 리터럴 JS 쓰기는 M1 스윕이 0건 고정', () => {
+    // M1(18R→19R) 확장 기록: 예외④는 CSS.registerProperty **하나**가 아니라 런타임 생성 CSS/custom-property
+    // 쓰기 **전체**다 — (a) el.style.setProperty('--color-x', …), (b) JSX `style={{ '--color-x': … }}`,
+    // (c) 동적 <style> 텍스트 주입, (d) CSS.registerProperty. 이들은 styles/**/*.{scss,css}에 나타나지 않아
+    // 이 정적 게이트의 입력 밖이다. CSS 텍스트 경로(@property)는 I4에서 닫혔지만 위 JS 경로는 열려 있다.
     expect(findProtectedDeclarations('@property --color-input-border{syntax:"<color>";inherits:false;initial-value:transparent}')
       .length).toBeGreaterThan(0);
-    // 반면 동일 효과를 내는 JS 호출은 이 게이트의 입력(styles/**/*.{scss,css})에 아예 나타나지 않는다.
-    // 현재 레포 사용처 0건이라 실피해는 없으나, 도입 시 이 경로는 열려 있다 — 기록만 남긴다.
+    // .js 파일은 어떤 것도 스윕 대상이 아니다(styles 밖·확장자 밖 둘 다).
     expect(isProtectedSweepTarget('library/theme.js')).toBe(false);
+    expect(isProtectedSweepTarget('components/Canvas/CanvasPageView.js')).toBe(false);
+    // 단, "보호 토큰 이름을 JS에서 리터럴로 쓰는" 가장 흔한 회귀 경로만은 M1(19R) 인벤토리 스윕이 별도로
+    // 0건 고정한다(아래 describe). 현행 근거: 레포의 유일한 setProperty는 --sticky-header-h(비보호)뿐.
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// M1(19R) — 예외④ 보강: components/·pages/ JS에서 **보호 토큰 리터럴 쓰기 0건**을 인벤토리로 잠근다.
+// 런타임 CSS 쓰기 전면 폐쇄는 이 정적 게이트의 범위 밖이지만(예외④), 리터럴 보호 토큰 이름을 JS에서
+// 직접 대입하는 가장 흔한 회귀 경로(inline style 키·setProperty·registerProperty·동적 <style>)만은
+// grep 인벤토리로 0건 고정한다. 비보호 런타임 주입(--branch-color/--status-color/--accent/
+// --sticky-header-h)은 보호 접두(--color-/--track-/--shadow-)가 아니라 자연히 제외된다.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('M1(19R) — components/·pages/ JS 리터럴 보호 토큰 쓰기 0건 스윕 (예외④ 보강)', () => {
+  const repoRoot = resolve(__dirname, '..');
+  const jsFiles = ['components', 'pages'].flatMap((d) => {
+    const dir = resolve(repoRoot, d);
+    return readdirSync(dir, { recursive: true }).map(String)
+      .filter((f) => f.endsWith('.js')).map((f) => resolve(dir, f));
+  });
+  // 보호 토큰 "쓰기"만 매치한다(소비 var(--color-x)는 제외). 세 형태:
+  const WRITE_RES = [
+    /--(?:color|track|shadow)-[a-z0-9-]+["'`]?\s*:/,             // 객체 키/CSS 선언: '--color-x': 또는 --color-x:
+    /\.setProperty\(\s*["'`]--(?:color|track|shadow)-/,           // el.style.setProperty('--color-x', …)
+    /registerProperty\(\s*\{[^}]*["'`]--(?:color|track|shadow)-/, // CSS.registerProperty({ name: '--color-x' })
+  ];
+  it('컴포넌트/페이지 JS가 충분히 수집된다(스윕 공허 방지)', () => {
+    expect(jsFiles.length).toBeGreaterThan(100);
+  });
+  it('보호 토큰(--color-/--track-/--shadow-)을 리터럴로 쓰는 JS가 0건', () => {
+    const offenders = [];
+    for (const f of jsFiles) {
+      readFileSync(f, 'utf8').split('\n').forEach((line, i) => {
+        const code = line.split('//')[0]; // 라인 주석 제외
+        if (WRITE_RES.some((re) => re.test(code))) offenders.push(`${f.replace(repoRoot + '/', '')}:${i + 1}`);
+      });
+    }
+    expect(offenders, `JS 리터럴 보호 토큰 쓰기 발견(런타임 주입은 게이트 밖 — 신설 시 명시 결정 필요): ${offenders.join('; ')}`).toEqual([]);
+  });
+  it('스윕 검출력(공허하지 않음): 합성 write는 잡고, read/비보호는 안 잡는다', () => {
+    const writes = [
+      `style={{ '--color-x': v }}`,
+      `el.style.setProperty('--track-y', z)`,
+      `CSS.registerProperty({ name: '--shadow-z' })`,
+      '`--color-a: ${v}; border: 1px`',
+    ];
+    for (const s of writes) expect(WRITE_RES.some((re) => re.test(s)), s).toBe(true);
+    const nonWrites = [
+      'border: 1px solid var(--color-x)',                 // 소비(read)
+      `el.style.setProperty('--sticky-header-h', h)`,     // 비보호 런타임 주입
+      'var(--branch-color)',                              // 비보호 소비
+    ];
+    for (const s of nonWrites) expect(WRITE_RES.some((re) => re.test(s)), s).toBe(false);
   });
 });
 
@@ -2211,6 +2474,17 @@ const NON_CSS_WS = {
   'ZWNBSP U+FEFF': '\uFEFF',
   'VERTICAL TAB U+000B': '\u000B',
 };
+// M2(19R) — **ECMAScript `\s` 전체 − CSS 공백 5종**의 완전 집합(20종). NON_CSS_WS(위 4종)는 대표 샘플일
+// 뿐이라 U+2028/U+2029/U+202F/U+1680/U+2000–200A 등 미등재 문자가 회귀해도 못 잡았다. 이 완전 집합 +
+// 완전성 단정으로 "JS_ONLY_WS_RE/NON_CSS_WS를 4종 전용으로 약화하면 RED"를 강제한다(실측 도출: BMP 스캔
+// `/\s/.test(ch) && !CSS5.test(ch)`).
+const JS_ONLY_WS_CODEPOINTS = [
+  0x000B, 0x00A0, 0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006,
+  0x2007, 0x2008, 0x2009, 0x200A, 0x2028, 0x2029, 0x202F, 0x205F, 0x3000, 0xFEFF,
+];
+const JS_ONLY_WS_CHARS = JS_ONLY_WS_CODEPOINTS.map((cp) => String.fromCodePoint(cp))
+const hex4 = (ch) => `U+${ch.codePointAt(0).toString(16).toUpperCase().padStart(4, '0')}`;
+
 describe('I1(18R) — CSS 공백 전용 정규화(손실 정규화 폐쇄)', () => {
   it('CSS 공백 5종만 공백으로 취급한다(헬퍼 단위 계약)', () => {
     expect(normalizeCssWhitespace(' \t\n\f\r a \t\n\f\r ')).toBe('a');
@@ -2275,6 +2549,61 @@ describe('I1(18R) — CSS 공백 전용 정규화(손실 정규화 폐쇄)', () 
     expect(() => structuralGate(cssText)).toThrow(/2번째 블록\(다크\)/);
     const lightNbsp = `:root\u00A0{--color-a:1}html[data-theme='dark']{--color-a:2}:root{--color-b:3}`;
     expect(() => structuralGate(lightNbsp)).toThrow(/1번째 블록\(라이트\)/);
+  });
+});
+
+describe('M2(19R) — NON_CSS_WS 완전성(ECMAScript \\s − CSS 5종 20문자) + resolveColorValue 직접 테스트', () => {
+  it('JS_ONLY_WS_CHARS는 "ECMAScript \\s 전체 − CSS 5종"의 완전 집합이다 (4종 약화 시 RED)', () => {
+    // BMP 전체를 스캔해 "JS 공백이지만 CSS 공백은 아닌" 코드포인트 집합을 실측하고 fixture와 대조한다.
+    const css5 = new RegExp(`[${CSS_WS_CLASS}]`);
+    const computed = [];
+    for (let cp = 0; cp <= 0xFFFF; cp++) {
+      const ch = String.fromCharCode(cp);
+      if (/\s/.test(ch) && !css5.test(ch)) computed.push(cp);
+    }
+    expect([...JS_ONLY_WS_CODEPOINTS].sort((a, b) => a - b)).toEqual(computed.sort((a, b) => a - b));
+    expect(JS_ONLY_WS_CHARS).toHaveLength(20);
+    // JS_ONLY_WS_RE가 전 문자를 매치하고 CSS 5종은 매치하지 않는다(정규식-fixture 정합).
+    for (const ch of JS_ONLY_WS_CHARS) expect(JS_ONLY_WS_RE.test(ch), hex4(ch)).toBe(true);
+    for (const ch of [' ', '\t', '\n', '\f', '\r']) expect(JS_ONLY_WS_RE.test(ch)).toBe(false);
+    // 대표 4종(NON_CSS_WS)이 완전 집합의 부분집합인지도 확인(약화 감시).
+    for (const w of Object.values(NON_CSS_WS)) expect(JS_ONLY_WS_CHARS).toContain(w);
+  });
+
+  it.each(JS_ONLY_WS_CHARS.map((w) => [hex4(w), w]))(
+    '완전 집합 %s: 셀렉터(rulesFound 0)·box-shadow 값·border 값 3자리 모두 게이트가 공백으로 오정규화하지 않는다',
+    (_n, w) => {
+      expect(evaluatePinnedContract(`.X${w}{border:1px solid ${V}}`, '.X', { kind: 'border', token: CIB }).rulesFound ?? 0).toBe(0);
+      expect(classifyRelevantDecl('box-shadow', `inset${w}0 0 0 1px ${IV}`).syntax).toBe('non-canonical');
+      expect(classifyRelevantDecl('border', `1px${w}solid ${V}`).syntax).toBe('non-canonical');
+    });
+
+  // resolveColorValue — M2 승격 후 직접 테스트. 옛 `\s`/`trim()`으로 되돌리면 NBSP 케이스가 통과(RED).
+  const dv = { 'color-x': '#6B7280', 'color-y': 'var(--color-x)', 'color-loop': 'var(--color-loop)' };
+  it('리터럴 색(hex/rgba)은 그대로 반환', () => {
+    expect(resolveColorValue('#6B7280', dv)).toBe('#6B7280');
+    expect(resolveColorValue('rgba(1,2,3,0.5)', dv)).toBe('rgba(1,2,3,0.5)');
+  });
+  it('var(--token)은 darkValuesMap으로 재귀 해석(체인 포함)', () => {
+    expect(resolveColorValue('var(--color-x)', dv)).toBe('#6B7280');
+    expect(resolveColorValue('var(--color-y)', dv)).toBe('#6B7280'); // var→var→리터럴
+  });
+  it('var() 내부/경계의 CSS 공백은 허용(축약·trim 후 매치)', () => {
+    expect(resolveColorValue('  var( --color-x ) \t', dv)).toBe('#6B7280');
+  });
+  it('NON_CSS_WS(NBSP/EM SPACE 등)는 var() 매치 실패 → null (옛 \\s/trim 회귀 잠금)', () => {
+    expect(resolveColorValue('var( --color-x)', dv)).toBeNull();  // 여는 괄호 뒤 NBSP
+    expect(resolveColorValue('var(--color-x )', dv)).toBeNull();  // 토큰 뒤 NBSP
+    expect(resolveColorValue(' var(--color-x)', dv)).toBeNull();  // 값 경계 NBSP(trim 안 됨)
+    expect(resolveColorValue('var(--color-x) ', dv)).toBeNull();  // 값 경계 EM SPACE
+  });
+  it('미정의 토큰·복합 표현식·null은 null(판정 불가 → 호출부 RED 유도)', () => {
+    expect(resolveColorValue('var(--missing)', dv)).toBeNull();
+    expect(resolveColorValue('calc(1px + 2px)', dv)).toBeNull();
+    expect(resolveColorValue(null, dv)).toBeNull();
+  });
+  it('순환 참조는 depth 한계(>5)로 null(무한재귀 방지)', () => {
+    expect(resolveColorValue('var(--color-loop)', dv)).toBeNull();
   });
 });
 
