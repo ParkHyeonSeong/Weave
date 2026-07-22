@@ -1392,6 +1392,44 @@ function colorSchemeOffenders(themesCss) {
   return offenders;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// I1(23R) — root 노드 인벤토리 exact 고정. structuralGate는 root 직속 "rule 개수 3개"만 센다
+// (walkRules + parent.type==='root' 필터). 그래서 at-rule(@media/@supports/@layer/@import/@font-face 등)이
+// 3블록 앞/뒤/사이에 추가돼도 rootRules에 안 잡혀 통과했다 — 격리 실증: `_themes.scss` 끝에
+// `@media (min-width:0px){ :root { color-scheme: dark } }`(항상-참 조건) 추가가 472/472 GREEN인데,
+// 그 후행 `:root{color-scheme:dark}`가 **라이트 화면의 네이티브 컨트롤·스크롤바를 실제 dark로** 바꾸는
+// 제품 회귀다(정적 _themes.scss 안·exact selector라 범위 밖 아님). selector 의미론 모델을 추가하지 않고
+// (17R 교훈) **구조 인벤토리**로만 닫는다: comment 외 root.nodes가 정확히 [lightRule, darkRule, aliasRule]
+// 세 identity와 **개수+동일성+순서**로 일치해야 한다. 3블록 판정은 structuralGate 재사용(새 파서 없음).
+// colorSchemeOffenders와 같은 이유로 structuralGate 본체가 아닌 **인접 전용 단정**으로 둔다 — 게이트에
+// 병합하면 3블록 밖 노드를 의도적으로 실어 특정 throw 메시지(/보호 토큰|3블록/ 등)를 단정하는 다른
+// describe들이 깨진다(현행 472 계약 보존). structuralGate가 count/shape로 **먼저 throw**하는 mutation
+// (4번째 rule 등)은 이 함수 진입 전에 이미 RED다. 같은 "count≠identity" 처방은 19R I2가 CORPUS를
+// `length >= 90` count에서 순서 고정 exact manifest로 바꾼 것과 동일 계열이다.
+// ─────────────────────────────────────────────────────────────────────────────
+function rootInventoryOffenders(themesCss) {
+  const { root, lightRule, darkRule, aliasRule } = structuralGate(themesCss);
+  const expected = [lightRule, darkRule, aliasRule];
+  const meaningful = root.nodes.filter((n) => n.type !== 'comment');
+  const describeNode = (n) =>
+    n.type === 'rule' ? `rule ${n.selector}`
+      : n.type === 'atrule' ? `@${n.name}${n.params ? ` ${n.params}` : ''}`
+        : n.type === 'decl' ? `decl ${n.prop}` : n.type;
+  const offenders = [];
+  if (meaningful.length !== expected.length) {
+    offenders.push(
+      `root 직속 의미 노드 ${meaningful.length}개(기대 ${expected.length}, comment 제외): ` +
+      meaningful.map((n) => `${describeNode(n)}@${n.source?.start?.line}행`).join(', '),
+    );
+  }
+  meaningful.forEach((node, i) => {
+    if (node !== expected[i]) {
+      offenders.push(`root 인덱스 ${i} 노드가 3블록 identity와 불일치: ${describeNode(node)}@${node.source?.start?.line}행`);
+    }
+  });
+  return offenders;
+}
+
 describe('_themes.scss 구조 계약 — flat 3블록 강제 (selector 매칭→구조 게이트 전환, 9라운드)', () => {
   it('실 파일이 3블록 계약을 만족한다(형태·순서·보호 토큰 3블록 밖 배타성)', () => {
     expect(() => structuralGate(css)).not.toThrow();
@@ -1593,6 +1631,54 @@ describe('I1(22R) color-scheme 선재현↔RED mutation — manifest 밖 non-cus
   });
   it('⑥ 테마 블록에 color-scheme 아닌 다른 일반 선언(accent-color) → RED(비허용 일반 선언)', () => {
     expect(offendersOf({ lightExtra: 'accent-color: red;' }).join(' ')).toMatch(/라이트 블록 비허용 일반 선언 accent-color/);
+  });
+});
+
+describe('_themes.scss root 노드 인벤토리 exact — comment 외 root.nodes == [light,dark,alias] identity (I1 23R)', () => {
+  it('실 _themes.scss: comment 외 root 직속 노드가 정확히 3블록 identity 세 개(개수+동일성+순서, offender 0)', () => {
+    expect(rootInventoryOffenders(css)).toEqual([]);
+  });
+  it('적대적 재검토: 인벤토리는 개수가 아니라 세 rule identity(===)를 본다 (count-only 아님)', () => {
+    // 개수(3)가 맞아도 다른 노드로 대체되면 identity 불일치로 잡힌다는 것을 실 파일에서 명시한다.
+    const { root, lightRule, darkRule, aliasRule } = structuralGate(css);
+    const meaningful = root.nodes.filter((n) => n.type !== 'comment');
+    expect(meaningful.length).toBe(3);
+    expect(meaningful[0]).toBe(lightRule); // 참조 동일(===)
+    expect(meaningful[1]).toBe(darkRule);
+    expect(meaningful[2]).toBe(aliasRule);
+  });
+});
+
+describe('I1(23R) root 인벤토리 선재현↔RED mutation — at-rule/4번째/순서 (count-only 게이트가 놓친 구멍)', () => {
+  const OK3 = `:root{--color-bg:#fff}html[data-theme='dark']{--color-bg:#000}:root{--color-alias:1}`;
+  // 아래 5종은 rootRules 개수 3을 유지하고 3블록 밖 선언(color-scheme)도 보호 접두가 아니라
+  // structuralGate가 **통과**한다(현행 count-only 게이트의 false-green). 인벤토리만 RED로 갈린다.
+  const passesGateButExtraNode = {
+    '@media 추가':    `${OK3}@media (min-width:0px){:root{color-scheme:dark}}`,
+    '@supports 추가': `${OK3}@supports (display:block){:root{color-scheme:dark}}`,
+    '@layer 추가':    `${OK3}@layer theme{:root{color-scheme:dark}}`,
+    '@import 추가':   `${OK3}@import "x.css";`,
+    '순서 뒤섞기(at-rule 선두)': `@media (min-width:0px){:root{color-scheme:dark}}${OK3}`,
+  };
+  it.each(Object.entries(passesGateButExtraNode))(
+    '선재현: %s → structuralGate는 여전히 통과(count-only blind, false-green)',
+    (_l, mutCss) => { expect(() => structuralGate(mutCss)).not.toThrow(); },
+  );
+  it.each(Object.entries(passesGateButExtraNode))(
+    'RED: %s → rootInventoryOffenders offender>0(3블록 밖 노드 감지)',
+    (_l, mutCss) => { expect(rootInventoryOffenders(mutCss).length).toBeGreaterThan(0); },
+  );
+  it('4번째 rule 추가 → structuralGate가 count(정확히 3개)로 먼저 throw(인벤토리 진입 전 RED)', () => {
+    const mut = `${OK3}:root{color-scheme:dark}`;
+    expect(() => structuralGate(mut)).toThrow(/정확히 3개|3블록/);
+    expect(() => rootInventoryOffenders(mut)).toThrow(); // structuralGate throw를 전파
+  });
+  it('GREEN 대조: comment 추가(선두·말미·블록 사이)는 무의미 노드라 offender 0', () => {
+    expect(rootInventoryOffenders(`/* lead */${OK3}`)).toEqual([]);
+    expect(rootInventoryOffenders(`${OK3}/* tail */`)).toEqual([]);
+    expect(rootInventoryOffenders(
+      `:root{--color-bg:#fff}/* mid */html[data-theme='dark']{--color-bg:#000}:root{--color-alias:1}`,
+    )).toEqual([]);
   });
 });
 
@@ -2997,8 +3083,8 @@ describe('명시 예외 전수 — 게이트 범위 밖 경로(알려진 한계 
     // .js 파일은 어떤 것도 스윕 대상이 아니다(styles 밖·확장자 밖 둘 다).
     expect(isProtectedSweepTarget('library/theme.js')).toBe(false);
     expect(isProtectedSweepTarget('components/Canvas/CanvasPageView.js')).toBe(false);
-    // 단, "보호 토큰 이름을 JS에서 리터럴로 **단일행** 대입하는" 가장 흔한 회귀 경로만은 M1 인벤토리 스윕이
-    // 0건 고정한다(아래 describe). M1(20R) 주장 범위 축소: 완전 커버는 JS AST 스캔이 필요하고 그건 스코프
+    // 단, 보호 토큰 이름을 향한 **WRITE_RES 세 정규식의 lexical match**만은 M1 인벤토리 스윕이 0건 고정한다
+    // (아래 describe·semantic write 보장 아님). M1(20R→22R) 주장 범위: 완전 커버는 JS AST 스캔이 필요하고 그건 스코프
     // 밖이므로 — 줄바꿈된 setProperty(…\n '--color-x')·브래킷 접근(style['--color-x']=)은 정규식 증설로
     // 흉내내지 않고 **명시적 미보장**으로 남긴다(아래 describe가 그 미보장 경계를 단정으로 기록).
   });
@@ -3031,7 +3117,7 @@ describe('M1(22R) — components/·pages/ JS WRITE_RES lexical match 0건 스윕
     return readdirSync(dir, { recursive: true }).map(String)
       .filter((f) => f.endsWith('.js')).map((f) => resolve(dir, f));
   });
-  // 보호 토큰 "쓰기"만 매치한다(소비 var(--color-x)는 제외). 단일행 세 형태:
+  // WRITE_RES 세 정규식의 lexical form만 매치한다(semantic write 아님·소비 var(--color-x)는 제외). 세 형태:
   const WRITE_RES = [
     /--(?:color|track|shadow)-[a-z0-9-]+["'`]?\s*:/,             // 객체 키/CSS 선언: '--color-x': 또는 --color-x:
     /\.setProperty\(\s*["'`]--(?:color|track|shadow)-/,           // el.style.setProperty('--color-x', …)
