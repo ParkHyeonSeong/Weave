@@ -910,9 +910,13 @@ function siteCssText(relPath) {
 // 확장해 재사용한다(로직 중복·drift 방지). 고아 파일(_app 미import, 예: createIssue.scss)도 스윕
 // 대상에 포함되지만 무해하다 — 선언 금지는 파일 로드 여부와 무관한 전역 계약이다. sass.compile
 // 실패는 조용히 건너뛰지 않고(offender로 표면화) expect([]).toEqual([])를 RED로 떨어뜨린다.
+// I1(24R): 같은 siteCssText(compile/normalize)→postcss AST 파이프라인에 property 하나(color-scheme) 금지를
+// 더 얹는다 — findColorSchemeDeclarations(비-custom 전역 스위치)를 findProtectedDeclarations(보호 custom
+// property)와 같은 텍스트에 병렬로 태워 offender를 합친다(새 파이프라인 없음).
 function sweepFileForProtectedDeclarations(relPath) {
   try {
-    return findProtectedDeclarations(siteCssText(relPath)).map((o) => `${relPath}: ${o}`);
+    const text = siteCssText(relPath);
+    return [...findProtectedDeclarations(text), ...findColorSchemeDeclarations(text)].map((o) => `${relPath}: ${o}`);
   } catch (e) {
     return [`${relPath}: 컴파일/파싱 실패(FAIL로 표면화, 침묵 스킵 금지) — ${String((e && e.message) || e).split('\n')[0]}`];
   }
@@ -969,9 +973,43 @@ describe('styles/ 전체 컴파일/AST 스윕 — 비핀 파일 보호 토큰 �
     expect([...exts].sort()).toEqual(['.css', '.scss']);
   });
 
-  it('.scss 전부(컴파일 후 AST)+.css 전부(정규화 후 파싱)가 --color-/--track-/--shadow- 를 선언하지 않는다', () => {
+  it('.scss 전부(컴파일 후 AST)+.css 전부(정규화 후 파싱)가 --color-/--track-/--shadow-·color-scheme 를 선언하지 않는다 (I1 24R)', () => {
     const offenders = targetFiles.flatMap(sweepFileForProtectedDeclarations);
-    expect(offenders, `보호 토큰 선언(또는 컴파일 실패) 발견: ${offenders.join('; ')}`).toEqual([]);
+    expect(offenders, `보호 토큰/color-scheme 선언(또는 컴파일 실패) 발견: ${offenders.join('; ')}`).toEqual([]);
+  });
+});
+
+describe('I1(24R) styles 전역 color-scheme 금지 선재현↔RED — P4 스윕 non-custom property 확장', () => {
+  // 옛 P4 검출(findProtectedDeclarations)은 --color-/--track-/--shadow-만 봐서 color-scheme에 blind(선재현),
+  // 신 검출(findColorSchemeDeclarations)이 디코딩+lowercase로 위치/selector/escape/case 무관 RED. 두 검출을
+  // sweepFileForProtectedDeclarations가 같은 siteCssText에 병렬로 태운다(위 실 스윕 assertion이 실 파일 커버).
+  const scssCss = (body) => compileString(body).css;   // .scss 경로(Sass 컴파일)
+  const rawCss = (body) => normalizeRawCss(body);       // .css 경로(fonts.css식 css-syntax 정규화)
+  const cases = {
+    'fonts.css식 .css raw':         rawCss(':root{color-scheme:dark}'),
+    '일반 SCSS(비-:root selector)':  scssCss('.Foo{color-scheme:dark}'),
+    '@media 내부':                   rawCss('@media (min-width:0px){:root{color-scheme:dark}}'),
+    'escaped(color-\\73 cheme)':     ':root{color-\\73 cheme:dark}', // raw — decoder가 실이름 복원
+    'case 변형(COLOR-SCHEME)':       ':root{COLOR-SCHEME:dark}',      // raw — toLowerCase가 정규화(regular property는 대소문자 무시)
+  };
+  it.each(Object.entries(cases))('선재현: %s → findProtectedDeclarations blind(offender 0)', (_l, cssText) => {
+    expect(findProtectedDeclarations(cssText)).toEqual([]);
+  });
+  it.each(Object.entries(cases))('RED: %s → findColorSchemeDeclarations offender>0', (_l, cssText) => {
+    expect(findColorSchemeDeclarations(cssText).length).toBeGreaterThan(0);
+  });
+  it('escaped가 실 파이프라인(Sass css-syntax 정규화)에서도 리터럴 color-scheme로 접혀 잡힌다(디코더는 belt-and-suspenders)', () => {
+    // 실 스윕은 siteCssText(Sass)를 거치므로 escape는 컴파일 시 리터럴로 정규화된다 — 정규화본도 RED.
+    expect(findColorSchemeDeclarations(rawCss(':root{color-\\73 cheme:dark}')).length).toBeGreaterThan(0);
+  });
+  it('대조(false-positive 없음): color-scheme 없는 파일 — 보호 custom property 소비·color/background는 GREEN', () => {
+    expect(findColorSchemeDeclarations(rawCss(':root{--color-bg:#fff}'))).toEqual([]);
+    expect(findColorSchemeDeclarations(scssCss('.Foo{color:red;background:var(--color-bg)}'))).toEqual([]); // 'color'≠'color-scheme'
+  });
+  it('적대적 스코프 판단: color-scheme만 좁게 금지 — accent-color/forced-color-adjust는 컴포넌트 정당 사용이라 대상 아님', () => {
+    // accent-color는 스타일에 input[type=checkbox] 등 9곳 정당 사용, forced-color-adjust는 레포 0 — 전역 금지 시 false-positive.
+    expect(findColorSchemeDeclarations(rawCss('.Foo{accent-color:red;forced-color-adjust:none}'))).toEqual([]);
+    expect(STYLES_FORBIDDEN_NONCUSTOM_PROPS).toEqual(['color-scheme']);
   });
 });
 
@@ -1271,6 +1309,31 @@ function findProtectedDeclarations(cssText) {
   return offenders;
 }
 
+// I1(24R) — styles 전역 color-scheme 금지. P4 스윕(findProtectedDeclarations)은 `--color-/--track-/--shadow-`
+// 보호 **custom property**만 봤다. 그런데 `color-scheme`(non-custom, `--` 아님)는 :root의 네이티브 컨트롤·
+// 스크롤바 라이트/다크를 통째로 바꾸는 전역 스위치이고 정본은 오직 `_themes.scss`(라이트/다크 블록)다.
+// 격리 실증: `_themes.scss`보다 뒤 import되는 `fonts.css`(_app.js: _themes→globals→fonts 순)에
+// `:root{color-scheme:dark!important}`를 넣어도 findProtectedDeclarations는 `--` 접두가 아니라 blind →
+// 486 GREEN인데 라이트 화면 네이티브 컨트롤·스크롤바가 실제 dark로 강제되는 제품 회귀(selector 동치성/JS
+// 런타임 예외 아님, 정적 styles 인벤토리 스코프 안). 기존 compile/normalize(siteCssText)→postcss AST
+// 파이프라인을 **그대로 재사용**해(새 파이프라인 없음) `color-scheme` 선언을 위치·selector·중첩 무관 전면
+// 금지한다. 이름 비교는 이 파일의 유일 디코더 decodeCssIdentifier(escape 복원)+toLowerCase 후 —
+// escaped(`color-\73 cheme`)/case 변형(`COLOR-SCHEME`)까지 닫는다(regular property는 스펙상 대소문자 무시).
+// 적대적 스코프 판단: 다른 테마성 non-custom property는 **함께 금지하지 않는다** — `accent-color`는 스타일에
+// input[type=checkbox] 등 컴포넌트 스코프로 9곳 정당 사용(전역 금지 시 false-positive), `forced-color-adjust`는
+// 레포 사용 0. color-scheme만이 `_themes`가 :root에서 소유하는 전역 네이티브-테마 스위치라 여기만 좁게 닫는다.
+const STYLES_FORBIDDEN_NONCUSTOM_PROPS = ['color-scheme'];
+function findColorSchemeDeclarations(cssText) {
+  const root = postcss.parse(cssText);
+  const offenders = [];
+  root.walkDecls((decl) => {
+    const name = decodeCssIdentifier(decl.prop).toLowerCase();
+    if (!STYLES_FORBIDDEN_NONCUSTOM_PROPS.includes(name)) return;
+    offenders.push(`${name} 선언 금지(styles 전역 — 정본은 _themes.scss)@${decl.source?.start?.line}행(위치: ${describeLocation(decl.parent)})`);
+  });
+  return offenders;
+}
+
 // P3(역방향, 내부 리뷰 지적) — 위 스캔들은 전부 "보호 접두가 3블록 '밖'에서 선언되면 안 된다"는
 // 한 방향만 본다. 반대 방향(3블록 '안'에 PROTECTED_TOKEN_PREFIXES 밖의 새 토큰 패밀리가 섞여도
 // 아무도 안 잡는다)은 열린 구멍이었다 — 예: 4번째 접두(예: --spacing-)가 도입돼 3블록에 추가돼도
@@ -1407,26 +1470,61 @@ function colorSchemeOffenders(themesCss) {
 // (4번째 rule 등)은 이 함수 진입 전에 이미 RED다. 같은 "count≠identity" 처방은 19R I2가 CORPUS를
 // `length >= 90` count에서 순서 고정 exact manifest로 바꾼 것과 동일 계열이다.
 // ─────────────────────────────────────────────────────────────────────────────
+// postcss 노드 1개를 사람이 읽을 타입 라벨로. rootInventoryOffenders(root 직속)와 ruleChildTypeOffenders
+// (블록 직속 자식)가 공유한다(로컬 중복 제거) — 둘 다 "이 위치에 있으면 안 되는 노드"를 지목한다.
+function describeCssNode(n) {
+  return n.type === 'rule' ? `rule ${n.selector}`
+    : n.type === 'atrule' ? `@${n.name}${n.params ? ` ${n.params}` : ''}`
+      : n.type === 'decl' ? `decl ${n.prop}` : n.type;
+}
 function rootInventoryOffenders(themesCss) {
   const { root, lightRule, darkRule, aliasRule } = structuralGate(themesCss);
   const expected = [lightRule, darkRule, aliasRule];
   const meaningful = root.nodes.filter((n) => n.type !== 'comment');
-  const describeNode = (n) =>
-    n.type === 'rule' ? `rule ${n.selector}`
-      : n.type === 'atrule' ? `@${n.name}${n.params ? ` ${n.params}` : ''}`
-        : n.type === 'decl' ? `decl ${n.prop}` : n.type;
   const offenders = [];
   if (meaningful.length !== expected.length) {
     offenders.push(
       `root 직속 의미 노드 ${meaningful.length}개(기대 ${expected.length}, comment 제외): ` +
-      meaningful.map((n) => `${describeNode(n)}@${n.source?.start?.line}행`).join(', '),
+      meaningful.map((n) => `${describeCssNode(n)}@${n.source?.start?.line}행`).join(', '),
     );
   }
   meaningful.forEach((node, i) => {
     if (node !== expected[i]) {
-      offenders.push(`root 인덱스 ${i} 노드가 3블록 identity와 불일치: ${describeNode(node)}@${node.source?.start?.line}행`);
+      offenders.push(`root 인덱스 ${i} 노드가 3블록 identity와 불일치: ${describeCssNode(node)}@${node.source?.start?.line}행`);
     }
   });
+  return offenders;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// I2(24R) — rule→직접 자식 우주 고정. rootInventoryOffenders(23R)는 root **직속 노드**만 exact 고정한다.
+// 그런데 colorSchemeOffenders·structuralGate shape·buildBlockValues는 전부 `rule.walkDecls()` **재귀**라
+// 3블록 안 어딘가 중첩된 노드의 선언을 그 블록의 직접 선언처럼 집계했다. 격리 실증(raw/native-nesting CSS):
+//   :root { --color-bg:#fff; @media (min-width:99999px) { color-scheme:light } }
+// → root 3-rule 통과(중첩 @media는 top-level 노드가 아니라 rootInventoryOffenders도 못 봄)·재귀 walker상
+//   color-scheme:light 1개 인정(colorSchemeOffenders GREEN)·shape/manifest 정상 — 그런데 media 불일치 시
+//   라이트 root에 color-scheme 미적용(계약이 실제와 어긋나는 false-green). Sass 1.97.3 경유는 중첩 @media를
+//   hoist해 top-level at-rule로 빼므로 rootInventoryOffenders(23R)가 RED로 잡지만(실측), **raw CSS(native
+//   nesting)는 hoist 없이 중첩 유지**라 그 방어가 성립 안 한다(실측: 중첩 노드의 parent가 @media/nested-rule).
+// 처방(브라우저 의미론 모델 추가 없이, 17R 교훈): 세 legit rule 각각에서 **comment 제외 직접 자식이 전부
+// `decl`인지** 구조로 고정한다 — nested rule/nested at-rule(@media/@supports/@layer 등) 등장 = offender.
+// 이로써 root(23R)→rule 자식 타입(24R)→decl 분할(19~22R)→값(21R) 귀납이 실제 코드와 일치하고, 위 세
+// 재귀 walker가 중첩 노드를 직접 선언으로 오인할 여지 자체가 사라진다(그 재귀들의 공동 backstop).
+// rootInventoryOffenders와 같은 이유로 structuralGate 본체가 아닌 **인접 전용 단정**으로 둔다 — 3블록 판정은
+// structuralGate 재사용(새 파서 없음). structuralGate가 count/shape/보호토큰으로 **먼저 throw**하는 mutation은
+// 이 함수 진입 전에 이미 RED다.
+// ─────────────────────────────────────────────────────────────────────────────
+function ruleChildTypeOffenders(themesCss) {
+  const { lightRule, darkRule, aliasRule } = structuralGate(themesCss);
+  const offenders = [];
+  for (const [blockName, rule] of [['라이트', lightRule], ['다크', darkRule], ['별칭', aliasRule]]) {
+    for (const child of rule.nodes) {
+      if (child.type === 'comment') continue; // comment는 선언 아님 — cascade에 무영향이라 예외
+      if (child.type !== 'decl') {
+        offenders.push(`${blockName} 블록 직접 자식이 decl 아님(중첩 노드는 재귀 walker가 직접 선언으로 오인): ${describeCssNode(child)}@${child.source?.start?.line}행`);
+      }
+    }
+  }
   return offenders;
 }
 
@@ -1679,6 +1777,69 @@ describe('I1(23R) root 인벤토리 선재현↔RED mutation — at-rule/4번째
     expect(rootInventoryOffenders(
       `:root{--color-bg:#fff}/* mid */html[data-theme='dark']{--color-bg:#000}:root{--color-alias:1}`,
     )).toEqual([]);
+  });
+});
+
+describe('_themes.scss rule 직접 자식 타입 exact — 세 블록 직접 자식 전부 decl(comment 제외) (I2 24R)', () => {
+  it('실 _themes.scss: 라이트/다크/별칭 블록 직접 자식에 nested rule/at-rule 없음(offender 0)', () => {
+    expect(ruleChildTypeOffenders(css)).toEqual([]);
+  });
+  it('적대적 재검토: 세 블록 직접 자식은 comment를 빼면 전부 decl 타입이다(중첩 노드 부재)', () => {
+    // 재귀 walkDecls가 직접 선언으로 오인할 수 있는 중첩 노드가 실제로 있는지 직접 자식 타입으로 확인한다.
+    const { lightRule, darkRule, aliasRule } = structuralGate(css);
+    const childTypes = (rule) => rule.nodes.filter((n) => n.type !== 'comment').map((n) => n.type);
+    for (const rule of [lightRule, darkRule, aliasRule]) {
+      expect(new Set(childTypes(rule))).toEqual(new Set(['decl']));
+    }
+  });
+});
+
+describe('I2(24R) rule 자식 우주 선재현↔RED mutation — 재귀 walkDecls 과잉 인정(raw native-nesting)', () => {
+  // structuralGate/colorSchemeOffenders/rootInventoryOffenders는 전부 postcss.parse 직접(Sass 미경유)이라
+  // native-nesting이 hoist 없이 중첩 유지된다 — 그 상태에서 옛 계약 전부 통과(선재현)↔ruleChildTypeOffenders만
+  // RED로 갈리는 지점을 고정한다. light 블록은 **직접** color-scheme 없이 중첩 노드 안에만 color-scheme:light를
+  // 실어, 재귀 walker가 그 nested 선언을 라이트의 직접 color-scheme로 오인(false-green)하는 것을 정확히 재현한다.
+  const rawThemes = (lightNested) =>
+    `:root{--color-bg:#fff;${lightNested}}` +
+    `html[data-theme='dark']{color-scheme:dark;--color-bg:#000}` +
+    `:root{--color-alias:1}`;
+  const nestedNodes = {
+    'nested @media(항상-참 min-width:0px)':     '@media (min-width:0px){color-scheme:light}',
+    'nested @media(항상-거짓 min-width:99999px)': '@media (min-width:99999px){color-scheme:light}',
+    'nested rule(.child)':                       '.child{color-scheme:light}',
+    'nested @supports':                          '@supports (display:grid){color-scheme:light}',
+  };
+  it.each(Object.entries(nestedNodes))(
+    '선재현: %s → structuralGate 통과 + rootInventoryOffenders 0 + colorSchemeOffenders 0(재귀 walker false-green)',
+    (_l, nested) => {
+      const raw = rawThemes(nested);
+      expect(() => structuralGate(raw)).not.toThrow();          // 중첩 노드는 3블록 밖 top-level 노드가 아님
+      expect(rootInventoryOffenders(raw)).toEqual([]);          // 23R 인벤토리는 top-level만 봐서 blind
+      expect(colorSchemeOffenders(raw)).toEqual([]);            // 재귀 walkDecls가 nested color-scheme:light를 라이트 직접으로 오인
+    },
+  );
+  it.each(Object.entries(nestedNodes))(
+    'RED: %s → ruleChildTypeOffenders offender>0(라이트 블록 직접 자식에 non-decl)',
+    (_l, nested) => {
+      const offs = ruleChildTypeOffenders(rawThemes(nested));
+      expect(offs.length).toBeGreaterThan(0);
+      expect(offs.join(' ')).toMatch(/라이트 블록 직접 자식이 decl 아님/);
+    },
+  );
+  it('브리프 격리 실증(항상-거짓 @media): 옛 전 계약 통과인데 media 불일치 시 라이트 color-scheme 미적용', () => {
+    // colorSchemeOffenders는 nested color-scheme:light를 인정(계약 통과)하지만, min-width:99999px는 실뷰포트에서
+    // 불일치라 라이트 root에 color-scheme가 실제로는 적용되지 않는다 — 계약↔실제 괴리를 ruleChildTypeOffenders가 닫는다.
+    const raw = rawThemes('@media (min-width:99999px){color-scheme:light}');
+    expect(colorSchemeOffenders(raw)).toEqual([]);              // 옛 계약 GREEN(false-green)
+    expect(ruleChildTypeOffenders(raw).length).toBeGreaterThan(0); // 신 구조 계약 RED
+  });
+  it('GREEN 대조: comment는 선언 아님 — 직접 color-scheme:light + 블록내 comment는 offender 0', () => {
+    const raw = `:root{--color-bg:#fff;/* c */color-scheme:light}` +
+      `html[data-theme='dark']{color-scheme:dark;--color-bg:#000}` +
+      `:root{--color-alias:1}`;
+    expect(() => structuralGate(raw)).not.toThrow();
+    expect(colorSchemeOffenders(raw)).toEqual([]);
+    expect(ruleChildTypeOffenders(raw)).toEqual([]);
   });
 });
 
