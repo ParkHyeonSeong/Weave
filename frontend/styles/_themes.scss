@@ -74,6 +74,19 @@ $_l-warning: #D97706;
   --color-text-soft: #{color.adjust($_l-border, $lightness: -45%)};             // scrum 73·103·113·145·241 (보더 -45% = 회색 텍스트 관용구)
   --color-border-faint: #{color.adjust($_l-border, $lightness: 3%)};            // scrum 213·343
 
+  // Scrum 앱 accent (S3 — scrum.scss 리터럴 #16A34A/#DC2626/#2563EB + color.adjust 파생 승격)
+  --color-accent-scrum: #16A34A;
+  --color-accent-scrum-subtle: #{color.adjust(#16A34A, $lightness: 52%)};      // scrum 19·22·76·92·169 (+350의 50% 통합)
+  --color-accent-scrum-wash: #{color.adjust(#16A34A, $lightness: 48%)};        // scrum 171 hover
+  --color-accent-scrum-border: #{color.adjust(#16A34A, $lightness: 30%)};      // scrum 22 hover border
+  --color-accent-scrum-border-soft: #{color.adjust(#16A34A, $lightness: 40%)}; // scrum 92 keep 헤더 divider
+  --color-accent-scrum-ring: rgba(22, 163, 74, 0.3);                           // scrum 91 focus ring (= rgba(#16A34A,.3) 동치)
+  --color-retro-try: #2563EB;
+  --color-retro-try-bg: #{color.adjust(#2563EB, $lightness: 46%)};             // scrum 94
+  --color-retro-try-border: #{color.adjust(#2563EB, $lightness: 34%)};         // scrum 94
+  --color-error-border-soft: #{color.adjust($_l-error, $lightness: 36%)};      // scrum 93·273
+  --color-backdrop: rgba(28, 28, 28, 0.32);                                    // scrum 124 (라이트 현행값 보존; track 3곳은 S4 이행)
+
   // 그림자 — 다크에서는 값 자체가 재정의된다(§2)
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
@@ -148,6 +161,18 @@ html[data-theme='dark'] {
   --color-bg-sunken: #0B0C0E;
   --color-text-soft: #8B93A1;
   --color-border-faint: #2C2E35;
+
+  --color-accent-scrum: #4CC38A;              // = --color-success 다크(그린 계열 단일화)
+  --color-accent-scrum-subtle: #12281C;       // = --color-success-bg 다크(틴트 공유)
+  --color-accent-scrum-wash: #173524;
+  --color-accent-scrum-border: #3E7A5C;
+  --color-accent-scrum-border-soft: #2E5240;
+  --color-accent-scrum-ring: rgba(76, 195, 138, 0.55); // 합성 후 bg 대비 ≥3:1 (0.3은 1.8:1 false — 리뷰 실측)
+  --color-retro-try: #7EA6F4;                 // = --color-status-in-progress 다크(블루 정합)
+  --color-retro-try-bg: #14213B;
+  --color-retro-try-border: #34496E;
+  --color-error-border-soft: #A05259;         // surface 3.25:1·error-bg 3.16:1 (#8A464D는 2.59:1 미달 — 리뷰 실측)
+  --color-backdrop: rgba(0, 0, 0, 0.5);       // 다크 scrim — 28,28,28은 #0E0F11을 밝혀 scrim 역할 상실
 
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5);

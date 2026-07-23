@@ -180,6 +180,17 @@ const THEME_VALUE_MANIFEST = {
     'color-bg-sunken': 'rgb(252.45, 252.45, 252.45)',
     'color-text-soft': 'rgb(114.25, 114.25, 114.25)',
     'color-border-faint': 'rgb(236.65, 236.65, 236.65)',
+    'color-accent-scrum': '#16A34A',
+    'color-accent-scrum-subtle': 'rgb(202.3113513514, 247.8886486486, 219.12)',
+    'color-accent-scrum-wash': 'rgb(184.3372972973, 245.4627027027, 206.88)',
+    'color-accent-scrum-border': 'rgb(103.4540540541, 234.5459459459, 151.8)',
+    'color-accent-scrum-border-soft': 'rgb(148.3891891892, 240.6108108108, 182.4)',
+    'color-accent-scrum-ring': 'rgba(22, 163, 74, 0.3)',
+    'color-retro-try': '#2563EB',
+    'color-retro-try-bg': 'rgb(251.8857142857, 252.7714285714, 254.7142857143)',
+    'color-retro-try-border': 'rgb(195.8285714286, 212.6571428571, 249.5714285714)',
+    'color-error-border-soft': 'rgb(245.5, 196.1, 196.1)',
+    'color-backdrop': 'rgba(28, 28, 28, 0.32)',
     'shadow-xs': '0 1px 2px rgba(0, 0, 0, 0.04)',
     'shadow-sm': '0 1px 3px rgba(0, 0, 0, 0.06)',
     'shadow-md': '0 4px 12px rgba(0, 0, 0, 0.08)',
@@ -236,6 +247,17 @@ const THEME_VALUE_MANIFEST = {
     'color-bg-sunken': '#0B0C0E',
     'color-text-soft': '#8B93A1',
     'color-border-faint': '#2C2E35',
+    'color-accent-scrum': '#4CC38A',
+    'color-accent-scrum-subtle': '#12281C',
+    'color-accent-scrum-wash': '#173524',
+    'color-accent-scrum-border': '#3E7A5C',
+    'color-accent-scrum-border-soft': '#2E5240',
+    'color-accent-scrum-ring': 'rgba(76, 195, 138, 0.55)',
+    'color-retro-try': '#7EA6F4',
+    'color-retro-try-bg': '#14213B',
+    'color-retro-try-border': '#34496E',
+    'color-error-border-soft': '#A05259',
+    'color-backdrop': 'rgba(0, 0, 0, 0.5)',
     'shadow-xs': '0 1px 2px rgba(0, 0, 0, 0.4)',
     'shadow-sm': '0 1px 3px rgba(0, 0, 0, 0.5)',
     'shadow-md': '0 4px 12px rgba(0, 0, 0, 0.55)',
@@ -1965,6 +1987,29 @@ describe('다크 --color-input-border(-hover) 대비 고정 (대칭 구멍 B —
         ).toBeGreaterThanOrEqual(3);
       });
     }
+  }
+
+  // S3 scrum accent — 텍스트 4.5:1, 컨트롤 경계 3:1 (SC 1.4.3 / 1.4.11). 컨트롤 경계 토큰이
+  // 무보호면 다크 강등이 침묵 통과하는 대칭 구멍 B와 동일 구조라 이 describe에 co-locate하고
+  // 같은 알파 선합성 경로(contrastOverBg)를 재사용한다(새 describe·헬퍼 없음). 링은 반투명이라
+  // contrastOverBg가 color-bg 위에 선합성한 결과로 잰다 — 불투명 원색으로 재지 않는다(14R 패턴).
+  const SCRUM_DARK_CONTRAST = [
+    ['color-accent-scrum', 'color-accent-scrum-subtle', 4.5], // 틴트 배경 위 accent 텍스트
+    ['color-accent-scrum', 'color-input-bg', 4.5],            // 컨트롤 배경 위 accent 텍스트(Chip--on·TodayBtn·탭 on)
+    ['color-accent-scrum', 'color-surface', 3],               // 보더/아이콘 vs 표면
+    ['color-accent-scrum-border', 'color-surface', 3],        // hover 컨트롤 경계
+    ['color-retro-try', 'color-retro-try-bg', 4.5],           // KPT try 헤더
+    ['color-error-border-soft', 'color-surface', 3],          // LeaveBtn 컨트롤 경계
+    ['color-error-border-soft', 'color-error-bg', 3],         // LeaveBtn hover 시 경계 유지
+    ['color-accent-scrum-ring', 'color-bg', 3],               // focus ring 반투명 → bg 위 선합성 후 대비
+  ];
+  for (const [fg, bg, ratio] of SCRUM_DARK_CONTRAST) {
+    it(`${fg} vs ${bg} ${ratio}:1 이상`, () => {
+      expect(
+        contrastOverBg(darkValues[fg], darkValues[bg]),
+        `${fg}=${darkValues[fg]} vs ${bg}=${darkValues[bg]}`,
+      ).toBeGreaterThanOrEqual(ratio);
+    });
   }
 });
 
