@@ -1,4 +1,3 @@
-@use 'sass:color';
 @use '../../variables' as *;
 
 .ScrumBoard { display:flex; flex-direction:column; height:100%; }
@@ -98,21 +97,21 @@
 // =========================================================================
 .ScrumBoard__MembersBtn {
   display:inline-flex; align-items:center; gap:6px;
-  border:1px solid $color-border; border-radius:8px; padding:4px 10px;
-  font-size:13px; font-weight:700; background:#fff;
+  border:1px solid $color-input-border; border-radius:8px; padding:4px 10px;
+  font-size:13px; font-weight:700; background:$color-input-bg;
   color:var(--color-text-soft); cursor:pointer;
   transition:border-color 120ms, background 120ms, color 120ms;
-  &:hover { border-color:$color-border-hover; background:$color-surface-hover; color:$color-text; }
+  &:hover { border-color:$color-input-border-hover; background:$color-surface-hover; color:$color-text; }
   svg { opacity:.8; }
 }
 
 .ScrumBoard__SettingsBtn {
   display:inline-flex; align-items:center; justify-content:center;
   width:30px; height:30px;
-  border:1px solid $color-border; border-radius:8px; background:#fff;
+  border:1px solid $color-input-border; border-radius:8px; background:$color-input-bg;
   color:var(--color-text-soft); cursor:pointer;
   transition:border-color 120ms, background 120ms, color 120ms;
-  &:hover { border-color:$color-border-hover; background:$color-surface-hover; color:$color-text; }
+  &:hover { border-color:$color-input-border-hover; background:$color-surface-hover; color:$color-text; }
   svg { opacity:.8; }
 }
 
@@ -121,13 +120,13 @@
 // =========================================================================
 .ScrumMembers__Backdrop {
   position:fixed; inset:0; z-index:1000;
-  background:rgba(28,28,28,0.32); backdrop-filter:blur(2px);
+  background:var(--color-backdrop); backdrop-filter:blur(2px);
   display:flex; align-items:center; justify-content:center;
 }
 .ScrumMembers {
   width:480px; max-width:calc(100vw - 32px);
   max-height:calc(100vh - 64px);
-  background:#fff; border-radius:12px;
+  background:$color-bg; border-radius:12px;
   box-shadow:0 24px 60px -16px rgba(0,0,0,0.28), 0 4px 12px rgba(0,0,0,0.06);
   display:flex; flex-direction:column; overflow:hidden;
 }
@@ -138,7 +137,7 @@
 .ScrumMembers__HeadTitle {
   display:inline-flex; align-items:center; gap:8px;
   font-size:15px; font-weight:700; color:$color-text;
-  svg { color:#16A34A; }
+  svg { color:var(--color-accent-scrum); }
 }
 .ScrumMembers__Count {
   font-style:normal; font-size:12px; font-weight:700;
@@ -164,15 +163,15 @@
 .ScrumMembers__Actions { position:relative; }
 .ScrumMembers__InviteBtn {
   display:inline-flex; align-items:center; gap:6px;
-  border:1px solid #16A34A; border-radius:8px; padding:6px 12px;
+  border:1px solid var(--color-accent-scrum); border-radius:8px; padding:6px 12px;
   font-size:13px; font-weight:700; cursor:pointer;
-  color:#16A34A; background:color.adjust(#16A34A, $lightness:52%);
+  color:var(--color-accent-scrum); background:var(--color-accent-scrum-subtle);
   transition:background 120ms;
-  &:hover { background:color.adjust(#16A34A, $lightness:48%); }
+  &:hover { background:var(--color-accent-scrum-wash); }
 }
 .ScrumMembers__InviteDropdown {
   position:absolute; top:calc(100% + 6px); left:0; right:0; z-index:5;
-  background:#fff; border:1px solid $color-border; border-radius:10px;
+  background:$color-bg; border:1px solid $color-input-border; border-radius:10px;
   box-shadow:$shadow-lg; overflow:hidden;
 }
 .ScrumMembers__SearchWrap {
@@ -195,7 +194,7 @@
   text-align:left; color:$color-text;
   transition:background 100ms;
   &:hover { background:$color-surface-hover; }
-  svg { color:#16A34A; flex-shrink:0; }
+  svg { color:var(--color-accent-scrum); flex-shrink:0; }
 }
 // 색/크기/폰트는 <Avatar>가 인라인으로 칠함(user_id 해시). 여기선 레이아웃만.
 .ScrumMembers__SearchItemAvatar { flex-shrink:0; }
@@ -249,17 +248,17 @@
   color:$color-text-tertiary;
   display:flex; align-items:center; justify-content:center;
   transition:background 120ms, color 120ms;
-  &:hover { background:color.adjust(#DC2626, $lightness:48%); color:#DC2626; }
+  &:hover { background:var(--color-error-bg); color:$color-error; }
 }
 .ScrumMembers__ConfirmInline { display:inline-flex; align-items:center; gap:4px; }
 .ScrumMembers__ConfirmYes {
   border:none; border-radius:6px; padding:4px 8px; cursor:pointer;
-  font-size:12px; font-weight:700; color:#fff; background:#DC2626;
-  &:hover { background:color.adjust(#DC2626, $lightness:-6%); }
+  font-size:12px; font-weight:700; color:$color-text-inverse; background:$color-error;
+  &:hover { background:var(--color-error-strong); }
 }
 .ScrumMembers__ConfirmNo {
-  border:1px solid $color-border; border-radius:6px; padding:4px 8px; cursor:pointer;
-  font-size:12px; font-weight:600; color:$color-text-secondary; background:#fff;
+  border:1px solid $color-input-border; border-radius:6px; padding:4px 8px; cursor:pointer;
+  font-size:12px; font-weight:600; color:$color-text-secondary; background:$color-input-bg;
   &:hover { background:$color-surface-hover; }
 }
 
@@ -270,11 +269,11 @@
 }
 .ScrumMembers__LeaveBtn {
   display:inline-flex; align-items:center; gap:6px;
-  border:1px solid color.adjust(#DC2626, $lightness:36%); border-radius:8px;
+  border:1px solid var(--color-error-border-soft); border-radius:8px;
   padding:6px 12px; font-size:13px; font-weight:700; cursor:pointer;
-  color:#DC2626; background:#fff;
+  color:$color-error; background:$color-input-bg;
   transition:background 120ms;
-  &:hover { background:color.adjust(#DC2626, $lightness:48%); }
+  &:hover { background:var(--color-error-bg); }
 }
 
 // =========================================================================
@@ -289,7 +288,7 @@
     list-style:none; padding-left:0;
     li[data-type="taskItem"] {
       display:flex; align-items:flex-start; gap:6px; margin:2px 0;
-      > label { flex-shrink:0; margin:0; input[type="checkbox"] { width:14px; height:14px; accent-color:#16A34A; cursor:pointer; } }
+      > label { flex-shrink:0; margin:0; input[type="checkbox"] { width:14px; height:14px; accent-color:var(--color-accent-scrum); cursor:pointer; } }
       > div { flex:1; min-width:0; }
       &[data-checked="true"] > div { text-decoration:line-through; color:$color-text-tertiary; }
     }
@@ -325,10 +324,10 @@
   .ref-chip__badge {
     display:inline-block; vertical-align:1px; margin-left:4px; padding:0 5px;
     border-radius:3px; font-size:10px; font-weight:$font-weight-medium; line-height:1.5; white-space:nowrap;
-    &--todo { background:rgba(0,0,0,0.06); color:$color-text-secondary; }
+    &--todo { background:var(--color-surface-hover); color:$color-text-secondary; } // 구 흑투명 0.06 리터럴→surface-hover(allowlist #6)
     &--in_progress { background:$color-status-in-progress-bg; color:$color-status-in-progress; }
     &--done { background:$color-success-bg; color:$color-success; }
-    &--cancelled { background:rgba(0,0,0,0.06); color:$color-text-secondary; }
+    &--cancelled { background:var(--color-surface-hover); color:$color-text-secondary; } // 구 흑투명 0.06 리터럴→surface-hover(allowlist #7)
     &--open { background:$color-status-in-progress-bg; color:$color-status-in-progress; }
     &--closed { background:$color-success-bg; color:$color-success; }
   }
@@ -346,12 +345,13 @@
 // 색/크기/폰트는 <Avatar>가 인라인으로 칠함(user_id 해시). 여기선 레이아웃만.
 .RetroMember__Avatar { flex-shrink:0; }
 .RetroMember__You {
-  font-style:normal; font-size:11px; font-weight:700; color:#16A34A;
-  background:color.adjust(#16A34A, $lightness:50%); border-radius:4px; padding:1px 6px;
+  font-style:normal; font-size:11px; font-weight:700; color:var(--color-accent-scrum);
+  background:var(--color-accent-scrum-subtle); border-radius:4px; padding:1px 6px; // 50%→52%(-subtle) 통합
 }
 .RetroMember .RetroCol__Body { min-height:110px; }
 
 // 스크럼 셀 포커스 툴바 (칸 위 부유)
+// 이미-다크 표면(부유 툴바) — 테마 불변, 다크모드 반전 금지 (스펙 핵심 함정)
 .ScrumCellToolbar {
   display:inline-flex; align-items:center; gap:2px;
   background:#1F2430; color:#fff; padding:4px; border-radius:9px;
