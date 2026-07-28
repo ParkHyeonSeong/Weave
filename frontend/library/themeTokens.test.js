@@ -4,6 +4,20 @@ import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { compile, compileString } from 'sass';
 import postcss from 'postcss';
+import * as SPEC from './s4Spec.mjs';
+import * as EV from './s4Evaluator.mjs';
+import * as CANON from './s4Canonicalize.mjs';
+import * as PIX from './s4PixelDiff.mjs';
+import { PNG } from 'pngjs';                          // 픽셀 테스트용(ESM — require 금지)
+import { execSync } from 'node:child_process';        // 기존 파일에 없으므로 신규 추가
+const sha256 = (x) => createHash('sha256').update(x).digest('hex');   // createHash는 기존 import 재사용
+// SURFACE_NAMES: 23개 이름 exact manifest(순서 포함) — spec과 독립 정의라야 drift를 잡는다
+const SURFACE_NAMES = ['canvas', 'canvas-toolbar-active', 'canvas-matpill-on', 'sourcepicker',
+  'sourcepicker-branch-hover', 'sourcepicker-group-hover', 'sourcepicker-task-hover',
+  'sourcepicker-unparticipate-hover', 'sourcepicker-search-focus', 'sourcepicker-addmenu-open',
+  'detail', 'detail-originlink-hover', 'detail-trackchip-hover', 'timeline',
+  'timeline-lane-hover', 'timeline-lane-selected', 'tree', 'tree-row-hover', 'tree-row-selected',
+  'bulkadd', 'createtrack', 'createtrack-visopt-active', 'settings-branches-edit'];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // I1(18R) — **CSS 공백 전용 정규화**. CSS 스펙의 whitespace는 정확히 5종(space·tab·LF·FF·CR)이다.
@@ -3758,4 +3772,189 @@ describe('M1(18R) — classifyRelevantDecl이 CANONICAL_DECLS를 직접 dispatch
     expect([...new Set(CANONICAL_DECLS.map((e) => e.prop))]).toEqual(['border', 'box-shadow']);
     for (const e of CANONICAL_DECLS) expect(typeof e.build, e.id).toBe('function');
   });
+});
+
+describe('S4 cssColorLiterals', () => {
+  it.each([
+    ['url("a#fff")', []], ['url(data:image/svg+xml,%23fff)', []], ["'#fff'", []],
+    ['0 0 0 1px rgba(0,0,0,0.12), 0 1px 2px #ABC', ['rgba(0,0,0,0.12)', '#ABC']],
+    ['#5E6AD2F', ['#5E6AD2F']], ['foo#fffbar', []],
+  ])('extract %s', (input, out) => expect(EV.extractColorLiterals(input)).toEqual(out));
+});
+describe('S4 normColor / resolveLight', () => {
+  it.each([['#fff', '#ffffff'], ['#FFFFFF', '#ffffff'], ['rgba(28, 28, 28, 0.32)', 'rgba(28,28,28,0.32)'], ['#ABCD', '#aabbccdd']])
+    ('norm %s', (a, b) => expect(EV.normColor(a)).toBe(b));
+  it('resolve direct', () => expect(EV.resolveLight('--x', { '--x': '#E5E5E5' })).toBe('#E5E5E5'));
+  it('resolve alias chain', () => expect(EV.resolveLight('--a', { '--a': 'var(--b)', '--b': 'var(--c)', '--c': '#6B7280' })).toBe('#6B7280'));
+});
+describe('S4 projectSource', () => {
+  const src = ['a { color: #FFFFFF; }', 'b { border: 1px solid $track-border; }', 'c { background: rgba(94,106,210,0.1); }'].join('\n');
+  const one = (o) => EV.projectSource(src, [o], [], '', 'T');
+  it('lit', () => expect(one({ id: 'x', f: 'T', l: 1, k: 'lit', from: '#FFFFFF', to: 'var(--track-card)' }).projected).toContain('var(--track-card)'));
+  it('txt', () => expect(one({ id: 'x', f: 'T', l: 2, k: 'txt', from: '$track-border', to: '$color-input-border' }).projected).toContain('$color-input-border'));
+  it('tint alpha 보존', () => expect(one({ id: 'x', f: 'T', l: 3, k: 'tint', from: '94,106,210', to: 'color-mix(in srgb, var(--color-primary) {P}%, transparent)' }).projected).toContain('10%'));
+  it('DUP_LINE', () => expect(EV.projectSource(src, [{ id: 'a', f: 'T', l: 1, k: 'lit', from: '#FFFFFF', to: 'x' }, { id: 'b', f: 'T', l: 1, k: 'lit', from: '#FFFFFF', to: 'y' }], [], '', 'T').errors.join()).toMatch(/DUP_LINE/));
+  it('LIT_MATCH', () => expect(one({ id: 'x', f: 'T', l: 1, k: 'lit', from: '#000000', to: 'y' }).errors.join()).toMatch(/LIT_MATCH/));
+  it('annotation 파일 필터', () => expect(EV.projectSource(src, [], [{ f: 'X', l: 1, marker: '[m]', anchor: 'color', text: '// [m]' }], '', 'T').projected).not.toContain('[m]'));
+});
+describe('S4 validateAnnotations', () => {
+  const pre = ['a { color: #FFFFFF; }', 'a { color: #FFFFFF; }'].join('\n');   // 완전히 동일한 anchor 2줄
+  const ann = [{ f: 'T', l: 2, marker: '[S4:T2]', anchor: '#FFFFFF', text: '// [S4:T2] note' }];
+  const files = { T: { rel: 't' }, X: { rel: 'x' } };
+  const ok = ['a { color: #FFFFFF; }', '// [S4:T2] note', 'a { color: #FFFFFF; }'].join('\n');
+  const moved = ['// [S4:T2] note', 'a { color: #FFFFFF; }', 'a { color: #FFFFFF; }'].join('\n');  // 동일 anchor 이동
+  it('정상 GREEN', () => expect(EV.validateAnnotations({ T: ok, X: '' }, { T: pre, X: '' }, ann, files)).toEqual([]));
+  it('동일 anchor 이동 RED', () => expect(EV.validateAnnotations({ T: moved, X: '' }, { T: pre, X: '' }, ann, files).join()).toMatch(/ANN_OCCURRENCE/));
+  it('타 파일 FOREIGN', () => expect(EV.validateAnnotations({ T: ok, X: '// [S4:T2] note' }, { T: pre, X: '' }, ann, files).join()).toMatch(/ANN_FOREIGN/));
+  it('marker 중복', () => expect(EV.validateAnnotations({ T: ok, X: '' }, { T: pre, X: '' }, [...ann, ...ann], files).join()).toMatch(/ANN_MARKER_DUP/));
+  it('개수 0 RED', () => expect(EV.validateAnnotations({ T: pre, X: '' }, { T: pre, X: '' }, ann, files).join()).toMatch(/ANN_COUNT/));
+  it('text 변조 RED', () => expect(EV.validateAnnotations({ T: ok.replace('note', 'x'), X: '' }, { T: pre, X: '' }, ann, files).join()).toMatch(/ANN_TEXT|ANN_COUNT/));
+});
+describe('S4 dark structure', () => {
+  const mk = (selector, extra = {}) => ({ file: 't', selector, property: 'color', declarationOccurrence: 0, atRules: [], important: false, value: 'red', ...extra });
+  it('suffix 정상', () => expect(EV.validateDarkStructure([mk('.a'), mk(EV.DARK_PREFIX + ' .b')], ['t'], { t: 1 })).toEqual([]));
+  it('darkish RED', () => expect(EV.validateDarkStructure([mk('.a'), mk('html[data-theme=darkish] .b')], ['t'], { t: 1 }).join()).toMatch(/DARK_FOREIGN_SELECTOR|DARK_COUNT/));
+  it('comma branch prefix 제거 RED', () => expect(EV.validateDarkStructure([mk('.a'), mk(EV.DARK_PREFIX + ' .b, .c')], ['t'], { t: 1 }).join()).toMatch(/DARK_FOREIGN_SELECTOR/));
+  it('count 불일치 RED', () => expect(EV.validateDarkStructure([mk('.a')], ['t'], { t: 1 }).join()).toMatch(/DARK_COUNT/));
+  it('!important RED', () => expect(EV.validateDarkStructure([mk('.a'), mk(EV.DARK_PREFIX + ' .b', { important: true })], ['t'], { t: 1 }).join()).toMatch(/DARK_IMPORTANT/));
+  it('@media RED', () => expect(EV.validateDarkStructure([mk('.a'), mk(EV.DARK_PREFIX + ' .b', { atRules: ['@media x'] })], ['t'], { t: 1 }).join()).toMatch(/DARK_ATRULE/));
+});
+describe('S4 contrast', () => {
+  it.each([['#FFFFFF', 255], ['#fff', 255], ['#12345', null], ['#1234567', null]])('parse %s', (h, r) => {
+    const c = EV.parseColorLiteral(h); expect(c === null ? null : c.r).toBe(r); });
+  it('composite', () => expect(EV.compositeOver({ r: 255, g: 255, b: 255, a: 0.5 }, { r: 0, g: 0, b: 0, a: 1 }).r).toBeCloseTo(127.5));
+  it('ratio 흑백 21', () => expect(EV.contrastRatio({ r: 255, g: 255, b: 255 }, { r: 0, g: 0, b: 0 })).toBeCloseTo(21, 1));
+  it('gradient worst-case', () => expect(EV.evaluateContrastCases([{ name: 'g', text: '--fg', min: 1, stack: [{ gradient: ['--a', '--b'] }] }],
+    { '--fg': '#FFFFFF', '--a': '#000000', '--b': '#FFFFFF' }).results[0].ratio).toBeCloseTo(1, 1));
+  it('실패 케이스', () => expect(EV.evaluateContrastCases([{ name: 'f', text: '--fg', min: 4.5, stack: [{ token: '--bg' }] }],
+    { '--fg': '#777777', '--bg': '#888888' }).errors.join()).toMatch(/CONTRAST_FAIL/));
+  it('mix 레이어', () => expect(EV.evaluateContrastCases([{ name: 'm', text: '--fg', min: 1, stack: [{ token: '--bg' }, { mix: '--ink', pct: 50 }] }],
+    { '--fg': '#FFFFFF', '--bg': '#000000', '--ink': '#FFFFFF' }).results[0].ratio).toBeGreaterThan(1));
+});
+describe('S4 atoms / coverage / counts / fingerprint / canonicalize', () => {
+  it('중첩 --blocked atom 포함', () => expect(EV.atomsFromSelectors([{ selector: '.TrackTimeline__Bar--blocked' }]).has('TrackTimeline__Bar--blocked')).toBe(true));
+  it('축약 atom miss', () => expect(EV.atomsFromSelectors([{ selector: '.TrackHeader__ViewBtn--active' }]).has('TrackHeader__ViewBtn--activ')).toBe(false));
+  it('coverage 정상', () => expect(EV.validateSmokeCoverage({ new: [], changed: [] }, [{ name: 'a', actions: [], requiredElements: [], coverageSelectors: [], darkReviewSelectors: [] }])).toEqual([]));
+  it('mask로는 해소 불가', () => expect(EV.validateSmokeCoverage({ new: [{ selector: EV.DARK_PREFIX + ' .Zz' }], changed: [] },
+    [{ name: 'a', actions: [], requiredElements: [], coverageSelectors: [], darkReviewSelectors: ['.Zz'] }]).join()).toMatch(/SMOKE_UNMAPPED/));
+  it('observed로 해소', () => expect(EV.validateSmokeCoverage({ new: [{ selector: EV.DARK_PREFIX + ' .Zz' }], changed: [] },
+    [{ name: 'a', actions: [], requiredElements: [], coverageSelectors: [{ selector: '.Zz' }], darkReviewSelectors: [] }])).toEqual([]));
+  it('state 미증명 RED', () => expect(EV.validateSmokeCoverage({ new: [], changed: [] },
+    [{ name: 'a', actions: [], requiredElements: [], coverageSelectors: [{ selector: '.b', state: 'hover' }], darkReviewSelectors: [] }]).join()).toMatch(/SURFACE_STATE_UNPROVEN/));
+  it('surface 이름 중복 RED', () => expect(EV.validateSmokeCoverage({ new: [], changed: [] },
+    [{ name: 'a', actions: [], requiredElements: [], coverageSelectors: [], darkReviewSelectors: [] }, { name: 'a', actions: [], requiredElements: [], coverageSelectors: [], darkReviewSelectors: [] }]).join()).toMatch(/SURFACE_NAME_DUP/));
+  it('counts 불일치', () => expect(EV.validateCounts({ counts: { conversions: 1 }, changed: [] }, { conversions: 2 }).join()).toMatch(/conversions/));
+  it('allowId 누락', () => expect(EV.validateCounts({ counts: { conversions: 1, changed: 0, new: 0, newRules: 0, residual: 0, raw: 0, processed: 0, allowBearing: 0 },
+    changed: [] }, { conversions: 1, changedDecls: 0, newDecls: 0, newRules: 0, residual: 0, rawLiterals: 0, processedLiterals: 0, allowIds: 1 }).join()).toMatch(/allowId/));
+  it('fingerprint BASE 민감', () => expect(EV.specFingerprint(SPEC, sha256)).not.toBe(EV.specFingerprint({ ...SPEC, BASE: 'zzz' }, sha256)));
+  it('fingerprint surfaces 민감', () => expect(EV.specFingerprint(SPEC, sha256)).not.toBe(
+    EV.specFingerprint({ ...SPEC, REQUIRED_SMOKE_SURFACES: SPEC.REQUIRED_SMOKE_SURFACES.slice(1) }, sha256)));
+  it('canonicalize 순서 보존', () => expect(JSON.stringify(CANON.canonicalize([{ b: 1, a: 2 }, { a: 3 }]))).toBe('[{"a":2,"b":1},{"a":3}]'));
+  it('배열 순서 변화 = 다른 해시', () => expect(CANON.bundleString([{ url: '/x', body: [1, 2] }])).not.toBe(CANON.bundleString([{ url: '/x', body: [2, 1] }])));
+});
+describe('S4 action resolver', () => {
+  // 실제 구조의 대표 context — 러너가 쓰는 것과 같은 shape
+  const CTX = { trackId: 42, normalItemTitle: 'Synthetic Item A', branchName: 'SB', epicName: 'SE',
+    addMenuEpicLabel: 'Epic', settingsPreset: { editBranchIndex: 0, inactivePresetValue: '#16A34A' } };
+  it('23 surface 전 액션이 미해결 0으로 치환', () => {
+    const flat = EV.buildActionContext(CTX);
+    const all = SPEC.REQUIRED_SMOKE_SURFACES.flatMap((s2) => EV.resolveActions(s2.actions, flat).errors);
+    expect(all).toEqual([]);
+  });
+  it('치환 후 모든 nth가 0 이상 정수', () => {
+    const flat = EV.buildActionContext(CTX);
+    for (const s2 of SPEC.REQUIRED_SMOKE_SURFACES)
+      for (const a of EV.resolveActions(s2.actions, flat).resolved)
+        if (a.nth !== undefined) { expect(Number.isInteger(a.nth)).toBe(true); expect(a.nth).toBeGreaterThanOrEqual(0); }
+  });
+  it('치환 후 문자열 필드에 {...} 잔존 0', () => {
+    const flat = EV.buildActionContext(CTX);
+    for (const s2 of SPEC.REQUIRED_SMOKE_SURFACES)
+      for (const a of EV.resolveActions(s2.actions, flat).resolved)
+        for (const f of ['url', 'selector', 'hasText', 'key', 'value'])
+          if (typeof a[f] === 'string') expect(a[f]).not.toMatch(/\{[A-Za-z0-9_]+\}/);
+  });
+  it('두 번째 branch(editBranchIndex=1)도 정상 치환', () => {
+    const flat = EV.buildActionContext({ ...CTX, settingsPreset: { ...CTX.settingsPreset, editBranchIndex: 1 } });
+    const st = SPEC.REQUIRED_SMOKE_SURFACES.find((x) => x.name === 'settings-branches-edit');
+    const { resolved, errors } = EV.resolveActions(st.actions, flat);
+    expect(errors).toEqual([]);
+    const edit = resolved.find((a) => a.op === 'click' && a.selector.includes('IconBtn'));
+    expect(edit.selector).toContain("title='Edit display name / color'");   // Remove 버튼과 섞이지 않는다
+    expect(edit.nth).toBe(1);
+    const sw = resolved.find((a) => a.op === 'click' && a.selector.includes('Swatch'));
+    expect(sw.selector).toBe(".SettingsBranches__Swatch[aria-label='#16A34A']");
+    expect(sw.nth).toBeUndefined();                                          // 순번이 아니라 값으로 지정
+  });
+  it('nested key 누락 → UNRESOLVED', () => {
+    const bad = { ...CTX, settingsPreset: undefined };
+    const errs = SPEC.REQUIRED_SMOKE_SURFACES.flatMap((s2) => EV.resolveActions(s2.actions, EV.buildActionContext(bad)).errors);
+    expect(errs.join()).toMatch(/UNRESOLVED_PLACEHOLDER/);
+  });
+  it('nth placeholder 미해결 → UNRESOLVED(이전 false-green)', () => expect(
+    EV.resolveActions([{ op: 'click', selector: '.X', nth: '{someMissingKey}' }], {}).errors.join()).toMatch(/UNRESOLVED_PLACEHOLDER/));
+  it('nth 음수 → INVALID_NTH', () => expect(
+    EV.resolveActions([{ op: 'click', selector: '.X', nth: '-1' }], {}).errors.join()).toMatch(/INVALID_NTH/));
+  it('nth 소수 → INVALID_NTH', () => expect(
+    EV.resolveActions([{ op: 'click', selector: '.X', nth: '1.5' }], {}).errors.join()).toMatch(/INVALID_NTH/));
+});
+describe('S4 privacy audit', () => {
+  const NAMES = SPEC.REQUIRED_SMOKE_SURFACES.map((x) => x.captureName);
+  const h = (i) => String(i).padStart(64, '0');
+  const EXP = { captures: NAMES.map((c, i) => ({ captureName: c, sha256: h(i) })), contextSubjectSha256: h(99) };
+  const ok = () => ({ scope: 'dedicated-synthetic-account-workspace', contextPass: true,
+    contextSubjectSha256: h(99),
+    captures: NAMES.map((c, i) => ({ captureName: c, sha256: h(i), pass: true, findings: [] })) });
+  it('정상 → []', () => expect(EV.validatePrivacyAudit(ok(), EXP)).toEqual([]));
+  it('누락', () => expect(EV.validatePrivacyAudit(undefined, EXP).join()).toMatch(/PRIVACY_AUDIT_MISSING/));
+  it('scope 불일치', () => { const a = ok(); a.scope = 'single-track';
+    expect(EV.validatePrivacyAudit(a, EXP).join()).toMatch(/PRIVACY_AUDIT_SCOPE/); });
+  it('contextPass false', () => { const a = ok(); a.contextPass = false;
+    expect(EV.validatePrivacyAudit(a, EXP).join()).toMatch(/PRIVACY_AUDIT_CONTEXT_FAIL/); });
+  it('captures 타입 오류', () => { const a = ok(); a.captures = 'x';
+    expect(EV.validatePrivacyAudit(a, EXP).join()).toMatch(/PRIVACY_AUDIT_CAPTURES_TYPE/); });
+  it('22건(개수 부족)', () => { const a = ok(); a.captures.pop();
+    expect(EV.validatePrivacyAudit(a, EXP).join()).toMatch(/PRIVACY_AUDIT_CAPTURE_COUNT|PRIVACY_AUDIT_CAPTURE_SET/); });
+  it('중복 captureName', () => { const a = ok(); a.captures[1].captureName = a.captures[0].captureName;
+    expect(EV.validatePrivacyAudit(a, EXP).join()).toMatch(/PRIVACY_AUDIT_CAPTURE_DUP/); });
+  it('pass false', () => { const a = ok(); a.captures[2].pass = false;
+    expect(EV.validatePrivacyAudit(a, EXP).join()).toMatch(/PRIVACY_AUDIT_FAIL/); });
+  it('pass true + findings 존재(모순)', () => { const a = ok(); a.captures[3].findings = ['실사용자 이름 노출'];
+    expect(EV.validatePrivacyAudit(a, EXP).join()).toMatch(/PRIVACY_AUDIT_FINDINGS_NONEMPTY/); });
+  it('findings 누락·타입 오류', () => { const a = ok(); delete a.captures[4].findings; a.captures[5].findings = [1];
+    const e = EV.validatePrivacyAudit(a, EXP).join();
+    expect(e).toMatch(/PRIVACY_AUDIT_FINDINGS_TYPE/); expect(e).toMatch(/PRIVACY_AUDIT_FINDINGS_ITEM/); });
+  // ── 감사 대상 바이트 결속(검수 Important)
+  it('감사 후 PNG 교체 → SUBJECT_DRIFT', () => { const a = ok();
+    const exp2 = { ...EXP, captures: EXP.captures.map((c, i) => (i === 6 ? { ...c, sha256: h(777) } : c)) };
+    expect(EV.validatePrivacyAudit(a, exp2).join()).toMatch(/PRIVACY_AUDIT_SUBJECT_DRIFT/); });
+  it('감사 후 context 필드 변경 → CONTEXT_SUBJECT_DRIFT', () =>
+    expect(EV.validatePrivacyAudit(ok(), { ...EXP, contextSubjectSha256: h(1234) }).join())
+      .toMatch(/PRIVACY_AUDIT_CONTEXT_SUBJECT_DRIFT/));
+  it('capture sha 누락 → SUBJECT_DRIFT', () => { const a = ok(); delete a.captures[7].sha256;
+    expect(EV.validatePrivacyAudit(a, EXP).join()).toMatch(/PRIVACY_AUDIT_SUBJECT_DRIFT/); });
+});
+describe('S4 smoke manifest', () => {
+  it('surface 수 고정', () => expect(SPEC.REQUIRED_SMOKE_SURFACES.length).toBe(23));
+  it('이름 exact manifest', () => expect(SPEC.REQUIRED_SMOKE_SURFACES.map((s) => s.name)).toEqual(SURFACE_NAMES));
+  it('schema 필수 필드', () => SPEC.REQUIRED_SMOKE_SURFACES.forEach((s) => {
+    expect(Array.isArray(s.actions)).toBe(true); expect(Array.isArray(s.coverageSelectors)).toBe(true);
+    expect(Array.isArray(s.darkReviewSelectors)).toBe(true); expect(Array.isArray(s.requiredElements)).toBe(true);
+    expect(typeof s.captureName).toBe('string'); }));
+  it('상태 의존은 provenBy 보유', () => SPEC.REQUIRED_SMOKE_SURFACES.forEach((s) => s.coverageSelectors
+    .filter((o) => o.state).forEach((o) => expect(s.actions[o.provenBy]).toBeDefined())));
+});
+
+describe('S4 pixel diff', () => {
+  const mk = (w, h, fill) => { const p = new PNG({ width: w, height: h });
+    for (let i = 0; i < p.data.length; i += 4) { p.data[i] = fill[0]; p.data[i+1] = fill[1]; p.data[i+2] = fill[2]; p.data[i+3] = 255; }
+    return PNG.sync.write(p); };
+  const withPixel = (w, h, fill, x, y, c) => { const p = PNG.sync.read(mk(w, h, fill));
+    const i = (w * y + x) << 2; p.data[i] = c[0]; p.data[i+1] = c[1]; p.data[i+2] = c[2]; return PNG.sync.write(p); };
+  it('동일 이미지 → diff 0', () => expect(PIX.diffPng(mk(8, 8, [255,255,255]), mk(8, 8, [255,255,255]), []).diff).toBe(0));
+  it('1픽셀 차이 → diff 1', () => expect(PIX.diffPng(mk(8, 8, [255,255,255]), withPixel(8, 8, [255,255,255], 3, 3, [0,0,0]), []).diff).toBe(1));
+  it('그 픽셀을 덮는 rect → diff 0', () => expect(PIX.diffPng(mk(8, 8, [255,255,255]),
+    withPixel(8, 8, [255,255,255], 3, 3, [0,0,0]), [{ x: 2, y: 2, width: 3, height: 3 }]).diff).toBe(0));
+  it('크기 불일치 → ok:false SIZE', () => { const r = PIX.diffPng(mk(8, 8, [255,255,255]), mk(9, 8, [255,255,255]), []);
+    expect(r.ok).toBe(false); expect(r.reason).toMatch(/SIZE/); });
 });
