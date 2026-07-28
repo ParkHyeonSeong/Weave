@@ -189,6 +189,9 @@ const THEME_VALUE_MANIFEST = {
     'color-primary-wash': 'rgb(230.85, 232.65, 248.25)',
     'color-error-strong': 'rgb(187.0333333333, 30.1666666667, 30.1666666667)',
     'color-warning-strong': 'rgb(187.2233183857, 102.6708520179, 5.1766816143)',
+    'color-warning-ink': '#B45309',
+    'color-warning-ink-deep': '#92400E',
+    'color-warning-ink-strong': '#78350F',
     'color-surface-sunken': 'rgb(245.94, 247.45, 248.96)',
     'color-surface-raised': 'rgb(252.06, 252.55, 253.04)',
     'color-bg-sunken': 'rgb(252.45, 252.45, 252.45)',
@@ -210,6 +213,7 @@ const THEME_VALUE_MANIFEST = {
     'shadow-md': '0 4px 12px rgba(0, 0, 0, 0.08)',
     'shadow-lg': '0 8px 24px rgba(0, 0, 0, 0.12)',
     'track-paper': '#F9FAFB',
+    'track-card': '#FFFFFF',
     'track-paper-edge': '#F3F4F6',
     'track-ink-soft': '#4B5563',
     'track-border-soft': 'rgb(241.75, 241.75, 241.75)',
@@ -256,6 +260,9 @@ const THEME_VALUE_MANIFEST = {
     'color-primary-wash': '#1E2340',
     'color-error-strong': '#E0575C',
     'color-warning-strong': '#D19335',
+    'color-warning-ink': '#E5A54B',
+    'color-warning-ink-deep': '#EDBB72',
+    'color-warning-ink-strong': '#F3CD94',
     'color-surface-sunken': '#131418',
     'color-surface-raised': '#1B1D22',
     'color-bg-sunken': '#0B0C0E',
@@ -277,6 +284,7 @@ const THEME_VALUE_MANIFEST = {
     'shadow-md': '0 4px 12px rgba(0, 0, 0, 0.55)',
     'shadow-lg': '0 8px 24px rgba(0, 0, 0, 0.65)',
     'track-paper': '#17181C',
+    'track-card': '#1B1D22',
     'track-paper-edge': '#1E2025',
     'track-ink-soft': '#A8B0BC',
     'track-border-soft': '#2C2E35',
@@ -1983,7 +1991,7 @@ describe('다크 selected-indicator 값 시맨틱 고정 (SC 1.4.11 비텍스트
   });
 });
 
-describe('다크 --color-input-border(-hover) 대비 고정 (대칭 구멍 B — 컨트롤러 탐색, 10라운드)', () => {
+describe('다크 컨트롤 경계·accent 대비 고정(WCAG 1.4.3/1.4.11)', () => {
   // indicator(위 describe)만 대비 단정이 있었고 컨트롤 경계 토큰 자체(승격핀 6곳 중 5곳이 실제로
   // 소비하는 --color-input-border)는 무보호였다 — 다크 값을 --color-border(#26282E, 비-input 톤)로
   // 강등해도 대비 단정이 하나도 없어 전 테스트가 GREEN이었다(Task 6 "다크 대비 보정"의 존재 이유가
@@ -2016,6 +2024,15 @@ describe('다크 --color-input-border(-hover) 대비 고정 (대칭 구멍 B —
     ['color-error-border-soft', 'color-surface', 3],          // LeaveBtn 컨트롤 경계
     ['color-error-border-soft', 'color-error-bg', 3],         // LeaveBtn hover 시 경계 유지
     ['color-accent-scrum-ring', 'color-bg', 3],               // focus ring 반투명 → bg 위 선합성 후 대비
+    ['color-warning-ink', 'color-warning-bg', 4.5],
+    ['color-warning-ink-deep', 'color-warning-bg', 4.5],
+    ['color-warning-ink-strong', 'color-warning-bg', 4.5],
+    ['color-warning', 'color-warning-bg', 3],
+    ['color-text-inverse', 'color-primary', 4.5],
+    ['color-text-inverse', 'color-primary-hover', 4.5],
+    ['color-input-border-hover', 'track-border-soft', 3],
+    ['color-accent-scrum', 'color-accent-scrum-wash', 4.5],            // dark-only
+    ['color-accent-scrum-border', 'color-accent-scrum-subtle', 3],     // dark-only
   ];
   for (const [fg, bg, ratio] of SCRUM_DARK_CONTRAST) {
     it(`${fg} vs ${bg} ${ratio}:1 이상`, () => {

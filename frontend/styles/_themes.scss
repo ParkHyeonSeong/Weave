@@ -68,6 +68,9 @@ $_l-warning: #D97706;
   --color-primary-wash: #{color.scale($_l-primary, $lightness: 85%)};           // taskComment 130
   --color-error-strong: #{color.adjust($_l-error, $lightness: -8%)};            // epicFlow 306, archive-view 158(-6%→-8% 통합)
   --color-warning-strong: #{color.adjust($_l-warning, $lightness: -6%)};        // launchpad 193
+  --color-warning-ink: #B45309;
+  --color-warning-ink-deep: #92400E;
+  --color-warning-ink-strong: #78350F;
   --color-surface-sunken: #{color.adjust($_l-surface, $lightness: -1%)};        // scrum 57
   --color-surface-raised: #{color.adjust($_l-surface, $lightness: 1%)};         // taskList 1433
   --color-bg-sunken: #{color.adjust($_l-bg, $lightness: -1%)};                  // trackSettings 195
@@ -95,6 +98,7 @@ $_l-warning: #D97706;
 
   // Track 종이 계열 (track.scss:11-17 로컬 토큰 승격 — 다크 종이톤은 S4에서 재설계)
   --track-paper: #{$_l-surface};
+  --track-card: #FFFFFF;
   --track-paper-edge: #F3F4F6;
   --track-ink-soft: #4B5563;
   --track-border-soft: #{color.adjust($_l-border, $lightness: 5%)};
@@ -156,6 +160,9 @@ html[data-theme='dark'] {
   --color-primary-wash: #1E2340;
   --color-error-strong: #E0575C;
   --color-warning-strong: #D19335;
+  --color-warning-ink: #E5A54B;
+  --color-warning-ink-deep: #EDBB72;
+  --color-warning-ink-strong: #F3CD94;
   --color-surface-sunken: #131418;
   --color-surface-raised: #1B1D22;
   --color-bg-sunken: #0B0C0E;
@@ -180,6 +187,7 @@ html[data-theme='dark'] {
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.65);
 
   --track-paper: #17181C;
+  --track-card: #1B1D22;
   --track-paper-edge: #1E2025;
   --track-ink-soft: #A8B0BC;
   --track-border-soft: #2C2E35;
