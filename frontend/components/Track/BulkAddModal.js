@@ -3,6 +3,7 @@ import { getError } from '@/library/errorCode';
 import { errorText } from '@/library/errorText';
 import { X, Zap, Calendar, Filter } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import { resolveBranchChange } from '@/library/bulkAddBranch';
 import CustomSelect from '@/components/common/CustomSelect';
 
 // mode: 'epic' | 'sprint' | 'filter'
@@ -240,7 +241,12 @@ export default function BulkAddModal({
               placeholder="Branch 선택"
               className="BulkAdd__SelectControl"
               onChange={(v) => {
-                setBranchId(toIntOrNull(v));
+                // 같은 branch 재선택은 no-op — 초기화를 그대로 태우면 epics/sprints를 비우는데
+                // 재조회 effect는 [mode, branchId] 의존이라 값이 안 바뀌면 다시 안 돈다. 그 결과
+                // Epic/Sprint 드롭다운이 영구 공란이 된다(branch가 1개면 자동 선택돼 복구 불가).
+                const { changed, branchId: next } = resolveBranchChange(branchId, v);
+                if (!changed) return;
+                setBranchId(next);
                 setEpicId(null);
                 setSprintId(null);
                 setEpics([]);
