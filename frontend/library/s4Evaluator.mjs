@@ -173,7 +173,11 @@ export function validateSmokeCoverage(fixture, surfaces) {
     if (!o.produces && act.selector && !act.selector.includes(base.replace(/^\./, '')) && act.op !== 'setStorage')
       errors.push(`SURFACE_STATE_TARGET ${x.name} ${o.selector} vs ${act.selector}`);
   }
-  const DEAD = ['ManageBranches', 'TrackHeader__ParticipatingAdd', 'SettingsGeneral__Swatch--active'];
+  // dead = 어떤 JSX도 렌더하지 않는 selector만. `SettingsGeneral__Swatch--active`는 여기 있었으나
+  // 오분류였다 — trackSettings.scss가 _app.js에서 전역 import되고 ScrumSettingsGeneral이
+  // /scrum/[boardId]/settings 에서 실제로 렌더한다(리뷰 실측). 제외하면 allow #6의 라이트 링 변경과
+  // 다크 링이 브라우저 증거 없이 coverage를 통과하는 false-green이 되므로 surface로 덮는다.
+  const DEAD = ['ManageBranches', 'TrackHeader__ParticipatingAdd'];
   const isDead = (sel) => DEAD.some((d) => sel.includes(d));
   const unmapped = [];
   for (const n of fixture.new) for (const br of String(n.selector).split(',').map((x) => x.trim())) {

@@ -60,7 +60,7 @@ export const ANNOTATIONS = [   // 검수 §1: 고유 marker + BASE 원문 줄 ex
   { f: 'T', l: 2399, marker: '[S4:T2399]', anchor: '#FFFFFF',
     text: '  // [S4:T2399] on-accent 고정(런타임 데이터색 배경 — 테마 불변. S7 dynamic on-color 접근성 부채)' },
   { f: 'X', l: 147,  marker: '[S4:X147]',  anchor: '#FFFFFF',
-    text: '  // [S4:X147] on-accent 고정(런타임 데이터색 배경 — 테마 불변. S7 dynamic on-color 접근성 부채)' },
+    text: '  // [S4:X147] on-accent 고정(고정 preset accent 배경 — 테마 불변. S7 dynamic on-color 접근성 부채)' },
   { f: 'X', l: 228,  marker: '[S4:X228]',  anchor: '#FFFFFF',
     text: '  // [S4:X228] on-accent 고정(런타임 데이터색 배경 — 테마 불변. S7 dynamic on-color 접근성 부채)' },
 ];
@@ -276,6 +276,19 @@ export const REQUIRED_SMOKE_SURFACES = [
     coverageSelectors: [{ selector: ".SettingsBranches__Swatch--active", state: "selected", provenBy: 4,
       produces: ".SettingsBranches__Swatch[aria-label='{inactivePresetValue}'].SettingsBranches__Swatch--active" }],
     darkReviewSelectors: [".SettingsBranches__Swatch--active"] },
+  // allow #6(.SettingsGeneral__Swatch--active 링)의 유일한 실화면. trackSettings.scss는 _app.js에서
+  // 전역 import되고 이 클래스는 Scrum 설정에서만 렌더된다 — track 설정의 .SettingsBranches__Swatch--active
+  // 와는 다른 selector라 기존 surface로 대체되지 않는다(리뷰 실측, 이전 DEAD 오분류 교정).
+  { name: "settings-general-swatch", captureName: "settings-general-swatch.png",
+    requiredElements: [".SettingsGeneral__Swatches"],
+    actions: [{ op: "goto", url: "/scrum/{scrumBoardId}/settings" },
+      { op: "waitFor", selector: ".SettingsGeneral__Swatch", state: "visible" },
+      { op: "expectAbsent", selector: ".SettingsGeneral__Swatch[aria-label='color {scrumInactivePreset}'].SettingsGeneral__Swatch--active" },
+      { op: "click", selector: ".SettingsGeneral__Swatch[aria-label='color {scrumInactivePreset}']" },
+      { op: "expectPresent", selector: ".SettingsGeneral__Swatch[aria-label='color {scrumInactivePreset}'].SettingsGeneral__Swatch--active" }],
+    coverageSelectors: [{ selector: ".SettingsGeneral__Swatch--active", state: "selected", provenBy: 3,
+      produces: ".SettingsGeneral__Swatch[aria-label='color {scrumInactivePreset}'].SettingsGeneral__Swatch--active" }],
+    darkReviewSelectors: [".SettingsGeneral__Swatch--active"] }
 ];
 export const OVERRIDES = {
   T: `// === 다크 오버라이드 (S4) ===

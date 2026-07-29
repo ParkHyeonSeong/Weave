@@ -11,13 +11,14 @@ import * as PIX from './s4PixelDiff.mjs';
 import { PNG } from 'pngjs';                          // 픽셀 테스트용(ESM — require 금지)
 import { execSync } from 'node:child_process';        // 기존 파일에 없으므로 신규 추가
 const sha256 = (x) => createHash('sha256').update(x).digest('hex');   // createHash는 기존 import 재사용
-// SURFACE_NAMES: 23개 이름 exact manifest(순서 포함) — spec과 독립 정의라야 drift를 잡는다
+// SURFACE_NAMES: 24개 이름 exact manifest(순서 포함) — spec과 독립 정의라야 drift를 잡는다
 const SURFACE_NAMES = ['canvas', 'canvas-toolbar-active', 'canvas-matpill-on', 'sourcepicker',
   'sourcepicker-branch-hover', 'sourcepicker-group-hover', 'sourcepicker-task-hover',
   'sourcepicker-unparticipate-hover', 'sourcepicker-search-focus', 'sourcepicker-addmenu-open',
   'detail', 'detail-originlink-hover', 'detail-trackchip-hover', 'timeline',
   'timeline-lane-hover', 'timeline-lane-selected', 'tree', 'tree-row-hover', 'tree-row-selected',
-  'bulkadd', 'createtrack', 'createtrack-visopt-active', 'settings-branches-edit'];
+  'bulkadd', 'createtrack', 'createtrack-visopt-active', 'settings-branches-edit',
+  'settings-general-swatch'];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // I1(18R) — **CSS 공백 전용 정규화**. CSS 스펙의 whitespace는 정확히 5종(space·tab·LF·FF·CR)이다.
@@ -3873,8 +3874,9 @@ describe('S4 atoms / coverage / counts / fingerprint / canonicalize', () => {
 describe('S4 action resolver', () => {
   // 실제 구조의 대표 context — 러너가 쓰는 것과 같은 shape
   const CTX = { trackId: 42, normalItemTitle: 'Synthetic Item A', branchName: 'SB', epicName: 'SE',
-    addMenuEpicLabel: 'Epic', settingsPreset: { editBranchIndex: 0, inactivePresetValue: '#16A34A' } };
-  it('23 surface 전 액션이 미해결 0으로 치환', () => {
+    addMenuEpicLabel: 'Epic', scrumBoardId: 7, scrumInactivePreset: '#DC2626',
+    settingsPreset: { editBranchIndex: 0, inactivePresetValue: '#16A34A' } };
+  it('24 surface 전 액션이 미해결 0으로 치환', () => {
     const flat = EV.buildActionContext(CTX);
     const all = SPEC.REQUIRED_SMOKE_SURFACES.flatMap((s2) => EV.resolveActions(s2.actions, flat).errors);
     expect(all).toEqual([]);
@@ -3953,7 +3955,7 @@ describe('S4 privacy audit', () => {
     expect(EV.validatePrivacyAudit(a, EXP).join()).toMatch(/PRIVACY_AUDIT_SUBJECT_DRIFT/); });
 });
 describe('S4 smoke manifest', () => {
-  it('surface 수 고정', () => expect(SPEC.REQUIRED_SMOKE_SURFACES.length).toBe(23));
+  it('surface 수 고정', () => expect(SPEC.REQUIRED_SMOKE_SURFACES.length).toBe(24));
   it('이름 exact manifest', () => expect(SPEC.REQUIRED_SMOKE_SURFACES.map((s) => s.name)).toEqual(SURFACE_NAMES));
   it('schema 필수 필드', () => SPEC.REQUIRED_SMOKE_SURFACES.forEach((s) => {
     expect(Array.isArray(s.actions)).toBe(true); expect(Array.isArray(s.coverageSelectors)).toBe(true);
@@ -3978,7 +3980,7 @@ describe('S4 pixel diff', () => {
 });
 
 // Task 2 Step 5가 출력한 sha256으로 이 값을 채운다(그 커밋 diff에 값이 드러나야 한다)
-const S4_EXPECTED_SHA256 = '71fbebb9cca032a437e6631f602a5697cdc3cdaf9201483c258ecc699227490e';
+const S4_EXPECTED_SHA256 = '7dcb3ef6fb5d040f594e9d43872384545467fb199510a733ad4733524f132213';
 describe('S4 fixture 동결', () => {
   it('상수가 64자리 hex이고 미교체 placeholder가 아님', () => {
     expect(S4_EXPECTED_SHA256).toMatch(/^[0-9a-f]{64}$/);

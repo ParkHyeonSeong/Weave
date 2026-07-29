@@ -50,6 +50,10 @@
   },
   "epicName": "Alpha Epic",
   "addMenuEpicLabel": "Epic",
+  "scrumBoardId": 10,
+  "scrumBoardName": "Alpha Scrum",
+  "scrumBoardColor": "#16A34A",
+  "scrumInactivePreset": "#DC2626",
   "settingsPreset": {
     "editBranchIndex": 0,
     "inactivePresetValue": "#16A34A",
@@ -1049,6 +1053,44 @@
           "selector": ".SettingsBranches__Swatch[aria-label='{inactivePresetValue}'].SettingsBranches__Swatch--active"
         }
       ]
+    },
+    {
+      "name": "settings-general-swatch",
+      "captureName": "settings-general-swatch.png",
+      "sha256": "4095abdea6345b2cfc37c3b8f6745bd250b4b909fba88bce8286aa2e250352a0",
+      "endpoints": [
+        "/chat",
+        "/notifications/unread-count",
+        "/notifications?limit=30",
+        "/profile/ui-prefs",
+        "/scrum",
+        "/scrum/10",
+        "/setup/status"
+      ],
+      "bundleSha256": "a0ca25c00779511aa8086a3be49be0749c31d913602192d0f5999486623c0f90",
+      "actions": [
+        {
+          "op": "goto",
+          "url": "/scrum/{scrumBoardId}/settings"
+        },
+        {
+          "op": "waitFor",
+          "selector": ".SettingsGeneral__Swatch",
+          "state": "visible"
+        },
+        {
+          "op": "expectAbsent",
+          "selector": ".SettingsGeneral__Swatch[aria-label='color {scrumInactivePreset}'].SettingsGeneral__Swatch--active"
+        },
+        {
+          "op": "click",
+          "selector": ".SettingsGeneral__Swatch[aria-label='color {scrumInactivePreset}']"
+        },
+        {
+          "op": "expectPresent",
+          "selector": ".SettingsGeneral__Swatch[aria-label='color {scrumInactivePreset}'].SettingsGeneral__Swatch--active"
+        }
+      ]
     }
   ],
   "baseLightMaskRects": {
@@ -1897,6 +1939,16 @@
           "y": 464.62,
           "width": 23.76,
           "height": 23.76
+        }
+      ]
+    },
+    "settings-general-swatch": {
+      ".SettingsGeneral__Swatch--active": [
+        {
+          "x": 334.96,
+          "y": 342.46,
+          "width": 28.08,
+          "height": 28.08
         }
       ]
     }
@@ -3011,13 +3063,43 @@
         "index": 8,
         "url": "/tracks/5/branches"
       }
+    ],
+    "settings-general-swatch": [
+      {
+        "index": 1,
+        "url": "/chat"
+      },
+      {
+        "index": 2,
+        "url": "/notifications/unread-count"
+      },
+      {
+        "index": 3,
+        "url": "/notifications?limit=30"
+      },
+      {
+        "index": 4,
+        "url": "/profile/ui-prefs"
+      },
+      {
+        "index": 5,
+        "url": "/scrum"
+      },
+      {
+        "index": 6,
+        "url": "/scrum/10"
+      },
+      {
+        "index": 7,
+        "url": "/setup/status"
+      }
     ]
   },
   "privacyAudit": {
     "scope": "dedicated-synthetic-account-workspace",
     "contextPass": true,
-    "contextSubjectSha256": "e01e8641b3bc4250ad99814442781b352ffe093938123427e6ab14e5e153aa95",
-    "method": "전용 계정 track-demo@example.com(user 12, member)으로만 캡처. 이 계정은 ALPHA 브랜치와 트랙 5/6에만 소속이며 GET /branches=[ALPHA] · /tracks=[Beta Track, Alpha Track] · /canvases=[] · /branches/public=[] · /notifications unread=0 · /recent-views=[] · /my-tasks=[] 로 다른 계정 데이터가 조회 자체가 불가함을 확인했다. 고유 레이아웃 10종(canvas / sourcepicker-addmenu-open / detail / timeline / timeline-lane-selected / tree / tree-row-selected / bulkadd / createtrack / settings-branches-edit)을 눈으로 전수 확인했고, 나머지 13장은 그중 한 레이아웃의 hover/focus/selected 상태 변형으로 pixelmatch 차이가 ≤2.25%임을 실측했다 (sourcepicker.png는 canvas.png와 바이트 동일). 화면에 등장하는 모든 문자열이 합성이다: TEST / Track Demo / TD / Alpha Track / Beta Track / - Alpha / ALPHA / Alpha One~Seven / Alpha Backlog One / Alpha Sprint 1 / Alpha Epic / Alpha Epic Child / RESTRICTED ITEM·Beta. CreateTrack의 \"예: Q3 결제 출시 준비\"는 components/modal/CreateTrack.js:111 의 하드코딩 placeholder이며 DB 데이터가 아니다(실측).",
+    "contextSubjectSha256": "ddf2281c3fc29cb19cfffb42e085cdf60792e601998b3501cfc68e89bf543dcf",
+    "method": "전용 계정 track-demo@example.com(user 12, member)으로만 캡처. 이 계정은 ALPHA 브랜치와 트랙 5/6에만 소속이며 GET /branches=[ALPHA] · /tracks=[Beta Track, Alpha Track] · /canvases=[] · /branches/public=[] · /notifications unread=0 · /recent-views=[] · /my-tasks=[] 로 다른 계정 데이터가 조회 자체가 불가함을 확인했다. 고유 레이아웃 11종(canvas / sourcepicker-addmenu-open / detail / timeline / timeline-lane-selected / tree / tree-row-selected / bulkadd / createtrack / settings-branches-edit / settings-general-swatch)을 눈으로 전수 확인했고, 나머지 13장은 그중 한 레이아웃의 hover/focus/selected 상태 변형으로 pixelmatch 차이가 ≤2.25%임을 실측했다 (sourcepicker.png는 canvas.png와 바이트 동일). 화면에 등장하는 모든 문자열이 합성이다: TEST / Track Demo / TD / Alpha Track / Beta Track / - Alpha / ALPHA / Alpha One~Seven / Alpha Backlog One / Alpha Sprint 1 / Alpha Epic / Alpha Epic Child / RESTRICTED ITEM·Beta / Alpha Scrum. CreateTrack의 \"예: Q3 결제 출시 준비\"는 components/modal/CreateTrack.js:111 의 하드코딩 placeholder이며 DB 데이터가 아니다(실측).",
     "captures": [
       {
         "captureName": "canvas.png",
@@ -3154,6 +3236,12 @@
       {
         "captureName": "settings-branches-edit.png",
         "sha256": "694a42bdac88ac8edce5c5321f1af8c5cc15a1da60a4b3338277acef5a17b18c",
+        "pass": true,
+        "findings": []
+      },
+      {
+        "captureName": "settings-general-swatch.png",
+        "sha256": "4095abdea6345b2cfc37c3b8f6745bd250b4b909fba88bce8286aa2e250352a0",
         "pass": true,
         "findings": []
       }

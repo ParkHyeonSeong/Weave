@@ -14,7 +14,7 @@
       "blob": "bc54e5417c1f8afab658f963cfa9711414445509"
     }
   },
-  "fingerprint": "69edcafbbccd05ddb5494be8a7390398ee253fa32a60b3f3d32d70a2d3098b11",
+  "fingerprint": "021c67611f40fc19d7583ea8e82e37770e6de048fb39d04c22d38950a0cadd00",
   "allowIdToKey": {
     "1": "styles/components/track/track.scss||.TrackNode__PrioFlag|background|0",
     "2": "styles/components/track/track.scss||.TrackTree__Priority--high|background|0",
@@ -36,7 +36,7 @@
     "18": "styles/components/track/track.scss||.TrackTree__Priority--low|background|0"
   },
   "smoke": {
-    "contextSha256": "0bb66efc58fbdb55778f60b9dc345798a4685290187cf4ca65f4bf08f090cf05",
+    "contextSha256": "415ea0072eb19069f364d80bcaa566a392c2fcfa4a43592de68c6e8ccc0a224b",
     "captures": [
       {
         "captureName": "canvas.png",
@@ -129,6 +129,10 @@
       {
         "captureName": "settings-branches-edit.png",
         "sha256": "694a42bdac88ac8edce5c5321f1af8c5cc15a1da60a4b3338277acef5a17b18c"
+      },
+      {
+        "captureName": "settings-general-swatch.png",
+        "sha256": "4095abdea6345b2cfc37c3b8f6745bd250b4b909fba88bce8286aa2e250352a0"
       }
     ]
   },
