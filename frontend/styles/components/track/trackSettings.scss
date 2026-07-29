@@ -213,7 +213,7 @@
     cursor: pointer; transition: transform $transition-fast, border-color $transition-fast;
     padding: 0;
     &:hover { transform: scale(1.08); }
-    &--active { border-color: $color-text; box-shadow: 0 0 0 2px $color-bg, 0 0 0 3px rgba(0,0,0,0.12); }
+    &--active { border-color: $color-text; box-shadow: 0 0 0 2px $color-bg, 0 0 0 3px $color-input-border; }
   }
   &__HexInput {
     width: 100px;
@@ -251,7 +251,7 @@
   }
   &__SaveBtn {
     font-size: $font-size-sm;
-    color: #fff;
+    color: $color-text-inverse;
     background: $color-primary;
     border: 1px solid $color-primary;
     padding: 5px 14px;
@@ -306,7 +306,7 @@
 
     &--active {
       border-color: $color-text;
-      box-shadow: 0 0 0 2px $color-bg, 0 0 0 3px rgba(0,0,0,0.12);
+      box-shadow: 0 0 0 2px $color-bg, 0 0 0 3px $color-input-border;
     }
   }
 
