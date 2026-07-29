@@ -381,8 +381,10 @@ describe('전 SCSS var(--…) 참조 커버리지', () => {
   const RUNTIME_INJECTED = ['branch-color', 'status-color', 'accent', 'sticky-header-h'];
   // 예외는 경로+개수까지 고정 — 번지거나 늘어나면 즉시 검출, 이관(S4/S5)하면 목록·개수 갱신 신호.
   // S4 stage 3에서 track.scss 6건 이관 완료 — 미정의 var(--text-secondary/--text-tertiary)라
-  //   폴백(#9ca3af)만 렌더되던 죽은 참조였고, 정의된 --color-text-* 토큰으로 교체했다. 라이트 값이
-  //   #9ca3af → #6B7280로 바뀌는 것은 의도된 교정이며 사이트별 판정을 거쳤다(s4Spec CONVERSIONS).
+  //   폴백만 렌더되고 테마를 따라가지 않던 죽은 참조였고, 정의된 --color-text-* 토큰으로 교체했다.
+  //   라이트 영향은 두 갈래다: tertiary 5건은 폴백 #9ca3af → --color-text-tertiary #6B7280 로
+  //   **색이 바뀌는 교정**(allow #13~#17), secondary 1건(구 1207행)은 폴백이 이미 #6b7280이라
+  //   **라이트 동치**이고 다크 추종만 복구된다. 사이트별 판정은 s4Spec CONVERSIONS에 있다.
   // S5: context-menu.scss의 미정의 var 폴백 소비 2건.
   const PENDING = {
     'common/context-menu.scss': { 'color-hover': 1, 'color-border-subtle': 1 },
