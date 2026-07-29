@@ -324,7 +324,7 @@ $track-border-soft: var(--track-border-soft);
     &:focus {
       outline: none;
       border-color: $color-primary;
-      box-shadow: 0 0 0 3px rgba(94,106,210,0.1);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 10%, transparent);
     }
     &::placeholder { color: $track-ink-mute; }
   }
@@ -383,7 +383,7 @@ $track-border-soft: var(--track-border-soft);
     flex-shrink: 0;
     cursor: pointer;
     &:hover {
-      background: rgba(220,38,38,0.1);
+      background: color-mix(in srgb, var(--color-error) 10%, transparent);
       color: $color-error;
     }
   }
@@ -431,7 +431,7 @@ $track-border-soft: var(--track-border-soft);
     cursor: pointer;
     text-align: left;
     &:hover { background: rgba(0,0,0,0.03); }
-    &:focus-visible { outline: 2px solid #5E6AD2; outline-offset: -2px; }
+    &:focus-visible { outline: 2px solid $color-primary; outline-offset: -2px; }
   }
 
   &__GroupIcon {
@@ -451,8 +451,8 @@ $track-border-soft: var(--track-border-soft);
   &__GroupHint {
     font-size: 9.5px;
     font-weight: 600;
-    color: #16A34A;
-    background: rgba(22,163,74,0.10);
+    color: $color-success;
+    background: color-mix(in srgb, var(--color-success) 10%, transparent);
     padding: 1px 5px;
     border-radius: 3px;
     letter-spacing: 0.04em;
@@ -583,7 +583,7 @@ $track-border-soft: var(--track-border-soft);
   min-width: 0;
   position: relative;
   background:
-    radial-gradient(ellipse at top, rgba(94,106,210,0.04) 0%, transparent 55%),
+    radial-gradient(ellipse at top, color-mix(in srgb, var(--color-primary) 4%, transparent) 0%, transparent 55%),
     $track-paper;
   overflow: hidden;
 
@@ -599,7 +599,7 @@ $track-border-soft: var(--track-border-soft);
     inset: 0;
     pointer-events: none;
     background:
-      radial-gradient(ellipse at center, transparent 60%, rgba(28,28,28,0.04) 100%);
+      radial-gradient(ellipse at center, transparent 60%, color-mix(in srgb, var(--color-text) 4%, transparent) 100%);
     z-index: 1;
   }
 
@@ -663,7 +663,7 @@ $track-border-soft: var(--track-border-soft);
     transition: background 120ms, color 120ms;
     &:hover { background: $track-border-soft; color: $track-ink; }
     &--active {
-      background: rgba(94,106,210,0.1);
+      background: color-mix(in srgb, var(--color-primary) 10%, transparent);
       color: $color-primary;
     }
   }
@@ -705,7 +705,7 @@ $track-border-soft: var(--track-border-soft);
     transition: background 120ms, color 120ms;
 
     &--on {
-      background: rgba(94,106,210,0.12);
+      background: color-mix(in srgb, var(--color-primary) 12%, transparent);
       color: $color-primary;
     }
   }
@@ -738,7 +738,7 @@ $track-border-soft: var(--track-border-soft);
 // Node (Cross-branch Task)
 // =========================================================================
 .TrackNode {
-  --branch-color: #5E6AD2;
+  --branch-color: var(--color-primary);
   position: relative;
   min-width: 220px;
   max-width: 240px;
@@ -821,8 +821,8 @@ $track-border-soft: var(--track-border-soft);
     margin-left: auto;
     width: 16px; height: 16px;
     border-radius: 50%;
-    background: #FEE2E2;
-    color: #DC2626;
+    background: $color-error-bg;
+    color: $color-error;
     font-size: 10px;
     font-weight: 700;
     display: flex; align-items: center; justify-content: center;
@@ -844,7 +844,7 @@ $track-border-soft: var(--track-border-soft);
   &__ParentChip {
     margin-top: 2px;
     font-size: 11px;
-    color: var(--text-tertiary, #9ca3af);
+    color: var(--color-text-tertiary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -855,7 +855,7 @@ $track-border-soft: var(--track-border-soft);
     align-items: center;
     gap: 3px;
     font-size: 10px;
-    color: var(--text-tertiary, #9ca3af);
+    color: var(--color-text-tertiary);
   }
 
   &__Footer {
@@ -1077,7 +1077,7 @@ $track-border-soft: var(--track-border-soft);
     text-transform: uppercase;
     line-height: 1.2;
     box-shadow:
-      0 0 0 1px rgba(94,106,210,0.45),
+      0 0 0 1px color-mix(in srgb, var(--color-primary) 45%, transparent),
       0 1px 2px rgba(0,0,0,0.08);
 
     &--draft {
@@ -1204,7 +1204,7 @@ $track-border-soft: var(--track-border-soft);
   &__BcSep { color: $track-ink-mute; }
 
   &__ParentCrumb {
-    color: var(--text-secondary, #6b7280);
+    color: var(--color-text-secondary);
     cursor: pointer;
 
     &:hover { text-decoration: underline; }
@@ -1327,7 +1327,7 @@ $track-border-soft: var(--track-border-soft);
     appearance: none;
     transition: background 120ms, color 120ms;
     &:hover {
-      background: rgba(94,106,210,0.1);
+      background: color-mix(in srgb, var(--color-primary) 10%, transparent);
       color: $color-primary;
     }
   }
@@ -1380,7 +1380,7 @@ $track-border-soft: var(--track-border-soft);
     font-size: 11px;
     transition: background 120ms;
     &:hover {
-      background: rgba(94,106,210,0.1);
+      background: color-mix(in srgb, var(--color-primary) 10%, transparent);
       color: $color-primary;
     }
   }
@@ -1554,7 +1554,7 @@ $track-border-soft: var(--track-border-soft);
       color: $track-ink;
     }
     &--open {
-      background: rgba(94,106,210,0.1);
+      background: color-mix(in srgb, var(--color-primary) 10%, transparent);
       color: $color-primary;
     }
   }
@@ -1737,7 +1737,7 @@ $track-border-soft: var(--track-border-soft);
     transition: background 120ms;
     &:hover { background: rgba(0,0,0,0.02); }
     &--selected {
-      background: rgba(94,106,210,0.06);
+      background: color-mix(in srgb, var(--color-primary) 6%, transparent);
       &::before {
         content: '';
         position: absolute;
@@ -1765,7 +1765,7 @@ $track-border-soft: var(--track-border-soft);
   &__LaneParentChip {
     flex-shrink: 0;
     font-size: 10px;
-    color: var(--text-tertiary, #9ca3af);
+    color: var(--color-text-tertiary);
   }
 
   &__Canvas {
@@ -1867,7 +1867,7 @@ $track-border-soft: var(--track-border-soft);
 
   // Task 막대
   &__Bar {
-    --branch-color: #5E6AD2;
+    --branch-color: var(--color-primary);
     --status-color: #9CA3AF;
     position: absolute;
     display: flex;
@@ -1908,8 +1908,8 @@ $track-border-soft: var(--track-border-soft);
       background:
         repeating-linear-gradient(
           135deg,
-          rgba(220,38,38,0.06) 0,
-          rgba(220,38,38,0.06) 4px,
+          color-mix(in srgb, var(--color-error) 6%, transparent) 0,
+          color-mix(in srgb, var(--color-error) 6%, transparent) 4px,
           transparent 4px,
           transparent 9px
         ),
@@ -2086,10 +2086,10 @@ $track-border-soft: var(--track-border-soft);
     background: #FFFFFF;
     position: relative;
 
-    &:hover { background: rgba(94,106,210,0.025); }
+    &:hover { background: color-mix(in srgb, var(--color-primary) 2.5%, transparent); }
 
     &--selected {
-      background: rgba(94,106,210,0.06);
+      background: color-mix(in srgb, var(--color-primary) 6%, transparent);
       &::before {
         content: '';
         position: absolute;
@@ -2167,7 +2167,7 @@ $track-border-soft: var(--track-border-soft);
   &__ParentChip {
     flex-shrink: 0;
     font-size: 11px;
-    color: var(--text-tertiary, #9ca3af);
+    color: var(--color-text-tertiary);
   }
 
   &__RestrictedIcon {
@@ -2208,19 +2208,19 @@ $track-border-soft: var(--track-border-soft);
     text-transform: capitalize;
 
     &--urgent {
-      background: rgba(220,38,38,0.08);
+      background: color-mix(in srgb, var(--color-error) 8%, transparent);
       color: $color-error;
     }
     &--high {
-      background: rgba(245,158,11,0.1);
-      color: #B45309;
+      background: $color-warning-bg;
+      color: var(--color-warning-ink);
     }
     &--medium {
-      background: rgba(94,106,210,0.08);
+      background: color-mix(in srgb, var(--color-primary) 8%, transparent);
       color: $color-primary;
     }
     &--low {
-      background: rgba(156,163,175,0.16);
+      background: color-mix(in srgb, var(--track-ink-soft) 16%, transparent);
       color: $track-ink-soft;
     }
   }
@@ -2309,7 +2309,7 @@ $track-border-soft: var(--track-border-soft);
   &__Backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(28,28,28,0.32);
+    background: var(--color-backdrop);
     backdrop-filter: blur(2px);
     z-index: 1000;
     display: flex;
@@ -2376,10 +2376,10 @@ $track-border-soft: var(--track-border-soft);
       background: $track-border-soft;
     }
     &--checked {
-      background: color-mix(in srgb, var(--branch-color) 6%, #FFFFFF);
+      background: color-mix(in srgb, var(--branch-color) 6%, var(--track-card));
       border-color: color-mix(in srgb, var(--branch-color) 25%, transparent);
       &:hover {
-        background: color-mix(in srgb, var(--branch-color) 10%, #FFFFFF);
+        background: color-mix(in srgb, var(--branch-color) 10%, var(--track-card));
       }
     }
   }
@@ -2439,17 +2439,17 @@ $track-border-soft: var(--track-border-soft);
   &__Warn {
     margin: 10px 22px 0;
     padding: 10px 12px;
-    background: rgba(245,158,11,0.08);
-    border: 1px solid rgba(245,158,11,0.2);
+    background: $color-warning-bg;
+    border: 1px solid color-mix(in srgb, var(--color-warning) 20%, transparent);
     border-radius: 8px;
     display: flex;
     align-items: flex-start;
     gap: 8px;
     font-size: 12px;
     line-height: 1.5;
-    color: #92400E;
-    svg { color: #D97706; flex-shrink: 0; margin-top: 2px; }
-    strong { color: #78350F; font-weight: 700; }
+    color: var(--color-warning-ink-deep);
+    svg { color: $color-warning; flex-shrink: 0; margin-top: 2px; }
+    strong { color: var(--color-warning-ink-strong); font-weight: 700; }
   }
 
   &__Foot {
@@ -2470,7 +2470,7 @@ $track-border-soft: var(--track-border-soft);
     font-weight: 500;
     color: $track-ink-mute;
   }
-  &__DiffAdd { color: #16A34A; }
+  &__DiffAdd { color: $color-success; }
   &__DiffRemove { color: $color-error; }
   &__DiffSep { color: $track-ink-mute; opacity: 0.5; }
 
@@ -2536,7 +2536,7 @@ $track-border-soft: var(--track-border-soft);
   &__Backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(28,28,28,0.32);
+    background: var(--color-backdrop);
     backdrop-filter: blur(2px);
     z-index: 1000;
     display: flex;
@@ -2704,7 +2704,7 @@ $track-border-soft: var(--track-border-soft);
   &__TaskParentChip {
     flex-shrink: 0;
     font-size: 11px;
-    color: var(--text-tertiary, #9ca3af);
+    color: var(--color-text-tertiary);
   }
 
   &__Foot {

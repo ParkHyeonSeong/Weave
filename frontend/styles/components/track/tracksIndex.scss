@@ -52,7 +52,7 @@
   &__Backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(28,28,28,0.32);
+    background: var(--color-backdrop);
     backdrop-filter: blur(2px);
     z-index: 1000;
     display: flex;
@@ -175,7 +175,7 @@
     &:hover { border-color: $color-text-secondary; }
     &--active {
       border-color: $color-primary;
-      background: rgba(94,106,210,0.04);
+      background: color-mix(in srgb, var(--color-primary) 4%, transparent);
       svg { color: $color-primary; }
     }
   }
@@ -203,7 +203,7 @@
     text-align: center;
   }
   &__Branch {
-    --branch-color: #5E6AD2;
+    --branch-color: var(--color-primary);
     display: flex;
     align-items: center;
     gap: 10px;
@@ -216,7 +216,7 @@
 
     &:hover { background: $color-surface-hover; }
     &--checked {
-      background: color-mix(in srgb, var(--branch-color) 6%, #FFFFFF);
+      background: color-mix(in srgb, var(--branch-color) 6%, var(--track-card));
       border-color: color-mix(in srgb, var(--branch-color) 25%, transparent);
     }
   }

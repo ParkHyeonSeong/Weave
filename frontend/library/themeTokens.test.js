@@ -380,12 +380,11 @@ describe('전 SCSS var(--…) 참조 커버리지', () => {
   // 테마 정의 ∪ 불변 별칭 ∪ 런타임 JS 주입 ∪ S5 이행 예정(context-menu 폴백 소비)만 허용.
   const RUNTIME_INJECTED = ['branch-color', 'status-color', 'accent', 'sticky-header-h'];
   // 예외는 경로+개수까지 고정 — 번지거나 늘어나면 즉시 검출, 이관(S4/S5)하면 목록·개수 갱신 신호.
-  // S4: track.scss 기존 fallback 소비(848·859·1769·2171·2708 tertiary, 1208 secondary).
-  //   ⚠️ fallback(#9ca3af)이 신 토큰 라이트값(--color-text-tertiary=#6B7280)과 달라 단순 치환 시
-  //      라이트 색이 바뀐다 — S4에서 사이트별 의도 판정 필수.
+  // S4 stage 3에서 track.scss 6건 이관 완료 — 미정의 var(--text-secondary/--text-tertiary)라
+  //   폴백(#9ca3af)만 렌더되던 죽은 참조였고, 정의된 --color-text-* 토큰으로 교체했다. 라이트 값이
+  //   #9ca3af → #6B7280로 바뀌는 것은 의도된 교정이며 사이트별 판정을 거쳤다(s4Spec CONVERSIONS).
   // S5: context-menu.scss의 미정의 var 폴백 소비 2건.
   const PENDING = {
-    'track/track.scss': { 'text-secondary': 1, 'text-tertiary': 5 },
     'common/context-menu.scss': { 'color-hover': 1, 'color-border-subtle': 1 },
   };
   it('미정의 var 참조 없음 (예외는 경로·개수 고정)', () => {
