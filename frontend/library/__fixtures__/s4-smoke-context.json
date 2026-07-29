@@ -1,0 +1,3162 @@
+{
+  "appOrigin": "http://localhost:10000",
+  "apiOrigin": "http://localhost:10001/api",
+  "trackId": 5,
+  "urls": {
+    "index": "/tracks",
+    "detail": "/tracks/5",
+    "settings": "/tracks/5/settings"
+  },
+  "account": {
+    "username": "Track Demo",
+    "avatarInitials": "TD",
+    "avatarColor": "#475569",
+    "role": "member",
+    "workspaceName": "TEST"
+  },
+  "statusKeys": {
+    "blocked": "blocked",
+    "done": "done"
+  },
+  "branchIds": {
+    "alpha": 13,
+    "beta": 14
+  },
+  "branchName": "- Alpha",
+  "branchKey": "ALPHA",
+  "itemIds": {
+    "alphaOne": 21,
+    "alphaTwo": 22,
+    "alphaThree": 23,
+    "alphaFour": 24,
+    "alphaFive": 25,
+    "alphaSix": 26,
+    "betaRestricted": 27
+  },
+  "linkIds": {
+    "mat": 9,
+    "draft": 10,
+    "rel": 11
+  },
+  "normalItemId": 22,
+  "normalItemTitle": "Alpha Two",
+  "normalItemTitleSafe": {
+    "noQuotes": true,
+    "matchCount": 1
+  },
+  "otherTracks": {
+    "count": 1,
+    "firstTrackName": "Beta Track"
+  },
+  "epicName": "Alpha Epic",
+  "addMenuEpicLabel": "Epic",
+  "settingsPreset": {
+    "editBranchIndex": 0,
+    "inactivePresetValue": "#16A34A",
+    "currentColor": "#5E6AD2"
+  },
+  "parentChip": {
+    "itemId": 26,
+    "parentTitle": "Alpha Five"
+  },
+  "parentChipDated": {
+    "itemId": 26,
+    "startDate": "2026-05-18",
+    "dueDate": "2026-05-24"
+  },
+  "subProgress": {
+    "itemId": 25,
+    "total": 2,
+    "done": 1
+  },
+  "activeSprint": {
+    "branchId": 13,
+    "sprintId": 12,
+    "sprintName": "Alpha Sprint 1"
+  },
+  "blocked": {
+    "itemId": 21,
+    "statusKey": "blocked",
+    "startDate": "2026-05-11",
+    "dueDate": "2026-05-18"
+  },
+  "priority": {
+    "urgentTitle": "Alpha One",
+    "highTitle": "Alpha Two",
+    "mediumTitle": "Alpha Three",
+    "lowCount": 1,
+    "lowTitle": "Alpha Four"
+  },
+  "treeRowZero": {
+    "className": "TrackTree__Row ",
+    "isRestricted": false
+  },
+  "treeGroupNames": [
+    "- Alpha",
+    "?"
+  ],
+  "sourceTaskZero": {
+    "className": "SourcePicker__Task",
+    "used": false,
+    "context": false,
+    "footHint": "2 of 8 draggable"
+  },
+  "bulkAdd": {
+    "branchId": 13,
+    "branchName": "- Alpha",
+    "epicId": 7,
+    "epicName": "Alpha Epic",
+    "parentChipRowTaskId": 52
+  },
+  "defaults": {
+    "matToggleOn": true,
+    "edgeType": "flow_to"
+  },
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "capture": {
+    "type": "png",
+    "scale": "css",
+    "cssPxEqualsImagePx": true
+  },
+  "pseudoMaskPolicy": "pseudo-element(.Track::before)는 getComputedStyle(parent, \"::before\").content 로만 판정하고 마스크 대상이 아니다",
+  "prevTheme": {
+    "present": true,
+    "value": "dark"
+  },
+  "prevLastView": {
+    "present": false,
+    "value": null
+  },
+  "surfaces": [
+    {
+      "name": "canvas",
+      "captureName": "canvas.png",
+      "sha256": "80f7ba6b063576476f5d9aefd559329ef720ccd0ddbd2191867adac035538bcb",
+      "endpoints": [
+        "/branches",
+        "/chat",
+        "/notifications/unread-count",
+        "/notifications?limit=30",
+        "/profile/ui-prefs",
+        "/setup/status",
+        "/tracks",
+        "/tracks/5",
+        "/tracks/5/items",
+        "/tracks/5/links",
+        "/tracks/5/members",
+        "/tracks/5/sidebar-tree"
+      ],
+      "bundleSha256": "d4c8dd146cb9eaf20265a50190f818ce11a1bd95edf6d5c36f70b635da2207cb",
+      "actions": [
+        {
+          "op": "setStorage",
+          "key": "track:{id}:lastView",
+          "value": "flow"
+        },
+        {
+          "op": "goto",
+          "url": "/tracks/{id}"
+        },
+        {
+          "op": "waitFor",
+          "selector": ".TrackNode--restricted",
+          "state": "visible"
+        }
+      ]
+    },
+    {
+      "name": "canvas-toolbar-active",
+      "captureName": "canvas-toolbar-active.png",
+      "sha256": "22018ce2d22c1935f9985762b25ded0ccfbc40fb1df222bb177a1bc46d42104b",
+      "endpoints": [
+        "/branches",
+        "/chat",
+        "/notifications/unread-count",
+        "/notifications?limit=30",
+        "/profile/ui-prefs",
+        "/setup/status",
+        "/tracks",
+        "/tracks/5",
+        "/tracks/5/items",
+        "/tracks/5/links",
+        "/tracks/5/members",
+        "/tracks/5/sidebar-tree"
+      ],
+      "bundleSha256": "d4c8dd146cb9eaf20265a50190f818ce11a1bd95edf6d5c36f70b635da2207cb",
+      "actions": [
+        {
+          "op": "setStorage",
+          "key": "track:{id}:lastView",
+          "value": "flow"
+        },
+        {
+          "op": "goto",
+          "url": "/tracks/{id}"
+        },
+        {
+          "op": "click",
+          "selector": ".TrackCanvas__ToolbarBtn[title='Relates to']",
+          "nth": 0
+        },
+        {
+          "op": "expectPresent",
+          "selector": ".TrackCanvas__ToolbarBtn--active[title='Relates to']"
+        }
+      ]
+    },
+    {
+      "name": "canvas-matpill-on",
+      "captureName": "canvas-matpill-on.png",
+      "sha256": "c10987db45a04cf4211fa9da0122f3280e5c32d85aad71d19bec64b2837b7b01",
+      "endpoints": [
+        "/branches",
+        "/chat",
+        "/notifications/unread-count",
+        "/notifications?limit=30",
+        "/profile/ui-prefs",
+        "/setup/status",
+        "/tracks",
+        "/tracks/5",
+        "/tracks/5/items",
+        "/tracks/5/links",
+        "/tracks/5/members",
+        "/tracks/5/sidebar-tree"
+      ],
+      "bundleSha256": "d4c8dd146cb9eaf20265a50190f818ce11a1bd95edf6d5c36f70b635da2207cb",
+      "actions": [
+        {
+          "op": "setStorage",
+          "key": "track:{id}:lastView",
+          "value": "flow"
+        },
+        {
+          "op": "goto",
+          "url": "/tracks/{id}"
+        },
+        {
+          "op": "expectPresent",
+          "selector": ".TrackCanvas__MatPill--on"
+        },
+        {
+          "op": "click",
+          "selector": ".TrackCanvas__MatToggle",
+          "nth": 0
+        },
+        {
+          "op": "expectAbsent",
+          "selector": ".TrackCanvas__MatPill--on"
+        },
+        {
+          "op": "click",
+          "selector": ".TrackCanvas__MatToggle",
+          "nth": 0
+        },
+        {
+          "op": "expectPresent",
+          "selector": ".TrackCanvas__MatPill--on"
+        }
+      ]
+    },
+    {
+      "name": "sourcepicker",
+      "captureName": "sourcepicker.png",
+      "sha256": "80f7ba6b063576476f5d9aefd559329ef720ccd0ddbd2191867adac035538bcb",
+      "endpoints": [
+        "/branches",
+        "/chat",
+        "/notifications/unread-count",
+        "/notifications?limit=30",
+        "/profile/ui-prefs",
+        "/setup/status",
+        "/tracks",
+        "/tracks/5",
+        "/tracks/5/items",
+        "/tracks/5/links",
+        "/tracks/5/members",
+        "/tracks/5/sidebar-tree"
+      ],
+      "bundleSha256": "d4c8dd146cb9eaf20265a50190f818ce11a1bd95edf6d5c36f70b635da2207cb",
+      "actions": [
+        {
+          "op": "setStorage",
+          "key": "track:{id}:lastView",
+          "value": "flow"
+        },
+        {
+          "op": "goto",
+          "url": "/tracks/{id}"
+        },
+        {
+          "op": "waitFor",
+          "selector": ".SourcePicker__BranchRow",
+          "state": "visible"
+        }
+      ]
+    },
+    {
+      "name": "sourcepicker-branch-hover",
+      "captureName": "sourcepicker-branch-hover.png",
+      "sha256": "2c8905e09a231b3a7fd3e5d7100e466ea855d3ad5541858eaac59c0cb5f3cd4f",
+      "endpoints": [
+        "/branches",
+        "/chat",
+        "/notifications/unread-count",
+        "/notifications?limit=30",
+        "/profile/ui-prefs",
+        "/setup/status",
+        "/tracks",
+        "/tracks/5",
+        "/tracks/5/items",
+        "/tracks/5/links",
+        "/tracks/5/members",
+        "/tracks/5/sidebar-tree"
+      ],
+      "bundleSha256": "d4c8dd146cb9eaf20265a50190f818ce11a1bd95edf6d5c36f70b635da2207cb",
+      "actions": [
+        {
+          "op": "setStorage",
+          "key": "track:{id}:lastView",
+          "value": "flow"
+        },
+        {
+          "op": "goto",
+          "url": "/tracks/{id}"
+        },
+        {
+          "op": "hover",
+          "selector": ".SourcePicker__BranchRow",
+          "nth": 0
+        }
+      ]
+    },
+    {
+      "name": "sourcepicker-group-hover",
+      "captureName": "sourcepicker-group-hover.png",
+      "sha256": "abbb3ffffbb4a62f668059781b1b2e3dce0de53129443a4e88c3e2d123e181ff",
+      "endpoints": [
+        "/branches",
+        "/chat",
+        "/notifications/unread-count",
+        "/notifications?limit=30",
+        "/profile/ui-prefs",
+        "/setup/status",
+        "/tracks",
+        "/tracks/5",
+        "/tracks/5/items",
+        "/tracks/5/links",
+        "/tracks/5/members",
+        "/tracks/5/sidebar-tree"
+      ],
+      "bundleSha256": "d4c8dd146cb9eaf20265a50190f818ce11a1bd95edf6d5c36f70b635da2207cb",
+      "actions": [
+        {
+          "op": "setStorage",
+          "key": "track:{id}:lastView",
+          "value": "flow"
+        },
+        {
+          "op": "goto",
+          "url": "/tracks/{id}"
+        },
+        {
+          "op": "hover",
+          "selector": ".SourcePicker__GroupRow",
+          "nth": 0
+        }
+      ]
+    },
+    {
+      "name": "sourcepicker-task-hover",
+      "captureName": "sourcepicker-task-hover.png",
+      "sha256": "e15a94b8bd37382b9947db3aa65246ab5c9064f45299c5aa545104b43d8d8fa6",
+      "endpoints": [
+        "/branches",
+        "/chat",
+        "/notifications/unread-count",
+        "/notifications?limit=30",
+        "/profile/ui-prefs",
+        "/setup/status",
+        "/tracks",
+        "/tracks/5",
+        "/tracks/5/items",
+        "/tracks/5/links",
+        "/tracks/5/members",
+        "/tracks/5/sidebar-tree"
+      ],
+      "bundleSha256": "d4c8dd146cb9eaf20265a50190f818ce11a1bd95edf6d5c36f70b635da2207cb",
+      "actions": [
+        {
+          "op": "setStorage",
+          "key": "track:{id}:lastView",
+          "value": "flow"
+        },
+        {
+          "op": "goto",
+          "url": "/tracks/{id}"
+        },
+        {
+          "op": "hover",
+          "selector": ".SourcePicker__Task",
+          "nth": 0
+        }
+      ]
+    },
+    {
+      "name": "sourcepicker-unparticipate-hover",
+      "captureName": "sourcepicker-unparticipate-hover.png",
+      "sha256": "c4229c4c6635ce32fe8defdb72b0532c1b16d5b9e1d0c9c841870b8e2905855f",
+      "endpoints": [
+        "/branches",
+        "/chat",
+        "/notifications/unread-count",
+        "/notifications?limit=30",
+        "/profile/ui-prefs",
+        "/setup/status",
+        "/tracks",
+        "/tracks/5",
+        "/tracks/5/items",
+        "/tracks/5/links",
+        "/tracks/5/members",
+        "/tracks/5/sidebar-tree"
+      ],
+      "bundleSha256": "d4c8dd146cb9eaf20265a50190f818ce11a1bd95edf6d5c36f70b635da2207cb",
+      "actions": [
+        {
+          "op": "setStorage",
+          "key": "track:{id}:lastView",
+          "value": "flow"
+        },
+        {
+          "op": "goto",
+          "url": "/tracks/{id}"
+        },
+        {
+          "op": "hover",
+          "selector": ".SourcePicker__BranchRow",
+          "nth": 0
+        },
+        {
+          "op": "hover",
+          "selector": ".SourcePicker__BranchUnparticipate",
+          "nth": 0
+        }
+      ]
+    },
+    {
+      "name": "sourcepicker-search-focus",
+      "captureName": "sourcepicker-search-focus.png",
+      "sha256": "af33d0dd9f8004e7ff056e388c98aec123e9db76de346192a4063a126de4c837",
+      "endpoints": [
+        "/branches",
+        "/chat",
+        "/notifications/unread-count",
+        "/notifications?limit=30",
+        "/profile/ui-prefs",
+        "/setup/status",
+        "/tracks",
+        "/tracks/5",
+        "/tracks/5/items",
+        "/tracks/5/links",
+        "/tracks/5/members",
+        "/tracks/5/sidebar-tree"
+      ],
+      "bundleSha256": "d4c8dd146cb9eaf20265a50190f818ce11a1bd95edf6d5c36f70b635da2207cb",
+      "actions": [
+        {
+          "op": "setStorage",
+          "key": "track:{id}:lastView",
+          "value": "flow"
+        },
+        {
+          "op": "goto",
+          "url": "/tracks/{id}"
+        },
+        {
+          "op": "click",
+          "selector": ".SourcePicker__SearchInput",
+          "nth": 0
+        }
+      ]
+    },
+    {
+      "name": "sourcepicker-addmenu-open",
+      "captureName": "sourcepicker-addmenu-open.png",
+      "sha256": "6f95bdd82356b9b5cb9bec42c77a2bbcdc123f5a417677ae955089939b636d02",
+      "endpoints": [
+        "/branches",
+        "/chat",
+        "/notifications/unread-count",
+        "/notifications?limit=30",
+        "/profile/ui-prefs",
+        "/setup/status",
+        "/tracks",
+        "/tracks/5",
+        "/tracks/5/items",
+        "/tracks/5/links",
+        "/tracks/5/members",
+        "/tracks/5/sidebar-tree"
+      ],
+      "bundleSha256": "d4c8dd146cb9eaf20265a50190f818ce11a1bd95edf6d5c36f70b635da2207cb",
+      "actions": [
+        {
+          "op": "setStorage",
+          "key": "track:{id}:lastView",
+          "value": "flow"
+        },
+        {
+          "op": "goto",
+          "url": "/tracks/{id}"
+        },
+        {
+          "op": "hover",
+          "selector": ".SourcePicker__AddBtn",
+          "nth": 0
+        },
+        {
+          "op": "click",
+          "selector": ".SourcePicker__AddBtn",
+          "nth": 0
+        }
+      ]
+    },
+    {
+      "name": "detail",
+      "captureName": "detail.png",
+      "sha256": "b984018fb4027b11d8861e699a1870b77ed592823f265400d4fe7fe1da9b0e9d",
+      "endpoints": [
+        "/branches",
+        "/chat",
+        "/notifications/unread-count",
+        "/notifications?limit=30",
+        "/profile/ui-prefs",
+        "/setup/status",
+        "/tracks",
+        "/tracks/5",
+        "/tracks/5/items",
+        "/tracks/5/links",
+        "/tracks/5/members",
+        "/tracks/5/sidebar-tree"
+      ],
+      "bundleSha256": "d4c8dd146cb9eaf20265a50190f818ce11a1bd95edf6d5c36f70b635da2207cb",
+      "actions": [
+        {
+          "op": "setStorage",
+          "key": "track:{id}:lastView",
+          "value": "flow"
+        },
+        {
+          "op": "goto",
+          "url": "/tracks/{id}"
+        },
+        {
+          "op": "click",
+          "selector": ".TrackNode",
+          "hasText": "{normalItemTitle}"
+        },
+        {
+          "op": "waitFor",
+          "selector": ".TrackDetail__OriginLink",
+          "state": "visible"
+        }
+      ]
+    },
+    {
+      "name": "detail-originlink-hover",
+      "captureName": "detail-originlink-hover.png",
+      "sha256": "d70df83b903f099eaeef8a17cf5a16a8eb3166925704d17e359a87e0d8f40948",
+      "endpoints": [
+        "/branches",
+        "/chat",
+        "/notifications/unread-count",
+        "/notifications?limit=30",
+        "/profile/ui-prefs",
+        "/setup/status",
+        "/tracks",
+        "/tracks/5",
+        "/tracks/5/items",
+        "/tracks/5/links",
+        "/tracks/5/members",
+        "/tracks/5/sidebar-tree"
+      ],
+      "bundleSha256": "d4c8dd146cb9eaf20265a50190f818ce11a1bd95edf6d5c36f70b635da2207cb",
+      "actions": [
+        {
+          "op": "setStorage",
+          "key": "track:{id}:lastView",
+          "value": "flow"
+        },
+        {
+          "op": "goto",
+          "url": "/tracks/{id}"
+        },
+        {
+          "op": "click",
+          "selector": ".TrackNode",
+          "hasText": "{normalItemTitle}"
+        },
+        {
+          "op": "hover",
+          "selector": ".TrackDetail__OriginLink",
+          "nth": 0
+        }
+      ]
+    },
+    {
+      "name": "detail-trackchip-hover",
+      "captureName": "detail-trackchip-hover.png",
+      "sha256": "a007768412bd3396f9b4f29971faa27f4e7e56f31b5cf91ad4679e72faf22f87",
+      "endpoints": [
+        "/branches",
+        "/chat",
+        "/notifications/unread-count",
+        "/notifications?limit=30",
+        "/profile/ui-prefs",
+        "/setup/status",
+        "/tracks",
+        "/tracks/5",
+        "/tracks/5/items",
+        "/tracks/5/links",
+        "/tracks/5/members",
+        "/tracks/5/sidebar-tree"
+      ],
+      "bundleSha256": "d4c8dd146cb9eaf20265a50190f818ce11a1bd95edf6d5c36f70b635da2207cb",
+      "actions": [
+        {
+          "op": "setStorage",
+          "key": "track:{id}:lastView",
+          "value": "flow"
+        },
+        {
+          "op": "goto",
+          "url": "/tracks/{id}"
+        },
+        {
+          "op": "click",
+          "selector": ".TrackNode",
+          "hasText": "{normalItemTitle}"
+        },
+        {
+          "op": "hover",
+          "selector": ".TrackDetail__TrackChip",
+          "nth": 0
+        }
+      ]
+    },
+    {
+      "name": "timeline",
+      "captureName": "timeline.png",
+      "sha256": "11de43440b1454067dce602fadeebcbc586bfa048db42024147c16ca2d5850c4",
+      "endpoints": [
+        "/branches",
+        "/chat",
+        "/notifications/unread-count",
+        "/notifications?limit=30",
+        "/profile/ui-prefs",
+        "/setup/status",
+        "/tracks",
+        "/tracks/5",
+        "/tracks/5/items",
+        "/tracks/5/links",
+        "/tracks/5/members",
+        "/tracks/5/sidebar-tree"
+      ],
+      "bundleSha256": "d4c8dd146cb9eaf20265a50190f818ce11a1bd95edf6d5c36f70b635da2207cb",
+      "actions": [
+        {
+          "op": "setStorage",
+          "key": "track:{id}:lastView",
+          "value": "timeline"
+        },
+        {
+          "op": "goto",
+          "url": "/tracks/{id}"
+        },
+        {
+          "op": "waitFor",
+          "selector": ".TrackTimeline__Bar--blocked",
+          "state": "visible"
+        }
+      ]
+    },
+    {
+      "name": "timeline-lane-hover",
+      "captureName": "timeline-lane-hover.png",
+      "sha256": "f749ef47ae43768d8455f250c4cad1ada60273b435ddb88be514af5b72e324d7",
+      "endpoints": [
+        "/branches",
+        "/chat",
+        "/notifications/unread-count",
+        "/notifications?limit=30",
+        "/profile/ui-prefs",
+        "/setup/status",
+        "/tracks",
+        "/tracks/5",
+        "/tracks/5/items",
+        "/tracks/5/links",
+        "/tracks/5/members",
+        "/tracks/5/sidebar-tree"
+      ],
+      "bundleSha256": "d4c8dd146cb9eaf20265a50190f818ce11a1bd95edf6d5c36f70b635da2207cb",
+      "actions": [
+        {
+          "op": "setStorage",
+          "key": "track:{id}:lastView",
+          "value": "timeline"
+        },
+        {
+          "op": "goto",
+          "url": "/tracks/{id}"
+        },
+        {
+          "op": "hover",
+          "selector": ".TrackTimeline__LaneRow",
+          "nth": 0
+        }
+      ]
+    },
+    {
+      "name": "timeline-lane-selected",
+      "captureName": "timeline-lane-selected.png",
+      "sha256": "d2e0ac579571fe939ea74a6aa12dae5ffd3327fd51376b29b59f9e355a9541da",
+      "endpoints": [
+        "/branches",
+        "/chat",
+        "/notifications/unread-count",
+        "/notifications?limit=30",
+        "/profile/ui-prefs",
+        "/setup/status",
+        "/tracks",
+        "/tracks/5",
+        "/tracks/5/items",
+        "/tracks/5/links",
+        "/tracks/5/members",
+        "/tracks/5/sidebar-tree"
+      ],
+      "bundleSha256": "d4c8dd146cb9eaf20265a50190f818ce11a1bd95edf6d5c36f70b635da2207cb",
+      "actions": [
+        {
+          "op": "setStorage",
+          "key": "track:{id}:lastView",
+          "value": "timeline"
+        },
+        {
+          "op": "goto",
+          "url": "/tracks/{id}"
+        },
+        {
+          "op": "click",
+          "selector": ".TrackTimeline__LaneRow",
+          "nth": 0
+        }
+      ]
+    },
+    {
+      "name": "tree",
+      "captureName": "tree.png",
+      "sha256": "6cdb680d9e8a4fef3e7761142ca31b0877b221aa93ccf38ef7ac735d1ccaaf4b",
+      "endpoints": [
+        "/branches",
+        "/chat",
+        "/notifications/unread-count",
+        "/notifications?limit=30",
+        "/profile/ui-prefs",
+        "/setup/status",
+        "/tracks",
+        "/tracks/5",
+        "/tracks/5/items",
+        "/tracks/5/links",
+        "/tracks/5/members",
+        "/tracks/5/sidebar-tree"
+      ],
+      "bundleSha256": "d4c8dd146cb9eaf20265a50190f818ce11a1bd95edf6d5c36f70b635da2207cb",
+      "actions": [
+        {
+          "op": "setStorage",
+          "key": "track:{id}:lastView",
+          "value": "tree"
+        },
+        {
+          "op": "goto",
+          "url": "/tracks/{id}"
+        },
+        {
+          "op": "waitFor",
+          "selector": ".TrackTree__Row--restricted",
+          "state": "visible"
+        }
+      ]
+    },
+    {
+      "name": "tree-row-hover",
+      "captureName": "tree-row-hover.png",
+      "sha256": "e4a0dbf1514fc5ba6e72c6c58b1e7235bb9b26bdd6fab6b4e4e5485ee9e9a368",
+      "endpoints": [
+        "/branches",
+        "/chat",
+        "/notifications/unread-count",
+        "/notifications?limit=30",
+        "/profile/ui-prefs",
+        "/setup/status",
+        "/tracks",
+        "/tracks/5",
+        "/tracks/5/items",
+        "/tracks/5/links",
+        "/tracks/5/members",
+        "/tracks/5/sidebar-tree"
+      ],
+      "bundleSha256": "d4c8dd146cb9eaf20265a50190f818ce11a1bd95edf6d5c36f70b635da2207cb",
+      "actions": [
+        {
+          "op": "setStorage",
+          "key": "track:{id}:lastView",
+          "value": "tree"
+        },
+        {
+          "op": "goto",
+          "url": "/tracks/{id}"
+        },
+        {
+          "op": "hover",
+          "selector": ".TrackTree__Row",
+          "nth": 0
+        }
+      ]
+    },
+    {
+      "name": "tree-row-selected",
+      "captureName": "tree-row-selected.png",
+      "sha256": "d1ed7bcd1673727edb5ad4bdfd962724ef708c80a22afefe472a556a0a9326e2",
+      "endpoints": [
+        "/branches",
+        "/chat",
+        "/notifications/unread-count",
+        "/notifications?limit=30",
+        "/profile/ui-prefs",
+        "/setup/status",
+        "/tracks",
+        "/tracks/5",
+        "/tracks/5/items",
+        "/tracks/5/links",
+        "/tracks/5/members",
+        "/tracks/5/sidebar-tree"
+      ],
+      "bundleSha256": "d4c8dd146cb9eaf20265a50190f818ce11a1bd95edf6d5c36f70b635da2207cb",
+      "actions": [
+        {
+          "op": "setStorage",
+          "key": "track:{id}:lastView",
+          "value": "tree"
+        },
+        {
+          "op": "goto",
+          "url": "/tracks/{id}"
+        },
+        {
+          "op": "click",
+          "selector": ".TrackTree__Row",
+          "nth": 0
+        }
+      ]
+    },
+    {
+      "name": "bulkadd",
+      "captureName": "bulkadd.png",
+      "sha256": "de003bd4396d6bf19d00a6f8aba82d654dc7fc2fa26077f78d877c4a4a8b40d1",
+      "endpoints": [
+        "/branches",
+        "/branches/13/epics",
+        "/chat",
+        "/notifications/unread-count",
+        "/notifications?limit=30",
+        "/profile/ui-prefs",
+        "/setup/status",
+        "/tracks",
+        "/tracks/5",
+        "/tracks/5/items",
+        "/tracks/5/links",
+        "/tracks/5/members",
+        "/tracks/5/sidebar-tree",
+        "/tracks/5/sources?limit=200&include_non_participating=true&branch_id=13&epic_id=7&exclude_done=true"
+      ],
+      "bundleSha256": "c5162524bb7116efbe4a900747639c7725289c21fbdcca17887b604e6aed4fba",
+      "actions": [
+        {
+          "op": "setStorage",
+          "key": "track:{id}:lastView",
+          "value": "flow"
+        },
+        {
+          "op": "goto",
+          "url": "/tracks/{id}"
+        },
+        {
+          "op": "click",
+          "selector": ".SourcePicker__AddBtn",
+          "nth": 0
+        },
+        {
+          "op": "click",
+          "selector": ".SourcePicker__AddMenuItem",
+          "hasText": "{addMenuEpicLabel}"
+        },
+        {
+          "op": "click",
+          "selector": ".BulkAdd__SelectControl .CustomSelect__Trigger",
+          "nth": 0
+        },
+        {
+          "op": "click",
+          "selector": ".CustomSelect__Option",
+          "hasText": "{branchName}"
+        },
+        {
+          "op": "click",
+          "selector": ".BulkAdd__SelectControl .CustomSelect__Trigger",
+          "nth": 1
+        },
+        {
+          "op": "click",
+          "selector": ".CustomSelect__Option",
+          "hasText": "{epicName}"
+        },
+        {
+          "op": "waitFor",
+          "selector": ".BulkAdd__Task",
+          "state": "visible"
+        }
+      ]
+    },
+    {
+      "name": "createtrack",
+      "captureName": "createtrack.png",
+      "sha256": "4d4b4b0e0640f5a5325b4579a95c30f790a1310e4796443c83399f31d385667b",
+      "endpoints": [
+        "/branches",
+        "/chat",
+        "/notifications/unread-count",
+        "/notifications?limit=30",
+        "/profile/ui-prefs",
+        "/setup/status",
+        "/tracks",
+        "/tracks/home-stats"
+      ],
+      "bundleSha256": "1a00747c10401c4fc0f45174fff2a1439c40470fc86572e8239f14b9e44a52e0",
+      "actions": [
+        {
+          "op": "goto",
+          "url": "/tracks"
+        },
+        {
+          "op": "click",
+          "selector": ".HBtn.HBtn--pri.HBtn--sm",
+          "hasText": "＋ 새 트랙"
+        },
+        {
+          "op": "waitFor",
+          "selector": ".CreateTrack__Branch",
+          "state": "visible"
+        }
+      ]
+    },
+    {
+      "name": "createtrack-visopt-active",
+      "captureName": "createtrack-visopt-active.png",
+      "sha256": "c1da255897e3325bb0bb2f549e14561491a5c90628c938aac7f906bda8d791ed",
+      "endpoints": [
+        "/branches",
+        "/chat",
+        "/notifications/unread-count",
+        "/notifications?limit=30",
+        "/profile/ui-prefs",
+        "/setup/status",
+        "/tracks",
+        "/tracks/home-stats"
+      ],
+      "bundleSha256": "1a00747c10401c4fc0f45174fff2a1439c40470fc86572e8239f14b9e44a52e0",
+      "actions": [
+        {
+          "op": "goto",
+          "url": "/tracks"
+        },
+        {
+          "op": "click",
+          "selector": ".HBtn.HBtn--pri.HBtn--sm",
+          "hasText": "＋ 새 트랙"
+        },
+        {
+          "op": "waitFor",
+          "selector": ".CreateTrack__VisOpt",
+          "state": "visible"
+        },
+        {
+          "op": "expectAbsent",
+          "selector": ".CreateTrack__VisOpt:nth-of-type(2).CreateTrack__VisOpt--active"
+        },
+        {
+          "op": "click",
+          "selector": ".CreateTrack__VisOpt",
+          "nth": 1
+        },
+        {
+          "op": "expectPresent",
+          "selector": ".CreateTrack__VisOpt:nth-of-type(2).CreateTrack__VisOpt--active"
+        }
+      ]
+    },
+    {
+      "name": "settings-branches-edit",
+      "captureName": "settings-branches-edit.png",
+      "sha256": "694a42bdac88ac8edce5c5321f1af8c5cc15a1da60a4b3338277acef5a17b18c",
+      "endpoints": [
+        "/chat",
+        "/notifications/unread-count",
+        "/notifications?limit=30",
+        "/profile/ui-prefs",
+        "/setup/status",
+        "/tracks",
+        "/tracks/5",
+        "/tracks/5/branches"
+      ],
+      "bundleSha256": "2c512b9845b6788b2e02bfc462610010d558e9f806e805200e8257385d135eb0",
+      "actions": [
+        {
+          "op": "goto",
+          "url": "/tracks/{id}/settings"
+        },
+        {
+          "op": "click",
+          "selector": ".TrackSettings__SubTab",
+          "hasText": "Branches"
+        },
+        {
+          "op": "click",
+          "selector": ".SettingsBranches__IconBtn[title='Edit display name / color']",
+          "nth": "{editBranchIndex}"
+        },
+        {
+          "op": "expectAbsent",
+          "selector": ".SettingsBranches__Swatch[aria-label='{inactivePresetValue}'].SettingsBranches__Swatch--active"
+        },
+        {
+          "op": "click",
+          "selector": ".SettingsBranches__Swatch[aria-label='{inactivePresetValue}']"
+        },
+        {
+          "op": "expectPresent",
+          "selector": ".SettingsBranches__Swatch[aria-label='{inactivePresetValue}'].SettingsBranches__Swatch--active"
+        }
+      ]
+    }
+  ],
+  "baseLightMaskRects": {
+    "canvas": {
+      ".TrackNode__PrioFlag": [
+        {
+          "x": 595,
+          "y": 493.55,
+          "width": 8,
+          "height": 8
+        }
+      ],
+      ".TrackNode--restricted": [
+        {
+          "x": 840,
+          "y": 607.05,
+          "width": 90,
+          "height": 54.88
+        }
+      ],
+      ".SourcePicker__BranchKey": [
+        {
+          "x": 432.4,
+          "y": 374.05,
+          "width": 46.6,
+          "height": 19
+        }
+      ],
+      ".TrackNode__ParentChip": [
+        {
+          "x": 679.5,
+          "y": 638.78,
+          "width": 93.5,
+          "height": 8.25
+        }
+      ],
+      ".TrackNode__SubProgress": [
+        {
+          "x": 545.82,
+          "y": 638.97,
+          "width": 13.3,
+          "height": 7.5
+        }
+      ]
+    },
+    "canvas-toolbar-active": {
+      ".TrackNode__PrioFlag": [
+        {
+          "x": 595,
+          "y": 493.55,
+          "width": 8,
+          "height": 8
+        }
+      ],
+      ".TrackNode--restricted": [
+        {
+          "x": 840,
+          "y": 607.05,
+          "width": 90,
+          "height": 54.88
+        }
+      ],
+      ".SourcePicker__BranchKey": [
+        {
+          "x": 432.4,
+          "y": 374.05,
+          "width": 46.6,
+          "height": 19
+        }
+      ],
+      ".TrackNode__ParentChip": [
+        {
+          "x": 679.5,
+          "y": 638.78,
+          "width": 93.5,
+          "height": 8.25
+        }
+      ],
+      ".TrackNode__SubProgress": [
+        {
+          "x": 545.82,
+          "y": 638.97,
+          "width": 13.3,
+          "height": 7.5
+        }
+      ]
+    },
+    "canvas-matpill-on": {
+      ".TrackNode__PrioFlag": [
+        {
+          "x": 595,
+          "y": 493.55,
+          "width": 8,
+          "height": 8
+        }
+      ],
+      ".TrackNode--restricted": [
+        {
+          "x": 840,
+          "y": 607.05,
+          "width": 90,
+          "height": 54.88
+        }
+      ],
+      ".SourcePicker__BranchKey": [
+        {
+          "x": 432.4,
+          "y": 374.05,
+          "width": 46.6,
+          "height": 19
+        }
+      ],
+      ".TrackNode__ParentChip": [
+        {
+          "x": 679.5,
+          "y": 638.78,
+          "width": 93.5,
+          "height": 8.25
+        }
+      ],
+      ".TrackNode__SubProgress": [
+        {
+          "x": 545.82,
+          "y": 638.97,
+          "width": 13.3,
+          "height": 7.5
+        }
+      ]
+    },
+    "sourcepicker": {
+      ".TrackNode__PrioFlag": [
+        {
+          "x": 595,
+          "y": 493.55,
+          "width": 8,
+          "height": 8
+        }
+      ],
+      ".TrackNode--restricted": [
+        {
+          "x": 840,
+          "y": 607.05,
+          "width": 90,
+          "height": 54.88
+        }
+      ],
+      ".SourcePicker__BranchKey": [
+        {
+          "x": 432.4,
+          "y": 374.05,
+          "width": 46.6,
+          "height": 19
+        }
+      ],
+      ".TrackNode__ParentChip": [
+        {
+          "x": 679.5,
+          "y": 638.78,
+          "width": 93.5,
+          "height": 8.25
+        }
+      ],
+      ".TrackNode__SubProgress": [
+        {
+          "x": 545.82,
+          "y": 638.97,
+          "width": 13.3,
+          "height": 7.5
+        }
+      ]
+    },
+    "sourcepicker-branch-hover": {
+      ".TrackNode__PrioFlag": [
+        {
+          "x": 595,
+          "y": 493.55,
+          "width": 8,
+          "height": 8
+        }
+      ],
+      ".TrackNode--restricted": [
+        {
+          "x": 840,
+          "y": 607.05,
+          "width": 90,
+          "height": 54.88
+        }
+      ],
+      ".SourcePicker__BranchKey": [
+        {
+          "x": 432.4,
+          "y": 374.05,
+          "width": 46.6,
+          "height": 19
+        }
+      ],
+      ".TrackNode__ParentChip": [
+        {
+          "x": 679.5,
+          "y": 638.78,
+          "width": 93.5,
+          "height": 8.25
+        }
+      ],
+      ".TrackNode__SubProgress": [
+        {
+          "x": 545.82,
+          "y": 638.97,
+          "width": 13.3,
+          "height": 7.5
+        }
+      ]
+    },
+    "sourcepicker-group-hover": {
+      ".TrackNode__PrioFlag": [
+        {
+          "x": 595,
+          "y": 493.55,
+          "width": 8,
+          "height": 8
+        }
+      ],
+      ".TrackNode--restricted": [
+        {
+          "x": 840,
+          "y": 607.05,
+          "width": 90,
+          "height": 54.88
+        }
+      ],
+      ".SourcePicker__BranchKey": [
+        {
+          "x": 432.4,
+          "y": 374.05,
+          "width": 46.6,
+          "height": 19
+        }
+      ],
+      ".TrackNode__ParentChip": [
+        {
+          "x": 679.5,
+          "y": 638.78,
+          "width": 93.5,
+          "height": 8.25
+        }
+      ],
+      ".TrackNode__SubProgress": [
+        {
+          "x": 545.82,
+          "y": 638.97,
+          "width": 13.3,
+          "height": 7.5
+        }
+      ]
+    },
+    "sourcepicker-task-hover": {
+      ".TrackNode__PrioFlag": [
+        {
+          "x": 595,
+          "y": 493.55,
+          "width": 8,
+          "height": 8
+        }
+      ],
+      ".TrackNode--restricted": [
+        {
+          "x": 840,
+          "y": 607.05,
+          "width": 90,
+          "height": 54.88
+        }
+      ],
+      ".SourcePicker__BranchKey": [
+        {
+          "x": 432.4,
+          "y": 374.05,
+          "width": 46.6,
+          "height": 19
+        }
+      ],
+      ".TrackNode__ParentChip": [
+        {
+          "x": 679.5,
+          "y": 638.78,
+          "width": 93.5,
+          "height": 8.25
+        }
+      ],
+      ".TrackNode__SubProgress": [
+        {
+          "x": 545.82,
+          "y": 638.97,
+          "width": 13.3,
+          "height": 7.5
+        }
+      ]
+    },
+    "sourcepicker-unparticipate-hover": {
+      ".TrackNode__PrioFlag": [
+        {
+          "x": 595,
+          "y": 493.55,
+          "width": 8,
+          "height": 8
+        }
+      ],
+      ".TrackNode--restricted": [
+        {
+          "x": 840,
+          "y": 607.05,
+          "width": 90,
+          "height": 54.88
+        }
+      ],
+      ".SourcePicker__BranchKey": [
+        {
+          "x": 432.4,
+          "y": 374.05,
+          "width": 46.6,
+          "height": 19
+        }
+      ],
+      ".TrackNode__ParentChip": [
+        {
+          "x": 679.5,
+          "y": 638.78,
+          "width": 93.5,
+          "height": 8.25
+        }
+      ],
+      ".TrackNode__SubProgress": [
+        {
+          "x": 545.82,
+          "y": 638.97,
+          "width": 13.3,
+          "height": 7.5
+        }
+      ]
+    },
+    "sourcepicker-search-focus": {
+      ".TrackNode__PrioFlag": [
+        {
+          "x": 595,
+          "y": 493.55,
+          "width": 8,
+          "height": 8
+        }
+      ],
+      ".TrackNode--restricted": [
+        {
+          "x": 840,
+          "y": 607.05,
+          "width": 90,
+          "height": 54.88
+        }
+      ],
+      ".SourcePicker__BranchKey": [
+        {
+          "x": 432.4,
+          "y": 374.05,
+          "width": 46.6,
+          "height": 19
+        }
+      ],
+      ".TrackNode__ParentChip": [
+        {
+          "x": 679.5,
+          "y": 638.78,
+          "width": 93.5,
+          "height": 8.25
+        }
+      ],
+      ".TrackNode__SubProgress": [
+        {
+          "x": 545.82,
+          "y": 638.97,
+          "width": 13.3,
+          "height": 7.5
+        }
+      ]
+    },
+    "sourcepicker-addmenu-open": {
+      ".TrackNode__PrioFlag": [
+        {
+          "x": 595,
+          "y": 493.55,
+          "width": 8,
+          "height": 8
+        }
+      ],
+      ".TrackNode--restricted": [
+        {
+          "x": 840,
+          "y": 607.05,
+          "width": 90,
+          "height": 54.88
+        }
+      ],
+      ".SourcePicker__BranchKey": [
+        {
+          "x": 432.4,
+          "y": 374.05,
+          "width": 46.6,
+          "height": 19
+        }
+      ],
+      ".TrackNode__ParentChip": [
+        {
+          "x": 679.5,
+          "y": 638.78,
+          "width": 93.5,
+          "height": 8.25
+        }
+      ],
+      ".TrackNode__SubProgress": [
+        {
+          "x": 545.82,
+          "y": 638.97,
+          "width": 13.3,
+          "height": 7.5
+        }
+      ]
+    },
+    "detail": {
+      ".TrackNode__PrioFlag": [
+        {
+          "x": 595,
+          "y": 493.55,
+          "width": 8,
+          "height": 8
+        }
+      ],
+      ".TrackNode--restricted": [
+        {
+          "x": 840,
+          "y": 607.05,
+          "width": 90,
+          "height": 54.88
+        }
+      ],
+      ".SourcePicker__BranchKey": [
+        {
+          "x": 432.4,
+          "y": 374.05,
+          "width": 46.6,
+          "height": 19
+        }
+      ],
+      ".TrackNode__ParentChip": [
+        {
+          "x": 679.5,
+          "y": 638.78,
+          "width": 93.5,
+          "height": 8.25
+        }
+      ],
+      ".TrackNode__SubProgress": [
+        {
+          "x": 545.82,
+          "y": 638.97,
+          "width": 13.3,
+          "height": 7.5
+        }
+      ]
+    },
+    "detail-originlink-hover": {
+      ".TrackNode__PrioFlag": [
+        {
+          "x": 595,
+          "y": 493.55,
+          "width": 8,
+          "height": 8
+        }
+      ],
+      ".TrackNode--restricted": [
+        {
+          "x": 840,
+          "y": 607.05,
+          "width": 90,
+          "height": 54.88
+        }
+      ],
+      ".SourcePicker__BranchKey": [
+        {
+          "x": 432.4,
+          "y": 374.05,
+          "width": 46.6,
+          "height": 19
+        }
+      ],
+      ".TrackNode__ParentChip": [
+        {
+          "x": 679.5,
+          "y": 638.78,
+          "width": 93.5,
+          "height": 8.25
+        }
+      ],
+      ".TrackNode__SubProgress": [
+        {
+          "x": 545.82,
+          "y": 638.97,
+          "width": 13.3,
+          "height": 7.5
+        }
+      ]
+    },
+    "detail-trackchip-hover": {
+      ".TrackNode__PrioFlag": [
+        {
+          "x": 595,
+          "y": 493.55,
+          "width": 8,
+          "height": 8
+        }
+      ],
+      ".TrackNode--restricted": [
+        {
+          "x": 840,
+          "y": 607.05,
+          "width": 90,
+          "height": 54.88
+        }
+      ],
+      ".SourcePicker__BranchKey": [
+        {
+          "x": 432.4,
+          "y": 374.05,
+          "width": 46.6,
+          "height": 19
+        }
+      ],
+      ".TrackNode__ParentChip": [
+        {
+          "x": 679.5,
+          "y": 638.78,
+          "width": 93.5,
+          "height": 8.25
+        }
+      ],
+      ".TrackNode__SubProgress": [
+        {
+          "x": 545.82,
+          "y": 638.97,
+          "width": 13.3,
+          "height": 7.5
+        }
+      ]
+    },
+    "timeline": {
+      ".SourcePicker__BranchKey": [
+        {
+          "x": 432.4,
+          "y": 374.05,
+          "width": 46.6,
+          "height": 19
+        }
+      ],
+      ".TrackTimeline__LaneParentChip": [
+        {
+          "x": 692.02,
+          "y": 532.05,
+          "width": 52.98,
+          "height": 15
+        }
+      ]
+    },
+    "timeline-lane-hover": {
+      ".SourcePicker__BranchKey": [
+        {
+          "x": 432.4,
+          "y": 374.05,
+          "width": 46.6,
+          "height": 19
+        }
+      ],
+      ".TrackTimeline__LaneParentChip": [
+        {
+          "x": 692.02,
+          "y": 532.05,
+          "width": 52.98,
+          "height": 15
+        }
+      ]
+    },
+    "timeline-lane-selected": {
+      ".SourcePicker__BranchKey": [
+        {
+          "x": 432.4,
+          "y": 374.05,
+          "width": 46.6,
+          "height": 19
+        }
+      ],
+      ".TrackTimeline__LaneParentChip": [
+        {
+          "x": 692.02,
+          "y": 532.05,
+          "width": 52.98,
+          "height": 15
+        }
+      ]
+    },
+    "tree": {
+      ".TrackTree__Priority--high": [
+        {
+          "x": 862,
+          "y": 427.3,
+          "width": 39.16,
+          "height": 20.5
+        }
+      ],
+      ".TrackTree__Row--restricted": [
+        {
+          "x": 520,
+          "y": 683.05,
+          "width": 748,
+          "height": 40
+        }
+      ],
+      ".SourcePicker__BranchKey": [
+        {
+          "x": 432.4,
+          "y": 374.05,
+          "width": 46.6,
+          "height": 19
+        }
+      ],
+      ".TrackTree__GroupKey": [
+        {
+          "x": 661.6,
+          "y": 325.05,
+          "width": 582.4,
+          "height": 16
+        },
+        {
+          "x": 624.74,
+          "y": 630.05,
+          "width": 619.26,
+          "height": 16
+        }
+      ],
+      ".TrackTree__ParentChip": [
+        {
+          "x": 657.73,
+          "y": 469.3,
+          "width": 58.27,
+          "height": 16.5
+        }
+      ],
+      ".TrackTree__Priority--low": [
+        {
+          "x": 862,
+          "y": 587.3,
+          "width": 36.75,
+          "height": 20.5
+        }
+      ]
+    },
+    "tree-row-hover": {
+      ".TrackTree__Priority--high": [
+        {
+          "x": 862,
+          "y": 427.3,
+          "width": 39.16,
+          "height": 20.5
+        }
+      ],
+      ".TrackTree__Row--restricted": [
+        {
+          "x": 520,
+          "y": 683.05,
+          "width": 748,
+          "height": 40
+        }
+      ],
+      ".SourcePicker__BranchKey": [
+        {
+          "x": 432.4,
+          "y": 374.05,
+          "width": 46.6,
+          "height": 19
+        }
+      ],
+      ".TrackTree__GroupKey": [
+        {
+          "x": 661.6,
+          "y": 325.05,
+          "width": 582.4,
+          "height": 16
+        },
+        {
+          "x": 624.74,
+          "y": 630.05,
+          "width": 619.26,
+          "height": 16
+        }
+      ],
+      ".TrackTree__ParentChip": [
+        {
+          "x": 657.73,
+          "y": 469.3,
+          "width": 58.27,
+          "height": 16.5
+        }
+      ],
+      ".TrackTree__Priority--low": [
+        {
+          "x": 862,
+          "y": 587.3,
+          "width": 36.75,
+          "height": 20.5
+        }
+      ]
+    },
+    "tree-row-selected": {
+      ".TrackTree__Priority--high": [
+        {
+          "x": 862,
+          "y": 427.3,
+          "width": 39.16,
+          "height": 20.5
+        }
+      ],
+      ".TrackTree__Row--restricted": [
+        {
+          "x": 520,
+          "y": 683.05,
+          "width": 748,
+          "height": 40
+        }
+      ],
+      ".SourcePicker__BranchKey": [
+        {
+          "x": 432.4,
+          "y": 374.05,
+          "width": 46.6,
+          "height": 19
+        }
+      ],
+      ".TrackTree__GroupKey": [
+        {
+          "x": 661.6,
+          "y": 325.05,
+          "width": 582.4,
+          "height": 16
+        },
+        {
+          "x": 624.74,
+          "y": 630.05,
+          "width": 619.26,
+          "height": 16
+        }
+      ],
+      ".TrackTree__ParentChip": [
+        {
+          "x": 657.73,
+          "y": 469.3,
+          "width": 58.27,
+          "height": 16.5
+        }
+      ],
+      ".TrackTree__Priority--low": [
+        {
+          "x": 862,
+          "y": 587.3,
+          "width": 36.75,
+          "height": 20.5
+        }
+      ]
+    },
+    "bulkadd": {
+      ".TrackNode__PrioFlag": [
+        {
+          "x": 595,
+          "y": 493.55,
+          "width": 8,
+          "height": 8
+        }
+      ],
+      ".TrackNode--restricted": [
+        {
+          "x": 840,
+          "y": 607.05,
+          "width": 90,
+          "height": 54.88
+        }
+      ],
+      ".SourcePicker__BranchKey": [
+        {
+          "x": 432.4,
+          "y": 374.05,
+          "width": 46.6,
+          "height": 19
+        }
+      ],
+      ".TrackNode__ParentChip": [
+        {
+          "x": 679.5,
+          "y": 638.78,
+          "width": 93.5,
+          "height": 8.25
+        }
+      ],
+      ".TrackNode__SubProgress": [
+        {
+          "x": 545.82,
+          "y": 638.97,
+          "width": 13.3,
+          "height": 7.5
+        }
+      ],
+      ".BulkAdd__TaskParentChip": [
+        {
+          "x": 949.73,
+          "y": 431.25,
+          "width": 58.27,
+          "height": 16.5
+        }
+      ]
+    },
+    "createtrack": {
+      ".CreateTrack__BranchKey": [
+        {
+          "x": 889.77,
+          "y": 622.25,
+          "width": 46.23,
+          "height": 16.5
+        }
+      ]
+    },
+    "createtrack-visopt-active": {
+      ".CreateTrack__BranchKey": [
+        {
+          "x": 889.77,
+          "y": 622.25,
+          "width": 46.23,
+          "height": 16.5
+        }
+      ]
+    },
+    "settings-branches-edit": {
+      ".SettingsBranches__Swatch--active": [
+        {
+          "x": 311.12,
+          "y": 464.62,
+          "width": 23.76,
+          "height": 23.76
+        }
+      ]
+    }
+  },
+  "networkIndex": {
+    "canvas": [
+      {
+        "index": 1,
+        "url": "/branches"
+      },
+      {
+        "index": 2,
+        "url": "/chat"
+      },
+      {
+        "index": 3,
+        "url": "/notifications/unread-count"
+      },
+      {
+        "index": 4,
+        "url": "/notifications?limit=30"
+      },
+      {
+        "index": 5,
+        "url": "/profile/ui-prefs"
+      },
+      {
+        "index": 6,
+        "url": "/setup/status"
+      },
+      {
+        "index": 7,
+        "url": "/tracks"
+      },
+      {
+        "index": 8,
+        "url": "/tracks/5"
+      },
+      {
+        "index": 9,
+        "url": "/tracks/5/items"
+      },
+      {
+        "index": 10,
+        "url": "/tracks/5/links"
+      },
+      {
+        "index": 11,
+        "url": "/tracks/5/members"
+      },
+      {
+        "index": 12,
+        "url": "/tracks/5/sidebar-tree"
+      }
+    ],
+    "canvas-toolbar-active": [
+      {
+        "index": 1,
+        "url": "/branches"
+      },
+      {
+        "index": 2,
+        "url": "/chat"
+      },
+      {
+        "index": 3,
+        "url": "/notifications/unread-count"
+      },
+      {
+        "index": 4,
+        "url": "/notifications?limit=30"
+      },
+      {
+        "index": 5,
+        "url": "/profile/ui-prefs"
+      },
+      {
+        "index": 6,
+        "url": "/setup/status"
+      },
+      {
+        "index": 7,
+        "url": "/tracks"
+      },
+      {
+        "index": 8,
+        "url": "/tracks/5"
+      },
+      {
+        "index": 9,
+        "url": "/tracks/5/items"
+      },
+      {
+        "index": 10,
+        "url": "/tracks/5/links"
+      },
+      {
+        "index": 11,
+        "url": "/tracks/5/members"
+      },
+      {
+        "index": 12,
+        "url": "/tracks/5/sidebar-tree"
+      }
+    ],
+    "canvas-matpill-on": [
+      {
+        "index": 1,
+        "url": "/branches"
+      },
+      {
+        "index": 2,
+        "url": "/chat"
+      },
+      {
+        "index": 3,
+        "url": "/notifications/unread-count"
+      },
+      {
+        "index": 4,
+        "url": "/notifications?limit=30"
+      },
+      {
+        "index": 5,
+        "url": "/profile/ui-prefs"
+      },
+      {
+        "index": 6,
+        "url": "/setup/status"
+      },
+      {
+        "index": 7,
+        "url": "/tracks"
+      },
+      {
+        "index": 8,
+        "url": "/tracks/5"
+      },
+      {
+        "index": 9,
+        "url": "/tracks/5/items"
+      },
+      {
+        "index": 10,
+        "url": "/tracks/5/links"
+      },
+      {
+        "index": 11,
+        "url": "/tracks/5/members"
+      },
+      {
+        "index": 12,
+        "url": "/tracks/5/sidebar-tree"
+      }
+    ],
+    "sourcepicker": [
+      {
+        "index": 1,
+        "url": "/branches"
+      },
+      {
+        "index": 2,
+        "url": "/chat"
+      },
+      {
+        "index": 3,
+        "url": "/notifications/unread-count"
+      },
+      {
+        "index": 4,
+        "url": "/notifications?limit=30"
+      },
+      {
+        "index": 5,
+        "url": "/profile/ui-prefs"
+      },
+      {
+        "index": 6,
+        "url": "/setup/status"
+      },
+      {
+        "index": 7,
+        "url": "/tracks"
+      },
+      {
+        "index": 8,
+        "url": "/tracks/5"
+      },
+      {
+        "index": 9,
+        "url": "/tracks/5/items"
+      },
+      {
+        "index": 10,
+        "url": "/tracks/5/links"
+      },
+      {
+        "index": 11,
+        "url": "/tracks/5/members"
+      },
+      {
+        "index": 12,
+        "url": "/tracks/5/sidebar-tree"
+      }
+    ],
+    "sourcepicker-branch-hover": [
+      {
+        "index": 1,
+        "url": "/branches"
+      },
+      {
+        "index": 2,
+        "url": "/chat"
+      },
+      {
+        "index": 3,
+        "url": "/notifications/unread-count"
+      },
+      {
+        "index": 4,
+        "url": "/notifications?limit=30"
+      },
+      {
+        "index": 5,
+        "url": "/profile/ui-prefs"
+      },
+      {
+        "index": 6,
+        "url": "/setup/status"
+      },
+      {
+        "index": 7,
+        "url": "/tracks"
+      },
+      {
+        "index": 8,
+        "url": "/tracks/5"
+      },
+      {
+        "index": 9,
+        "url": "/tracks/5/items"
+      },
+      {
+        "index": 10,
+        "url": "/tracks/5/links"
+      },
+      {
+        "index": 11,
+        "url": "/tracks/5/members"
+      },
+      {
+        "index": 12,
+        "url": "/tracks/5/sidebar-tree"
+      }
+    ],
+    "sourcepicker-group-hover": [
+      {
+        "index": 1,
+        "url": "/branches"
+      },
+      {
+        "index": 2,
+        "url": "/chat"
+      },
+      {
+        "index": 3,
+        "url": "/notifications/unread-count"
+      },
+      {
+        "index": 4,
+        "url": "/notifications?limit=30"
+      },
+      {
+        "index": 5,
+        "url": "/profile/ui-prefs"
+      },
+      {
+        "index": 6,
+        "url": "/setup/status"
+      },
+      {
+        "index": 7,
+        "url": "/tracks"
+      },
+      {
+        "index": 8,
+        "url": "/tracks/5"
+      },
+      {
+        "index": 9,
+        "url": "/tracks/5/items"
+      },
+      {
+        "index": 10,
+        "url": "/tracks/5/links"
+      },
+      {
+        "index": 11,
+        "url": "/tracks/5/members"
+      },
+      {
+        "index": 12,
+        "url": "/tracks/5/sidebar-tree"
+      }
+    ],
+    "sourcepicker-task-hover": [
+      {
+        "index": 1,
+        "url": "/branches"
+      },
+      {
+        "index": 2,
+        "url": "/chat"
+      },
+      {
+        "index": 3,
+        "url": "/notifications/unread-count"
+      },
+      {
+        "index": 4,
+        "url": "/notifications?limit=30"
+      },
+      {
+        "index": 5,
+        "url": "/profile/ui-prefs"
+      },
+      {
+        "index": 6,
+        "url": "/setup/status"
+      },
+      {
+        "index": 7,
+        "url": "/tracks"
+      },
+      {
+        "index": 8,
+        "url": "/tracks/5"
+      },
+      {
+        "index": 9,
+        "url": "/tracks/5/items"
+      },
+      {
+        "index": 10,
+        "url": "/tracks/5/links"
+      },
+      {
+        "index": 11,
+        "url": "/tracks/5/members"
+      },
+      {
+        "index": 12,
+        "url": "/tracks/5/sidebar-tree"
+      }
+    ],
+    "sourcepicker-unparticipate-hover": [
+      {
+        "index": 1,
+        "url": "/branches"
+      },
+      {
+        "index": 2,
+        "url": "/chat"
+      },
+      {
+        "index": 3,
+        "url": "/notifications/unread-count"
+      },
+      {
+        "index": 4,
+        "url": "/notifications?limit=30"
+      },
+      {
+        "index": 5,
+        "url": "/profile/ui-prefs"
+      },
+      {
+        "index": 6,
+        "url": "/setup/status"
+      },
+      {
+        "index": 7,
+        "url": "/tracks"
+      },
+      {
+        "index": 8,
+        "url": "/tracks/5"
+      },
+      {
+        "index": 9,
+        "url": "/tracks/5/items"
+      },
+      {
+        "index": 10,
+        "url": "/tracks/5/links"
+      },
+      {
+        "index": 11,
+        "url": "/tracks/5/members"
+      },
+      {
+        "index": 12,
+        "url": "/tracks/5/sidebar-tree"
+      }
+    ],
+    "sourcepicker-search-focus": [
+      {
+        "index": 1,
+        "url": "/branches"
+      },
+      {
+        "index": 2,
+        "url": "/chat"
+      },
+      {
+        "index": 3,
+        "url": "/notifications/unread-count"
+      },
+      {
+        "index": 4,
+        "url": "/notifications?limit=30"
+      },
+      {
+        "index": 5,
+        "url": "/profile/ui-prefs"
+      },
+      {
+        "index": 6,
+        "url": "/setup/status"
+      },
+      {
+        "index": 7,
+        "url": "/tracks"
+      },
+      {
+        "index": 8,
+        "url": "/tracks/5"
+      },
+      {
+        "index": 9,
+        "url": "/tracks/5/items"
+      },
+      {
+        "index": 10,
+        "url": "/tracks/5/links"
+      },
+      {
+        "index": 11,
+        "url": "/tracks/5/members"
+      },
+      {
+        "index": 12,
+        "url": "/tracks/5/sidebar-tree"
+      }
+    ],
+    "sourcepicker-addmenu-open": [
+      {
+        "index": 1,
+        "url": "/branches"
+      },
+      {
+        "index": 2,
+        "url": "/chat"
+      },
+      {
+        "index": 3,
+        "url": "/notifications/unread-count"
+      },
+      {
+        "index": 4,
+        "url": "/notifications?limit=30"
+      },
+      {
+        "index": 5,
+        "url": "/profile/ui-prefs"
+      },
+      {
+        "index": 6,
+        "url": "/setup/status"
+      },
+      {
+        "index": 7,
+        "url": "/tracks"
+      },
+      {
+        "index": 8,
+        "url": "/tracks/5"
+      },
+      {
+        "index": 9,
+        "url": "/tracks/5/items"
+      },
+      {
+        "index": 10,
+        "url": "/tracks/5/links"
+      },
+      {
+        "index": 11,
+        "url": "/tracks/5/members"
+      },
+      {
+        "index": 12,
+        "url": "/tracks/5/sidebar-tree"
+      }
+    ],
+    "detail": [
+      {
+        "index": 1,
+        "url": "/branches"
+      },
+      {
+        "index": 2,
+        "url": "/chat"
+      },
+      {
+        "index": 3,
+        "url": "/notifications/unread-count"
+      },
+      {
+        "index": 4,
+        "url": "/notifications?limit=30"
+      },
+      {
+        "index": 5,
+        "url": "/profile/ui-prefs"
+      },
+      {
+        "index": 6,
+        "url": "/setup/status"
+      },
+      {
+        "index": 7,
+        "url": "/tracks"
+      },
+      {
+        "index": 8,
+        "url": "/tracks/5"
+      },
+      {
+        "index": 9,
+        "url": "/tracks/5/items"
+      },
+      {
+        "index": 10,
+        "url": "/tracks/5/links"
+      },
+      {
+        "index": 11,
+        "url": "/tracks/5/members"
+      },
+      {
+        "index": 12,
+        "url": "/tracks/5/sidebar-tree"
+      }
+    ],
+    "detail-originlink-hover": [
+      {
+        "index": 1,
+        "url": "/branches"
+      },
+      {
+        "index": 2,
+        "url": "/chat"
+      },
+      {
+        "index": 3,
+        "url": "/notifications/unread-count"
+      },
+      {
+        "index": 4,
+        "url": "/notifications?limit=30"
+      },
+      {
+        "index": 5,
+        "url": "/profile/ui-prefs"
+      },
+      {
+        "index": 6,
+        "url": "/setup/status"
+      },
+      {
+        "index": 7,
+        "url": "/tracks"
+      },
+      {
+        "index": 8,
+        "url": "/tracks/5"
+      },
+      {
+        "index": 9,
+        "url": "/tracks/5/items"
+      },
+      {
+        "index": 10,
+        "url": "/tracks/5/links"
+      },
+      {
+        "index": 11,
+        "url": "/tracks/5/members"
+      },
+      {
+        "index": 12,
+        "url": "/tracks/5/sidebar-tree"
+      }
+    ],
+    "detail-trackchip-hover": [
+      {
+        "index": 1,
+        "url": "/branches"
+      },
+      {
+        "index": 2,
+        "url": "/chat"
+      },
+      {
+        "index": 3,
+        "url": "/notifications/unread-count"
+      },
+      {
+        "index": 4,
+        "url": "/notifications?limit=30"
+      },
+      {
+        "index": 5,
+        "url": "/profile/ui-prefs"
+      },
+      {
+        "index": 6,
+        "url": "/setup/status"
+      },
+      {
+        "index": 7,
+        "url": "/tracks"
+      },
+      {
+        "index": 8,
+        "url": "/tracks/5"
+      },
+      {
+        "index": 9,
+        "url": "/tracks/5/items"
+      },
+      {
+        "index": 10,
+        "url": "/tracks/5/links"
+      },
+      {
+        "index": 11,
+        "url": "/tracks/5/members"
+      },
+      {
+        "index": 12,
+        "url": "/tracks/5/sidebar-tree"
+      }
+    ],
+    "timeline": [
+      {
+        "index": 1,
+        "url": "/branches"
+      },
+      {
+        "index": 2,
+        "url": "/chat"
+      },
+      {
+        "index": 3,
+        "url": "/notifications/unread-count"
+      },
+      {
+        "index": 4,
+        "url": "/notifications?limit=30"
+      },
+      {
+        "index": 5,
+        "url": "/profile/ui-prefs"
+      },
+      {
+        "index": 6,
+        "url": "/setup/status"
+      },
+      {
+        "index": 7,
+        "url": "/tracks"
+      },
+      {
+        "index": 8,
+        "url": "/tracks/5"
+      },
+      {
+        "index": 9,
+        "url": "/tracks/5/items"
+      },
+      {
+        "index": 10,
+        "url": "/tracks/5/links"
+      },
+      {
+        "index": 11,
+        "url": "/tracks/5/members"
+      },
+      {
+        "index": 12,
+        "url": "/tracks/5/sidebar-tree"
+      }
+    ],
+    "timeline-lane-hover": [
+      {
+        "index": 1,
+        "url": "/branches"
+      },
+      {
+        "index": 2,
+        "url": "/chat"
+      },
+      {
+        "index": 3,
+        "url": "/notifications/unread-count"
+      },
+      {
+        "index": 4,
+        "url": "/notifications?limit=30"
+      },
+      {
+        "index": 5,
+        "url": "/profile/ui-prefs"
+      },
+      {
+        "index": 6,
+        "url": "/setup/status"
+      },
+      {
+        "index": 7,
+        "url": "/tracks"
+      },
+      {
+        "index": 8,
+        "url": "/tracks/5"
+      },
+      {
+        "index": 9,
+        "url": "/tracks/5/items"
+      },
+      {
+        "index": 10,
+        "url": "/tracks/5/links"
+      },
+      {
+        "index": 11,
+        "url": "/tracks/5/members"
+      },
+      {
+        "index": 12,
+        "url": "/tracks/5/sidebar-tree"
+      }
+    ],
+    "timeline-lane-selected": [
+      {
+        "index": 1,
+        "url": "/branches"
+      },
+      {
+        "index": 2,
+        "url": "/chat"
+      },
+      {
+        "index": 3,
+        "url": "/notifications/unread-count"
+      },
+      {
+        "index": 4,
+        "url": "/notifications?limit=30"
+      },
+      {
+        "index": 5,
+        "url": "/profile/ui-prefs"
+      },
+      {
+        "index": 6,
+        "url": "/setup/status"
+      },
+      {
+        "index": 7,
+        "url": "/tracks"
+      },
+      {
+        "index": 8,
+        "url": "/tracks/5"
+      },
+      {
+        "index": 9,
+        "url": "/tracks/5/items"
+      },
+      {
+        "index": 10,
+        "url": "/tracks/5/links"
+      },
+      {
+        "index": 11,
+        "url": "/tracks/5/members"
+      },
+      {
+        "index": 12,
+        "url": "/tracks/5/sidebar-tree"
+      }
+    ],
+    "tree": [
+      {
+        "index": 1,
+        "url": "/branches"
+      },
+      {
+        "index": 2,
+        "url": "/chat"
+      },
+      {
+        "index": 3,
+        "url": "/notifications/unread-count"
+      },
+      {
+        "index": 4,
+        "url": "/notifications?limit=30"
+      },
+      {
+        "index": 5,
+        "url": "/profile/ui-prefs"
+      },
+      {
+        "index": 6,
+        "url": "/setup/status"
+      },
+      {
+        "index": 7,
+        "url": "/tracks"
+      },
+      {
+        "index": 8,
+        "url": "/tracks/5"
+      },
+      {
+        "index": 9,
+        "url": "/tracks/5/items"
+      },
+      {
+        "index": 10,
+        "url": "/tracks/5/links"
+      },
+      {
+        "index": 11,
+        "url": "/tracks/5/members"
+      },
+      {
+        "index": 12,
+        "url": "/tracks/5/sidebar-tree"
+      }
+    ],
+    "tree-row-hover": [
+      {
+        "index": 1,
+        "url": "/branches"
+      },
+      {
+        "index": 2,
+        "url": "/chat"
+      },
+      {
+        "index": 3,
+        "url": "/notifications/unread-count"
+      },
+      {
+        "index": 4,
+        "url": "/notifications?limit=30"
+      },
+      {
+        "index": 5,
+        "url": "/profile/ui-prefs"
+      },
+      {
+        "index": 6,
+        "url": "/setup/status"
+      },
+      {
+        "index": 7,
+        "url": "/tracks"
+      },
+      {
+        "index": 8,
+        "url": "/tracks/5"
+      },
+      {
+        "index": 9,
+        "url": "/tracks/5/items"
+      },
+      {
+        "index": 10,
+        "url": "/tracks/5/links"
+      },
+      {
+        "index": 11,
+        "url": "/tracks/5/members"
+      },
+      {
+        "index": 12,
+        "url": "/tracks/5/sidebar-tree"
+      }
+    ],
+    "tree-row-selected": [
+      {
+        "index": 1,
+        "url": "/branches"
+      },
+      {
+        "index": 2,
+        "url": "/chat"
+      },
+      {
+        "index": 3,
+        "url": "/notifications/unread-count"
+      },
+      {
+        "index": 4,
+        "url": "/notifications?limit=30"
+      },
+      {
+        "index": 5,
+        "url": "/profile/ui-prefs"
+      },
+      {
+        "index": 6,
+        "url": "/setup/status"
+      },
+      {
+        "index": 7,
+        "url": "/tracks"
+      },
+      {
+        "index": 8,
+        "url": "/tracks/5"
+      },
+      {
+        "index": 9,
+        "url": "/tracks/5/items"
+      },
+      {
+        "index": 10,
+        "url": "/tracks/5/links"
+      },
+      {
+        "index": 11,
+        "url": "/tracks/5/members"
+      },
+      {
+        "index": 12,
+        "url": "/tracks/5/sidebar-tree"
+      }
+    ],
+    "bulkadd": [
+      {
+        "index": 1,
+        "url": "/branches"
+      },
+      {
+        "index": 2,
+        "url": "/branches/13/epics"
+      },
+      {
+        "index": 3,
+        "url": "/chat"
+      },
+      {
+        "index": 4,
+        "url": "/notifications/unread-count"
+      },
+      {
+        "index": 5,
+        "url": "/notifications?limit=30"
+      },
+      {
+        "index": 6,
+        "url": "/profile/ui-prefs"
+      },
+      {
+        "index": 7,
+        "url": "/setup/status"
+      },
+      {
+        "index": 8,
+        "url": "/tracks"
+      },
+      {
+        "index": 9,
+        "url": "/tracks/5"
+      },
+      {
+        "index": 10,
+        "url": "/tracks/5/items"
+      },
+      {
+        "index": 11,
+        "url": "/tracks/5/links"
+      },
+      {
+        "index": 12,
+        "url": "/tracks/5/members"
+      },
+      {
+        "index": 13,
+        "url": "/tracks/5/sidebar-tree"
+      },
+      {
+        "index": 14,
+        "url": "/tracks/5/sources?limit=200&include_non_participating=true&branch_id=13&epic_id=7&exclude_done=true"
+      }
+    ],
+    "createtrack": [
+      {
+        "index": 1,
+        "url": "/branches"
+      },
+      {
+        "index": 2,
+        "url": "/chat"
+      },
+      {
+        "index": 3,
+        "url": "/notifications/unread-count"
+      },
+      {
+        "index": 4,
+        "url": "/notifications?limit=30"
+      },
+      {
+        "index": 5,
+        "url": "/profile/ui-prefs"
+      },
+      {
+        "index": 6,
+        "url": "/setup/status"
+      },
+      {
+        "index": 7,
+        "url": "/tracks"
+      },
+      {
+        "index": 8,
+        "url": "/tracks/home-stats"
+      }
+    ],
+    "createtrack-visopt-active": [
+      {
+        "index": 1,
+        "url": "/branches"
+      },
+      {
+        "index": 2,
+        "url": "/chat"
+      },
+      {
+        "index": 3,
+        "url": "/notifications/unread-count"
+      },
+      {
+        "index": 4,
+        "url": "/notifications?limit=30"
+      },
+      {
+        "index": 5,
+        "url": "/profile/ui-prefs"
+      },
+      {
+        "index": 6,
+        "url": "/setup/status"
+      },
+      {
+        "index": 7,
+        "url": "/tracks"
+      },
+      {
+        "index": 8,
+        "url": "/tracks/home-stats"
+      }
+    ],
+    "settings-branches-edit": [
+      {
+        "index": 1,
+        "url": "/chat"
+      },
+      {
+        "index": 2,
+        "url": "/notifications/unread-count"
+      },
+      {
+        "index": 3,
+        "url": "/notifications?limit=30"
+      },
+      {
+        "index": 4,
+        "url": "/profile/ui-prefs"
+      },
+      {
+        "index": 5,
+        "url": "/setup/status"
+      },
+      {
+        "index": 6,
+        "url": "/tracks"
+      },
+      {
+        "index": 7,
+        "url": "/tracks/5"
+      },
+      {
+        "index": 8,
+        "url": "/tracks/5/branches"
+      }
+    ]
+  },
+  "privacyAudit": {
+    "scope": "dedicated-synthetic-account-workspace",
+    "contextPass": true,
+    "contextSubjectSha256": "e01e8641b3bc4250ad99814442781b352ffe093938123427e6ab14e5e153aa95",
+    "method": "전용 계정 track-demo@example.com(user 12, member)으로만 캡처. 이 계정은 ALPHA 브랜치와 트랙 5/6에만 소속이며 GET /branches=[ALPHA] · /tracks=[Beta Track, Alpha Track] · /canvases=[] · /branches/public=[] · /notifications unread=0 · /recent-views=[] · /my-tasks=[] 로 다른 계정 데이터가 조회 자체가 불가함을 확인했다. 고유 레이아웃 10종(canvas / sourcepicker-addmenu-open / detail / timeline / timeline-lane-selected / tree / tree-row-selected / bulkadd / createtrack / settings-branches-edit)을 눈으로 전수 확인했고, 나머지 13장은 그중 한 레이아웃의 hover/focus/selected 상태 변형으로 pixelmatch 차이가 ≤2.25%임을 실측했다 (sourcepicker.png는 canvas.png와 바이트 동일). 화면에 등장하는 모든 문자열이 합성이다: TEST / Track Demo / TD / Alpha Track / Beta Track / - Alpha / ALPHA / Alpha One~Seven / Alpha Backlog One / Alpha Sprint 1 / Alpha Epic / Alpha Epic Child / RESTRICTED ITEM·Beta. CreateTrack의 \"예: Q3 결제 출시 준비\"는 components/modal/CreateTrack.js:111 의 하드코딩 placeholder이며 DB 데이터가 아니다(실측).",
+    "captures": [
+      {
+        "captureName": "canvas.png",
+        "sha256": "80f7ba6b063576476f5d9aefd559329ef720ccd0ddbd2191867adac035538bcb",
+        "pass": true,
+        "findings": []
+      },
+      {
+        "captureName": "canvas-toolbar-active.png",
+        "sha256": "22018ce2d22c1935f9985762b25ded0ccfbc40fb1df222bb177a1bc46d42104b",
+        "pass": true,
+        "findings": []
+      },
+      {
+        "captureName": "canvas-matpill-on.png",
+        "sha256": "c10987db45a04cf4211fa9da0122f3280e5c32d85aad71d19bec64b2837b7b01",
+        "pass": true,
+        "findings": []
+      },
+      {
+        "captureName": "sourcepicker.png",
+        "sha256": "80f7ba6b063576476f5d9aefd559329ef720ccd0ddbd2191867adac035538bcb",
+        "pass": true,
+        "findings": []
+      },
+      {
+        "captureName": "sourcepicker-branch-hover.png",
+        "sha256": "2c8905e09a231b3a7fd3e5d7100e466ea855d3ad5541858eaac59c0cb5f3cd4f",
+        "pass": true,
+        "findings": []
+      },
+      {
+        "captureName": "sourcepicker-group-hover.png",
+        "sha256": "abbb3ffffbb4a62f668059781b1b2e3dce0de53129443a4e88c3e2d123e181ff",
+        "pass": true,
+        "findings": []
+      },
+      {
+        "captureName": "sourcepicker-task-hover.png",
+        "sha256": "e15a94b8bd37382b9947db3aa65246ab5c9064f45299c5aa545104b43d8d8fa6",
+        "pass": true,
+        "findings": []
+      },
+      {
+        "captureName": "sourcepicker-unparticipate-hover.png",
+        "sha256": "c4229c4c6635ce32fe8defdb72b0532c1b16d5b9e1d0c9c841870b8e2905855f",
+        "pass": true,
+        "findings": []
+      },
+      {
+        "captureName": "sourcepicker-search-focus.png",
+        "sha256": "af33d0dd9f8004e7ff056e388c98aec123e9db76de346192a4063a126de4c837",
+        "pass": true,
+        "findings": []
+      },
+      {
+        "captureName": "sourcepicker-addmenu-open.png",
+        "sha256": "6f95bdd82356b9b5cb9bec42c77a2bbcdc123f5a417677ae955089939b636d02",
+        "pass": true,
+        "findings": []
+      },
+      {
+        "captureName": "detail.png",
+        "sha256": "b984018fb4027b11d8861e699a1870b77ed592823f265400d4fe7fe1da9b0e9d",
+        "pass": true,
+        "findings": []
+      },
+      {
+        "captureName": "detail-originlink-hover.png",
+        "sha256": "d70df83b903f099eaeef8a17cf5a16a8eb3166925704d17e359a87e0d8f40948",
+        "pass": true,
+        "findings": []
+      },
+      {
+        "captureName": "detail-trackchip-hover.png",
+        "sha256": "a007768412bd3396f9b4f29971faa27f4e7e56f31b5cf91ad4679e72faf22f87",
+        "pass": true,
+        "findings": []
+      },
+      {
+        "captureName": "timeline.png",
+        "sha256": "11de43440b1454067dce602fadeebcbc586bfa048db42024147c16ca2d5850c4",
+        "pass": true,
+        "findings": []
+      },
+      {
+        "captureName": "timeline-lane-hover.png",
+        "sha256": "f749ef47ae43768d8455f250c4cad1ada60273b435ddb88be514af5b72e324d7",
+        "pass": true,
+        "findings": []
+      },
+      {
+        "captureName": "timeline-lane-selected.png",
+        "sha256": "d2e0ac579571fe939ea74a6aa12dae5ffd3327fd51376b29b59f9e355a9541da",
+        "pass": true,
+        "findings": []
+      },
+      {
+        "captureName": "tree.png",
+        "sha256": "6cdb680d9e8a4fef3e7761142ca31b0877b221aa93ccf38ef7ac735d1ccaaf4b",
+        "pass": true,
+        "findings": []
+      },
+      {
+        "captureName": "tree-row-hover.png",
+        "sha256": "e4a0dbf1514fc5ba6e72c6c58b1e7235bb9b26bdd6fab6b4e4e5485ee9e9a368",
+        "pass": true,
+        "findings": []
+      },
+      {
+        "captureName": "tree-row-selected.png",
+        "sha256": "d1ed7bcd1673727edb5ad4bdfd962724ef708c80a22afefe472a556a0a9326e2",
+        "pass": true,
+        "findings": []
+      },
+      {
+        "captureName": "bulkadd.png",
+        "sha256": "de003bd4396d6bf19d00a6f8aba82d654dc7fc2fa26077f78d877c4a4a8b40d1",
+        "pass": true,
+        "findings": []
+      },
+      {
+        "captureName": "createtrack.png",
+        "sha256": "4d4b4b0e0640f5a5325b4579a95c30f790a1310e4796443c83399f31d385667b",
+        "pass": true,
+        "findings": []
+      },
+      {
+        "captureName": "createtrack-visopt-active.png",
+        "sha256": "c1da255897e3325bb0bb2f549e14561491a5c90628c938aac7f906bda8d791ed",
+        "pass": true,
+        "findings": []
+      },
+      {
+        "captureName": "settings-branches-edit.png",
+        "sha256": "694a42bdac88ac8edce5c5321f1af8c5cc15a1da60a4b3338277acef5a17b18c",
+        "pass": true,
+        "findings": []
+      }
+    ]
+  }
+}

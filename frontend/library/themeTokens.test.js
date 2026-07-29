@@ -3975,3 +3975,16 @@ describe('S4 pixel diff', () => {
   it('크기 불일치 → ok:false SIZE', () => { const r = PIX.diffPng(mk(8, 8, [255,255,255]), mk(9, 8, [255,255,255]), []);
     expect(r.ok).toBe(false); expect(r.reason).toMatch(/SIZE/); });
 });
+
+// Task 2 Step 5가 출력한 sha256으로 이 값을 채운다(그 커밋 diff에 값이 드러나야 한다)
+const S4_EXPECTED_SHA256 = '71fbebb9cca032a437e6631f602a5697cdc3cdaf9201483c258ecc699227490e';
+describe('S4 fixture 동결', () => {
+  it('상수가 64자리 hex이고 미교체 placeholder가 아님', () => {
+    expect(S4_EXPECTED_SHA256).toMatch(/^[0-9a-f]{64}$/);
+    expect(S4_EXPECTED_SHA256).not.toBe('0'.repeat(64));
+  });
+  it('fixture 해시가 상수와 일치', () => {
+    const raw = readFileSync(new URL('./__fixtures__/s4-expected.json', import.meta.url));
+    expect(createHash('sha256').update(raw).digest('hex')).toBe(S4_EXPECTED_SHA256);
+  });
+});
