@@ -85,23 +85,20 @@ export function stageBytes({ fixturesDir, bytes }) {
 }
 
 // lock: O_EXCL 파일. 잡지 못하면 즉시 실패(다른 승격이 진행 중).
-export const LOCK_STALE_MS = 5 * 60 * 1000;   // 이보다 오래된 lock은 죽은 프로세스의 잔재로 본다
-function withLock(fixturesDir, fn, nowMs) {
+// lock: O_EXCL 파일. **자동 회수는 하지 않는다.**
+// 이전 판은 mtime이 오래됐으면 stale로 보고 unlink했는데, 소유자가 살아 있어도(SIGSTOP·긴 sleep·
+// 시계 변경) 탈취돼 상호배제가 깨졌다(리뷰 실증: 소유자 fd가 열린 채 promoted:true). 게다가
+// 공개 nowMs 인자로 최근 lock도 stale처럼 만들 수 있었다.
+// lock이 있으면 항상 실패하고, 잔재 제거는 별도 명시적 복구 절차의 몫이다.
+function withLock(fixturesDir, fn) {
   const lock = join(fixturesDir, LOCK_NAME);
   let fd = null;
-  try { fd = openSync(lock, 'wx'); } catch (e) {
-    // SIGKILL 등으로 남은 stale lock 회수 — 나이를 보고만 지운다(살아있는 승격은 건드리지 않음).
-    let age = 0;
-    try { age = (nowMs ?? Date.now()) - lstatSync(lock).mtimeMs; } catch (e2) { age = 0; }
-    if (age < LOCK_STALE_MS) return { errors: ['PROMOTE_LOCK_BUSY'], promoted: false };
-    try { unlinkSync(lock); fd = openSync(lock, 'wx'); }
-    catch (e3) { return { errors: ['PROMOTE_LOCK_BUSY'], promoted: false }; }
-  }
+  try { fd = openSync(lock, 'wx'); } catch (e) { return { errors: ['PROMOTE_LOCK_BUSY'], promoted: false }; }
   try { return fn(); }
   finally { try { closeSync(fd); } catch (e) { /* noop */ } try { unlinkSync(lock); } catch (e) { /* noop */ } }
 }
 
-export function promoteStaged({ fixturesDir, expectedSha, fromSha, canonicalBytes, nowMs }) {
+export function promoteStaged({ fixturesDir, expectedSha, fromSha, canonicalBytes }) {
   const HEX = /^[0-9a-f]{64}$/;
   if (typeof expectedSha !== 'string' || !HEX.test(expectedSha))
     return { errors: ['PROMOTE_EXPECTED_SHA_REQUIRED'], promoted: false };
@@ -135,5 +132,5 @@ export function promoteStaged({ fixturesDir, expectedSha, fromSha, canonicalByte
     const err = atomicWrite(committedPath, staged);
     if (err) return { errors: [err], promoted: false, stagedSha };
     return { errors: [], promoted: true, stagedSha };
-  }, nowMs);
+  });
 }

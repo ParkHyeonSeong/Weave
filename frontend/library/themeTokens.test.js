@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync, readdirSync, mkdtempSync, writeFileSync, rmSync, symlinkSync } from 'node:fs';
+import { readFileSync, readdirSync, mkdtempSync, writeFileSync, rmSync, symlinkSync, utimesSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
@@ -4960,25 +4960,91 @@ describe('S4 malformed PNG — 실제 decode만 통과', () => {
   });
 });
 
-describe('S4 stale lock 회수', () => {
+describe('S4 lock — 자동 회수 없음(fail-closed)', () => {
   const mkdir = () => mkdtempSync(join(tmpdir(), 's4-lock-'));
-  it('최근 lock은 점유로 보고 거부', () => {
-    const d = mkdir(); writeFileSync(join(d, 's4-expected.json'), 'OLD');
-    const st = PROM.stageBytes({ fixturesDir: d, bytes: 'NEW' });
+  const setup = (d) => { writeFileSync(join(d, 's4-expected.json'), 'OLD');
+    return PROM.stageBytes({ fixturesDir: d, bytes: 'NEW' }); };
+  const go = (d, st, extra = {}) => PROM.promoteStaged({ fixturesDir: d,
+    expectedSha: st.candidateSha, fromSha: st.baseCommittedSha, canonicalBytes: 'NEW', ...extra });
+  it('lock이 있으면 항상 거부한다', () => {
+    const d = mkdir(); const st = setup(d);
     writeFileSync(join(d, '.s4-promote.lock'), '');
-    expect(PROM.promoteStaged({ fixturesDir: d, expectedSha: st.candidateSha, fromSha: st.baseCommittedSha,
-      canonicalBytes: 'NEW' }).errors).toEqual(['PROMOTE_LOCK_BUSY']);
+    expect(go(d, st).errors).toEqual(['PROMOTE_LOCK_BUSY']);
+    expect(readFileSync(join(d, 's4-expected.json'), 'utf8')).toBe('OLD');
     rmSync(d, { recursive: true, force: true });
   });
-  it('오래된 lock(죽은 프로세스 잔재)은 회수하고 진행', () => {
-    const d = mkdir(); writeFileSync(join(d, 's4-expected.json'), 'OLD');
-    const st = PROM.stageBytes({ fixturesDir: d, bytes: 'NEW' });
+  it('mtime이 오래돼도 탈취하지 않는다 — 살아있는 소유자 보호', () => {
+    const d = mkdir(); const st = setup(d);
+    const lock = join(d, '.s4-promote.lock');
+    writeFileSync(lock, '');
+    const old = new Date(Date.now() - 3600e3);
+    utimesSync(lock, old, old);
+    expect(go(d, st).errors).toEqual(['PROMOTE_LOCK_BUSY']);
+    expect(readFileSync(join(d, 's4-expected.json'), 'utf8')).toBe('OLD');
+    rmSync(d, { recursive: true, force: true });
+  });
+  it('nowMs 같은 인자로 stale 판정을 유도할 수 없다', () => {
+    const d = mkdir(); const st = setup(d);
     writeFileSync(join(d, '.s4-promote.lock'), '');
-    const r = PROM.promoteStaged({ fixturesDir: d, expectedSha: st.candidateSha, fromSha: st.baseCommittedSha,
-      canonicalBytes: 'NEW', nowMs: Date.now() + PROM.LOCK_STALE_MS + 1000 });
-    expect(r.errors).toEqual([]); expect(r.promoted).toBe(true);
-    expect(readFileSync(join(d, 's4-expected.json'), 'utf8')).toBe('NEW');
+    expect(go(d, st, { nowMs: Date.now() + 1e9 }).errors).toEqual(['PROMOTE_LOCK_BUSY']);
+    rmSync(d, { recursive: true, force: true });
+  });
+  it('lock이 없으면 정상 승격되고 lock 잔재가 남지 않는다', () => {
+    const d = mkdir(); const st = setup(d);
+    expect(go(d, st).promoted).toBe(true);
     expect(readdirSync(d)).not.toContain('.s4-promote.lock');
     rmSync(d, { recursive: true, force: true });
+  });
+});
+
+describe('S4 PNG corruption을 public 경로에 고정', () => {
+  // helper 직접 호출만으로는 artifactsCore가 decoder를 빠뜨려도 GREEN이다.
+  // corrupt PNG에 맞춰 fixture capture SHA·privacy subject SHA·context SHA를 **재결속**한 뒤
+  // public 경로에서 RASTER_PNG_DECODE가 나오고 단순 hash drift는 0인지 확인한다.
+  const CORRUPT = Buffer.alloc(33);
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(CORRUPT, 0);
+  CORRUPT.writeUInt32BE(13, 8); CORRUPT.write('IHDR', 12);
+  CORRUPT.writeUInt32BE(1440, 16); CORRUPT.writeUInt32BE(900, 20);
+
+  const world = (pngFor) => {
+    const pngs = { 'unit-a.png': pngFor('unit-a.png'), 'unit-b.png': pngFor('unit-b.png') };
+    const subject = { viewport: { width: 1440, height: 900 }, capture: { type: 'png', scale: 'css', dpr: 1 },
+      baseLightMaskRects: unitCtx().baseLightMaskRects };
+    const privacyAudit = { scope: 'dedicated-synthetic-account-workspace', contextPass: true,
+      contextSubjectSha256: sha256(JSON.stringify(CANON.canonicalize(subject))),
+      captures: Object.keys(pngs).sort().map((n) => ({ captureName: n, sha256: sha256(pngs[n]), pass: true, findings: [] })) };
+    const contextRaw = JSON.stringify({ ...subject, privacyAudit });
+    const fixture = { ...unitFixture(), base: AW_SPEC.BASE,
+      blobs: { P: { rel: 'unit.scss', blob: 'blobP' }, R: { rel: 'unit-settings.scss', blob: 'blobR' } },
+      fingerprint: EV.specFingerprint(AW_SPEC, sha256),
+      smoke: { contextSha256: sha256(contextRaw),
+        captures: Object.keys(pngs).sort().map((n) => ({ captureName: n, sha256: sha256(pngs[n]) })) } };
+    return { pngs, contextRaw, fixture, readPng: (n) => pngs[n] };
+  };
+
+  it('정상 PNG 세계는 committed 경로가 []', () => {
+    const w = world(() => pngBytes(1440, 900, 3));
+    expect(EV.validateCommittedArtifacts({ committedFixtureRaw: JSON.stringify(w.fixture), spec: AW_SPEC,
+      contextRaw: w.contextRaw, sha256, readPng: w.readPng, baseDecls: UNIT_BASE_DECLS })).toEqual([]);
+  });
+  it('corrupt PNG + 해시 재결속 → RASTER_PNG_DECODE 이고 SHA drift는 0', () => {
+    const w = world(() => CORRUPT);
+    const errs = EV.validateCommittedArtifacts({ committedFixtureRaw: JSON.stringify(w.fixture), spec: AW_SPEC,
+      contextRaw: w.contextRaw, sha256, readPng: w.readPng, baseDecls: UNIT_BASE_DECLS });
+    expect(errs.filter((e) => /RASTER_PNG_DECODE/.test(e)).length).toBe(2);      // 두 capture 모두
+    expect(errs.filter((e) => /FROZEN_PNG_SHA_DRIFT/.test(e)).length).toBe(0);   // 해시는 맞춰놨다
+  });
+  it('같은 corruption에서 approveAndWrite는 write 0회', () => {
+    const w = world(() => CORRUPT);
+    const c = { serialize: 0, write: 0 };
+    const r = EV.approveAndWrite({
+      fixture: w.fixture, spec: AW_SPEC, contrastResults: [],
+      actualDecls: UNIT_DECLS, actualRaw: '', preAnnSources: {},
+      actualAllowIdToKey: UNIT_ACTUAL_ALLOW_MAP, baseDecls: UNIT_BASE_DECLS,
+      contextRaw: w.contextRaw, sha256, readPng: w.readPng,
+      serialize: () => { c.serialize++; return 'B'; }, write: () => { c.write++; } });
+    expect(r.errors.join('|')).toMatch(/RASTER_PNG_DECODE/);
+    expect(r.wrote).toBe(false);
+    expect(c).toEqual({ serialize: 0, write: 0 });
   });
 });
