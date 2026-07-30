@@ -10,7 +10,9 @@ import * as CANON from './s4Canonicalize.mjs';
 import * as PIX from './s4PixelDiff.mjs';
 import { PNG } from 'pngjs';                          // 픽셀 테스트용(ESM — require 금지)
 import { execSync } from 'node:child_process';        // 기존 파일에 없으므로 신규 추가
-const sha256 = (x) => createHash('sha256').update(x).digest('hex');   // createHash는 기존 import 재사용
+import { pathToFileURL } from 'node:url';             // compileString에 실제 파일 URL을 줘야 상대 @use가 풀린다
+const sha256 = (x) => createHash('sha256').update(x).digest('hex');
+const REPO = resolve(__dirname, '../..');   // BASE 소스를 git에서 읽을 때 사용   // createHash는 기존 import 재사용
 // SURFACE_NAMES: 24개 이름 exact manifest(순서 포함) — spec과 독립 정의라야 drift를 잡는다
 const SURFACE_NAMES = ['canvas', 'canvas-toolbar-active', 'canvas-matpill-on', 'sourcepicker',
   'sourcepicker-branch-hover', 'sourcepicker-group-hover', 'sourcepicker-task-hover',
@@ -3990,4 +3992,704 @@ describe('S4 fixture 동결', () => {
     const raw = readFileSync(new URL('./__fixtures__/s4-expected.json', import.meta.url));
     expect(createHash('sha256').update(raw).digest('hex')).toBe(S4_EXPECTED_SHA256);
   });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// S4 마스크 계약 — allow 선언 → 마스크 정본 → 브라우저 좌표 → pixel diff 소비까지.
+// 이전 판에서는 이 사슬의 각 고리가 서로를 검사하지 않아 (a) live allow #6의 마스크 누락
+// (b) spec 밖 selector가 context에 유입 (c) border rect를 paint rect로 오인 (d) no-op validator
+// 주입 (e) unknown surface 빈 비교가 전부 GREEN이었다. 아래는 그 폐쇄를 고정한다.
+// ─────────────────────────────────────────────────────────────────────────────
+const S4_MK = (x, y, w, h, scale, outset) => ({ x, y, width: w, height: h, scale,
+  paintRect: { x: x - outset * scale, y: y - outset * scale, width: w + 2 * outset * scale, height: h + 2 * outset * scale } });
+
+// ── 단위 mutation 전용 독립 정본 ────────────────────────────────────────────
+// 프로덕션 SPEC/fixture에서 파생하지 않는다. 파생하면 spec 자체의 좌표·property 오류가
+// "정답"으로 함께 이동해 self-oracle이 된다(리뷰 지적). ID를 1,4로 비연속으로 둬서
+// 연속 번호 가정(1..N)이 다시 들어오면 즉시 드러나게 한다.
+const UNIT_SPEC = {
+  LIGHT_DIFF_MASKS: {
+    1: { selector: '.UnitPlain', paintOutsetPx: 0, expectedScale: 1 },
+    4: { selector: '.UnitRing', paintOutsetPx: 3, expectedScale: 1.08 },
+  },
+  REQUIRED_SMOKE_SURFACES: [
+    { name: 'unit-a', captureName: 'unit-a.png', actions: [], requiredElements: [], coverageSelectors: [{ selector: '.UnitPlain' }], darkReviewSelectors: [] },
+    { name: 'unit-b', captureName: 'unit-b.png', actions: [], requiredElements: [], coverageSelectors: [{ selector: '.UnitRing' }], darkReviewSelectors: [] },
+  ],
+  // evaluateConformance가 참조하는 최소 형태(내용은 단위 격리용 더미)
+  FILES: { P: { rel: 'unit.scss', blob: 'x' }, R: { rel: 'unit-settings.scss', blob: 'y' } },
+  DARK_DECL_COUNTS: { P: 0, R: 0 },
+  COUNTS: { conversions: 2, changedDecls: 2, newDecls: 0, newRules: 0, residual: 0, rawLiterals: 0, processedLiterals: 0, allowIds: 2 },
+  CONVERSIONS: [{ ident: { t: 'allow', id: 1 } }, { ident: { t: 'allow', id: 4 } }],
+  ANNOTATIONS: [], OVERRIDES: {}, CONTRAST_CASES: [], CONTRAST_REFERENCE: {},
+};
+// ── UNIT 세계: 실제 declaration에 결속 ────────────────────────────────────
+// 이전 판은 file/property를 문자열로만 분리하고 actualDecls를 비워둬서, ring의 property를
+// box-shadow→background로 fixture·changed·actual map에서 함께 바꿰도 conformance가 clean이었다.
+// 여기서는 선언 목록·expectedAfter·actual attribution 맵을 **각각 독립 리터럴**로 적어,
+// 한 축만 어긋나면 공용 경로가 RED가 되게 한다.
+const UNIT_DECLS = [
+  { key: 'unit.scss||.UnitPlain|background|0', file: 'unit.scss', atRules: [], selector: '.UnitPlain',
+    property: 'background', declarationOccurrence: 0, value: 'var(--u-plain)', important: false },
+  { key: 'unit-settings.scss||.UnitRing|box-shadow|0', file: 'unit-settings.scss', atRules: [], selector: '.UnitRing',
+    property: 'box-shadow', declarationOccurrence: 0, value: '0 0 0 3px var(--u-ring)', important: false },
+];
+// BASE 선언(변환 전) — before/beforeImportant 대조용 독립 리터럴
+const UNIT_BASE_DECLS = [
+  { key: 'unit.scss||.UnitPlain|background|0', file: 'unit.scss', atRules: [], selector: '.UnitPlain',
+    property: 'background', declarationOccurrence: 0, value: '#111111', important: false },
+  { key: 'unit-settings.scss||.UnitRing|box-shadow|0', file: 'unit-settings.scss', atRules: [], selector: '.UnitRing',
+    property: 'box-shadow', declarationOccurrence: 0, value: '0 0 0 3px #222222', important: false },
+];
+// 독립 리터럴 — UNIT_DECLS에서 파생하지 않는다(파생하면 다시 self-oracle).
+const UNIT_EXPECTED_AFTER = [
+  { key: 'unit.scss||.UnitPlain|background|0', value: 'var(--u-plain)', important: false },
+  { key: 'unit-settings.scss||.UnitRing|box-shadow|0', value: '0 0 0 3px var(--u-ring)', important: false },
+];
+const UNIT_ACTUAL_ALLOW_MAP = new Map([
+  [1, 'unit.scss||.UnitPlain|background|0'],
+  [4, 'unit-settings.scss||.UnitRing|box-shadow|0'],
+]);
+const U_KEY = (sel) => (sel === '.UnitPlain'
+  ? 'unit.scss||.UnitPlain|background|0' : 'unit-settings.scss||.UnitRing|box-shadow|0');
+const U_SHA = (n) => String(n).repeat(64).slice(0, 64);
+const unitFixture = () => ({
+  allowIdToKey: { 1: U_KEY('.UnitPlain'), 4: U_KEY('.UnitRing') },
+  changed: [
+    { key: U_KEY('.UnitPlain'), file: 'unit.scss', atRules: [], selector: '.UnitPlain', property: 'background',
+      declarationOccurrence: 0, before: '#111111', after: 'var(--u-plain)',
+      beforeImportant: false, afterImportant: false, evidence: ['allow'], allowIds: [1] },
+    { key: U_KEY('.UnitRing'), file: 'unit-settings.scss', atRules: [], selector: '.UnitRing', property: 'box-shadow',
+      declarationOccurrence: 0, before: '0 0 0 3px #222222', after: '0 0 0 3px var(--u-ring)',
+      beforeImportant: false, afterImportant: false, evidence: ['allow'], allowIds: [4] },
+  ],
+  new: [], residual: [], expectedAfter: JSON.parse(JSON.stringify(UNIT_EXPECTED_AFTER)),
+  counts: { conversions: 2, changed: 2, new: 0, newRules: 0, residual: 0, raw: 0, processed: 0, allowBearing: 2 },
+  smoke: { contextSha256: U_SHA('a'), captures: [
+    { captureName: 'unit-a.png', sha256: U_SHA('b') },
+    { captureName: 'unit-b.png', sha256: U_SHA('c') } ] },
+});
+const U_OWNER = (sel) => UNIT_SPEC.REQUIRED_SMOKE_SURFACES.find((x) => x.coverageSelectors.some((o) => o.selector === sel)).name;
+// full matrix: 2 surface × 2 live selector, 미발견은 []
+const unitCtx = () => {
+  const ctx = { viewport: { width: 1440, height: 900 }, baseLightMaskRects: {} };
+  for (const x of UNIT_SPEC.REQUIRED_SMOKE_SURFACES) {
+    const bysel = {};
+    for (const m of Object.values(UNIT_SPEC.LIGHT_DIFF_MASKS))
+      bysel[m.selector] = U_OWNER(m.selector) === x.name
+        ? [S4_MK(100, 100, 20, 20, m.expectedScale, m.paintOutsetPx)] : [];
+    ctx.baseLightMaskRects[x.name] = bysel;
+  }
+  return ctx;
+};
+const unitObs = (ctx, surf) => Object.fromEntries(Object.values(UNIT_SPEC.LIGHT_DIFF_MASKS).map((m) => {
+  const rects = (ctx.baseLightMaskRects[surf] || {})[m.selector] || [];
+  return [m.selector, rects.map((r) => ({ x: r.x, y: r.y, width: r.width, height: r.height, scale: r.scale }))];
+}));
+const U_RING = '.UnitRing';
+
+const s4Png = (w, h, fill) => { const p = new PNG({ width: w, height: h });
+  for (let i = 0; i < p.data.length; i += 4) { p.data[i] = fill[0]; p.data[i+1] = fill[1]; p.data[i+2] = fill[2]; p.data[i+3] = 255; }
+  return PNG.sync.write(p); };
+
+describe('S4 마스크 정본 — allow ID 완전분할·selector 일치·coverage 소유', () => {
+  const fx = unitFixture();
+  it('allow ID 전체가 live — dead 예외 개념이 존재하지 않는다', () => {
+    expect(SPEC.DEAD_ALLOW_IDS).toBeUndefined();
+    expect(SPEC.DEAD_SELECTORS).toBeUndefined();
+    const specIds = Object.keys(SPEC.LIGHT_DIFF_MASKS).map(Number).sort((a, b) => a - b);   // 프로덕션 정본 대조는 여기서만
+    const convIds = [...new Set(SPEC.CONVERSIONS.filter((c) => c.ident.t === 'allow').map((c) => c.ident.id))].sort((a, b) => a - b);
+    expect(specIds).toEqual(convIds);
+  });
+  it('정상 UNIT spec/fixture/context는 오류 0 (clean baseline)', () => expect(EV.validateMaskContract(fx, UNIT_SPEC, unitCtx())).toEqual([]));
+  it('RED: live allow의 mask 삭제(ID 4)', () => {
+    const spec = { ...UNIT_SPEC, LIGHT_DIFF_MASKS: { ...UNIT_SPEC.LIGHT_DIFF_MASKS } }; delete spec.LIGHT_DIFF_MASKS[4];
+    expect(EV.validateMaskContract(fx, spec, unitCtx()).join()).toMatch(/MASK_ID_UNCLASSIFIED 4/);
+  });
+  it('RED: mask selector가 선언 selector와 불일치', () => {
+    const spec = { ...UNIT_SPEC, LIGHT_DIFF_MASKS: { ...UNIT_SPEC.LIGHT_DIFF_MASKS, 4: { ...UNIT_SPEC.LIGHT_DIFF_MASKS[4], selector: '.Wrong' } } };
+    expect(EV.validateMaskContract(fx, spec, unitCtx()).join()).toMatch(/MASK_SELECTOR_MISMATCH 4/);
+  });
+  it('RED: 비정규 ID 키 "01"은 "1"과 합쳐지지 않고 거부', () => {
+    const spec = { ...UNIT_SPEC, LIGHT_DIFF_MASKS: { ...UNIT_SPEC.LIGHT_DIFF_MASKS, '01': UNIT_SPEC.LIGHT_DIFF_MASKS[1] } };
+    expect(EV.validateMaskContract(fx, spec, unitCtx()).join()).toMatch(/MASK_ID_NONCANONICAL/);
+  });
+});
+
+describe('S4 마스크 좌표 계약 — context rect', () => {
+  const fx = unitFixture();
+  const bad = (mut) => { const c = unitCtx(); mut(c, U_OWNER(U_RING)); return EV.validateMaskContract(fx, UNIT_SPEC, c).join(); };
+  it('RED: spec 밖 selector 유입', () => expect(bad((c, s) => { c.baseLightMaskRects[s]['.Bogus'] = [S4_MK(1, 1, 5, 5, 1, 0)]; })).toMatch(/MASK_FOREIGN_SELECTOR/));
+  it('RED: manifest에 없는 surface 이름', () => expect(bad((c) => { c.baseLightMaskRects.NOPE = { [U_RING]: [S4_MK(1, 1, 5, 5, 1.08, 3)] }; })).toMatch(/MASK_UNKNOWN_SURFACE NOPE/));
+  it('RED: selector 키 생략(미조사) — [] 과 구분된다', () =>
+    expect(bad((c, s) => { delete c.baseLightMaskRects[s][U_RING]; })).toMatch(/MASK_SELECTOR_NOT_SCANNED .*UnitRing/));
+  it('RED: surface 통째 누락(미조사)', () =>
+    expect(bad((c, s) => { delete c.baseLightMaskRects[s]; })).toMatch(/MASK_SURFACE_NOT_SCANNED/));
+  it('RED: 전 surface에서 occurrence 0 → 그 마스크는 관측된 적이 없다', () =>
+    expect(bad((c) => { for (const s of Object.keys(c.baseLightMaskRects)) c.baseLightMaskRects[s][U_RING] = []; }))
+      .toMatch(/MASK_RECT_ABSENT .*UnitRing/));
+  it('GREEN: 조사했고 0건인 화면은 빈 배열로 정상 표현', () => {
+    const c = unitCtx();
+    expect(c.baseLightMaskRects['unit-a'][U_RING]).toEqual([]);
+    expect(EV.validateMaskContract(fx, UNIT_SPEC, c)).toEqual([]);
+  });
+  it('행렬 완전성: UNIT 2 surface × live 2 키를 전부 보유', () => {
+    const c = unitCtx();
+    expect(Object.keys(c.baseLightMaskRects).sort()).toEqual(UNIT_SPEC.REQUIRED_SMOKE_SURFACES.map((x) => x.name).sort());
+    for (const s of Object.keys(c.baseLightMaskRects))
+      expect(Object.keys(c.baseLightMaskRects[s]).sort()).toEqual(Object.values(UNIT_SPEC.LIGHT_DIFF_MASKS).map((m) => m.selector).sort());
+  });
+  it('RED: paintRect 누락(= border rect만)', () => expect(bad((c, s) => { delete c.baseLightMaskRects[s][U_RING][0].paintRect; })).toMatch(/MASK_PAINT_MISSING/));
+  it('RED: paintRect 과소 확장', () => expect(bad((c, s) => { c.baseLightMaskRects[s][U_RING][0].paintRect.width -= 2; })).toMatch(/MASK_PAINT_MISMATCH/));
+  it('RED: scale과 paintRect 동시 확대(내부 일관이어도 spec 기대와 다름)', () => expect(bad((c, s) => {
+    const r = c.baseLightMaskRects[s][U_RING][0]; r.scale = 3;
+    r.paintRect = { x: r.x - 9, y: r.y - 9, width: r.width + 18, height: r.height + 18 };
+  })).toMatch(/MASK_SCALE_UNEXPECTED/));
+  it('RED: width 0 / NaN / viewport 밖', () => {
+    expect(bad((c, s) => { c.baseLightMaskRects[s][U_RING][0].width = 0; })).toMatch(/MASK_RECT_DEGENERATE/);
+    expect(bad((c, s) => { c.baseLightMaskRects[s][U_RING][0].x = NaN; })).toMatch(/MASK_RECT_NONFINITE/);
+    expect(bad((c, s) => { c.baseLightMaskRects[s][U_RING][0] = S4_MK(1439, 899, 20, 20, 1.08, 3); })).toMatch(/MASK_RECT_OUT_OF_VIEWPORT/);
+  });
+  it('GREEN: coverage owner가 아닌 surface의 정상 occurrence도 허용(모달 뒤 캔버스)', () => {
+    const c = unitCtx();   // unit-a 소유 selector가 unit-b에도 실제로 보이는 상황
+    c.baseLightMaskRects['unit-b']['.UnitPlain'].push(S4_MK(200, 200, 10, 10, 1, 0));
+    expect(EV.validateMaskContract(fx, UNIT_SPEC, c)).toEqual([]);
+  });
+});
+
+describe('S4 pixel diff 소비 — 단일 경로만 허용', () => {
+  const fx = unitFixture();
+  const IMG = () => s4Png(40, 40, [255, 255, 255]);
+  const call = (over) => PIX.diffSurfaceLight({ baseBuf: IMG(), afterBuf: IMG(), fixture: fx, spec: UNIT_SPEC,
+    context: unitCtx(), surfaceName: U_OWNER(U_RING), observed: unitObs(unitCtx(), U_OWNER(U_RING)), ...over });
+  it('validator를 주입할 수 없다(정적 결속) — 인자를 넘겨도 무시된다', () => {
+    const r = call({ validateMaskContract: () => [] });
+    expect(r.errors).toEqual([]);                       // 정상 입력이라 GREEN
+    const forged = unitCtx();
+    forged.baseLightMaskRects[U_OWNER(U_RING)][U_RING][0].paintRect.width = 9999;
+    const r2 = PIX.diffSurfaceLight({ baseBuf: IMG(), afterBuf: IMG(), fixture: fx, spec: UNIT_SPEC, context: forged,
+      surfaceName: U_OWNER(U_RING), observed: unitObs(forged, U_OWNER(U_RING)), validateMaskContract: () => [] });
+    expect(r2.errors.join()).toMatch(/MASK_PAINT_MISMATCH/);   // no-op validator로도 우회 불가
+  });
+  it('RED: observed 생략', () => expect(call({ observed: undefined }).errors.join()).toMatch(/OBSERVE_REQUIRED/));
+  it('RED: selector 값이 배열이 아님 → KEY_MISSING', () => {
+    const o = unitObs(unitCtx(), U_OWNER(U_RING)); o[U_RING] = {};
+    expect(call({ observed: o }).errors.join()).toMatch(/OBSERVE_KEY_MISSING/);
+  });
+  it('RED: 같은 개수인데 좌표 누락 [{}] → NONFINITE', () => {
+    const o = unitObs(unitCtx(), U_OWNER(U_RING)); o[U_RING] = [{}];
+    expect(call({ observed: o }).errors.join()).toMatch(/OBSERVE_NONFINITE/);
+  });
+  it('RED: occurrence 개수 불일치', () => {
+    const o = unitObs(unitCtx(), U_OWNER(U_RING)); o[U_RING] = [];
+    expect(call({ observed: o }).errors.join()).toMatch(/OBSERVE_COUNT/);
+  });
+  it('RED: 요소 이동(정규화 경계 초과)', () => {
+    const o = unitObs(unitCtx(), U_OWNER(U_RING));
+    o[U_RING][0] = { ...o[U_RING][0], x: o[U_RING][0].x + 0.02 };
+    expect(call({ observed: o }).errors.join()).toMatch(/OBSERVE_GEOMETRY/);
+  });
+  it('GREEN: 양자(1/64px) 미만 흔들림은 동일 좌표로 정규화', () => {
+    const o = unitObs(unitCtx(), U_OWNER(U_RING));
+    o[U_RING][0] = { ...o[U_RING][0], x: o[U_RING][0].x + 0.005 };
+    expect(call({ observed: o }).errors).toEqual([]);
+  });
+  it('RED: manifest에 없는 surface는 빈 비교로 통과하지 못한다', () =>
+    expect(call({ surfaceName: 'NOPE' }).errors.join()).toMatch(/SURFACE_UNKNOWN/));
+  it('RED: context에 없는 surface', () => {
+    const c = unitCtx(); const s = U_OWNER(U_RING); const o = unitObs(c, s); delete c.baseLightMaskRects[s];
+    expect(PIX.diffSurfaceLight({ baseBuf: IMG(), afterBuf: IMG(), fixture: fx, spec: UNIT_SPEC, context: c, surfaceName: s, observed: o })
+      .errors.join()).toMatch(/SURFACE_NOT_IN_CONTEXT/);
+  });
+  it('GREEN: 그 화면에 live selector가 하나도 없어도 정상(전부 빈 배열, maskCount 0)', () => {
+    // UNIT 정본에 3번째 surface를 추가해 "조사했고 전부 0건"인 화면을 만든다.
+    const spec = { ...UNIT_SPEC, REQUIRED_SMOKE_SURFACES: [...UNIT_SPEC.REQUIRED_SMOKE_SURFACES,
+      { name: 'unit-empty', captureName: 'unit-empty.png', actions: [], requiredElements: [], coverageSelectors: [], darkReviewSelectors: [] }] };
+    const c = unitCtx();
+    c.baseLightMaskRects['unit-empty'] = Object.fromEntries(Object.values(spec.LIGHT_DIFF_MASKS).map((m) => [m.selector, []]));
+    const o = Object.fromEntries(Object.values(spec.LIGHT_DIFF_MASKS).map((m) => [m.selector, []]));
+    const r = PIX.diffSurfaceLight({ baseBuf: IMG(), afterBuf: IMG(), fixture: fx, spec, context: c, surfaceName: 'unit-empty', observed: o });
+    expect(r.errors).toEqual([]); expect(r.maskCount).toBe(0);
+  });
+});
+
+describe('S4 게이트 배선 — helper가 아니라 공용 경로가 잡는다', () => {
+  const fx = unitFixture();
+  // helper 직접 호출 테스트만 있으면 evaluateConformance에서 호출을 빼도 GREEN이다.
+  // 배선 자체를 잠그기 위해 반드시 공용 conformance 경로로 단정한다.
+  const conform = (spec) => EV.evaluateConformance(UNIT_DECLS, '', {}, spec, fx, UNIT_ACTUAL_ALLOW_MAP, UNIT_BASE_DECLS).join('\n');
+  it('RED: 마스크 정본 위반도 evaluateConformance 경로에서 검출된다', () => {
+    // evaluateConformance는 counts 등 다른 검사도 하지만, 여기서 잠그는 것은
+    // "마스크 정본 위반이 helper 직접 호출이 아니라 **공용 경로**에서도 나오는가"다.
+    const spec = { ...UNIT_SPEC, LIGHT_DIFF_MASKS: { ...UNIT_SPEC.LIGHT_DIFF_MASKS } }; delete spec.LIGHT_DIFF_MASKS[4];
+    expect(conform(spec)).toMatch(/MASK_ID_UNCLASSIFIED 4/);
+    expect(conform(UNIT_SPEC)).not.toMatch(/MASK_ID_UNCLASSIFIED/);
+  });
+});
+
+describe('S4 public diffSurfaceLight — 마스크가 실제 픽셀 비교에 적용된다', () => {
+  const fx = unitFixture();
+  const SURF = U_OWNER(U_RING);
+  // unitCtx의 ring rect = MK(100,100,20,20,1.08,3) → paintRect x/y 96.76, w/h 26.48 → 픽셀 96..123
+  const W = 200, H = 200;
+  const withPx = (x, y) => { const p = PNG.sync.read(s4Png(W, H, [255, 255, 255]));
+    const i = (W * y + x) << 2; p.data[i] = 0; p.data[i + 1] = 0; p.data[i + 2] = 0; return PNG.sync.write(p); };
+  const run = (afterBuf) => PIX.diffSurfaceLight({ baseBuf: s4Png(W, H, [255, 255, 255]), afterBuf,
+    fixture: fx, spec: UNIT_SPEC, context: unitCtx(), surfaceName: SURF, observed: unitObs(unitCtx(), SURF) });
+  it('마스크 내부 1픽셀 차이 → diff 0 (허용된 라이트 변화)', () => {
+    const r = run(withPx(110, 110));
+    expect(r.errors).toEqual([]); expect(r.maskCount).toBe(1); expect(r.diff).toBe(0); expect(r.ok).toBe(true);
+  });
+  it('마스크 외부 1픽셀 차이 → diff 1 (회귀 검출)', () => {
+    const r = run(withPx(150, 150));
+    expect(r.errors).toEqual([]); expect(r.diff).toBe(1); expect(r.ok).toBe(false);
+  });
+  it('마스크 경계 바로 바깥(124,124)도 검출된다', () => expect(run(withPx(124, 124)).diff).toBe(1));
+});
+
+describe('S4 observed 키 집합 — 누락·초과', () => {
+  const fx = unitFixture();
+  const SURF = U_OWNER(U_RING);
+  const IMG = () => s4Png(40, 40, [255, 255, 255]);
+  const call = (observed) => PIX.diffSurfaceLight({ baseBuf: IMG(), afterBuf: IMG(), fixture: fx, spec: UNIT_SPEC,
+    context: unitCtx(), surfaceName: SURF, observed });
+  it('RED: live selector 키를 실제로 삭제 → OBSERVE_KEY_MISSING', () => {
+    const o = unitObs(unitCtx(), SURF); delete o[U_RING];
+    expect(call(o).errors.join()).toMatch(/OBSERVE_KEY_MISSING .*UnitRing/);
+  });
+  it('RED: 정본에 없는 키 추가 → OBSERVE_EXTRA', () => {
+    const o = unitObs(unitCtx(), SURF); o['.NotAMask'] = [];
+    expect(call(o).errors.join()).toMatch(/OBSERVE_EXTRA .*\.NotAMask/);
+  });
+});
+
+describe('S4 allow ID 네 집합 exact equality — 비연속 집합과 단독 변조', () => {
+  // 재번호화 대신 CONVERSIONS · LIGHT_DIFF_MASKS · allowIdToKey · changed[].allowIds
+  // 네 집합의 sorted exact equality를 강제한다. ID가 비연속(1,4)이어도 정상이어야 한다.
+  const C = () => UNIT_SPEC.COUNTS;
+  const run = (fx, spec) => EV.validateCounts(fx, (spec || UNIT_SPEC).COUNTS, spec).join('|');
+  it('GREEN: 비연속 집합(1,4) 정상', () => expect(run(unitFixture(), UNIT_SPEC)).toBe(''));
+  it('GREEN: 프로덕션 비연속 집합도 개수·집합 정합', () => {
+    const ids = [...new Set(SPEC.CONVERSIONS.filter((c) => c.ident.t === 'allow').map((c) => c.ident.id))].sort((a, b) => a - b);
+    expect(ids).toEqual(Object.keys(SPEC.LIGHT_DIFF_MASKS).map(Number).sort((a, b) => a - b));
+    expect(ids.length).toBe(SPEC.COUNTS.allowIds);
+    expect(ids).not.toEqual(ids.map((_, i) => i + 1));            // 연속이 아님을 명시
+  });
+  it('RED: changed 단독 변조', () => {
+    const fx = unitFixture(); fx.changed[1].allowIds = [9];
+    expect(run(fx, UNIT_SPEC)).toMatch(/ALLOW_SET_CHANGED_VS_CONVERSIONS|ALLOW_SET_CHANGED_VS_MASKS|ALLOW_SET_CHANGED_VS_KEYMAP/);
+  });
+  it('RED: keyMap 단독 변조', () => {
+    const fx = unitFixture(); fx.allowIdToKey = { 1: fx.allowIdToKey[1], 9: fx.allowIdToKey[4] };
+    expect(run(fx, UNIT_SPEC)).toMatch(/ALLOW_SET_CHANGED_VS_KEYMAP/);
+  });
+  it('RED: CONVERSIONS 단독 변조', () => {
+    const spec = { ...UNIT_SPEC, CONVERSIONS: [{ ident: { t: 'allow', id: 1 } }, { ident: { t: 'allow', id: 9 } }] };
+    expect(run(unitFixture(), spec)).toMatch(/ALLOW_SET_CHANGED_VS_CONVERSIONS/);
+  });
+  it('RED: LIGHT_DIFF_MASKS 단독 변조', () => {
+    const spec = { ...UNIT_SPEC, LIGHT_DIFF_MASKS: { 1: UNIT_SPEC.LIGHT_DIFF_MASKS[1], 9: UNIT_SPEC.LIGHT_DIFF_MASKS[4] } };
+    expect(run(unitFixture(), spec)).toMatch(/ALLOW_SET_CHANGED_VS_MASKS/);
+  });
+  it('RED: spec 미전달(배선 제거) → ALLOW_SET_SPEC_REQUIRED', () =>
+    expect(EV.validateCounts(unitFixture(), C(), undefined).join('|')).toMatch(/ALLOW_SET_SPEC_REQUIRED/));
+  it('배선 행동 고정: validateCandidate에 변이 spec을 주입하면 네 집합 오류가 나온다', () => {
+    // 정규식으로 소스를 보면 호출을 지우고 같은 문자열을 주석에 남겨도 통과한다.
+    // generator가 실제로 쓰는 순수 함수에 변이를 주입해 배선을 잠근다.
+    const ctx = unitCtx();
+    const results = [];
+    expect(EV.validateCandidate({ fixture: unitFixture(), spec: UNIT_SPEC, context: ctx, contrastResults: results })).toEqual([]);
+    const spec = { ...UNIT_SPEC, CONVERSIONS: [{ ident: { t: 'allow', id: 1 } }, { ident: { t: 'allow', id: 9 } }] };
+    expect(EV.validateCandidate({ fixture: unitFixture(), spec, context: ctx, contrastResults: results }).join('|'))
+      .toMatch(/ALLOW_SET_CHANGED_VS_CONVERSIONS/);
+  });
+  // validator를 주입할 수 없다 — 데이터와 순수 IO만 넘긴다.
+  const IOSPY = () => { const c = { serialize: 0, write: 0, bytes: [] };
+    return { c, serialize: () => { c.serialize++; return 'BYTES'; }, write: (b) => { c.write++; c.bytes.push(b); } }; };
+  const U_CTX_RAW = () => JSON.stringify({ ...unitCtx(), capture: { type: 'png', scale: 'css', dpr: 1 },
+    privacyAudit: { scope: 'dedicated-synthetic-account-workspace', contextPass: true, contextSubjectSha256: 'x', captures: [] } });
+  const AW = (over = {}) => { const io = IOSPY();
+    const r = EV.approveAndWrite({
+      fixture: unitFixture(), spec: UNIT_SPEC, contrastResults: [],
+      actualDecls: UNIT_DECLS, actualRaw: '', preAnnSources: {},
+      actualAllowIdToKey: UNIT_ACTUAL_ALLOW_MAP, baseDecls: UNIT_BASE_DECLS,
+      contextRaw: U_CTX_RAW(), sha256, readPng: () => ({ bytes: Buffer.from('p'), width: 1440, height: 900 }),
+      serialize: io.serialize, write: io.write, ...over });
+    return { r, c: io.c }; };
+  it('validator 주입은 무시된다(정적 결속) — conformance/frozen 인자를 넘겨도 실제 validator가 돈다', () => {
+    const { r, c } = AW({ conformance: () => [], frozen: () => [], validateCandidate: () => [] });
+    // UNIT_SPEC에는 RASTER_CONTRACT·FILES blob이 없어 artifacts 단계에서 정상적으로 막힌다
+    expect(r.wrote).toBe(false); expect(c).toEqual({ serialize: 0, write: 0, bytes: [] });
+    expect(r.calls.artifacts).toBe(1);
+  });
+  it('candidate-only 오류 → conformance·artifacts 0회, write 0회', () => {
+    const spec = { ...UNIT_SPEC, CONVERSIONS: [{ ident: { t: 'allow', id: 1 } }, { ident: { t: 'allow', id: 9 } }] };
+    const { r, c } = AW({ spec });
+    expect(r.errors.join('|')).toMatch(/ALLOW_SET_CHANGED_VS_CONVERSIONS/);
+    expect(r.calls).toEqual({ candidate: 1, conformance: 0, artifacts: 0 });
+    expect(c).toEqual({ serialize: 0, write: 0, bytes: [] });
+  });
+  it('conformance-only 오류 → artifacts 0회, write 0회 (쓰기가 conformance보다 앞서지 않는다)', () => {
+    const { r, c } = AW({ baseDecls: undefined });
+    expect(r.errors.join('|')).toMatch(/BASE_DECLS_REQUIRED/);
+    expect(r.calls).toEqual({ candidate: 1, conformance: 1, artifacts: 0 });
+    expect(c).toEqual({ serialize: 0, write: 0, bytes: [] });
+  });
+  it('artifacts-only 오류 → write 0회 (candidate·conformance는 통과)', () => {
+    const { r, c } = AW({ readPng: () => ({ bytes: Buffer.from('p'), width: 2880, height: 1800 }) });
+    expect(r.calls).toEqual({ candidate: 1, conformance: 1, artifacts: 1 });
+    expect(c).toEqual({ serialize: 0, write: 0, bytes: [] });
+  });
+  it('contextRaw가 파싱 불가면 candidate 단계에서 막힌다', () => {
+    const { r, c } = AW({ contextRaw: '{ not json' });
+    expect(r.errors.join('|')).toMatch(/CANDIDATE_CONTEXT_REQUIRED/);
+    expect(r.calls).toEqual({ candidate: 1, conformance: 0, artifacts: 0 });
+    expect(c.write).toBe(0);
+  });
+  it('내부 validator 예외/비배열도 fail-closed (write 0회)', () => {
+    const { r, c } = AW({ spec: {} });
+    expect(r.errors.join('|')).toMatch(/APPROVE_VALIDATOR_THREW|APPROVE_VALIDATOR_NONARRAY/);
+    expect(c.write).toBe(0);
+  });
+  it('serialize/write 미주입은 APPROVE_IO_REQUIRED', () => {
+    const r = EV.approveAndWrite({ fixture: unitFixture(), spec: UNIT_SPEC, contrastResults: [] });
+    expect(r.errors).toEqual(['APPROVE_IO_REQUIRED']); expect(r.wrote).toBe(false);
+  });
+  it('보조 lint: generator가 approveAndWrite만 쓰고 s4-expected.json 쓰기 지점이 1곳', () => {
+    const src = readFileSync(new URL('../scripts/s4-gen.mjs', import.meta.url), 'utf8');
+    const code = src.split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
+    expect(code).toMatch(/EV\.approveAndWrite\(/);
+    for (const fn of ['validateCounts', 'validateSmokeCoverage', 'validateMaskContract', 'validateContrastReference', 'validateCandidate'])
+      expect(code).not.toMatch(new RegExp(`EV\\.${fn}\\(`));
+    // s4-expected.json 쓰기는 approveAndWrite의 writer 안에서만 일어난다
+    const writes = code.match(/writeFileSync\([^)]*s4-expected\.json/g) || [];
+    expect(writes.length).toBe(1);
+  });
+  it('실제 산출물 바이트 불변 — generator RED 실행이 fixture를 건드리지 않는다', () => {
+    const f = new URL('./__fixtures__/s4-expected.json', import.meta.url);
+    const before = createHash('sha256').update(readFileSync(f)).digest('hex');
+    const r = execSync('node scripts/s4-gen.mjs; echo "exit=$?"',
+      { cwd: new URL('..', import.meta.url).pathname, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    expect(r).toMatch(/exit=1/);
+    expect(createHash('sha256').update(readFileSync(f)).digest('hex')).toBe(before);
+  });
+});
+
+describe('S4 공용 경로 clean baseline + 한 축 변이', () => {
+  const conform = (fx, spec, decls, map) => EV.evaluateConformance(
+    decls || UNIT_DECLS, '', {}, spec || UNIT_SPEC, fx, map || UNIT_ACTUAL_ALLOW_MAP, UNIT_BASE_DECLS);
+  it('GREEN: 완결된 UNIT 입력은 evaluateConformance가 정확히 []', () =>
+    expect(conform(unitFixture())).toEqual([]));
+  it('RED: 마스크 정본 한 축 변이(ID 4 삭제)', () => {
+    const spec = { ...UNIT_SPEC, LIGHT_DIFF_MASKS: { ...UNIT_SPEC.LIGHT_DIFF_MASKS } }; delete spec.LIGHT_DIFF_MASKS[4];
+    expect(conform(unitFixture(), spec).join('|')).toMatch(/MASK_ID_UNCLASSIFIED 4/);
+  });
+  it('RED: smoke 한 축 변이(capture 집합 불일치)', () => {
+    const fx = unitFixture(); fx.smoke.captures.pop();
+    expect(conform(fx).join('|')).toMatch(/SMOKE_CAPTURE_SET_MISMATCH/);
+  });
+  it('RED: residual 한 축 변이', () => {
+    const fx = unitFixture(); fx.residual = [{ x: 1 }];
+    expect(conform(fx).join('|')).toMatch(/RESIDUAL_MISMATCH/);
+  });
+});
+
+describe('S4 contrast — dead 우회 폐쇄', () => {
+  it('RED: case에 dead:true가 있으면 거부되고 실패도 함께 보고된다', () => {
+    const spec = { ...UNIT_SPEC, CONTRAST_CASES: [
+      { name: 'unit-1to1', text: '--u-fg', min: 4.5, dead: true, stack: [{ token: '--u-bg' }] }] };
+    const vals = { '--u-fg': '#808080', '--u-bg': '#808080' };   // 대비 1:1
+    const r = EV.evaluateContrastCases(spec.CONTRAST_CASES, vals);
+    expect(r.errors.join('|')).toMatch(/CONTRAST_DEAD_FORBIDDEN unit-1to1/);
+    expect(r.errors.join('|')).toMatch(/CONTRAST_FAIL unit-1to1/);
+    expect(r.results[0].pass).toBe(false);
+  });
+  it('정본에 dead 필드가 남아 있지 않다', () =>
+    expect(SPEC.CONTRAST_CASES.some((c) => 'dead' in c)).toBe(false));
+});
+
+describe('S4 fixture ↔ 실제 선언 결속', () => {
+  // 표기(file/property)만 분리하고 실체와 결속하지 않으면, changed·allowIdToKey의 property를
+  // 함께 바꿔치기해도 내부 일관이라 conformance가 clean이었다(리뷰 실증).
+  const conform = (fx, decls, map) => EV.evaluateConformance(decls || UNIT_DECLS, '', {}, UNIT_SPEC, fx,
+    map || UNIT_ACTUAL_ALLOW_MAP, UNIT_BASE_DECLS).join('|');
+  it('GREEN: 정상 결속', () => expect(conform(unitFixture())).toBe(''));
+  it('RED: changed·allowIdToKey의 property를 함께 변조(box-shadow → background)', () => {
+    const wrong = 'unit-settings.scss||.UnitRing|background|0';
+    const fx = unitFixture();
+    fx.changed[1].key = wrong; fx.allowIdToKey[4] = wrong;
+    expect(conform(fx, UNIT_DECLS, new Map([[1, UNIT_DECLS[0].key], [4, wrong]])))
+      .toMatch(/CHANGED_KEY_NOT_IN_ACTUAL|ALLOW_KEY_NOT_IN_ACTUAL/);
+  });
+  it('RED: actual declaration 삭제', () =>
+    expect(conform(unitFixture(), [UNIT_DECLS[0]])).toMatch(/CHANGED_KEY_NOT_IN_ACTUAL/));
+  it('RED: changed.selector 단독 변조 (canonical key 재계산이 선점 검출)', () => {
+    const fx = unitFixture(); fx.changed[1].selector = '.Other';
+    expect(conform(fx)).toMatch(/CHANGED_KEY_NONCANONICAL|CHANGED_VS_ACTUAL/);
+  });
+});
+
+describe('S4 contrast 참고치 집합 계약', () => {
+  // result는 min·pass까지 case와 정합해야 한다(메타데이터 결속).
+  const res = () => SPEC.CONTRAST_CASES.map((c) => ({ name: c.name, ratio: SPEC.CONTRAST_REFERENCE[c.name],
+    min: c.min, pass: SPEC.CONTRAST_REFERENCE[c.name] >= c.min }));
+  it('GREEN: 정본 case ↔ reference 이름 집합 exact', () =>
+    expect(EV.validateContrastReference(SPEC.CONTRAST_CASES, SPEC.CONTRAST_REFERENCE, res())).toEqual([]));
+  it('RED: case 1개 삭제', () => expect(EV.validateContrastReference(SPEC.CONTRAST_CASES.slice(1), SPEC.CONTRAST_REFERENCE, res().slice(1)).join('|'))
+    .toMatch(/CONTRAST_REFERENCE_SET_MISMATCH/));
+  it('RED: reference 1개 삭제', () => {
+    const r = { ...SPEC.CONTRAST_REFERENCE }; delete r['TrackTree GroupKey hover'];
+    expect(EV.validateContrastReference(SPEC.CONTRAST_CASES, r, res()).join('|')).toMatch(/CONTRAST_REFERENCE_SET_MISMATCH/);
+  });
+  it('RED: case 이름 중복', () => {
+    const cs = [...SPEC.CONTRAST_CASES, SPEC.CONTRAST_CASES[0]];
+    expect(EV.validateContrastReference(cs, SPEC.CONTRAST_REFERENCE, res()).join('|')).toMatch(/CONTRAST_CASE_NAME_DUP/);
+  });
+  it('RED: 결과 누락', () => expect(EV.validateContrastReference(SPEC.CONTRAST_CASES, SPEC.CONTRAST_REFERENCE, res().slice(1)).join('|'))
+    .toMatch(/CONTRAST_RESULT_MISSING/));
+  it('참고치가 fingerprint에 포함된다', () => {
+    const mut = { ...SPEC, CONTRAST_REFERENCE: { ...SPEC.CONTRAST_REFERENCE, 'TrackTree GroupKey hover': 9.999 } };
+    expect(EV.specFingerprint(mut, sha256)).not.toBe(EV.specFingerprint(SPEC, sha256));
+  });
+});
+
+describe('S4 allow ID 타입·형식', () => {
+  const C = () => UNIT_SPEC.COUNTS;
+  it('RED: changed allowIds에 "04" 문자열', () => {
+    const fx = unitFixture(); fx.changed[1].allowIds = ['04'];
+    expect(EV.validateCounts(fx, C(), UNIT_SPEC).join('|')).toMatch(/ALLOW_ID_TYPE changed "04"/);
+  });
+  it('RED: allowIdToKey 키가 "04"', () => {
+    const fx = unitFixture(); fx.allowIdToKey = { 1: fx.allowIdToKey[1], '04': fx.allowIdToKey[4] };
+    expect(EV.validateCounts(fx, C(), UNIT_SPEC).join('|')).toMatch(/ALLOW_ID_KEY allowIdToKey "04"/);
+  });
+  it('RED: 비정수 ID', () => {
+    const fx = unitFixture(); fx.changed[1].allowIds = [4.5];
+    expect(EV.validateCounts(fx, C(), UNIT_SPEC).join('|')).toMatch(/ALLOW_ID_TYPE changed 4\.5/);
+  });
+  it('RED: mask 키가 "04"', () => {
+    const spec = { ...UNIT_SPEC, LIGHT_DIFF_MASKS: { 1: UNIT_SPEC.LIGHT_DIFF_MASKS[1], '04': UNIT_SPEC.LIGHT_DIFF_MASKS[4] } };
+    expect(EV.validateCounts(unitFixture(), C(), spec).join('|')).toMatch(/ALLOW_ID_KEY LIGHT_DIFF_MASKS "04"/);
+  });
+});
+
+describe('S4 선언 결속 — actual key canonical·changed 전체 schema·base 대조', () => {
+  const conform = (over = {}) => EV.evaluateConformance(
+    over.decls || UNIT_DECLS, '', {}, UNIT_SPEC, over.fx || unitFixture(),
+    over.map || UNIT_ACTUAL_ALLOW_MAP, 'base' in over ? over.base : UNIT_BASE_DECLS).join('|');
+  it('GREEN: 정상', () => expect(conform()).toBe(''));
+  it('RED: actual declaration의 file만 변조 → key가 canonical과 불일치', () => {
+    const decls = JSON.parse(JSON.stringify(UNIT_DECLS)); decls[1].file = 'evil.scss';
+    expect(conform({ decls })).toMatch(/DECL_KEY_NONCANONICAL/);
+  });
+  it('RED: actual declaration의 atRules만 변조', () => {
+    const decls = JSON.parse(JSON.stringify(UNIT_DECLS)); decls[1].atRules = ['@media x'];
+    expect(conform({ decls })).toMatch(/DECL_KEY_NONCANONICAL/);
+  });
+  it('RED: actual declaration의 occurrence만 변조', () => {
+    const decls = JSON.parse(JSON.stringify(UNIT_DECLS)); decls[1].declarationOccurrence = 8;
+    expect(conform({ decls })).toMatch(/DECL_KEY_NONCANONICAL/);
+  });
+  it('RED: actual key 중복', () => {
+    const decls = [...UNIT_DECLS, { ...UNIT_DECLS[0] }];
+    expect(conform({ decls })).toMatch(/DECL_KEY_DUP/);
+  });
+  for (const f of ['file', 'property', 'declarationOccurrence']) {
+    it(`RED: changed.${f} 단독 변조`, () => {
+      const fx = unitFixture(); fx.changed[1][f] = f === 'declarationOccurrence' ? 7 : 'zz';
+      expect(conform({ fx })).toMatch(/CHANGED_KEY_NONCANONICAL|CHANGED_VS_ACTUAL/);
+    });
+  }
+  for (const [f, v] of [['after', 'zz'], ['afterImportant', true]]) {
+    it(`RED: changed.${f} 단독 변조 (actual 대조)`, () => {
+      const fx = unitFixture(); fx.changed[1][f] = v;
+      expect(conform({ fx })).toMatch(new RegExp(`CHANGED_VS_ACTUAL .* ${f}`));
+    });
+  }
+  for (const [f, v] of [['before', 'zz'], ['beforeImportant', true]]) {
+    it(`RED: changed.${f} 단독 변조 (base 대조)`, () => {
+      const fx = unitFixture(); fx.changed[1][f] = v;
+      expect(conform({ fx })).toMatch(new RegExp(`CHANGED_VS_BASE .* ${f}`));
+    });
+  }
+  it('RED: changed schema 필드 누락', () => {
+    const fx = unitFixture(); delete fx.changed[1].beforeImportant;
+    expect(conform({ fx })).toMatch(/CHANGED_SCHEMA_MISSING/);
+  });
+  it('RED: baseDecls 미전달은 fail-closed', () => expect(conform({ base: undefined })).toMatch(/BASE_DECLS_REQUIRED/));
+  it('RED: actual·fixture·expected·map 동시 변이도 base 대조로 잡힌다', () => {
+    // 모든 "after" 축을 일관되게 바꿔도 BASE는 못 바꾸므로 before 대조가 남는다.
+    const decls = JSON.parse(JSON.stringify(UNIT_DECLS)); decls[1].value = 'HACKED';
+    const fx = unitFixture(); fx.changed[1].after = 'HACKED';
+    fx.expectedAfter[1].value = 'HACKED';
+    expect(conform({ decls, fx })).toBe('');            // after 축만 보면 통과
+    fx.changed[1].before = 'HACKED';                     // before까지 위조하면 base가 잡는다
+    expect(conform({ decls, fx })).toMatch(/CHANGED_VS_BASE .* before/);
+  });
+});
+
+describe('S4 contrast 숫자·스키마 fail-closed', () => {
+  const vals = { '--a': '#000000', '--b': '#ffffff' };
+  it('RED: min 누락', () => {
+    const r = EV.evaluateContrastCases([{ name: 'n', text: '--a', stack: [{ token: '--b' }] }], vals);
+    expect(r.errors.join('|')).toMatch(/CONTRAST_MIN_INVALID/);
+  });
+  it('RED: min <= 1', () => {
+    const r = EV.evaluateContrastCases([{ name: 'n', text: '--a', min: 1, stack: [{ token: '--b' }] }], vals);
+    expect(r.errors.join('|')).toMatch(/CONTRAST_MIN_INVALID/);
+  });
+  it('RED: mix.pct 누락/범위 초과', () => {
+    for (const pct of [undefined, -1, 101, NaN]) {
+      const r = EV.evaluateContrastCases([{ name: 'n', text: '--a', min: 4.5, stack: [{ token: '--b' }, { mix: '--a', pct }] }], vals);
+      expect(r.errors.join('|')).toMatch(/CONTRAST_PCT_INVALID|CONTRAST_BASE/);
+    }
+  });
+  it('RED: result ratio가 NaN/문자열/undefined면 드리프트 검사가 사라지지 않는다', () => {
+    for (const ratio of [NaN, '6', undefined, Infinity]) {
+      expect(EV.validateContrastReference([{ name: 'z' }], { z: 6 }, [{ name: 'z', ratio }]).join('|'))
+        .toMatch(/CONTRAST_RESULT_RATIO_INVALID/);
+    }
+  });
+  it('RED: reference 값이 비수치', () => expect(EV.validateContrastReference([{ name: 'z' }], { z: NaN }, [{ name: 'z', ratio: 6 }]).join('|'))
+    .toMatch(/CONTRAST_REFERENCE_INVALID/));
+  it('RED: tolerance가 비수치', () => expect(EV.validateContrastReference([{ name: 'z' }], { z: 6 }, [{ name: 'z', ratio: 6 }], NaN).join('|'))
+    .toMatch(/CONTRAST_TOL_INVALID/));
+});
+
+describe('S4 candidate 승인 경로 — context 필수 + 축별 mutation', () => {
+  const ok = () => ({ fixture: unitFixture(), spec: UNIT_SPEC, context: unitCtx(), contrastResults: [] });
+  it('GREEN: 정상 candidate', () => expect(EV.validateCandidate(ok())).toEqual([]));
+  it('RED: context 생략', () => expect(EV.validateCandidate({ ...ok(), context: undefined }).join('|')).toMatch(/CANDIDATE_CONTEXT_REQUIRED/));
+  it('RED: context가 배열', () => expect(EV.validateCandidate({ ...ok(), context: [] }).join('|')).toMatch(/CANDIDATE_CONTEXT_REQUIRED/));
+  it('RED: contrastResults 생략', () => expect(EV.validateCandidate({ ...ok(), contrastResults: undefined }).join('|')).toMatch(/CANDIDATE_CONTRAST_RESULTS_REQUIRED/));
+  it('RED: counts 축', () => { const a = ok(); a.fixture.counts.changed = 9;
+    expect(EV.validateCandidate(a).join('|')).toMatch(/changed 9!=2/); });
+  it('RED: mask 축', () => { const a = ok(); delete a.context.baseLightMaskRects['unit-a'];
+    expect(EV.validateCandidate(a).join('|')).toMatch(/MASK_SURFACE_NOT_SCANNED/); });
+  it('RED: contrast 축', () => { const a = ok();
+    a.spec = { ...UNIT_SPEC, CONTRAST_CASES: [{ name: 'q', min: 4.5 }], CONTRAST_REFERENCE: {} };
+    expect(EV.validateCandidate(a).join('|')).toMatch(/CONTRAST_REFERENCE_SET_MISMATCH/); });
+});
+
+describe('S4 contrast result 메타데이터 결속', () => {
+  const cases = [{ name: 'z', text: '--a', min: 4.5, stack: [{ token: '--b' }] }];
+  const ref = { z: 6 };
+  it('GREEN: min·pass가 case와 계산 결과에 일치', () =>
+    expect(EV.validateContrastReference(cases, ref, [{ name: 'z', ratio: 6, min: 4.5, pass: true }])).toEqual([]));
+  it('RED: result.min이 case.min과 다름', () =>
+    expect(EV.validateContrastReference(cases, ref, [{ name: 'z', ratio: 6, min: 3, pass: true }]).join('|'))
+      .toMatch(/CONTRAST_RESULT_MIN_MISMATCH/));
+  it('RED: result.pass가 ratio>=min과 다름', () =>
+    expect(EV.validateContrastReference(cases, ref, [{ name: 'z', ratio: 6, min: 4.5, pass: false }]).join('|'))
+      .toMatch(/CONTRAST_RESULT_PASS_MISMATCH/));
+  it('RED: 실패인데 pass:true로 위조', () =>
+    expect(EV.validateContrastReference(cases, { z: 2 }, [{ name: 'z', ratio: 2, min: 4.5, pass: true }]).join('|'))
+      .toMatch(/CONTRAST_RESULT_PASS_MISMATCH/));
+  it('RED: reference ratio가 1..21 밖', () => {
+    for (const v of [0.5, 22, -3])
+      expect(EV.validateContrastReference(cases, { z: v }, [{ name: 'z', ratio: 6, min: 4.5, pass: true }]).join('|'))
+        .toMatch(/CONTRAST_REFERENCE_INVALID/);
+  });
+  it('RED: tolerance 상한 0.3 초과', () =>
+    expect(EV.validateContrastReference(cases, ref, [{ name: 'z', ratio: 6, min: 4.5, pass: true }], 0.5).join('|'))
+      .toMatch(/CONTRAST_TOL_INVALID 0\.5/));
+  it('정본 결과도 메타데이터까지 정합', () => {
+    const res = SPEC.CONTRAST_CASES.map((c) => ({ name: c.name, ratio: SPEC.CONTRAST_REFERENCE[c.name],
+      min: c.min, pass: SPEC.CONTRAST_REFERENCE[c.name] >= c.min }));
+    expect(EV.validateContrastReference(SPEC.CONTRAST_CASES, SPEC.CONTRAST_REFERENCE, res)).toEqual([]);
+  });
+});
+
+describe('S4 case.min 독립 검증', () => {
+  const res = (min, pass) => [{ name: 'z', ratio: 6, min, pass }];
+  it('RED: min undefined + result를 맞춰 넣어도 통과하지 않는다', () =>
+    expect(EV.validateContrastReference([{ name: 'z', min: undefined }], { z: 6 }, res(undefined, false)).join('|'))
+      .toMatch(/CONTRAST_CASE_MIN_INVALID/));
+  it('RED: min <= 1 / min > 21 / 비수치', () => {
+    for (const m of [1, 0, 25, '4.5', NaN])
+      expect(EV.validateContrastReference([{ name: 'z', min: m }], { z: 6 }, res(m, 6 >= m)).join('|'))
+        .toMatch(/CONTRAST_CASE_MIN_INVALID/);
+  });
+  it('GREEN: 정본 case 전부 유효 범위', () => {
+    for (const c of SPEC.CONTRAST_CASES) {
+      expect(typeof c.min).toBe('number');
+      expect(c.min > 1 && c.min <= 21).toBe(true);
+    }
+  });
+});
+
+describe('S4 커밋 산출물 게이트 — 실제 fixture 원문·context 원문·PNG 바이트', () => {
+  const FIX = new URL('./__fixtures__/', import.meta.url);
+  const fixRaw = () => readFileSync(new URL('s4-expected.json', FIX), 'utf8');
+  const ctxRaw = () => readFileSync(new URL('s4-smoke-context.json', FIX), 'utf8');
+  const readPng = (name) => { const b = readFileSync(new URL(`s4-shots/base/${name}`, FIX));
+    return { bytes: b, width: b.readUInt32BE(16), height: b.readUInt32BE(20) }; };
+  // 실제 BASE 3파일을 컴파일해 선언을 얻는다 — baseDecls=[] 로는 canonical/dup 검사가 공허하다.
+  const realBaseDecls = () => {
+    const out = [];
+    for (const k of Object.keys(SPEC.FILES)) {
+      const rel = SPEC.FILES[k].rel;
+      const src = execSync(`git -C ${REPO} show ${SPEC.BASE}:frontend/${rel}`, { encoding: 'utf8' });
+      const css = compileString(src, { syntax: 'scss', url: pathToFileURL(resolve(__dirname, '..', rel)),
+        loadPaths: [resolve(__dirname, '../styles')] }).css;
+      out.push(...EV.collectDeclarations(postcss.parse(css), rel));
+    }
+    return out;
+  };
+  const run = (over = {}) => EV.validateCommittedArtifacts({
+    committedFixtureRaw: 'committedFixtureRaw' in over ? over.committedFixtureRaw : fixRaw(),
+    spec: over.spec || SPEC,
+    contextRaw: 'contextRaw' in over ? over.contextRaw : ctxRaw(),
+    sha256, readPng: over.readPng || readPng,
+    baseDecls: 'baseDecls' in over ? over.baseDecls : BASE_DECLS,
+  });
+  const BASE_DECLS = realBaseDecls();
+  const mutFx = (f) => { const o = JSON.parse(fixRaw()); f(o); return JSON.stringify(o); };
+  const mutCtx = (f) => { const o = JSON.parse(ctxRaw()); f(o); return JSON.stringify(o); };
+
+  it('실제 BASE 선언이 비어 있지 않고 canonical·중복 0', () => {
+    expect(BASE_DECLS.length).toBeGreaterThan(2000);
+    for (const d of BASE_DECLS) expect(d.key).toBe(EV.declarationKey(d));
+    expect(new Set(BASE_DECLS.map((d) => d.key)).size).toBe(BASE_DECLS.length);
+  });
+  it('IO 미주입은 fail-closed', () =>
+    expect(EV.validateCommittedArtifacts({ committedFixtureRaw: fixRaw(), spec: SPEC, contextRaw: ctxRaw() }))
+      .toEqual(['ARTIFACTS_IO_REQUIRED']));
+  it('fixture 원문 미전달·파싱 불가는 fail-closed', () => {
+    expect(EV.validateCommittedArtifacts({ spec: SPEC, contextRaw: ctxRaw(), sha256, readPng, baseDecls: BASE_DECLS }))
+      .toEqual(['COMMITTED_FIXTURE_RAW_REQUIRED']);
+    expect(run({ committedFixtureRaw: '{ nope' })).toEqual(['COMMITTED_FIXTURE_UNPARSEABLE']);
+  });
+  it('현재 커밋 산출물은 stale — fingerprint drift 검출', () => {
+    // ⚠️ 재수집·재동결 후에는 이 단정을 `expect(run()).toEqual([])`로 바꿔야 한다.
+    expect(run().join('|')).toMatch(/FROZEN_FINGERPRINT_DRIFT/);
+  });
+  it('blob 계약 exact — rel/extra/missing/blob 단독 변조', () => {
+    expect(run({ committedFixtureRaw: mutFx((o) => { o.blobs.T.rel = 'evil.scss'; }) }).join('|')).toMatch(/FROZEN_BLOB_REL/);
+    expect(run({ committedFixtureRaw: mutFx((o) => { o.blobs.EXTRA = { rel: 'x', blob: 'y' }; }) }).join('|')).toMatch(/FROZEN_BLOB_KEYSET/);
+    expect(run({ committedFixtureRaw: mutFx((o) => { delete o.blobs.X; }) }).join('|')).toMatch(/FROZEN_BLOB_KEYSET|FROZEN_BLOB_MISSING/);
+    expect(run({ committedFixtureRaw: mutFx((o) => { o.blobs.T.blob = 'zz'; }) }).join('|')).toMatch(/FROZEN_BLOB_SHA/);
+  });
+  it('BASE 선언 계약 — 빈 배열·파일 누락·noncanonical·중복', () => {
+    expect(run({ baseDecls: [] }).join('|')).toMatch(/FROZEN_BASE_DECLS_REQUIRED/);
+    expect(run({ baseDecls: BASE_DECLS.filter((d) => !d.file.endsWith('tracksIndex.scss')) }).join('|')).toMatch(/FROZEN_BASE_FILE_ABSENT/);
+    expect(run({ baseDecls: [{ ...BASE_DECLS[0], key: 'wrong' }, ...BASE_DECLS.slice(1)] }).join('|')).toMatch(/FROZEN_BASE_KEY_NONCANONICAL/);
+    expect(run({ baseDecls: [...BASE_DECLS, { ...BASE_DECLS[0] }] }).join('|')).toMatch(/FROZEN_BASE_KEY_DUP/);
+  });
+  it('raster 정본 대조 — context만/PNG만/둘 다/dpr/scale', () => {
+    const big = (n) => ({ ...readPng(n), width: 2880, height: 1800 });
+    expect(run({ contextRaw: mutCtx((o) => { o.viewport = { width: 2880, height: 1800 }; }) }).join('|')).toMatch(/RASTER_CONTEXT_VIEWPORT/);
+    expect(run({ readPng: big }).join('|')).toMatch(/RASTER_PNG_SIZE/);
+    expect(run({ contextRaw: mutCtx((o) => { o.viewport = { width: 2880, height: 1800 }; }), readPng: big }).join('|')).toMatch(/RASTER_/);
+    expect(run({ contextRaw: mutCtx((o) => { o.capture = { ...o.capture, dpr: 2 }; }) }).join('|')).toMatch(/RASTER_DPR/);
+    expect(run({ contextRaw: mutCtx((o) => { o.capture = { ...o.capture, scale: 'device' }; }) }).join('|')).toMatch(/RASTER_SCREENSHOT_SCALE/);
+  });
+  it('context 원문 단일 원천 — 임의 필드 추가는 privacy subject 재계산으로 검출', () =>
+    expect(run({ contextRaw: mutCtx((o) => { o.__evil = 'x'; }) }).join('|')).toMatch(/PRIVACY_AUDIT_CONTEXT_SUBJECT_DRIFT/));
+  it('contextRaw 바이트 변조는 해시 drift로 검출', () =>
+    expect(run({ contextRaw: `${ctxRaw()} ` }).join('|')).toMatch(/FROZEN_CONTEXT_SHA_DRIFT/));
+  it('PNG 바이트 drift 검출', () =>
+    expect(run({ readPng: () => ({ bytes: Buffer.from('x'), width: 1440, height: 900 }) }).join('|')).toMatch(/FROZEN_PNG_SHA_DRIFT/));
+  it('privacy audit 부재 검출', () =>
+    expect(run({ contextRaw: mutCtx((o) => { delete o.privacyAudit; }) }).join('|')).toMatch(/FROZEN_PRIVACY_AUDIT_MISSING/));
 });

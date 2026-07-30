@@ -2,7 +2,14 @@ export const BASE = '81ad606';
 export const FILES = { T: { rel: 'styles/components/track/track.scss', blob: 'dd2b8810a9ce3ef83660bbab91ea79bde810605b' },
   S: { rel: 'styles/components/track/trackSettings.scss', blob: 'aac357009553210d22e6becb6189599de1b94c6a' },
   X: { rel: 'styles/components/track/tracksIndex.scss', blob: 'bc54e5417c1f8afab658f963cfa9711414445509' } };
-export const COUNTS = { conversions: 109, changedDecls: 103, newDecls: 27, newRules: 22, residual: 62, rawLiterals: 157, processedLiterals: 95, allowIds: 18 };
+// ManageBranches(죽은 컴포넌트) 3건을 범위에서 제외한 결과. 예측 = 변환 -3 · changed -3 · residual +3
+// · processed -3 · allow -3 이고 실측이 정확히 일치했다(actual에 맞춘 사후 갱신이 아니라 예측 검증).
+// newDecls/newRules는 불변 — override 줄을 `.ManageBranches, .BulkAdd` → `.BulkAdd`로 좁혔을 뿐 규칙 수는 같다.
+// raster 계약 정본 — "PNG 크기 == context.viewport" 자기정합만 보면 둘을 함께 2880x1800으로
+// 바꿔도 통과한다. 고정 스모크 환경이므로 값을 여기에 못박고 parsed context·PNG IHDR·DPR·
+// screenshotScale을 각각 **이 상수와** 대조한다.
+export const RASTER_CONTRACT = { width: 1440, height: 900, dpr: 1, screenshotScale: 'css' };
+export const COUNTS = { conversions: 106, changedDecls: 100, newDecls: 27, newRules: 22, residual: 65, rawLiterals: 157, processedLiterals: 92, allowIds: 15 };
 export const DARK_DECL_COUNTS = { T: 26, X: 1, S: 0 };   // 검수 §3
 export const GROUP_STAGE = { F:3,H:3,I:3,J:3,K:3,L:3,M:3,N:3,O:3,U:3, A:4,B:4,C:4,D:4,G:4,Q:4,R:4,S:4,T:4, E:5,P:5 };
 const L = (token) => ({ t: 'lit', token });
@@ -37,14 +44,12 @@ export const CONVERSIONS = [
   C('T', 454, 'lit', '#16A34A', '$color-success', L('--color-success'), 'N'), C('T', 2473, 'lit', '#16A34A', '$color-success', L('--color-success'), 'N'),
   C('T', 455, 'tint', '22,163,74', 'color-mix(in srgb, var(--color-success) {P}%, transparent)', { t: 'smoke' }, 'N'),
   C('T', 2215, 'lit', 'rgba(245,158,11,0.1)', '$color-warning-bg', { t: 'allow', id: 2 }, 'O'),
-  C('T', 2442, 'lit', 'rgba(245,158,11,0.08)', '$color-warning-bg', { t: 'allow', id: 3 }, 'O'),
-  C('T', 2443, 'tint', '245,158,11', 'color-mix(in srgb, var(--color-warning) {P}%, transparent)', { t: 'allow', id: 4 }, 'O'),
   C('T', 2216, 'lit', '#B45309', 'var(--color-warning-ink)', L('--color-warning-ink'), 'O'),
   C('T', 2450, 'lit', '#92400E', 'var(--color-warning-ink-deep)', L('--color-warning-ink-deep'), 'O'),
   C('T', 2451, 'lit', '#D97706', '$color-warning', L('--color-warning'), 'O'),
   C('T', 2452, 'lit', '#78350F', 'var(--color-warning-ink-strong)', L('--color-warning-ink-strong'), 'O'),
   ...[[984,7],[985,7],[2106,8],[2107,8]].map(([l, id]) => C('T', l, 'lit', 'rgba(0,0,0,0.025)', 'color-mix(in srgb, var(--color-text) 2.5%, transparent)', { t: 'allow', id }, 'P')),
-  ...[[411,9],[2055,10],[2426,11]].map(([l, id]) => C('T', l, 'lit', 'rgba(0,0,0,0.04)', 'color-mix(in srgb, var(--color-text) 4%, transparent)', { t: 'allow', id }, 'Q')),
+  ...[[411,9],[2055,10]].map(([l, id]) => C('T', l, 'lit', 'rgba(0,0,0,0.04)', 'color-mix(in srgb, var(--color-text) 4%, transparent)', { t: 'allow', id }, 'Q')),
   C('X', 247, 'lit', 'rgba(0,0,0,0.04)', 'color-mix(in srgb, var(--color-text) 4%, transparent)', { t: 'allow', id: 12 }, 'Q'),
   C('S', 216, 'lit', 'rgba(0,0,0,0.12)', '$color-input-border', { t: 'allow', id: 5 }, 'R'),
   C('S', 309, 'lit', 'rgba(0,0,0,0.12)', '$color-input-border', { t: 'allow', id: 6 }, 'R'),
@@ -66,20 +71,41 @@ export const ANNOTATIONS = [   // 검수 §1: 고유 marker + BASE 원문 줄 ex
 ];
 // 검수 §4: 정적 smoke manifest — Task 0가 관측값을 채우기 전에 이름·필수 selector·액션·허용 영역이 먼저 고정된다.
 // bundle 엔드포인트는 추정하지 않고 Task 0가 실제 관측한 요청 집합을 context에 동결(검수 §5).
-// coverage 정본: 23 surface가 커버 대상 53 selector(= NEW branch ∪ smoke-light/allow CHANGED).
+// coverage 정본: **24 surface가 커버 대상 54 selector**(= NEW branch ∪ smoke-light/allow CHANGED).
 // ⚠️ token-identity 변환은 문자열 동일성으로 증명되므로 시각 증거 대상이 아니다 → coverage에 넣지 않는다.
-// 런타임 전제(존재만 확인)는 requiredElements로 분리한다(오버라이드 branch + smoke-light/allow 변경 선언, dead 3종 제외)를
+// 런타임 전제(존재만 확인)는 requiredElements로 분리한다(오버라이드 branch + smoke-light/allow 변경 선언)를
 // 빠짐없이 덮는다. 상태 의존 19종은 각각 그 상태를 만드는 action(provenBy)을 갖는다.
 // coverage key 규칙: hover/focus는 `selector:state`, --on/--active/--open/--selected는 selector 자체.
-// 라이트 픽셀 비교 마스크 — allow ID → paint 영역 selector(dead #3·#4·#6·#11은 화면에 없어 제외).
+// 라이트 픽셀 비교 마스크 — allow ID → { selector, paintOutsetPx } 정본.
+//  · selector는 그 allow ID가 붙은 **변경 선언의 selector와 정확히 일치**해야 한다(validateMaskContract가 강제).
+//  · paintOutsetPx = 변경되는 paint가 border box 밖으로 나가는 거리(CSS px, transform 적용 **전**).
+//    background/color 변경은 박스 안이라 0. box-shadow spread 변경만 바깥으로 나간다.
+//    실제 마스크 = borderRect 를 (paintOutsetPx × 그 시점 transform scale) 만큼 사방 확장한 rect.
+//  · 여기 키 집합은 CONVERSIONS의 allow ID 집합과 **exact 일치**해야 한다(예외 개념 없음).
 // s4PixelDiff.mjs가 이 상수를 import한다(단일 원천). specFingerprint에도 포함된다.
 export const LIGHT_DIFF_MASKS = {
-  1: '.TrackNode__PrioFlag', 2: '.TrackTree__Priority--high', 5: '.SettingsBranches__Swatch--active',
-  7: '.TrackNode--restricted', 8: '.TrackTree__Row--restricted', 9: '.SourcePicker__BranchKey',
-  10: '.TrackTree__GroupKey', 12: '.CreateTrack__BranchKey', 13: '.TrackNode__ParentChip',
-  14: '.TrackNode__SubProgress', 15: '.TrackTimeline__LaneParentChip', 16: '.TrackTree__ParentChip',
-  17: '.BulkAdd__TaskParentChip', 18: '.TrackTree__Priority--low',
+  1:  { selector: '.TrackNode__PrioFlag',              paintOutsetPx: 0 , expectedScale: 1 },
+  2:  { selector: '.TrackTree__Priority--high',        paintOutsetPx: 0 , expectedScale: 1 },
+  5:  { selector: '.SettingsBranches__Swatch--active', paintOutsetPx: 3 , expectedScale: 1.08 },  // box-shadow 0 0 0 3px
+  6:  { selector: '.SettingsGeneral__Swatch--active',  paintOutsetPx: 3 , expectedScale: 1.08 },  // box-shadow 0 0 0 3px
+  7:  { selector: '.TrackNode--restricted',            paintOutsetPx: 0 , expectedScale: 1 },
+  8:  { selector: '.TrackTree__Row--restricted',       paintOutsetPx: 0 , expectedScale: 1 },
+  9:  { selector: '.SourcePicker__BranchKey',          paintOutsetPx: 0 , expectedScale: 1 },
+  10: { selector: '.TrackTree__GroupKey',              paintOutsetPx: 0 , expectedScale: 1 },
+  12: { selector: '.CreateTrack__BranchKey',           paintOutsetPx: 0 , expectedScale: 1 },
+  13: { selector: '.TrackNode__ParentChip',            paintOutsetPx: 0 , expectedScale: 1 },
+  14: { selector: '.TrackNode__SubProgress',           paintOutsetPx: 0 , expectedScale: 1 },
+  15: { selector: '.TrackTimeline__LaneParentChip',    paintOutsetPx: 0 , expectedScale: 1 },
+  16: { selector: '.TrackTree__ParentChip',            paintOutsetPx: 0 , expectedScale: 1 },
+  17: { selector: '.BulkAdd__TaskParentChip',          paintOutsetPx: 0 , expectedScale: 1 },
+  18: { selector: '.TrackTree__Priority--low',         paintOutsetPx: 0 , expectedScale: 1 },
 };
+
+// dead 예외는 삭제했다. `DEAD_ALLOW_IDS`/`DEAD_SELECTORS`는 자기신고 우회였다 —
+// mask에서 ID를 지우고 dead에 등록하고 surface를 빼면 allow #6 false-green을 그대로 재개통할 수 있었다.
+// S4는 죽은 `.ManageBranches` 관련 변환(구 allow #3·#4·#11)과 그 다크 override를 **범위에서 제외**하고
+// 원문을 그대로 둔다. dead CSS 정리는 S5 부채. 그 결과 allow ID 전부가 live이고 예외 목록이 필요 없다.
+
 export const REQUIRED_SMOKE_SURFACES = [
   { name: "canvas", captureName: "canvas.png",
     actions: [{ op: "setStorage", key: "track:{id}:lastView", value: "flow" },
@@ -302,7 +328,7 @@ html[data-theme='dark'] {
   .TrackTimeline__Link { stroke: rgba(148, 157, 173, 0.62); color: rgba(148, 157, 173, 0.72); }
   .TrackTimeline__Link--mat { stroke: rgba(124, 138, 234, 0.75); color: rgba(124, 138, 234, 0.85); }
   .TrackTimeline__Link--rel { stroke: rgba(148, 157, 173, 0.62); color: rgba(148, 157, 173, 0.72); }
-  .ManageBranches, .BulkAdd { box-shadow: 0 0 0 1px var(--color-input-border), 0 24px 60px -16px rgba(0, 0, 0, 0.75), 0 4px 12px rgba(0, 0, 0, 0.5); }
+  .BulkAdd { box-shadow: 0 0 0 1px var(--color-input-border), 0 24px 60px -16px rgba(0, 0, 0, 0.75), 0 4px 12px rgba(0, 0, 0, 0.5); }
   .TrackHeader__ViewBtn--active { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 0 0 1px var(--color-input-border-hover); }
   .SourcePicker__Task:hover { box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(255, 255, 255, 0.14); }
   .TrackEdgeLabel__Badge--draft { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.22), 0 1px 2px rgba(0, 0, 0, 0.06); }
@@ -325,7 +351,15 @@ html[data-theme='dark'] {
 }`,
 };
 // 실제 CSS 스택(실측). expect 하드코딩 없음 — Task 2가 계산해 fixture에 동결, 계약은 min.
-// 참고치(외부 검수 측정): Source 6.184/5.513 · Tree 6.607/6.883 · Create 6.031/5.810 · Manage(dead) 6.031/4.792
+// 참고치(외부 검수 측정): Source 6.184/5.513 · Tree 6.607/6.883 · Create 6.031/5.810
+// (구 Manage 2건은 dead 우회였다 — `dead:true`가 대비 실패를 무조건 통과시켰고, T2426 제거 후엔 배경 stack 자체가 stale이라 삭제)
+// 대비 참고치 정본 — generator 지역 상수로 두면 case/reference 어느 쪽을 지워도 검사가 조용히 사라진다.
+// 이름 집합이 CONTRAST_CASES와 exact 일치해야 하고 specFingerprint에도 포함된다.
+export const CONTRAST_REFERENCE = {
+  'SourcePicker BranchKey normal': 6.184, 'SourcePicker BranchKey hover': 5.513,
+  'TrackTree GroupKey normal': 6.607, 'TrackTree GroupKey hover': 6.883,
+  'CreateTrack BranchKey normal': 6.031, 'CreateTrack BranchKey hover': 5.810,
+};
 export const CONTRAST_CASES = [
   { name: 'SourcePicker BranchKey normal', text: '--color-text-secondary', min: 4.5,
     stack: [{ gradient: ['--track-paper-raised-05', '--track-paper'] }, { mix: '--color-text', pct: 4 }] },
@@ -339,8 +373,4 @@ export const CONTRAST_CASES = [
     stack: [{ token: '--track-card' }, { mix: '--color-text', pct: 4 }] },
   { name: 'CreateTrack BranchKey hover', text: '--color-text-secondary', min: 4.5,
     stack: [{ token: '--track-card' }, { token: '--color-surface-hover' }, { mix: '--color-text', pct: 4 }] },
-  { name: 'ManageBranches BranchKey normal', text: '--color-text-secondary', min: 4.5, dead: true,
-    stack: [{ token: '--track-card' }, { mix: '--color-text', pct: 4 }] },
-  { name: 'ManageBranches BranchKey hover', text: '--color-text-secondary', min: 4.5, dead: true,
-    stack: [{ token: '--track-card' }, { token: '--track-border-soft' }, { mix: '--color-text', pct: 4 }] },
 ];

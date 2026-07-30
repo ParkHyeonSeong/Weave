@@ -2,6 +2,7 @@ import { createRequire } from 'node:module';
 import { execSync } from 'node:child_process';
 import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
 import * as SPEC from '/Users/hyeonseongpark/Documents/GitHub/Weave/frontend/library/s4Spec.mjs';
 import * as EV from '/Users/hyeonseongpark/Documents/GitHub/Weave/frontend/library/s4Evaluator.mjs';
 import * as CANON from '/Users/hyeonseongpark/Documents/GitHub/Weave/frontend/library/s4Canonicalize.mjs';
@@ -11,11 +12,17 @@ const require = createRequire(`${FRONT}/package.json`);
 const sass = require('sass'); const postcss = require('postcss');
 const sha = (s) => createHash('sha256').update(s).digest('hex');
 const gitShow = (ref, rel) => execSync(`git -C ${REPO} show ${ref}:frontend/${rel}`, { encoding: 'utf8' });
-const compileScss = (src) => { const tmp = `/tmp/_s4_${sha(src).slice(0, 12)}.scss`;
-  writeFileSync(tmp, src.replace(/'\.\.\/\.\.\/variables'/g, "'variables'").replace(/'\.\.\/variables'/g, "'variables'"));
-  return sass.compile(tmp, { loadPaths: [`${FRONT}/styles`] }).css; };
-const declsOf = (src, rel) => EV.collectDeclarations(postcss.parse(compileScss(src)), rel);
-const die = (msg, arr) => { console.error(msg, arr && arr.slice(0, 20)); process.exit(1); };
+// 임시 파일을 쓰지 않는다 — 예측 가능한 /tmp 경로에 O_EXCL 없이 write하면 미리 심어둔
+// 심볼릭 링크로 임의 파일이 덮어써진다(리뷰 실증). compileString + loadPaths로 충분하다.
+// 실제 파일 URL을 주면 상대 @use가 그대로 해석되어 import 문자열 정규식이 필요 없고,
+// 오류 위치도 실제 파일 기준으로 보존된다.
+const compileScss = (src, rel) => sass.compileString(src,
+  { syntax: 'scss', url: pathToFileURL(`${FRONT}/${rel}`), loadPaths: [`${FRONT}/styles`] }).css;
+const declsOf = (src, rel) => EV.collectDeclarations(postcss.parse(compileScss(src, rel)), rel);
+const die = (msg, arr) => {   // 총수를 함께 찍는다 — 잘린 20건을 총수로 오독한 전례가 있다
+  const n = Array.isArray(arr) ? arr.length : 0;
+  console.error(`${msg} — total=${n} shown=${Math.min(n, 20)}`, arr && arr.slice(0, 20));
+  process.exit(1); };
 
 // 1) blob 검증
 for (const k of Object.keys(SPEC.FILES)) { const { rel, blob } = SPEC.FILES[k];
@@ -33,15 +40,9 @@ const io = { compileDecls: (src, rel) => declsOf(src, rel), lightVals, darkVals 
 const pr = EV.evaluateProjection(SPEC, baseSources, io);
 if (pr.errors.length) die('EVALUATE_PROJECTION', pr.errors);
 // 4) 참고치 드리프트 게이트
-const REFERENCE = { 'SourcePicker BranchKey normal': 6.184, 'SourcePicker BranchKey hover': 5.513,
-  'TrackTree GroupKey normal': 6.607, 'TrackTree GroupKey hover': 6.883,
-  'CreateTrack BranchKey normal': 6.031, 'CreateTrack BranchKey hover': 5.810,
-  'ManageBranches BranchKey normal': 6.031, 'ManageBranches BranchKey hover': 4.792 };
-const drift = pr.contrast.results.filter((r) => REFERENCE[r.name] !== undefined && Math.abs(r.ratio - REFERENCE[r.name]) > 0.3)
-  .map((r) => `${r.name} ${r.ratio} vs ${REFERENCE[r.name]}`);
-if (drift.length) die('CONTRAST_REFERENCE_DRIFT', drift);
+
 const fingerprint = EV.specFingerprint(SPEC, sha);
-// 6b) smoke trust chain — context 원문과 destination PNG 23개의 **실제 바이트**로 계산(검수 §1)
+// 6b) smoke trust chain — context 원문과 destination PNG **24개**의 실제 바이트로 계산
 const FIXDIR = `${FRONT}/library/__fixtures__`;
 const ctxRaw = readFileSync(`${FIXDIR}/s4-smoke-context.json`);
 const captures = SPEC.REQUIRED_SMOKE_SURFACES.map((x) => {
@@ -62,18 +63,22 @@ const smoke = { contextSha256: sha(ctxRaw), captures };
 const { fixture, errors: fxErrors } = EV.buildFixture({ base: SPEC.BASE, blobs: SPEC.FILES, baseDecls: pr.baseDecls,
   projectedDecls: pr.projDecls, conversions: SPEC.CONVERSIONS, attribution: pr.attribution, contrast: pr.contrast, fingerprint, smoke });
 if (fxErrors.length) die('BUILD_FIXTURE', fxErrors);
-const cntErrors = EV.validateCounts(fixture, SPEC.COUNTS);
-if (cntErrors.length) die('COUNTS', cntErrors);
-// 검수 §3: 실제 fixture로 coverage 재검사(changed:[] 우회 폐기). 미매핑이 있으면 목록을 출력하고 중단 —
-// 미매핑이 남으면 플랜 오류다 — 여기서 manifest를 새로 설계하지 말고 중단·보고한다(Task 2 Step 3과 동일 계약).
-const covErrors = EV.validateSmokeCoverage(fixture, SPEC.REQUIRED_SMOKE_SURFACES);
-if (covErrors.length) die('SMOKE_COVERAGE', covErrors);
-// fixture 쓰기 전 clean baseline 강제(검수 §5) — 여기서 비어있지 않으면 결함이 동결된다
-const cleanErrors = EV.evaluateConformance(pr.projDecls, pr.projSrc, pr.preAnnSrc, SPEC, fixture, pr.attribution.allowIdToKey);
-if (cleanErrors.length) die('CLEAN_CONFORMANCE', cleanErrors);
-const json = EV.serializeFixture(fixture);   // 해시·비교 전부 이 직렬화를 쓴다
-mkdirSync(`${FRONT}/library/__fixtures__`, { recursive: true });
-writeFileSync(`${FRONT}/library/__fixtures__/s4-expected.json`, json);
+// 단일 승인 경로 — 개별 validator를 여기서 따로 부르지 않는다(배선 누락·부분 배선 차단).
+// 승인·직렬화·쓰기는 단일 orchestration만 쓴다. validator는 주입하지 않는다 — 데이터와 순수 IO만
+// 넘기고 순서(candidate → conformance → artifacts → serialize → write)는 함수 안에서 고정된다.
+const pngOf = (name) => { const b = readFileSync(`${FIXDIR}/s4-shots/base/${name}`);
+  return { bytes: b, width: b.readUInt32BE(16), height: b.readUInt32BE(20) }; };
+const approve = EV.approveAndWrite({
+  fixture, spec: SPEC, contrastResults: pr.contrast.results,
+  actualDecls: pr.projDecls, actualRaw: pr.projSrc, preAnnSources: pr.preAnnSrc,
+  actualAllowIdToKey: pr.attribution.allowIdToKey, baseDecls: pr.baseDecls,
+  contextRaw: ctxRaw.toString('utf8'), sha256: sha, readPng: pngOf,
+  serialize: EV.serializeFixture,
+  write: (bytes) => { mkdirSync(FIXDIR, { recursive: true });
+    writeFileSync(`${FIXDIR}/s4-expected.json`, bytes); },
+});
+if (approve.errors.length) die('APPROVE', approve.errors);
+const json = approve.bytes;
 console.log(`conversions=${SPEC.CONVERSIONS.length} changed=${fixture.counts.changed} new=${fixture.counts.new}/${fixture.counts.newRules}rules ` +
   `residual=${fixture.counts.residual} raw=${fixture.counts.raw} processed=${fixture.counts.processed} allowBearing=${fixture.counts.allowBearing} errors=0`);
 console.log('contrast=' + fixture.contrast.map((c) => `${c.ratio}`).join('/'));
