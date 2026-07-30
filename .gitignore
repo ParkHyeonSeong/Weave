@@ -45,4 +45,5 @@ backend/uploads/
 docs/
 .mcp.json
 .superpowers/
-.playwright-mcp/frontend/library/__fixtures__/s4-expected.candidate.json
+.playwright-mcp/
+/frontend/library/__fixtures__/s4-expected.candidate.json

@@ -410,6 +410,21 @@ export function validateCandidate({ fixture, spec, context, contrastResults }) {
 // 승인과 쓰기를 한 함수로 묶는다 — writer를 주입 가능하게 둬서 "오류가 있으면 정말 안 쓴다"를
 // 소스 정규식이 아니라 **행동**으로 검증할 수 있게 한다(주석 decoy로 통과하던 배선 테스트 대체).
 // errors가 비어 있지 않으면 serialize도 write도 호출하지 않는다.
+// PNG 헤더를 **직접 디코드**한다. readPng이 돌려준 width/height를 신뢰하면 임의 바이트라도
+// 해시와 자기신고 치수만 맞추면 raster 검증을 통과한다(리뷰 실증). signature + IHDR로 파생한다.
+const PNG_SIG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+export function decodePngHeader(bytes) {
+  if (!bytes || typeof bytes.length !== 'number' || bytes.length < 33) return { ok: false, reason: 'PNG_TOO_SHORT' };
+  for (let i = 0; i < 8; i++) if (bytes[i] !== PNG_SIG[i]) return { ok: false, reason: 'PNG_BAD_SIGNATURE' };
+  // 8..12 length, 12..16 type('IHDR'), 16..20 width, 20..24 height
+  if (String.fromCharCode(bytes[12], bytes[13], bytes[14], bytes[15]) !== 'IHDR')
+    return { ok: false, reason: 'PNG_NO_IHDR' };
+  const be = (o) => ((bytes[o] << 24) >>> 0) + (bytes[o + 1] << 16) + (bytes[o + 2] << 8) + bytes[o + 3];
+  const width = be(16), height = be(20);
+  if (!(width > 0) || !(height > 0)) return { ok: false, reason: 'PNG_BAD_IHDR' };
+  return { ok: true, width, height };
+}
+
 // ── 산출물 검증 코어 ────────────────────────────────────────────────────────
 // 입력은 **raw bytes만** 받는다. caller가 이미 파싱한 객체·해시·validator 결과를 정답으로
 // 주입할 수 없어야 한다(그게 self-validation의 근원이다). context도 여기서 직접 파싱한다.
@@ -461,12 +476,15 @@ function artifactsCore({ fixture, spec, contextRaw, sha256, readPng, baseDecls }
   const got = caps.map((c) => c.captureName).sort();
   if (JSON.stringify(want) !== JSON.stringify(got)) errors.push('FROZEN_CAPTURE_SET_MISMATCH');
   for (const c of caps) {
-    let png = null;
-    try { png = readPng(c.captureName); } catch (e) { png = null; }
-    if (!png || !png.bytes) { errors.push(`FROZEN_PNG_UNREADABLE ${c.captureName}`); continue; }
-    if (sha256(png.bytes) !== c.sha256) errors.push(`FROZEN_PNG_SHA_DRIFT ${c.captureName}`);
-    if (RC && (png.width !== RC.width || png.height !== RC.height))
-      errors.push(`RASTER_PNG_SIZE ${c.captureName} ${png.width}x${png.height} != ${RC.width}x${RC.height}`);
+    let bytes = null;
+    try { const r = readPng(c.captureName); bytes = (r && r.bytes) ? r.bytes : r; } catch (e) { bytes = null; }
+    if (!bytes) { errors.push(`FROZEN_PNG_UNREADABLE ${c.captureName}`); continue; }
+    if (sha256(bytes) !== c.sha256) errors.push(`FROZEN_PNG_SHA_DRIFT ${c.captureName}`);
+    // 치수는 caller 신고가 아니라 바이트에서 파생한다.
+    const hdr = decodePngHeader(bytes);
+    if (!hdr.ok) { errors.push(`RASTER_PNG_DECODE ${c.captureName} ${hdr.reason}`); continue; }
+    if (RC && (hdr.width !== RC.width || hdr.height !== RC.height))
+      errors.push(`RASTER_PNG_SIZE ${c.captureName} ${hdr.width}x${hdr.height} != ${RC.width}x${RC.height}`);
   }
 
   // 6) 마스크·좌표 계약 — 방금 파싱한 그 객체로만 검사한다

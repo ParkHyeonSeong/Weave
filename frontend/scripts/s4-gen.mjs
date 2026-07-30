@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 import { execSync } from 'node:child_process';
-import { writeFileSync, mkdirSync, readFileSync, renameSync, unlinkSync } from 'node:fs';
+import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
+import * as PROMOTE_IO from '/Users/hyeonseongpark/Documents/GitHub/Weave/frontend/library/s4Promote.mjs';
 import { createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import * as SPEC from '/Users/hyeonseongpark/Documents/GitHub/Weave/frontend/library/s4Spec.mjs';
@@ -68,36 +69,42 @@ if (fxErrors.length) die('BUILD_FIXTURE', fxErrors);
 // 넘기고 순서(candidate → conformance → artifacts → serialize → write)는 함수 안에서 고정된다.
 const pngOf = (name) => { const b = readFileSync(`${FIXDIR}/s4-shots/base/${name}`);
   return { bytes: b, width: b.readUInt32BE(16), height: b.readUInt32BE(20) }; };
-// 기본 실행은 **staging에만** 쓴다. 검증이 통과하는 순간 committed fixture를 덮어쓰면
-// 그 자체가 암묵적 rebaseline이고, 쓰기 중 실패하면 최종 fixture가 잘릴 수도 있다.
-// 승격은 `--promote`로만, 그것도 staging 바이트를 committed 계약으로 재검증한 뒤 atomic rename.
-const PROMOTE = process.argv.includes('--promote');
-const COMMITTED = `${FIXDIR}/s4-expected.json`;
-const STAGING = `${FIXDIR}/s4-expected.candidate.json`;
+// 생성과 승격은 분리된 두 경로다.
+//  기본 실행       : 승인된 bytes를 staging에만 기록하고 SHA를 출력한다(committed 무접촉).
+//  --promote <sha> : staging을 **재생성하지 않고** 읽어 그 SHA가 인자와 같은지 확인한 뒤,
+//                    committed 계약으로 재검증하고 CAS를 건 다음 atomic rename으로 승격한다.
+const argv = process.argv.slice(2);
+const pIdx = argv.indexOf('--promote');
+const PROMOTE_SHA = pIdx >= 0 ? argv[pIdx + 1] : null;
+const contextRawStr = ctxRaw.toString('utf8');
+const validateCommitted = (raw) => EV.validateCommittedArtifacts({ committedFixtureRaw: raw, spec: SPEC,
+  contextRaw: contextRawStr, sha256: sha, readPng: pngOf, baseDecls: pr.baseDecls });
+
+if (pIdx >= 0) {
+  const committedPath = `${FIXDIR}/s4-expected.json`;
+  const prevSha = sha(readFileSync(committedPath));
+  const res = PROMOTE_IO.promoteStaged({ fixturesDir: FIXDIR, expectedSha: PROMOTE_SHA, validate: validateCommitted, prevSha });
+  if (res.errors.length) die('PROMOTE', res.errors);
+  console.log(`promoted → ${committedPath} (sha ${res.stagedSha})`);
+  process.exit(0);
+}
+
 const approve = EV.approveAndWrite({
   fixture, spec: SPEC, contrastResults: pr.contrast.results,
   actualDecls: pr.projDecls, actualRaw: pr.projSrc, preAnnSources: pr.preAnnSrc,
   actualAllowIdToKey: pr.attribution.allowIdToKey, baseDecls: pr.baseDecls,
-  contextRaw: ctxRaw.toString('utf8'), sha256: sha, readPng: pngOf,
+  contextRaw: contextRawStr, sha256: sha, readPng: pngOf,
   serialize: EV.serializeFixture,
-  write: (bytes) => { mkdirSync(FIXDIR, { recursive: true }); writeFileSync(STAGING, bytes); },
+  write: (bytes) => { mkdirSync(FIXDIR, { recursive: true });
+    const st = PROMOTE_IO.stageBytes({ fixturesDir: FIXDIR, bytes });
+    if (st.errors.length) throw new Error(st.errors.join('; '));
+    console.log(`staged → ${st.path}`);
+    console.log(`staging sha256 = ${st.sha256}`);
+    console.log('승격하려면: node scripts/s4-gen.mjs --promote ' + st.sha256);
+  },
 });
 if (approve.errors.length) die('APPROVE', approve.errors);
 const json = approve.bytes;
-console.log(`staged → ${STAGING}`);
-if (PROMOTE) {
-  // staging에 실제로 쓰인 바이트를 다시 읽어 committed 계약으로 검증한 뒤에만 승격한다.
-  const staged = readFileSync(STAGING, 'utf8');
-  if (staged !== json) die('PROMOTE_STAGING_DRIFT', ['staged bytes != approved bytes']);
-  const cErrors = EV.validateCommittedArtifacts({ committedFixtureRaw: staged, spec: SPEC,
-    contextRaw: ctxRaw.toString('utf8'), sha256: sha, readPng: pngOf, baseDecls: pr.baseDecls });
-  if (cErrors.length) die('PROMOTE_COMMITTED', cErrors);
-  const tmp = `${COMMITTED}.tmp`;
-  writeFileSync(tmp, staged);
-  renameSync(tmp, COMMITTED);            // atomic
-  try { unlinkSync(STAGING); } catch (e) { /* staging 정리는 best effort */ }
-  console.log(`promoted → ${COMMITTED}`);
-}
 console.log(`conversions=${SPEC.CONVERSIONS.length} changed=${fixture.counts.changed} new=${fixture.counts.new}/${fixture.counts.newRules}rules ` +
   `residual=${fixture.counts.residual} raw=${fixture.counts.raw} processed=${fixture.counts.processed} allowBearing=${fixture.counts.allowBearing} errors=0`);
 console.log('contrast=' + fixture.contrast.map((c) => `${c.ratio}`).join('/'));

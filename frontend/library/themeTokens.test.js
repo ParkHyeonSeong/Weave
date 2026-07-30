@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync, readdirSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readFileSync, readdirSync, mkdtempSync, writeFileSync, rmSync, symlinkSync } from 'node:fs';
+import { resolve, join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { compile, compileString } from 'sass';
 import postcss from 'postcss';
@@ -8,11 +9,23 @@ import * as SPEC from './s4Spec.mjs';
 import * as EV from './s4Evaluator.mjs';
 import * as CANON from './s4Canonicalize.mjs';
 import * as PIX from './s4PixelDiff.mjs';
+import * as PROM from './s4Promote.mjs';
 import { PNG } from 'pngjs';                          // 픽셀 테스트용(ESM — require 금지)
 import { execSync } from 'node:child_process';        // 기존 파일에 없으므로 신규 추가
 import { pathToFileURL } from 'node:url';             // compileString에 실제 파일 URL을 줘야 상대 @use가 풀린다
 const sha256 = (x) => createHash('sha256').update(x).digest('hex');
-const REPO = resolve(__dirname, '../..');   // BASE 소스를 git에서 읽을 때 사용   // createHash는 기존 import 재사용
+const REPO = resolve(__dirname, '../..');   // BASE 소스를 git에서 읽을 때 사용
+// decodePngHeader가 읽는 부분(signature + IHDR)만 갖춘 최소 PNG 바이트.
+// 치수를 자기신고하지 않고 **바이트에서 파생**되게 하기 위해 테스트도 진짜 헤더를 쓴다.
+const pngHeaderBytes = (w, h, tag = '') => {
+  const b = Buffer.alloc(33 + Buffer.byteLength(tag));
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(b, 0);
+  b.writeUInt32BE(13, 8); b.write('IHDR', 12);
+  b.writeUInt32BE(w, 16); b.writeUInt32BE(h, 20);
+  b[24] = 8; b[25] = 6;                       // bit depth / color type
+  if (tag) b.write(tag, 33);
+  return b;
+};   // createHash는 기존 import 재사용
 // SURFACE_NAMES: 24개 이름 exact manifest(순서 포함) — spec과 독립 정의라야 drift를 잡는다
 const SURFACE_NAMES = ['canvas', 'canvas-toolbar-active', 'canvas-matpill-on', 'sourcepicker',
   'sourcepicker-branch-hover', 'sourcepicker-group-hover', 'sourcepicker-task-hover',
@@ -4364,11 +4377,12 @@ describe('S4 allow ID 네 집합 exact equality — 비연속 집합과 단독 �
     for (const fn of ['validateCounts', 'validateSmokeCoverage', 'validateMaskContract', 'validateContrastReference', 'validateCandidate', 'validateCandidateArtifacts'])
       expect(code).not.toMatch(new RegExp(`EV\\.${fn}\\(`));
     // committed 경로는 직접 writeFileSync 하지 않고 rename으로만 갱신한다
-    expect(code).not.toMatch(/writeFileSync\(\s*COMMITTED/);
-    expect(code).toMatch(/renameSync\(tmp, COMMITTED\)/);
-    expect(code).toMatch(/writeFileSync\(STAGING, bytes\)/);
-    // 승격은 명시 플래그로만
-    expect(code).toMatch(/const PROMOTE = process\.argv\.includes\('--promote'\)/);
+    // committed 쓰기는 generator에 없다 — s4Promote의 atomic rename에만 있다
+    expect(code).not.toMatch(/writeFileSync\([^)]*s4-expected\.json/);
+    expect(code).toMatch(/PROMOTE_IO\.stageBytes\(/);
+    expect(code).toMatch(/PROMOTE_IO\.promoteStaged\(/);
+    // 승격은 명시 플래그 + SHA 인자로만
+    expect(code).toMatch(/--promote/);
   });
   it('실제 산출물 바이트 불변 — generator RED 실행이 fixture를 건드리지 않는다', () => {
     const f = new URL('./__fixtures__/s4-expected.json', import.meta.url);
@@ -4627,8 +4641,7 @@ describe('S4 커밋 산출물 게이트 — 실제 fixture 원문·context 원�
   const FIX = new URL('./__fixtures__/', import.meta.url);
   const fixRaw = () => readFileSync(new URL('s4-expected.json', FIX), 'utf8');
   const ctxRaw = () => readFileSync(new URL('s4-smoke-context.json', FIX), 'utf8');
-  const readPng = (name) => { const b = readFileSync(new URL(`s4-shots/base/${name}`, FIX));
-    return { bytes: b, width: b.readUInt32BE(16), height: b.readUInt32BE(20) }; };
+  const readPng = (name) => readFileSync(new URL(`s4-shots/base/${name}`, FIX));
   // 실제 BASE 3파일을 컴파일해 선언을 얻는다 — baseDecls=[] 로는 canonical/dup 검사가 공허하다.
   const realBaseDecls = () => {
     const out = [];
@@ -4682,7 +4695,7 @@ describe('S4 커밋 산출물 게이트 — 실제 fixture 원문·context 원�
     expect(run({ baseDecls: [...BASE_DECLS, { ...BASE_DECLS[0] }] }).join('|')).toMatch(/FROZEN_BASE_KEY_DUP/);
   });
   it('raster 정본 대조 — context만/PNG만/둘 다/dpr/scale', () => {
-    const big = (n) => ({ ...readPng(n), width: 2880, height: 1800 });
+    const big = () => pngHeaderBytes(2880, 1800);
     expect(run({ contextRaw: mutCtx((o) => { o.viewport = { width: 2880, height: 1800 }; }) }).join('|')).toMatch(/RASTER_CONTEXT_VIEWPORT/);
     expect(run({ readPng: big }).join('|')).toMatch(/RASTER_PNG_SIZE/);
     expect(run({ contextRaw: mutCtx((o) => { o.viewport = { width: 2880, height: 1800 }; }), readPng: big }).join('|')).toMatch(/RASTER_/);
@@ -4694,7 +4707,7 @@ describe('S4 커밋 산출물 게이트 — 실제 fixture 원문·context 원�
   it('contextRaw 바이트 변조는 해시 drift로 검출', () =>
     expect(run({ contextRaw: `${ctxRaw()} ` }).join('|')).toMatch(/FROZEN_CONTEXT_SHA_DRIFT/));
   it('PNG 바이트 drift 검출', () =>
-    expect(run({ readPng: () => ({ bytes: Buffer.from('x'), width: 1440, height: 900 }) }).join('|')).toMatch(/FROZEN_PNG_SHA_DRIFT/));
+    expect(run({ readPng: () => pngHeaderBytes(1440, 900, 'x') }).join('|')).toMatch(/FROZEN_PNG_SHA_DRIFT/));
   it('privacy audit 부재 검출', () =>
     expect(run({ contextRaw: mutCtx((o) => { delete o.privacyAudit; }) }).join('|')).toMatch(/FROZEN_PRIVACY_AUDIT_MISSING/));
 });
@@ -4712,9 +4725,8 @@ const AW_SPEC = {
   FILES: { P: { rel: 'unit.scss', blob: 'blobP' }, R: { rel: 'unit-settings.scss', blob: 'blobR' } },
   RASTER_CONTRACT: { width: 1440, height: 900, dpr: 1, screenshotScale: 'css' },
 };
-const AW_PNG = { 'unit-a.png': Buffer.from('unit-a-bytes'), 'unit-b.png': Buffer.from('unit-b-bytes') };
-const AW_READ_PNG = (n) => { if (!AW_PNG[n]) throw new Error(`no png ${n}`);
-  return { bytes: AW_PNG[n], width: 1440, height: 900 }; };
+const AW_PNG = { 'unit-a.png': pngHeaderBytes(1440, 900, 'a'), 'unit-b.png': pngHeaderBytes(1440, 900, 'b') };
+const AW_READ_PNG = (n) => { if (!AW_PNG[n]) throw new Error(`no png ${n}`); return AW_PNG[n]; };
 const AW_CTX_RAW = () => {
   const subject = {
     viewport: { width: 1440, height: 900 },
@@ -4771,7 +4783,7 @@ describe('S4 승인 경로 정상 GREEN — write까지 실제로 도달한다',
     expect(c).toEqual({ serialize: 0, write: 0, bytes: [] });
   });
   it('RED: PNG 바이트 변조 → write 0회', () => {
-    const { r, c } = call({ readPng: () => ({ bytes: Buffer.from('tampered'), width: 1440, height: 900 }) });
+    const { r, c } = call({ readPng: () => pngHeaderBytes(1440, 900, 'tampered') });
     expect(r.errors.join('|')).toMatch(/FROZEN_PNG_SHA_DRIFT/);
     expect(c.write).toBe(0);
   });
@@ -4789,4 +4801,97 @@ describe('S4 raster 계약이 fingerprint에 포함된다', () => {
     expect(EV.specFingerprint({ ...SPEC, RASTER_CONTRACT: undefined }, sha256)).not.toBe(base()));
   for (const [field, value] of [['width', 2880], ['height', 1800], ['dpr', 2], ['screenshotScale', 'device']])
     it(`${field} 변이 → fingerprint 변화`, () => expect(mut({ [field]: value })).not.toBe(base()));
+});
+
+describe('S4 staging/promotion 수명주기 — 임시 디렉터리 행동 테스트', () => {
+  const mkdir = () => mkdtempSync(join(tmpdir(), 's4-promote-'));
+  const COMMITTED = 's4-expected.json';
+  const STAGING = 's4-expected.candidate.json';
+  const okValidate = () => [];
+
+  it('stageBytes: staging에만 쓰고 committed는 건드리지 않는다', () => {
+    const d = mkdir();
+    writeFileSync(join(d, COMMITTED), 'OLD');
+    const st = PROM.stageBytes({ fixturesDir: d, bytes: 'NEW' });
+    expect(st.errors).toEqual([]);
+    expect(st.sha256).toBe(sha256('NEW'));
+    expect(readFileSync(join(d, STAGING), 'utf8')).toBe('NEW');
+    expect(readFileSync(join(d, COMMITTED), 'utf8')).toBe('OLD');   // 무접촉
+    rmSync(d, { recursive: true, force: true });
+  });
+  it('promoteStaged: staging을 재생성하지 않고 그대로 승격한다', () => {
+    const d = mkdir();
+    writeFileSync(join(d, COMMITTED), 'OLD');
+    const st = PROM.stageBytes({ fixturesDir: d, bytes: 'NEW' });
+    const r = PROM.promoteStaged({ fixturesDir: d, expectedSha: st.sha256, validate: okValidate, prevSha: sha256('OLD') });
+    expect(r.errors).toEqual([]); expect(r.promoted).toBe(true);
+    expect(readFileSync(join(d, COMMITTED), 'utf8')).toBe('NEW');
+    rmSync(d, { recursive: true, force: true });
+  });
+  it('RED: expectedSha 불일치 — 검토한 것과 다른 candidate는 승격되지 않는다', () => {
+    const d = mkdir();
+    writeFileSync(join(d, COMMITTED), 'OLD');
+    PROM.stageBytes({ fixturesDir: d, bytes: 'NEW' });
+    const r = PROM.promoteStaged({ fixturesDir: d, expectedSha: sha256('OTHER'), validate: okValidate });
+    expect(r.errors.join('|')).toMatch(/PROMOTE_STAGING_SHA_MISMATCH/);
+    expect(r.promoted).toBe(false);
+    expect(readFileSync(join(d, COMMITTED), 'utf8')).toBe('OLD');
+    rmSync(d, { recursive: true, force: true });
+  });
+  it('RED: expectedSha 미전달·형식 오류', () => {
+    const d = mkdir(); PROM.stageBytes({ fixturesDir: d, bytes: 'NEW' });
+    for (const v of [undefined, 'zz', 123])
+      expect(PROM.promoteStaged({ fixturesDir: d, expectedSha: v, validate: okValidate }).errors.join('|'))
+        .toMatch(/PROMOTE_EXPECTED_SHA_REQUIRED/);
+    rmSync(d, { recursive: true, force: true });
+  });
+  it('RED: staging 부재', () => {
+    const d = mkdir();
+    expect(PROM.promoteStaged({ fixturesDir: d, expectedSha: sha256('x'), validate: okValidate }).errors)
+      .toEqual(['PROMOTE_NO_STAGING']);
+    rmSync(d, { recursive: true, force: true });
+  });
+  it('RED: CAS 충돌 — 그 사이 committed가 바뀌면 승격 거부', () => {
+    const d = mkdir();
+    writeFileSync(join(d, COMMITTED), 'OLD');
+    const st = PROM.stageBytes({ fixturesDir: d, bytes: 'NEW' });
+    writeFileSync(join(d, COMMITTED), 'CHANGED-BY-SOMEONE-ELSE');
+    const r = PROM.promoteStaged({ fixturesDir: d, expectedSha: st.sha256, validate: okValidate, prevSha: sha256('OLD') });
+    expect(r.errors.join('|')).toMatch(/PROMOTE_CAS_CONFLICT/);
+    expect(readFileSync(join(d, COMMITTED), 'utf8')).toBe('CHANGED-BY-SOMEONE-ELSE');
+    rmSync(d, { recursive: true, force: true });
+  });
+  it('RED: committed 계약 검증 실패 → 승격 안 됨', () => {
+    const d = mkdir();
+    writeFileSync(join(d, COMMITTED), 'OLD');
+    const st = PROM.stageBytes({ fixturesDir: d, bytes: 'NEW' });
+    const r = PROM.promoteStaged({ fixturesDir: d, expectedSha: st.sha256, validate: () => ['BAD'], prevSha: sha256('OLD') });
+    expect(r.errors).toEqual(['BAD']); expect(readFileSync(join(d, COMMITTED), 'utf8')).toBe('OLD');
+    rmSync(d, { recursive: true, force: true });
+  });
+  it('RED: validate 미주입·비배열 반환', () => {
+    const d = mkdir(); writeFileSync(join(d, COMMITTED), 'OLD');
+    const st = PROM.stageBytes({ fixturesDir: d, bytes: 'NEW' });
+    expect(PROM.promoteStaged({ fixturesDir: d, expectedSha: st.sha256 }).errors).toEqual(['PROMOTE_VALIDATE_REQUIRED']);
+    expect(PROM.promoteStaged({ fixturesDir: d, expectedSha: st.sha256, validate: () => 'nope' }).errors)
+      .toEqual(['PROMOTE_VALIDATOR_NONARRAY']);
+    rmSync(d, { recursive: true, force: true });
+  });
+  it('RED: 목적지가 심볼릭 링크면 거부(다른 파일 덮어쓰기 방지)', () => {
+    const d = mkdir();
+    const outside = join(d, 'outside.txt'); writeFileSync(outside, 'DO-NOT-TOUCH');
+    symlinkSync(outside, join(d, STAGING));
+    expect(PROM.stageBytes({ fixturesDir: d, bytes: 'NEW' }).errors.join('|')).toMatch(/SYMLINK_REFUSED/);
+    expect(readFileSync(outside, 'utf8')).toBe('DO-NOT-TOUCH');
+    rmSync(d, { recursive: true, force: true });
+  });
+  it('동시 실행: 두 stageBytes가 서로의 temp를 밟지 않는다', () => {
+    const d = mkdir();
+    const a = PROM.stageBytes({ fixturesDir: d, bytes: 'A' });
+    const b = PROM.stageBytes({ fixturesDir: d, bytes: 'B' });
+    expect(a.errors).toEqual([]); expect(b.errors).toEqual([]);
+    expect(readFileSync(join(d, STAGING), 'utf8')).toBe('B');       // 마지막이 이김(원자적)
+    expect(readdirSync(d).filter((f) => f.startsWith('.s4-'))).toEqual([]);   // temp 잔재 없음
+    rmSync(d, { recursive: true, force: true });
+  });
 });
