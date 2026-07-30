@@ -4903,3 +4903,82 @@ describe('S4 staging/promotion 수명주기 — 임시 디렉터리 행동 테�
     rm(d);
   });
 });
+
+describe('S4 CLI 문법 — 정확히 두 형태만', () => {
+  const HEX = 'a'.repeat(64), HEX2 = 'b'.repeat(64);
+  it('GREEN: 인자 없음 → stage', () => expect(PROM.parseCliArgs([])).toEqual({ mode: 'stage' }));
+  it('GREEN: --promote <sha> --from <sha>', () =>
+    expect(PROM.parseCliArgs(['--promote', HEX, '--from', HEX2]))
+      .toEqual({ mode: 'promote', candidateSha: HEX, fromSha: HEX2 }));
+  it('GREEN: --from none → fromSha null', () =>
+    expect(PROM.parseCliArgs(['--promote', HEX, '--from', 'none']))
+      .toEqual({ mode: 'promote', candidateSha: HEX, fromSha: null }));
+  const bad = [
+    [['--bogus'], /BAD_ARITY/],
+    [['--from', HEX], /BAD_ARITY/],
+    [['--promote', HEX], /BAD_ARITY/],
+    [['--promote', HEX, '--from', HEX2, '--extra'], /BAD_ARITY/],
+    [['--promote', HEX, '--promote', HEX2], /EXPECTED_FROM_FLAG/],
+    [['--from', HEX, '--promote', HEX2], /EXPECTED_PROMOTE_FLAG/],
+    [['--promote', 'zz', '--from', HEX2], /BAD_CANDIDATE_SHA/],
+    [['--promote', HEX, '--from', 'zz'], /BAD_FROM_SHA/],
+    [['--promote', HEX.toUpperCase(), '--from', HEX2], /BAD_CANDIDATE_SHA/],
+  ];
+  for (const [argv, re] of bad)
+    it(`RED: ${JSON.stringify(argv).slice(0, 48)}`, () => expect(PROM.parseCliArgs(argv).error).toMatch(re));
+  it('CLI가 무거운 작업 전에 문법을 강제한다(exit 2)', () => {
+    const cwd = new URL('..', import.meta.url).pathname;
+    for (const args of ['--bogus', '--from abc', '--promote x --from y']) {
+      const out = execSync(`node scripts/s4-gen.mjs ${args} 2>&1; echo "exit=$?"`, { cwd, encoding: 'utf8' });
+      expect(out).toMatch(/exit=2/);
+      expect(out).toMatch(/usage: node scripts\/s4-gen\.mjs/);
+      expect(out).not.toMatch(/APPROVE/);          // 승인 경로에 진입하지 않는다
+    }
+  });
+});
+
+describe('S4 malformed PNG — 실제 decode만 통과', () => {
+  const good = () => { const p = new PNG({ width: 8, height: 5 });
+    for (let i = 0; i < p.data.length; i += 4) { p.data[i + 3] = 255; } return PNG.sync.write(p); };
+  it('GREEN: 정상 PNG는 바이트에서 치수를 파생', () =>
+    expect(EV.decodePngHeader(good())).toEqual({ ok: true, width: 8, height: 5 }));
+  it('RED: IHDR만 있는 33바이트(헤더 흉내)', () => {
+    const b = Buffer.alloc(33);
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(b, 0);
+    b.writeUInt32BE(13, 8); b.write('IHDR', 12); b.writeUInt32BE(1440, 16); b.writeUInt32BE(900, 20);
+    expect(EV.decodePngHeader(b).ok).toBe(false);
+    expect(EV.decodePngHeader(b).reason).toMatch(/PNG_DECODE_FAILED/);
+  });
+  it('RED: CRC 손상', () => { const b = Buffer.from(good()); b[29] ^= 0xff;   // IHDR CRC 영역
+    expect(EV.decodePngHeader(b).ok).toBe(false); });
+  it('RED: truncation(IEND 제거)', () => { const b = good().slice(0, good().length - 12);
+    expect(EV.decodePngHeader(b).ok).toBe(false); });
+  it('RED: signature 손상 / 빈 입력', () => {
+    const b = Buffer.from(good()); b[1] = 0x00;
+    expect(EV.decodePngHeader(b).ok).toBe(false);
+    expect(EV.decodePngHeader(Buffer.alloc(0))).toEqual({ ok: false, reason: 'PNG_EMPTY' });
+  });
+});
+
+describe('S4 stale lock 회수', () => {
+  const mkdir = () => mkdtempSync(join(tmpdir(), 's4-lock-'));
+  it('최근 lock은 점유로 보고 거부', () => {
+    const d = mkdir(); writeFileSync(join(d, 's4-expected.json'), 'OLD');
+    const st = PROM.stageBytes({ fixturesDir: d, bytes: 'NEW' });
+    writeFileSync(join(d, '.s4-promote.lock'), '');
+    expect(PROM.promoteStaged({ fixturesDir: d, expectedSha: st.candidateSha, fromSha: st.baseCommittedSha,
+      canonicalBytes: 'NEW' }).errors).toEqual(['PROMOTE_LOCK_BUSY']);
+    rmSync(d, { recursive: true, force: true });
+  });
+  it('오래된 lock(죽은 프로세스 잔재)은 회수하고 진행', () => {
+    const d = mkdir(); writeFileSync(join(d, 's4-expected.json'), 'OLD');
+    const st = PROM.stageBytes({ fixturesDir: d, bytes: 'NEW' });
+    writeFileSync(join(d, '.s4-promote.lock'), '');
+    const r = PROM.promoteStaged({ fixturesDir: d, expectedSha: st.candidateSha, fromSha: st.baseCommittedSha,
+      canonicalBytes: 'NEW', nowMs: Date.now() + PROM.LOCK_STALE_MS + 1000 });
+    expect(r.errors).toEqual([]); expect(r.promoted).toBe(true);
+    expect(readFileSync(join(d, 's4-expected.json'), 'utf8')).toBe('NEW');
+    expect(readdirSync(d)).not.toContain('.s4-promote.lock');
+    rmSync(d, { recursive: true, force: true });
+  });
+});

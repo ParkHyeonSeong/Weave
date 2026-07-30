@@ -22,6 +22,22 @@ import { createHash } from 'node:crypto';
 
 const sha = (b) => createHash('sha256').update(b).digest('hex');
 
+// CLI 문법 정본 — 정확히 두 형태만 허용한다. includes/indexOf 방식은 unknown·중복·여분
+// 인자를 통과시키고, `--promote` 오타를 기본 staging 실행으로 떨어뜨려 검토된 candidate를
+// 새 candidate로 덮어쓴다(리뷰 실증). 순수 함수로 두고 CLI는 가장 먼저 이걸 부른다.
+export const CLI_USAGE = 'usage: node scripts/s4-gen.mjs | node scripts/s4-gen.mjs --promote <sha256> --from <sha256|none>';
+const HEX64 = /^[0-9a-f]{64}$/;
+export function parseCliArgs(argv) {
+  if (!Array.isArray(argv)) return { error: 'ARGV_REQUIRED' };
+  if (argv.length === 0) return { mode: 'stage' };
+  if (argv.length !== 4) return { error: `BAD_ARITY ${argv.length}` };
+  if (argv[0] !== '--promote') return { error: `EXPECTED_PROMOTE_FLAG ${argv[0]}` };
+  if (argv[2] !== '--from') return { error: `EXPECTED_FROM_FLAG ${argv[2]}` };
+  if (!HEX64.test(argv[1])) return { error: `BAD_CANDIDATE_SHA ${argv[1]}` };
+  if (!(argv[3] === 'none' || HEX64.test(argv[3]))) return { error: `BAD_FROM_SHA ${argv[3]}` };
+  return { mode: 'promote', candidateSha: argv[1], fromSha: argv[3] === 'none' ? null : argv[3] };
+}
+
 export const STAGING_NAME = 's4-expected.candidate.json';
 export const COMMITTED_NAME = 's4-expected.json';
 const LOCK_NAME = '.s4-promote.lock';
@@ -69,15 +85,23 @@ export function stageBytes({ fixturesDir, bytes }) {
 }
 
 // lock: O_EXCL 파일. 잡지 못하면 즉시 실패(다른 승격이 진행 중).
-function withLock(fixturesDir, fn) {
+export const LOCK_STALE_MS = 5 * 60 * 1000;   // 이보다 오래된 lock은 죽은 프로세스의 잔재로 본다
+function withLock(fixturesDir, fn, nowMs) {
   const lock = join(fixturesDir, LOCK_NAME);
   let fd = null;
-  try { fd = openSync(lock, 'wx'); } catch (e) { return { errors: ['PROMOTE_LOCK_BUSY'], promoted: false }; }
+  try { fd = openSync(lock, 'wx'); } catch (e) {
+    // SIGKILL 등으로 남은 stale lock 회수 — 나이를 보고만 지운다(살아있는 승격은 건드리지 않음).
+    let age = 0;
+    try { age = (nowMs ?? Date.now()) - lstatSync(lock).mtimeMs; } catch (e2) { age = 0; }
+    if (age < LOCK_STALE_MS) return { errors: ['PROMOTE_LOCK_BUSY'], promoted: false };
+    try { unlinkSync(lock); fd = openSync(lock, 'wx'); }
+    catch (e3) { return { errors: ['PROMOTE_LOCK_BUSY'], promoted: false }; }
+  }
   try { return fn(); }
   finally { try { closeSync(fd); } catch (e) { /* noop */ } try { unlinkSync(lock); } catch (e) { /* noop */ } }
 }
 
-export function promoteStaged({ fixturesDir, expectedSha, fromSha, canonicalBytes }) {
+export function promoteStaged({ fixturesDir, expectedSha, fromSha, canonicalBytes, nowMs }) {
   const HEX = /^[0-9a-f]{64}$/;
   if (typeof expectedSha !== 'string' || !HEX.test(expectedSha))
     return { errors: ['PROMOTE_EXPECTED_SHA_REQUIRED'], promoted: false };
@@ -111,5 +135,5 @@ export function promoteStaged({ fixturesDir, expectedSha, fromSha, canonicalByte
     const err = atomicWrite(committedPath, staged);
     if (err) return { errors: [err], promoted: false, stagedSha };
     return { errors: [], promoted: true, stagedSha };
-  });
+  }, nowMs);
 }

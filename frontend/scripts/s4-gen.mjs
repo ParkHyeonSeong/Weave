@@ -7,6 +7,10 @@ import { pathToFileURL } from 'node:url';
 import * as SPEC from '/Users/hyeonseongpark/Documents/GitHub/Weave/frontend/library/s4Spec.mjs';
 import * as EV from '/Users/hyeonseongpark/Documents/GitHub/Weave/frontend/library/s4Evaluator.mjs';
 import * as CANON from '/Users/hyeonseongpark/Documents/GitHub/Weave/frontend/library/s4Canonicalize.mjs';
+// 무거운 작업(Sass 컴파일·fixture 읽기) **전에** 인자 문법을 강제한다.
+const CLI = PROMOTE_IO.parseCliArgs(process.argv.slice(2));
+if (CLI.error) { console.error(`${PROMOTE_IO.CLI_USAGE}\n  ${CLI.error}`); process.exit(2); }
+
 const REPO = '/Users/hyeonseongpark/Documents/GitHub/Weave';
 const FRONT = `${REPO}/frontend`;
 const require = createRequire(`${FRONT}/package.json`);
@@ -74,9 +78,7 @@ const pngOf = (name) => { const b = readFileSync(`${FIXDIR}/s4-shots/base/${name
 //  --promote <candidateSha> --from <baseCommittedSha>
 //                                  : staging을 재생성하지 않고 읽어, 지금 재계산한 canonical bytes와
 //                                    exact 대조하고 lock 안에서 CAS 후 atomic rename
-const argv = process.argv.slice(2);
-const flag = (name) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : undefined; };
-const PROMOTING = argv.includes('--promote');
+const PROMOTING = CLI.mode === 'promote';
 const contextRawStr = ctxRaw.toString('utf8');
 
 // 승인 경로는 한 번만 정의한다. writer만 바꿔 끼운다 — 승격도 같은 검증을 통과한 bytes만 쓴다.
@@ -95,8 +97,7 @@ if (PROMOTING) {
   const dry = runApproval((bytes) => { canonicalBytes = bytes; });
   if (dry.errors.length) die('PROMOTE_APPROVAL', dry.errors);
   const res = PROMOTE_IO.promoteStaged({ fixturesDir: FIXDIR,
-    expectedSha: flag('--promote'), fromSha: flag('--from') === 'none' ? null : flag('--from'),
-    canonicalBytes });
+    expectedSha: CLI.candidateSha, fromSha: CLI.fromSha, canonicalBytes });
   if (res.errors.length) die('PROMOTE', res.errors);
   console.log(`promoted → ${FIXDIR}/s4-expected.json (sha ${res.stagedSha})`);
   process.exit(0);
