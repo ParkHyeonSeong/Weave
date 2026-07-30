@@ -144,7 +144,7 @@
     width: 26px; height: 26px;
     border-radius: 50%;
     border: 2px solid transparent;
-  // [S4:X147] on-accent 고정(런타임 데이터색 배경 — 테마 불변. S7 dynamic on-color 접근성 부채)
+  // [S4:X147] on-accent 고정(고정 preset accent 배경 — 테마 불변. S7 dynamic on-color 접근성 부채)
     color: #FFFFFF;
     display: flex; align-items: center; justify-content: center;
     transition: transform 120ms, border-color 120ms;

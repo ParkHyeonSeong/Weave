@@ -4355,15 +4355,20 @@ describe('S4 allow ID 네 집합 exact equality — 비연속 집합과 단독 �
     const r = EV.approveAndWrite({ fixture: unitFixture(), spec: UNIT_SPEC, contrastResults: [] });
     expect(r.errors).toEqual(['APPROVE_IO_REQUIRED']); expect(r.wrote).toBe(false);
   });
-  it('보조 lint: generator가 approveAndWrite만 쓰고 s4-expected.json 쓰기 지점이 1곳', () => {
+  it('보조 lint: 기본 실행은 staging에만 쓰고 committed 승격은 atomic rename', () => {
+    // 행동 증거는 위 approveAndWrite 테스트들이고, 이건 보조 lint다.
     const src = readFileSync(new URL('../scripts/s4-gen.mjs', import.meta.url), 'utf8');
     const code = src.split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
     expect(code).toMatch(/EV\.approveAndWrite\(/);
-    for (const fn of ['validateCounts', 'validateSmokeCoverage', 'validateMaskContract', 'validateContrastReference', 'validateCandidate'])
+    // 승인 단계 validator를 개별 호출하지 않는다(승격 단계의 committed 검증은 예외로 허용)
+    for (const fn of ['validateCounts', 'validateSmokeCoverage', 'validateMaskContract', 'validateContrastReference', 'validateCandidate', 'validateCandidateArtifacts'])
       expect(code).not.toMatch(new RegExp(`EV\\.${fn}\\(`));
-    // s4-expected.json 쓰기는 approveAndWrite의 writer 안에서만 일어난다
-    const writes = code.match(/writeFileSync\([^)]*s4-expected\.json/g) || [];
-    expect(writes.length).toBe(1);
+    // committed 경로는 직접 writeFileSync 하지 않고 rename으로만 갱신한다
+    expect(code).not.toMatch(/writeFileSync\(\s*COMMITTED/);
+    expect(code).toMatch(/renameSync\(tmp, COMMITTED\)/);
+    expect(code).toMatch(/writeFileSync\(STAGING, bytes\)/);
+    // 승격은 명시 플래그로만
+    expect(code).toMatch(/const PROMOTE = process\.argv\.includes\('--promote'\)/);
   });
   it('실제 산출물 바이트 불변 — generator RED 실행이 fixture를 건드리지 않는다', () => {
     const f = new URL('./__fixtures__/s4-expected.json', import.meta.url);
@@ -4692,4 +4697,96 @@ describe('S4 커밋 산출물 게이트 — 실제 fixture 원문·context 원�
     expect(run({ readPng: () => ({ bytes: Buffer.from('x'), width: 1440, height: 900 }) }).join('|')).toMatch(/FROZEN_PNG_SHA_DRIFT/));
   it('privacy audit 부재 검출', () =>
     expect(run({ contextRaw: mutCtx((o) => { delete o.privacyAudit; }) }).join('|')).toMatch(/FROZEN_PRIVACY_AUDIT_MISSING/));
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 승인 경로 **정상 GREEN 대조군**. 지금까지의 orchestration 테스트는 전부 write 전에
+// 실패하는 경로라, validator가 실수로 항상 오류를 내도 스위트가 GREEN일 수 있었다.
+// 완결된 독립 UNIT 세계(spec·fixture·context·PNG·baseDecls)로 write까지 실제로 도달시킨다.
+// ⚠️ fingerprint/해시는 UNIT_SPEC에서 계산해 넣는다 — 여기서 검증하려는 것은 "경로가 끝까지
+//    도는가"이지 프로덕션 값의 정답성이 아니다(그건 committed 게이트가 실 산출물로 본다).
+// ─────────────────────────────────────────────────────────────────────────────
+const AW_SPEC = {
+  ...UNIT_SPEC,
+  BASE: 'unitbase',
+  FILES: { P: { rel: 'unit.scss', blob: 'blobP' }, R: { rel: 'unit-settings.scss', blob: 'blobR' } },
+  RASTER_CONTRACT: { width: 1440, height: 900, dpr: 1, screenshotScale: 'css' },
+};
+const AW_PNG = { 'unit-a.png': Buffer.from('unit-a-bytes'), 'unit-b.png': Buffer.from('unit-b-bytes') };
+const AW_READ_PNG = (n) => { if (!AW_PNG[n]) throw new Error(`no png ${n}`);
+  return { bytes: AW_PNG[n], width: 1440, height: 900 }; };
+const AW_CTX_RAW = () => {
+  const subject = {
+    viewport: { width: 1440, height: 900 },
+    capture: { type: 'png', scale: 'css', dpr: 1 },
+    baseLightMaskRects: unitCtx().baseLightMaskRects,
+  };
+  const privacyAudit = {
+    scope: 'dedicated-synthetic-account-workspace', contextPass: true,
+    contextSubjectSha256: sha256(JSON.stringify(CANON.canonicalize(subject))),
+    captures: Object.keys(AW_PNG).sort().map((n) => ({ captureName: n, sha256: sha256(AW_PNG[n]), pass: true, findings: [] })),
+  };
+  return JSON.stringify({ ...subject, privacyAudit });
+};
+const AW_FIXTURE = () => {
+  const raw = AW_CTX_RAW();
+  return { ...unitFixture(),
+    base: AW_SPEC.BASE,
+    blobs: { P: { rel: 'unit.scss', blob: 'blobP' }, R: { rel: 'unit-settings.scss', blob: 'blobR' } },
+    fingerprint: EV.specFingerprint(AW_SPEC, sha256),
+    smoke: { contextSha256: sha256(raw),
+      captures: Object.keys(AW_PNG).sort().map((n) => ({ captureName: n, sha256: sha256(AW_PNG[n]) })) } };
+};
+
+describe('S4 승인 경로 정상 GREEN — write까지 실제로 도달한다', () => {
+  const io = () => { const c = { serialize: 0, write: 0, bytes: [] };
+    return { c, serialize: (fx) => { c.serialize++; return EV.serializeFixture(fx); }, write: (b) => { c.write++; c.bytes.push(b); } }; };
+  const call = (over = {}) => { const spy = io();
+    const r = EV.approveAndWrite({
+      fixture: AW_FIXTURE(), spec: AW_SPEC, contrastResults: [],
+      actualDecls: UNIT_DECLS, actualRaw: '', preAnnSources: {},
+      actualAllowIdToKey: UNIT_ACTUAL_ALLOW_MAP, baseDecls: UNIT_BASE_DECLS,
+      contextRaw: AW_CTX_RAW(), sha256, readPng: AW_READ_PNG,
+      serialize: spy.serialize, write: spy.write, ...over });
+    return { r, c: spy.c }; };
+
+  it('errors === [] · calls 3단계 모두 1 · serialize/write 정확히 1회 · 바이트 동일', () => {
+    const { r, c } = call();
+    expect(r.errors).toEqual([]);
+    expect(r.wrote).toBe(true);
+    expect(r.calls).toEqual({ candidate: 1, conformance: 1, artifacts: 1 });
+    expect(c.serialize).toBe(1); expect(c.write).toBe(1);
+    expect(c.bytes).toHaveLength(1);
+    expect(c.bytes[0]).toBe(r.bytes);                       // 검증한 bytes가 그대로 write로 간다
+    expect(c.bytes[0]).toBe(EV.serializeFixture(AW_FIXTURE()));
+  });
+  it('같은 입력으로 validateCommittedArtifacts도 [] (정상 대조군)', () =>
+    expect(EV.validateCommittedArtifacts({ committedFixtureRaw: JSON.stringify(AW_FIXTURE()),
+      spec: AW_SPEC, contextRaw: AW_CTX_RAW(), sha256, readPng: AW_READ_PNG, baseDecls: UNIT_BASE_DECLS })).toEqual([]));
+  // 정상 대조군 위에서 한 축씩 변이 → RED, 그리고 write 0회
+  it('RED: fingerprint 변조 → artifacts 단계, write 0회', () => {
+    const fx = AW_FIXTURE(); fx.fingerprint = 'z'.repeat(64);
+    const { r, c } = call({ fixture: fx });
+    expect(r.errors.join('|')).toMatch(/FROZEN_FINGERPRINT_DRIFT/);
+    expect(c).toEqual({ serialize: 0, write: 0, bytes: [] });
+  });
+  it('RED: PNG 바이트 변조 → write 0회', () => {
+    const { r, c } = call({ readPng: () => ({ bytes: Buffer.from('tampered'), width: 1440, height: 900 }) });
+    expect(r.errors.join('|')).toMatch(/FROZEN_PNG_SHA_DRIFT/);
+    expect(c.write).toBe(0);
+  });
+  it('RED: contextRaw 바이트 변조 → write 0회', () => {
+    const { r, c } = call({ contextRaw: `${AW_CTX_RAW()} ` });
+    expect(r.errors.join('|')).toMatch(/FROZEN_CONTEXT_SHA_DRIFT|PRIVACY_AUDIT_CONTEXT_SUBJECT_DRIFT/);
+    expect(c.write).toBe(0);
+  });
+});
+
+describe('S4 raster 계약이 fingerprint에 포함된다', () => {
+  const base = () => EV.specFingerprint(SPEC, sha256);
+  const mut = (patch) => EV.specFingerprint({ ...SPEC, RASTER_CONTRACT: { ...SPEC.RASTER_CONTRACT, ...patch } }, sha256);
+  it('RASTER_CONTRACT 자체가 payload에 있다', () =>
+    expect(EV.specFingerprint({ ...SPEC, RASTER_CONTRACT: undefined }, sha256)).not.toBe(base()));
+  for (const [field, value] of [['width', 2880], ['height', 1800], ['dpr', 2], ['screenshotScale', 'device']])
+    it(`${field} 변이 → fingerprint 변화`, () => expect(mut({ [field]: value })).not.toBe(base()));
 });

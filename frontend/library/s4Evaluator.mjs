@@ -557,6 +557,7 @@ export function specFingerprint(spec, sha256Hex) {   // 검수 §7: surfaces·ma
       JSON.stringify(x.requiredElements || []), JSON.stringify(x.actions)]),
     lightDiffMasks: spec.LIGHT_DIFF_MASKS,
     contrastReference: spec.CONTRAST_REFERENCE,   // 참고치 삭제·변조도 fingerprint를 흔든다
+    rasterContract: spec.RASTER_CONTRACT,        // viewport·DPR·scale이 바뀌면 다른 spec identity다
     overrideTargets: Object.entries(spec.OVERRIDES).map(([k, v]) =>
       [k, (v.match(/^\s{2}\.[^{]+\{/gm) || []).map((t) => t.trim())]),
     conversions: spec.CONVERSIONS.map((c) => [c.id, c.f, c.l, c.k, c.from, c.to, c.group, c.stage, JSON.stringify(c.ident)]),
