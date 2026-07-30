@@ -69,41 +69,50 @@ if (fxErrors.length) die('BUILD_FIXTURE', fxErrors);
 // 넘기고 순서(candidate → conformance → artifacts → serialize → write)는 함수 안에서 고정된다.
 const pngOf = (name) => { const b = readFileSync(`${FIXDIR}/s4-shots/base/${name}`);
   return { bytes: b, width: b.readUInt32BE(16), height: b.readUInt32BE(20) }; };
-// 생성과 승격은 분리된 두 경로다.
-//  기본 실행       : 승인된 bytes를 staging에만 기록하고 SHA를 출력한다(committed 무접촉).
-//  --promote <sha> : staging을 **재생성하지 않고** 읽어 그 SHA가 인자와 같은지 확인한 뒤,
-//                    committed 계약으로 재검증하고 CAS를 건 다음 atomic rename으로 승격한다.
+// 생성과 승격은 분리된 두 경로이고, **둘 다 전체 승인 경로를 통과해야 한다**.
+//  기본 실행                       : 승인 bytes를 staging에 기록하고 candidateSha·baseCommittedSha 출력
+//  --promote <candidateSha> --from <baseCommittedSha>
+//                                  : staging을 재생성하지 않고 읽어, 지금 재계산한 canonical bytes와
+//                                    exact 대조하고 lock 안에서 CAS 후 atomic rename
 const argv = process.argv.slice(2);
-const pIdx = argv.indexOf('--promote');
-const PROMOTE_SHA = pIdx >= 0 ? argv[pIdx + 1] : null;
+const flag = (name) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : undefined; };
+const PROMOTING = argv.includes('--promote');
 const contextRawStr = ctxRaw.toString('utf8');
-const validateCommitted = (raw) => EV.validateCommittedArtifacts({ committedFixtureRaw: raw, spec: SPEC,
-  contextRaw: contextRawStr, sha256: sha, readPng: pngOf, baseDecls: pr.baseDecls });
 
-if (pIdx >= 0) {
-  const committedPath = `${FIXDIR}/s4-expected.json`;
-  const prevSha = sha(readFileSync(committedPath));
-  const res = PROMOTE_IO.promoteStaged({ fixturesDir: FIXDIR, expectedSha: PROMOTE_SHA, validate: validateCommitted, prevSha });
-  if (res.errors.length) die('PROMOTE', res.errors);
-  console.log(`promoted → ${committedPath} (sha ${res.stagedSha})`);
-  process.exit(0);
-}
-
-const approve = EV.approveAndWrite({
+// 승인 경로는 한 번만 정의한다. writer만 바꿔 끼운다 — 승격도 같은 검증을 통과한 bytes만 쓴다.
+let canonicalBytes = null;
+const runApproval = (write) => EV.approveAndWrite({
   fixture, spec: SPEC, contrastResults: pr.contrast.results,
   actualDecls: pr.projDecls, actualRaw: pr.projSrc, preAnnSources: pr.preAnnSrc,
   actualAllowIdToKey: pr.attribution.allowIdToKey, baseDecls: pr.baseDecls,
   contextRaw: contextRawStr, sha256: sha, readPng: pngOf,
-  serialize: EV.serializeFixture,
-  write: (bytes) => { mkdirSync(FIXDIR, { recursive: true });
-    const st = PROMOTE_IO.stageBytes({ fixturesDir: FIXDIR, bytes });
-    if (st.errors.length) throw new Error(st.errors.join('; '));
-    console.log(`staged → ${st.path}`);
-    console.log(`staging sha256 = ${st.sha256}`);
-    console.log('승격하려면: node scripts/s4-gen.mjs --promote ' + st.sha256);
-  },
+  serialize: EV.serializeFixture, write,
+});
+
+if (PROMOTING) {
+  // 승격 전에도 전체 승인 경로를 다시 돌려 canonical bytes를 만든다.
+  // (여기서 만들어지지 않으면 expectedAfter·residual·counts·conformance 어딘가가 깨진 것이다.)
+  const dry = runApproval((bytes) => { canonicalBytes = bytes; });
+  if (dry.errors.length) die('PROMOTE_APPROVAL', dry.errors);
+  const res = PROMOTE_IO.promoteStaged({ fixturesDir: FIXDIR,
+    expectedSha: flag('--promote'), fromSha: flag('--from') === 'none' ? null : flag('--from'),
+    canonicalBytes });
+  if (res.errors.length) die('PROMOTE', res.errors);
+  console.log(`promoted → ${FIXDIR}/s4-expected.json (sha ${res.stagedSha})`);
+  process.exit(0);
+}
+
+let staged = null;
+const approve = runApproval((bytes) => {
+  mkdirSync(FIXDIR, { recursive: true });
+  staged = PROMOTE_IO.stageBytes({ fixturesDir: FIXDIR, bytes });
+  if (staged.errors.length) throw new Error(staged.errors.join('; '));
 });
 if (approve.errors.length) die('APPROVE', approve.errors);
+console.log(`staged → ${staged.path}`);
+console.log(`candidateSha     = ${staged.candidateSha}`);
+console.log(`baseCommittedSha = ${staged.baseCommittedSha}`);
+console.log(`승격: node scripts/s4-gen.mjs --promote ${staged.candidateSha} --from ${staged.baseCommittedSha ?? 'none'}`);
 const json = approve.bytes;
 console.log(`conversions=${SPEC.CONVERSIONS.length} changed=${fixture.counts.changed} new=${fixture.counts.new}/${fixture.counts.newRules}rules ` +
   `residual=${fixture.counts.residual} raw=${fixture.counts.raw} processed=${fixture.counts.processed} allowBearing=${fixture.counts.allowBearing} errors=0`);

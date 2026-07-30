@@ -410,19 +410,16 @@ export function validateCandidate({ fixture, spec, context, contrastResults }) {
 // 승인과 쓰기를 한 함수로 묶는다 — writer를 주입 가능하게 둬서 "오류가 있으면 정말 안 쓴다"를
 // 소스 정규식이 아니라 **행동**으로 검증할 수 있게 한다(주석 decoy로 통과하던 배선 테스트 대체).
 // errors가 비어 있지 않으면 serialize도 write도 호출하지 않는다.
-// PNG 헤더를 **직접 디코드**한다. readPng이 돌려준 width/height를 신뢰하면 임의 바이트라도
-// 해시와 자기신고 치수만 맞추면 raster 검증을 통과한다(리뷰 실증). signature + IHDR로 파생한다.
-const PNG_SIG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+// PNG를 **실제로 디코드**한다. signature와 IHDR 위치만 보면 CRC·필수 chunk가 없는 33바이트
+// 가짜도 통과한다(리뷰 실증: decodePngHeader ok:true 인데 PNG.sync.read는 CRC 오류).
+// 이미 의존성에 있는 pngjs로 파싱하고 치수는 decode 결과에서 파생한다.
 export function decodePngHeader(bytes) {
-  if (!bytes || typeof bytes.length !== 'number' || bytes.length < 33) return { ok: false, reason: 'PNG_TOO_SHORT' };
-  for (let i = 0; i < 8; i++) if (bytes[i] !== PNG_SIG[i]) return { ok: false, reason: 'PNG_BAD_SIGNATURE' };
-  // 8..12 length, 12..16 type('IHDR'), 16..20 width, 20..24 height
-  if (String.fromCharCode(bytes[12], bytes[13], bytes[14], bytes[15]) !== 'IHDR')
-    return { ok: false, reason: 'PNG_NO_IHDR' };
-  const be = (o) => ((bytes[o] << 24) >>> 0) + (bytes[o + 1] << 16) + (bytes[o + 2] << 8) + bytes[o + 3];
-  const width = be(16), height = be(20);
-  if (!(width > 0) || !(height > 0)) return { ok: false, reason: 'PNG_BAD_IHDR' };
-  return { ok: true, width, height };
+  if (!bytes || typeof bytes.length !== 'number' || bytes.length === 0) return { ok: false, reason: 'PNG_EMPTY' };
+  let img = null;
+  try { img = PNG.sync.read(Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes)); }
+  catch (e) { return { ok: false, reason: `PNG_DECODE_FAILED ${e && e.message}` }; }
+  if (!img || !(img.width > 0) || !(img.height > 0)) return { ok: false, reason: 'PNG_BAD_DIMENSIONS' };
+  return { ok: true, width: img.width, height: img.height };
 }
 
 // ── 산출물 검증 코어 ────────────────────────────────────────────────────────
@@ -599,6 +596,7 @@ export function parseColorLiteral(str) {
 
 import { extractColorLiterals } from './cssColorLiterals.mjs';
 import { canonicalize } from './s4Canonicalize.mjs';
+import { PNG } from 'pngjs';
 export function normColor(s) { let v = String(s).toLowerCase().replace(/\s+/g, '');
   const m = v.match(/^#([0-9a-f]{3,4})$/); if (m) v = '#' + [...m[1]].map((c) => c + c).join(''); return v; }
 export function resolveLight(token, vals, d = 0) { const v = vals[token]; if (v === undefined || d > 8) return v;
