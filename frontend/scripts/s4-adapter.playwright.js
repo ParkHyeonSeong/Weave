@@ -27,38 +27,52 @@
 async (page) => {
   const BRIDGE = 'http://127.0.0.1:10098';
   const ORIGIN = 'http://localhost:10000';
-  const PROTOCOL = 's4-bridge/1';        // CLI의 BRIDGE_PROTOCOL과 일치해야 한다
-  // selector + nth + hasText 를 Playwright locator 문자열로. **대상 선택만** 한다.
+  const PROTOCOL = 's4-bridge/2';        // CLI의 BRIDGE_PROTOCOL과 일치해야 한다
+  const REFRESH_COOKIE = 'weave_refresh';
   const T = (sel, nth, hasText) => (sel || '')
     + (hasText ? `:has-text("${hasText}")` : '')
     + ' >> nth=' + (nth == null ? 0 : nth);
 
-  // ── disposable context ─────────────────────────────────────────────────────
-  // 전달받은 page를 직접 몰면 URL·viewport·localStorage·init script가 누적되고 복원되지
-  // 않는다. 특히 23개 중 19개가 `setStorage → goto` 순서라, 시작 탭이 앱 origin이 아니면
-  // 엉뚱한 origin에 기록된다. 인증 상태만 복사한 일회용 context에서 돌고 finally에서 닫는다.
   const browser = page.context().browser();
   if (!browser) {
     return JSON.stringify({ fatal: 'NO_BROWSER — persistent context에서는 disposable context를 만들 수 없다' });
   }
-  const storageState = await page.context().storageState();
-  const ctx = await browser.newContext({ storageState });
-  const p = await ctx.newPage();
+  // ── 회전 refresh token을 복제하지 않는다 ───────────────────────────────────
+  // 서버는 refresh를 **단일사용**으로 회전시킨다. child가 /auth/refresh를 호출하면 원본
+  // 토큰이 소비되고 새 토큰은 child에만 생긴다 — child를 닫으면 원본 브라우저는 폐기된
+  // 토큰만 남아 다음 갱신에서 로그아웃된다. access가 만료됐다면 카나리가 실패해야 하지,
+  // 원본 세션을 태워선 안 된다.
+  const baseState = await page.context().storageState();
+  const childState = { ...baseState, cookies: (baseState.cookies || []).filter((c) => c.name !== REFRESH_COOKIE) };
+
+  let ctx = null;
+  let p = null;
   const log = [];
+  const closeChild = async () => { if (ctx) { await ctx.close(); ctx = null; p = null; } };
   try {
-    // 앱 origin으로 prime — 첫 setStorage가 about:blank에 기록되지 않게 한다.
-    await p.goto(ORIGIN, { waitUntil: 'domcontentloaded' });
-    for (let i = 0; i < 2000; i += 1) {
-      const cmd = await (await p.request.get(`${BRIDGE}/next`)).json();
+    for (let i = 0; i < 5000; i += 1) {
+      const cmd = await (await page.request.get(`${BRIDGE}/next`)).json();
       if (cmd.done) { log.push('done'); break; }
       let value = null;
       let error = null;
       try {
         const [a, b, c] = cmd.args;
         if (cmd.method === 'hello') value = { protocol: PROTOCOL, echo: a };
+        else if (cmd.method === 'shutdown') { await closeChild(); value = { ok: true }; log.push('shutdown'); }
+        else if (cmd.method === 'beginAttempt') {
+          // attempt마다 **새 child context** — 두 실행이 독립 증거가 되려면 필수다.
+          await closeChild();
+          ctx = await browser.newContext({ storageState: childState });
+          p = await ctx.newPage();
+          await p.goto(ORIGIN, { waitUntil: 'domcontentloaded' });
+          const path = await p.evaluate(() => location.pathname);
+          // refresh 쿠키가 없으니 access가 만료됐으면 로그인으로 튕긴다 — 그때는 명시적으로 실패한다.
+          if (path.startsWith('/auth/')) throw new Error(`CANARY_AUTH_EXPIRED ${path} (원본 세션은 건드리지 않았다)`);
+          value = { ok: true, attempt: a };
+        } else if (cmd.method === 'endAttempt') { await closeChild(); value = { ok: true, attempt: a }; }
+        else if (!p) error = 'NO_ACTIVE_ATTEMPT';
         else if (cmd.method === 'setViewport') await p.setViewportSize({ width: a, height: b });
         else if (cmd.method === 'setStorage') {
-          // origin이 앱이 아닌 상태에서 쓰면 그 기록은 다음 goto에서 사라진다 — 명시적으로 막는다.
           const origin = await p.evaluate(() => location.origin);
           if (origin !== ORIGIN) throw new Error(`WRONG_ORIGIN_FOR_STORAGE ${origin}`);
           await p.evaluate((q) => { localStorage.setItem(q[0], q[1]); }, [a, b]);
@@ -70,8 +84,6 @@ async (page) => {
         else if (cmd.method === 'sleep') await p.waitForTimeout(a);
         else if (cmd.method === 'evaluate') value = await p.evaluate(new Function(`return (${a})`)(), b);
         else if (cmd.method === 'addInitScript') {
-          // 매 문서에 navigation **이전** 실행으로 등록하고, 현재 문서에도 한 번 적용한다.
-          // ACK는 그 적용 결과를 그대로 돌려준다 — 예외를 삼키고 true를 주면 검증이 무의미하다.
           await p.addInitScript({ content: `(${a})()` });
           value = await p.evaluate(new Function(`return (${a})`)());
         } else if (cmd.method === 'screenshot') {
@@ -82,14 +94,13 @@ async (page) => {
         error = String((e && e.message) || e).split('\n')[0].slice(0, 200);
       }
       log.push(cmd.method + (error ? ` ERR:${error}` : ''));
-      await p.request.post(`${BRIDGE}/`, {
+      await page.request.post(`${BRIDGE}/`, {
         data: JSON.stringify({ id: cmd.id, value, error }),
         headers: { 'content-type': 'application/json' },
       });
     }
   } finally {
-    // 일회용 context를 닫는다 — 두 번의 반복 실행이 서로 독립 증거가 되려면 필수다.
-    await ctx.close();
+    await closeChild();
   }
   return JSON.stringify(log);
 }

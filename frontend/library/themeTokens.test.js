@@ -4808,6 +4808,115 @@ describe('S4 승격 하드 비활성 — discovery-only 체크포인트', () => 
   });
 });
 
+describe('S4 브리지 통합 — 단일 브리지로 반복 attempt를 완주한다', () => {
+  // 실제 main()을 돌리고, fake adapter가 HTTP로 붙어 attempt 2회 + shutdown까지 간다.
+  // 이전 판은 반복마다 서버를 새로 만들어 두 번째 hello가 무기한 대기했다(실증).
+  const PORT = 10197;
+  const api = 'http://localhost:10001/api';
+  const fakeAdapter = async ({ requestsPerAttempt, stopAfterAttempt }, port = PORT) => {
+    const seen = { attempts: 0, ended: 0, shutdown: false, methods: [] };
+    for (let i = 0; i < 4000; i += 1) {
+      let cmd;
+      try { cmd = await (await fetch(`http://127.0.0.1:${port}/next`)).json(); } catch (e) { break; }
+      if (cmd.done) break;
+      seen.methods.push(cmd.method);
+      let value = null; let error = null;
+      const [a] = cmd.args;
+      if (cmd.method === 'hello') value = { protocol: 's4-bridge/2', echo: a };
+      else if (cmd.method === 'beginAttempt') {
+        seen.attempts += 1;
+        if (stopAfterAttempt && seen.attempts > stopAfterAttempt) break;   // 어댑터가 사라지는 상황
+        value = { ok: true, attempt: a };
+      } else if (cmd.method === 'endAttempt') { seen.ended += 1; value = { ok: true }; }
+      else if (cmd.method === 'shutdown') { seen.shutdown = true; value = { ok: true }; }
+      else if (cmd.method === 'addInitScript') value = { ok: true, version: PROBE.NETWORK_HOOK_VERSION };
+      else if (cmd.method === 'evaluate') {
+        if (a === PROBE.NETWORK_IDLE_SOURCE) value = { installed: true, stale: false, idle: true, pending: 0 };
+        else if (a === PROBE.NETWORK_DRAIN_SOURCE) value = { ok: true, installedAtReadyState: 'loading',
+          entries: requestsPerAttempt(seen.attempts) };
+        else if (a === PROBE.ASSERT_SOURCE) value = Object.fromEntries((cmd.args[1] || []).map((s2) => [s2, { count: 1, visible: 1 }]));
+        else value = {};
+      } else value = null;
+      try {
+        await fetch(`http://127.0.0.1:${port}/`, { method: 'POST',
+          body: JSON.stringify({ id: cmd.id, value, error }), headers: { 'content-type': 'application/json' } });
+      } catch (e) { break; }
+    }
+    return seen;
+  };
+  // HEAD 게이트는 main에 남아 있다(워킹트리가 clean일 때만 통과). 여기서는 게이트를 통과한
+  // 뒤의 **브리지 수명주기**만 본다 — 게이트에 테스트용 우회를 만들지 않기 위한 분리다.
+  const HEAD = { headCommit: 'x'.repeat(40), blobs: {} };
+  const runObs = async (argv, adapterOpts, port) => {
+    const out = []; const errs = [];
+    const cli = CAP.parseCaptureArgs(argv, SPEC);
+    expect(cli.error).toBeUndefined();
+    const p = CAP.runObservation({ SPEC, cli, head: HEAD, log: (m) => out.push(m), err: (m) => errs.push(m) });
+    await new Promise((r) => setTimeout(r, 250));                 // 브리지가 뜰 시간
+    const seen = await fakeAdapter(adapterOpts, port);
+    const r = await p;
+    return { code: r.code, payload: r.payload, out, errs, seen };
+  };
+  const GOOD = () => [{ method: 'GET', url: `${api}/tracks/5`, status: 200, ok: true }];
+
+  it('attempt 2회를 한 브리지로 완주하고 shutdown까지 간다', async () => {
+    const r = await runObs(['--canary', 'canvas', '--repeat', '2', '--port', String(PORT)],
+      { requestsPerAttempt: GOOD }, PORT);
+    expect(r.code).toBe(0);
+    expect(r.seen.attempts).toBe(2);
+    expect(r.seen.ended).toBe(2);
+    expect(r.seen.shutdown).toBe(true);
+    const parsed = r.payload;
+    expect(parsed.mode).toBe('canary');
+    expect(parsed.eligibleForManifest).toBe(false);
+    expect(parsed.repeats).toBe(2);
+    expect(parsed.bySurface.canvas).toBeDefined();                 // surface 귀속 보존
+    expect(parsed.endpoints[0]).toContain(`${api}/tracks/5`);
+  }, 30000);
+
+  it('RED: 두 실행 모두 요청 0건이면 GREEN이 아니다', async () => {
+    const r = await runObs(['--canary', 'canvas', '--repeat', '2', '--port', String(PORT + 1)],
+      { requestsPerAttempt: () => [] }, PORT + 1);
+    expect(r.code).toBe(1);
+    expect(r.errs.join(' ')).toMatch(/OBSERVE_NO_EVIDENCE[\s\S]*NO_REQUESTS_OBSERVED/);
+  }, 30000);
+
+  it('RED: backend API origin 성공 응답이 없으면 거부', async () => {
+    const r = await runObs(['--canary', 'canvas', '--repeat', '2', '--port', String(PORT + 2)],
+      { requestsPerAttempt: () => [{ method: 'GET', url: 'http://localhost:10000/_next/x.js', status: 200, ok: true }] }, PORT + 2);
+    expect(r.code).toBe(1);
+    expect(r.errs.join(' ')).toMatch(/NO_API_REQUESTS/);
+  }, 30000);
+
+  it('RED: 두 실행의 endpoint 집합이 다르면 drift로 거부', async () => {
+    const r = await runObs(['--canary', 'canvas', '--repeat', '2', '--port', String(PORT + 3)],
+      { requestsPerAttempt: (n) => [{ method: 'GET', url: `${api}/tracks/${n}`, status: 200, ok: true }] }, PORT + 3);
+    expect(r.code).toBe(1);
+    expect(r.errs.join(' ')).toMatch(/ENDPOINT_DRIFT_BETWEEN_RUNS run1 vs run2/);
+  }, 30000);
+
+  it('RED: 어댑터가 두 번째 attempt에서 사라지면 timeout으로 끝난다(무기한 대기 없음)', async () => {
+    const r = await runObs(['--canary', 'canvas', '--repeat', '2', '--port', String(PORT + 4), '--timeoutMs', '1500'],
+      { requestsPerAttempt: GOOD, stopAfterAttempt: 1 }, PORT + 4);
+    expect(r.code).toBe(1);
+    expect(r.errs.join(' ')).toMatch(/BRIDGE_RPC_TIMEOUT/);
+  }, 30000);
+
+  it('RED: protocol이 다른 어댑터는 거부된다', async () => {
+    const port = PORT + 5;
+    const out = []; const errs = [];
+    const cli = CAP.parseCaptureArgs(['--canary', 'canvas', '--repeat', '2', '--port', String(port)], SPEC);
+    const mainP = CAP.runObservation({ SPEC, cli, head: HEAD, log: (m) => out.push(m), err: (m) => errs.push(m) });
+    await new Promise((r) => setTimeout(r, 250));
+    const cmd = await (await fetch(`http://127.0.0.1:${port}/next`)).json();
+    await fetch(`http://127.0.0.1:${port}/`, { method: 'POST',
+      body: JSON.stringify({ id: cmd.id, value: { protocol: 's4-bridge/0' } }),
+      headers: { 'content-type': 'application/json' } });
+    expect((await mainP).code).toBe(1);
+    expect(errs.join(' ')).toMatch(/BRIDGE_PROTOCOL_MISMATCH/);
+  }, 30000);
+});
+
 describe('S4 관찰 계약 — canary·hook 버전·격리·재현성', () => {
   const capSrc = () => readFileSync(new URL('../scripts/s4-capture.mjs', import.meta.url), 'utf8');
   const adapterSrc = () => readFileSync(new URL('../scripts/s4-adapter.playwright.js', import.meta.url), 'utf8');
@@ -4880,7 +4989,7 @@ describe('S4 관찰 계약 — canary·hook 버전·격리·재현성', () => {
   });
   it('어댑터는 일회용 context에서 돌고 반드시 닫는다', () => {
     const src = adapterSrc();
-    expect(src).toContain('browser.newContext({ storageState })');
+    expect(src).toContain('browser.newContext({ storageState: childState })');
     expect(src).toContain('await ctx.close();');
     expect(src).toContain('WRONG_ORIGIN_FOR_STORAGE');          // 잘못된 origin 기록 방지
     expect(src).toContain('NO_BROWSER');                        // persistent context는 fail-closed
@@ -4889,10 +4998,28 @@ describe('S4 관찰 계약 — canary·hook 버전·격리·재현성', () => {
       expect(src).not.toContain(banned);
   });
   it('브리지 handshake로 붙은 어댑터를 확인한다', () => {
-    expect(CAP.BRIDGE_PROTOCOL).toBe('s4-bridge/1');
+    expect(CAP.BRIDGE_PROTOCOL).toBe('s4-bridge/2');
     expect(CAP.BRIDGE_METHODS[0]).toBe('hello');
     expect(capSrc()).toContain('BRIDGE_PROTOCOL_MISMATCH');
     expect(adapterSrc()).toContain(`const PROTOCOL = '${CAP.BRIDGE_PROTOCOL}';`);
+  });
+  it('동적 로컬 import()는 금지 — closure가 놓치기 때문이다', () => {
+    // staticImportClosure는 정적 그래프만 따라간다. 동적 로컬 import()가 생기면 그 모듈은
+    // 결속 목록에서 조용히 빠진다 — 지금 없다는 사실을 상설로 고정한다.
+    const repo = fileURLToPath(new URL('../../', import.meta.url));
+    for (const rel of CAP.DISCOVERY_HASHED_MODULES) {
+      if (rel.endsWith('.playwright.js')) continue;              // 어댑터는 브라우저 프로세스용
+      const src = readFileSync(join(repo, rel), 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '').split('\n').map((l) => l.replace(/(^|[^:'"`])\/\/.*$/, '$1')).join('\n');
+      const dyn = [...src.matchAll(/\bimport\s*\(\s*['"`](\.[^'"`]+)['"`]/g)].map((m) => m[1]);
+      expect({ rel, dyn }).toEqual({ rel, dyn: [] });
+    }
+  });
+  it('handshake는 protocol 호환성만 증명한다(어댑터 identity가 아니다)', () => {
+    // 브라우저 프로세스는 레포 파일을 해시할 수 없다 — identity는 HEAD blob 결속이 맡는다.
+    const capSrc = readFileSync(new URL('../scripts/s4-capture.mjs', import.meta.url), 'utf8');
+    expect(capSrc).toContain('handshake는 **protocol 호환성만** 증명한다');
+    expect(CAP.DISCOVERY_HASHED_MODULES).toContain('frontend/scripts/s4-adapter.playwright.js');
   });
   it('HEAD 목록은 정적 import closure와 exact 일치한다', () => {
     const repo = fileURLToPath(new URL('../../', import.meta.url));
@@ -5046,17 +5173,18 @@ describe('S4 캡처 진입점 — core를 우회하는 어댑터를 막는다', 
     for (const banned of ['resolveActions', 'derivePaintRect', 'normalizeOccurrence', 'expectPresent'])
       expect(t).not.toContain(banned);
   });
-  it('브리지 method는 원시 동작 12종뿐이다(selector 술어를 받는 primitive 없음)', () => {
-    expect([...CAP.BRIDGE_METHODS].sort()).toEqual(['addInitScript', 'click', 'evaluate', 'goto', 'hello',
-      'hover', 'reload', 'screenshot', 'setStorage', 'setViewport', 'settle', 'sleep'].sort());
+  it('브리지 method는 원시 동작 + attempt lifecycle뿐이다(selector 술어를 받는 primitive 없음)', () => {
+    expect([...CAP.BRIDGE_METHODS].sort()).toEqual(['addInitScript', 'beginAttempt', 'click', 'endAttempt',
+      'evaluate', 'goto', 'hello', 'hover', 'reload', 'screenshot', 'setStorage', 'setViewport',
+      'settle', 'shutdown', 'sleep'].sort());
   });
   it('인자 문법이 엄격하다', () => {
     expect(CAP.parseCaptureArgs(['--phase', 'light'], SPEC))
-      .toEqual({ phase: 'light', port: 10098, discover: false, canary: null, repeat: 1 });
+      .toEqual({ phase: 'light', port: 10098, discover: false, canary: null, repeat: 1, timeoutMs: CAP.RPC_TIMEOUT_MS });
     expect(CAP.parseCaptureArgs(['--phase', 'dark', '--port', '10099'], SPEC))
-      .toEqual({ phase: 'dark', port: 10099, discover: false, canary: null, repeat: 1 });
+      .toEqual({ phase: 'dark', port: 10099, discover: false, canary: null, repeat: 1, timeoutMs: CAP.RPC_TIMEOUT_MS });
     expect(CAP.parseCaptureArgs(['--discover'], SPEC))
-      .toEqual({ phase: null, port: 10098, discover: true, canary: null, repeat: 1 });
+      .toEqual({ phase: null, port: 10098, discover: true, canary: null, repeat: 1, timeoutMs: CAP.RPC_TIMEOUT_MS });
     expect(CAP.parseCaptureArgs(['--discover', '--phase', 'light'], SPEC).error).toMatch(/EXACTLY_ONE_MODE/);
     expect(CAP.parseCaptureArgs([], SPEC).error).toMatch(/EXACTLY_ONE_MODE/);
     expect(CAP.parseCaptureArgs(['--phase', 'sepia'], SPEC).error).toMatch(/PHASE_REQUIRED/);
