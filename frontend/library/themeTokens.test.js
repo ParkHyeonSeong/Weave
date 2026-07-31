@@ -5218,6 +5218,41 @@ describe('S4 discovery-only — 관찰 전용 계약', () => {
     const r = await RUN.executeSurfaceSteps({ surface, rawContext: {}, driver, raster: null });
     expect(r.errors.join()).toMatch(/RUN_POSTCONDITION_FAILED d1\[1\] expectPresent \.Never/);
   });
+
+  // 늦게 나타나는 상태를 모사하는 driver — settle이 불린 selector만 보이게 된다.
+  const lateDriver = (opts = {}) => {
+    const settled = new Set();
+    return { settled,
+      async setViewport() {}, async setStorage() {}, async goto() {}, async click() {}, async hover() {},
+      async sleep() {}, async reload() {}, async addInitScript() {},
+      async settle(sel) { if (opts.neverAppears) throw new Error('TIMEOUT'); settled.add(sel); },
+      async evaluate(src, arg) {
+        if (src === PROBE.ASSERT_SOURCE) return Object.fromEntries(arg.map((s2) =>
+          [s2, settled.has(s2) ? { count: 1, visible: 1 } : { count: 0, visible: 0 }]));
+        return {};
+      } };
+  };
+  const LATE_SURFACE = {
+    name: 'd2', captureName: 'd2.png', requiredElements: [], darkReviewSelectors: [],
+    coverageSelectors: [{ selector: '.Late', state: 'selected', provenBy: 0 }],
+    actions: [{ op: 'goto', url: '/x' }],
+  };
+
+  it('RED: postAssert는 action 직후가 아니라 상태가 나타난 뒤에 판정한다', async () => {
+    // 실측 근거: goto가 domcontentloaded로 반환한 시점에는 헤더가 통째로 없고(버튼 0개),
+    // ~100ms 뒤에 붙는다. 즉시 1회 판정이면 이 surface는 재현 불가능한 코인플립이 된다.
+    const driver = lateDriver();
+    const r = await RUN.executeSurfaceSteps({ surface: LATE_SURFACE, rawContext: {}, driver, raster: null });
+    expect(r.errors).toEqual([]);
+    expect(driver.settled.has('.Late')).toBe(true);
+  });
+
+  it('settle을 넣어도 끝내 안 나타나는 상태는 그대로 RED다', async () => {
+    // settle은 힌트일 뿐 판정이 아니다 — 이게 깨지면 대기가 오류를 덮는 장치가 된다.
+    const driver = lateDriver({ neverAppears: true });
+    const r = await RUN.executeSurfaceSteps({ surface: LATE_SURFACE, rawContext: {}, driver, raster: null });
+    expect(r.errors.join()).toMatch(/RUN_STATE_UNPROVEN d2\[0\] state:selected \.Late count=0 visible=0/);
+  });
 });
 
 describe('S4 캡처 증거 계약 — 기록만으로는 통과하지 못한다', () => {

@@ -196,6 +196,17 @@ export async function executeSurfaceSteps({ surface, rawContext, driver, raster 
 
     if (s.postAssert.length) {
       const sels = s.postAssert.map((p) => p.selector);
+      // postAssert는 이 action의 **결과**다 — action이 반환한 순간이 아니라 결과가 나타난
+      // 순간에 읽어야 한다. goto는 domcontentloaded까지만 기다리는데 SPA 헤더는 그보다
+      // 늦게 붙는다(실측: DCL 시점 .TrackHeader__ViewBtn--active 0개, ~230ms에 1개).
+      // 즉시 1회만 읽으면 통과/실패가 스케줄링에 좌우된다 — 실제 카나리 attempt 2가
+      // 그렇게 죽었고 attempt 1이 통과한 건 운이었다.
+      // settle은 **힌트일 뿐**이고 판정은 아래 커밋된 probe가 한다. 상태가 끝내 나타나지
+      // 않으면 settle이 타임아웃해도 probe가 count=0을 보고해 그대로 RED다.
+      for (const sel of sels) {
+        try { await driver.settle(sel, 'visible', SETTLE_TIMEOUT_MS); }
+        catch (e) { /* 판정은 probe가 한다 */ }
+      }
       const { raw, errors } = await assertVisibility(driver, sels);
       if (errors.length) { log.push(entry); return fail(`RUN_ASSERT_INVALID ${surface.name}[${s.index}] ${errors[0]}`); }
       entry.decided = raw;
