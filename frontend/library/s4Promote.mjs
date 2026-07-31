@@ -120,6 +120,9 @@ function withLock(fixturesDir, fn) {
 }
 
 export function promoteStaged({ fixturesDir, expectedSha, fromSha, canonicalBytes }) {
+  // 하드 비활성 — promoteRelease만 막고 이건 열어 두면 "비활성"이 사실이 아니다.
+  // 실증: PROMOTION_ENABLED=false인데 stageBytes → promoteStaged로 s4-expected.json이 기록됐다.
+  if (!PROMOTION_ENABLED) return { errors: ['PROMOTION_DISABLED'], promoted: false };
   const HEX = /^[0-9a-f]{64}$/;
   if (typeof expectedSha !== 'string' || !HEX.test(expectedSha))
     return { errors: ['PROMOTE_EXPECTED_SHA_REQUIRED'], promoted: false };
@@ -174,6 +177,8 @@ export function promoteStaged({ fixturesDir, expectedSha, fromSha, canonicalByte
 // committed로 만들 수 없어야 한다. 승격 경로를 열려면 이 상수를 바꾸는 **명시적 커밋**이 필요하고,
 // 그때 projector 배선·immutable expected artifact·legacy reader 전환이 함께 와야 한다.
 export const PROMOTION_ENABLED = false;
+// 이 플래그는 **모든 승격 경로**를 막는다: promoteRelease, promoteStaged,
+// 그리고 이들을 부르는 CLI(s4-gen --promote / s4-promote-capture).
 
 export const CAPTURE_PHASES = ['light', 'dark'];
 export const BUNDLE_ROOT = 's4-capture';

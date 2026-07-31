@@ -27,7 +27,7 @@ import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import * as RAW_SPEC from '../library/s4Spec.mjs';
 import { runCapture, writeCandidate, executeSurfaceSteps, PHASES } from '../library/s4CaptureRunner.mjs';
-import { NETWORK_INSTALL_SOURCE, NETWORK_DRAIN_SOURCE } from '../library/s4DomProbe.mjs';
+import { NETWORK_INSTALL_SOURCE, NETWORK_DRAIN_SOURCE, NETWORK_IDLE_SOURCE } from '../library/s4DomProbe.mjs';
 import { snapshotSpec, specFingerprint, datasetDigest } from '../library/s4Evaluator.mjs';
 import { createHash } from 'node:crypto';
 import { headBlobBinding } from '../library/s4Promote.mjs';
@@ -106,12 +106,15 @@ export const DISCOVERY_HASHED_MODULES = [
   'frontend/library/s4Evaluator.mjs',
   'frontend/library/s4CaptureRunner.mjs',
   'frontend/library/s4Canonicalize.mjs',
+  // 검증기 자신(headBlobBinding)이 여기 있다 — 빠지면 검증기를 바꿔도 gate가 못 잡는다.
+  'frontend/library/s4Promote.mjs',
   'frontend/scripts/s4-capture.mjs',
+  // 브라우저를 실제로 모는 코드. ignored 파일이면 무엇이 몰았는지 diff에 남지 않는다.
+  'frontend/scripts/s4-adapter.playwright.js',
 ];
 // 캡처는 산출물을 만든다 — 승격까지의 전 경로가 clean이어야 한다.
 export const HASHED_MODULES = [
   ...DISCOVERY_HASHED_MODULES,
-  'frontend/library/s4Promote.mjs',
   'frontend/scripts/s4-promote-capture.mjs',
 ];
 export const REPO_DIR = fileURLToPath(new URL('../../', import.meta.url));
@@ -173,19 +176,31 @@ export async function main(argv, { log = console.log, err = console.error } = {}
     const server0 = makeBridgeServer(ds);
     await new Promise((r) => server0.listen(cli.port, '127.0.0.1', r));
     err(`discovery bridge on ${cli.port}`);
-    const seen = new Set();
+    const observed = [];
     const failures = [];
+    const waitIdle = async (surfaceName) => {
+      // 고정 sleep 대신 **정말 조용해졌는지** 본다: pending 0 + quiet window.
+      for (let t = 0; t < 60; t += 1) {
+        const st = await dd.evaluate(NETWORK_IDLE_SOURCE, 400);
+        if (!st || !st.installed) return `NETWORK_HOOK_MISSING ${surfaceName}`;
+        if (st.idle) return null;
+        await dd.sleep(200);
+      }
+      return `NETWORK_NEVER_IDLE ${surfaceName}`;
+    };
     try {
       if (typeof dd.addInitScript !== 'function') { err('DRIVER_NO_ADD_INIT_SCRIPT'); return 1; }
-      await dd.addInitScript(NETWORK_INSTALL_SOURCE);        // 모든 문서에 navigation 이전 주입
+      const installed = await dd.addInitScript(NETWORK_INSTALL_SOURCE);   // navigation 이전 주입
+      if (installed !== true) { err('ADD_INIT_SCRIPT_NOT_ACKED'); return 1; }
       for (const surface of SPEC.REQUIRED_SMOKE_SURFACES) {
         const r = await executeSurfaceSteps({ surface, rawContext: CAPTURE_SCENARIO, driver: dd,
           raster: SPEC.RASTER_CONTRACT });
         if (r.errors.length) { failures.push(`${surface.name}: ${r.errors[0]}`); continue; }
-        await dd.sleep(500);
-        const urls = await dd.evaluate(NETWORK_DRAIN_SOURCE, null);
-        if (!Array.isArray(urls)) { failures.push(`${surface.name}: DRAIN_INVALID`); continue; }
-        for (const u of urls) seen.add(String(u));
+        const idleErr = await waitIdle(surface.name);
+        if (idleErr) { failures.push(idleErr); continue; }
+        const entries = await dd.evaluate(NETWORK_DRAIN_SOURCE, null);
+        if (!Array.isArray(entries)) { failures.push(`${surface.name}: DRAIN_INVALID`); continue; }
+        for (const e of entries) observed.push({ surface: surface.name, method: e.method, url: e.url, status: e.status, ok: e.ok });
       }
     } finally { ds.done = true; setTimeout(() => server0.close(), 200); }
     if (failures.length) {
@@ -194,8 +209,32 @@ export async function main(argv, { log = console.log, err = console.error } = {}
       for (const f of failures) err(`  ${f}`);
       return 1;
     }
-    log(JSON.stringify({ observed: [...seen].sort(), count: seen.size,
-      surfaces: SPEC.REQUIRED_SMOKE_SURFACES.length }, null, 1));
+    // 종료 시점 HEAD 재검증 — 관찰 도중 워킹카피가 바뀌면 이 목록의 출처가 흔들린다.
+    const head2 = headBlobBinding(REPO_DIR, DISCOVERY_HASHED_MODULES,
+      (c) => execSync(c, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }), head.headCommit);
+    if (head2.errors.length || JSON.stringify(head2.blobs) !== JSON.stringify(head.blobs)) {
+      err('HEAD_BINDING_DRIFTED_DURING_DISCOVERY');
+      for (const e of head2.errors) err(`  ${e}`);
+      return 1;
+    }
+    // method별로 구별해 집계한다 — GET과 PATCH가 합쳐지면 endpoint 우주가 거짓이 된다.
+    const key = (e) => `${e.method} ${e.url}`;
+    const byKey = new Map();
+    for (const e of observed) {
+      const k = key(e);
+      const cur = byKey.get(k) || { method: e.method, url: e.url, statuses: new Set(), surfaces: new Set() };
+      cur.statuses.add(e.status); cur.surfaces.add(e.surface); byKey.set(k, cur);
+    }
+    log(JSON.stringify({
+      provenance: { headCommit: head.headCommit, blobs: head.blobs,
+        specFingerprint: specFingerprint(SPEC, (v) => createHash('sha256').update(v).digest('hex')) },
+      surfaces: SPEC.REQUIRED_SMOKE_SURFACES.map((x) => x.name),
+      surfacesCompleted: SPEC.REQUIRED_SMOKE_SURFACES.length - failures.length,
+      requestCount: observed.length,
+      endpoints: [...byKey.values()].map((v) => ({ method: v.method, url: v.url,
+        statuses: [...v.statuses].sort(), surfaces: [...v.surfaces].sort() }))
+        .sort((a, b) => (`${a.method} ${a.url}` < `${b.method} ${b.url}` ? -1 : 1)),
+    }, null, 1));
     err('discovery 완료 — 아무것도 쓰지 않았다. 사람이 검수해 EXPECTED_DATASET_MANIFEST를 별도 커밋할 것.');
     return 0;
   }

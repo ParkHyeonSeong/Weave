@@ -101,6 +101,11 @@ const pngOf = (name) => { const b = bundlePng(name);
 //                                  : staging을 재생성하지 않고 읽어, 지금 재계산한 canonical bytes와
 //                                    exact 대조하고 lock 안에서 CAS 후 atomic rename
 const PROMOTING = CLI.mode === 'promote';
+// 승격은 하드 비활성 상태다 — CLI에서도 즉시 멈춘다(라이브러리 게이트에만 의존하지 않는다).
+if (PROMOTING && !PROMOTE_IO.PROMOTION_ENABLED) {
+  console.error('PROMOTION_DISABLED — discovery-only 체크포인트에서는 승격할 수 없다.');
+  process.exit(1);
+}
 const contextRawStr = ctxRaw.toString('utf8');
 
 // 승인 경로는 한 번만 정의한다. writer만 바꿔 끼운다 — 승격도 같은 검증을 통과한 bytes만 쓴다.

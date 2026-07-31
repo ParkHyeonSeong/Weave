@@ -225,22 +225,56 @@ export const DATASET_PROBE_SOURCE = `function (urls) {
 // driver.addInitScript(source)로 매 문서에 자동 주입한다.
 export const NETWORK_INSTALL_SOURCE = `function () {
   if (window.__s4net) return true;
-  window.__s4net = [];
+  var st = { entries: [], pending: 0, lastActivity: Date.now() };
+  window.__s4net = st;
+  function abs(raw) {
+    try { return new URL(String(raw), location.href).href; } catch (e) { return String(raw); }
+  }
+  function record(method, url, status, ok) {
+    st.entries.push({ method: String(method || 'GET').toUpperCase(), url: abs(url),
+      status: typeof status === 'number' ? status : -1, ok: !!ok });
+    st.lastActivity = Date.now();
+  }
   var of = window.fetch;
   window.fetch = function (input, init) {
-    try { window.__s4net.push(String(input && input.url ? input.url : input)); } catch (e) { }
-    return of.apply(this, arguments);
+    var url = (input && input.url) ? input.url : input;
+    var method = (init && init.method) || (input && input.method) || 'GET';
+    st.pending++; st.lastActivity = Date.now();
+    return of.apply(this, arguments).then(function (r) {
+      record(method, url, r.status, r.ok); st.pending--; st.lastActivity = Date.now(); return r;
+    }, function (e) { record(method, url, -1, false); st.pending--; st.lastActivity = Date.now(); throw e; });
   };
   var oo = XMLHttpRequest.prototype.open;
-  XMLHttpRequest.prototype.open = function (m, u) {
-    try { window.__s4net.push(String(u)); } catch (e) { }
-    return oo.apply(this, arguments);
+  var osend = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.open = function (m, u) { this.__s4m = m; this.__s4u = u; return oo.apply(this, arguments); };
+  XMLHttpRequest.prototype.send = function () {
+    var xhr = this;
+    st.pending++; st.lastActivity = Date.now();
+    xhr.addEventListener('loadend', function () {
+      record(xhr.__s4m, xhr.__s4u, xhr.status, xhr.status >= 200 && xhr.status < 400);
+      st.pending--; st.lastActivity = Date.now();
+    });
+    return osend.apply(this, arguments);
   };
   return true;
 }`;
+
+// 네트워크가 **정말 조용해졌는지** 본다. 고정 sleep은 느린 응답을 놓치고 빠른 화면에서는 낭비다.
+// pending === 0 이고 마지막 활동 이후 quietMs가 지나야 idle이다.
+export const NETWORK_IDLE_SOURCE = `function (quietMs) {
+  var st = window.__s4net;
+  if (!st) return { installed: false, idle: false, pending: -1, sinceMs: -1 };
+  var since = Date.now() - st.lastActivity;
+  return { installed: true, idle: st.pending === 0 && since >= quietMs, pending: st.pending, sinceMs: since };
+}`;
+
+// 관찰 결과를 비우고 돌려준다. **구조화된 증거**다 — URL 문자열만 모으면 GET과 PATCH가
+// 합쳐지고 실패한 요청과 성공한 요청이 구별되지 않는다.
 export const NETWORK_DRAIN_SOURCE = `function () {
-  var out = window.__s4net || [];
-  window.__s4net = [];
+  var st = window.__s4net;
+  if (!st) return null;
+  var out = st.entries;
+  st.entries = [];
   return out;
 }`;
 
