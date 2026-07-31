@@ -97,17 +97,53 @@ async function waitIdle(dd, name) {
 }
 
 // 관찰이 **실제로 무언가를 잡았는지**. 빈 집합은 두 번 반복해도 digest가 같아 GREEN이 된다.
-export function liveEvidenceErrors(observed, apiOrigin) {
+export function apiOriginParts(apiOrigin) {
+  try {
+    const u = new URL(apiOrigin);
+    const base = u.pathname.replace(/\/$/, '');   // 예: '/api'
+    return { origin: u.origin, base };
+  } catch (e) { return null; }
+}
+
+// URL이 그 API에 속하는지 — **origin exact + path 경계**로 본다.
+// startsWith(apiOrigin)는 '/apiary/...'도 통과시켰다(실증).
+export function isApiRequest(url, apiOrigin) {
+  const parts = apiOriginParts(apiOrigin);
+  if (!parts) return false;
+  let u = null;
+  try { u = new URL(String(url)); } catch (e) { return false; }
+  if (u.origin !== parts.origin) return false;
+  if (!parts.base) return true;
+  return u.pathname === parts.base || u.pathname.startsWith(`${parts.base}/`);
+}
+
+// 이 surface가 반드시 냈어야 하는 route-load 요청. 지금은 track 상세로 가는 화면만 안다
+// (TrackDetail이 진입 시 GET /api/tracks/{id}를 낸다). 모르는 화면은 null이고 강제하지 않는다.
+export function requiredRouteLoad(surface, scenario) {
+  const goto = (surface.actions || []).find((a) => a.op === 'goto');
+  if (!goto) return null;
+  const url = String(goto.url).replace('{id}', String(scenario.trackId));
+  if (!/^\/tracks\/\d+$/.test(url)) return null;
+  return `GET ${scenario.apiOrigin}/tracks/${scenario.trackId}`;
+}
+
+// 관찰이 **실제로 무언가를 잡았는지**. 빈 집합은 두 번 반복해도 digest가 같아 GREEN이 된다.
+// expectedSurfaces를 받아 **요청이 0건인 화면**도 잡는다 — observed에 등장한 것만 순회하면
+// 23개 중 1개만 요청을 내도 통과한다(실증).
+export function liveEvidenceErrors(observed, apiOrigin, expectedSurfaces = [], requiredRequests = []) {
   const errors = [];
-  if (!observed.length) { errors.push('NO_REQUESTS_OBSERVED'); return errors; }
-  if (typeof apiOrigin !== 'string' || !apiOrigin) { errors.push('API_ORIGIN_UNKNOWN'); return errors; }
-  const apiHits = observed.filter((e) => String(e.url).startsWith(apiOrigin));
+  if (!apiOriginParts(apiOrigin)) { errors.push('API_ORIGIN_UNKNOWN'); return errors; }
+  if (!observed.length) errors.push('NO_REQUESTS_OBSERVED');
+  const counts = new Map();
+  for (const name of expectedSurfaces) counts.set(name, 0);      // 0으로 초기화 — 빠진 화면을 본다
+  for (const e of observed) counts.set(e.surface, (counts.get(e.surface) || 0) + 1);
+  for (const [name, n] of counts) if (!(n > 0)) errors.push(`SURFACE_NO_REQUESTS ${name}`);
+  const apiHits = observed.filter((e) => isApiRequest(e.url, apiOrigin));
   if (!apiHits.length) errors.push(`NO_API_REQUESTS ${apiOrigin}`);
   else if (!apiHits.some((e) => e.ok)) errors.push(`NO_SUCCESSFUL_API_REQUEST ${apiOrigin}`);
-  // surface별로도 최소 1건 — 한 화면만 요청을 냈는데 전체가 통과하면 안 된다.
-  const bySurface = new Map();
-  for (const e of observed) bySurface.set(e.surface, (bySurface.get(e.surface) || 0) + 1);
-  for (const [name, n] of bySurface) if (!n) errors.push(`SURFACE_NO_REQUESTS ${name}`);
+  // 알려진 route-load 요청은 성공으로 관찰돼야 한다.
+  const seen = new Set(observed.filter((e) => e.ok).map((e) => `${e.method} ${e.url}`));
+  for (const req of requiredRequests) if (req && !seen.has(req)) errors.push(`MISSING_ROUTE_LOAD ${req}`);
   return errors;
 }
 
@@ -124,7 +160,14 @@ export function surfaceEndpointMap(observed) {
 
 // 관찰 결과를 canonical 집합 + digest로. 두 실행이 같은지 exact 비교할 수 있어야 한다.
 export function canonicalEndpoints(observed) {
-  const set = [...new Set(observed.map((e) => `${e.method} ${e.url} ${e.status} ${e.ok ? 'ok' : 'fail'}`))].sort();
+  // **surface와 요청 횟수까지** 포함한다. global endpoint set만 비교하면 surface 간 요청을
+  // 교환하거나 횟수를 바꿔도 같은 digest가 나온다(실증).
+  const counts = new Map();
+  for (const e of observed) {
+    const k = `${e.surface} ${e.method} ${e.url} ${e.status} ${e.ok ? 'ok' : 'fail'}`;
+    counts.set(k, (counts.get(k) || 0) + 1);
+  }
+  const set = [...counts.entries()].map(([k, n]) => `${k} x${n}`).sort();
   return { set, digest: createHash('sha256').update(set.join('\n')).digest('hex') };
 }
 
@@ -291,7 +334,9 @@ export async function runObservation({ SPEC, cli, head, log = console.log, err =
           fatal = 1; break;
         }
         // 빈 관찰은 재현성 증거가 아니다 — 두 번 다 0건이면 digest가 같아 GREEN이 된다(실증).
-        const live = liveEvidenceErrors(observed, CAPTURE_SCENARIO.apiOrigin);
+        const live = liveEvidenceErrors(observed, CAPTURE_SCENARIO.apiOrigin,
+          targets.map((x) => x.name),
+          targets.map((x) => requiredRouteLoad(x, CAPTURE_SCENARIO)).filter(Boolean));
         if (live.length) {
           err(`OBSERVE_NO_EVIDENCE — attempt ${attempt + 1}`);
           for (const e of live) err(`  ${e}`);

@@ -4813,19 +4813,22 @@ describe('S4 브리지 통합 — 단일 브리지로 반복 attempt를 완주�
   // 이전 판은 반복마다 서버를 새로 만들어 두 번째 hello가 무기한 대기했다(실증).
   const PORT = 10197;
   const api = 'http://localhost:10001/api';
+  // fake adapter — **커밋된 어댑터와 같은 종료 규약**을 따른다: shutdown 응답을 보낸 뒤
+  // 곧바로 break한다. 연결 오류를 삼키지 않고 terminal로 보고해 종료 실패를 드러낸다.
   const fakeAdapter = async ({ requestsPerAttempt, stopAfterAttempt }, port = PORT) => {
-    const seen = { attempts: 0, ended: 0, shutdown: false, methods: [] };
+    const seen = { attempts: 0, ended: 0, shutdown: false, done: false, terminal: null, methods: [] };
     for (let i = 0; i < 4000; i += 1) {
       let cmd;
-      try { cmd = await (await fetch(`http://127.0.0.1:${port}/next`)).json(); } catch (e) { break; }
-      if (cmd.done) break;
+      try { cmd = await (await fetch(`http://127.0.0.1:${port}/next`)).json(); }
+      catch (e) { seen.terminal = `POLL_FAILED ${String(e.message).slice(0, 40)}`; break; }
+      if (cmd.done) { seen.done = true; break; }
       seen.methods.push(cmd.method);
-      let value = null; let error = null;
+      let value = null; const error = null;
       const [a] = cmd.args;
       if (cmd.method === 'hello') value = { protocol: 's4-bridge/2', echo: a };
       else if (cmd.method === 'beginAttempt') {
         seen.attempts += 1;
-        if (stopAfterAttempt && seen.attempts > stopAfterAttempt) break;   // 어댑터가 사라지는 상황
+        if (stopAfterAttempt && seen.attempts > stopAfterAttempt) { seen.terminal = 'ADAPTER_LEFT'; break; }
         value = { ok: true, attempt: a };
       } else if (cmd.method === 'endAttempt') { seen.ended += 1; value = { ok: true }; }
       else if (cmd.method === 'shutdown') { seen.shutdown = true; value = { ok: true }; }
@@ -4836,15 +4839,17 @@ describe('S4 브리지 통합 — 단일 브리지로 반복 attempt를 완주�
           entries: requestsPerAttempt(seen.attempts) };
         else if (a === PROBE.ASSERT_SOURCE) value = Object.fromEntries((cmd.args[1] || []).map((s2) => [s2, { count: 1, visible: 1 }]));
         else value = {};
-      } else value = null;
+      }
       try {
         await fetch(`http://127.0.0.1:${port}/`, { method: 'POST',
           body: JSON.stringify({ id: cmd.id, value, error }), headers: { 'content-type': 'application/json' } });
-      } catch (e) { break; }
+      } catch (e) { seen.terminal = `POST_FAILED ${String(e.message).slice(0, 40)}`; break; }
+      // 커밋된 어댑터와 동일: shutdown 응답 직후 clean break.
+      if (cmd.method === 'shutdown') { seen.clean = true; break; }
     }
     return seen;
   };
-  // HEAD 게이트는 main에 남아 있다(워킹트리가 clean일 때만 통과). 여기서는 게이트를 통과한
+  // HEAD 게이트는 main에 남아 있다(워킹트리 clean일 때만 통과). 여기서는 게이트를 통과한
   // 뒤의 **브리지 수명주기**만 본다 — 게이트에 테스트용 우회를 만들지 않기 위한 분리다.
   const HEAD = { headCommit: 'x'.repeat(40), blobs: {} };
   const runObs = async (argv, adapterOpts, port) => {
@@ -4852,7 +4857,7 @@ describe('S4 브리지 통합 — 단일 브리지로 반복 attempt를 완주�
     const cli = CAP.parseCaptureArgs(argv, SPEC);
     expect(cli.error).toBeUndefined();
     const p = CAP.runObservation({ SPEC, cli, head: HEAD, log: (m) => out.push(m), err: (m) => errs.push(m) });
-    await new Promise((r) => setTimeout(r, 250));                 // 브리지가 뜰 시간
+    await new Promise((r) => setTimeout(r, 250));
     const seen = await fakeAdapter(adapterOpts, port);
     const r = await p;
     return { code: r.code, payload: r.payload, out, errs, seen };
@@ -4866,6 +4871,9 @@ describe('S4 브리지 통합 — 단일 브리지로 반복 attempt를 완주�
     expect(r.seen.attempts).toBe(2);
     expect(r.seen.ended).toBe(2);
     expect(r.seen.shutdown).toBe(true);
+    // 종료 실패를 삼키지 않는다 — 이전 판은 마지막 GET 오류를 catch해 false-green이었다.
+    expect(r.seen.terminal).toBeNull();
+    expect(r.seen.clean).toBe(true);
     const parsed = r.payload;
     expect(parsed.mode).toBe('canary');
     expect(parsed.eligibleForManifest).toBe(false);
@@ -4890,7 +4898,11 @@ describe('S4 브리지 통합 — 단일 브리지로 반복 attempt를 완주�
 
   it('RED: 두 실행의 endpoint 집합이 다르면 drift로 거부', async () => {
     const r = await runObs(['--canary', 'canvas', '--repeat', '2', '--port', String(PORT + 3)],
-      { requestsPerAttempt: (n) => [{ method: 'GET', url: `${api}/tracks/${n}`, status: 200, ok: true }] }, PORT + 3);
+      // 두 실행 모두 필수 route-load는 포함하고, **추가 요청만** 다르게 한다.
+      { requestsPerAttempt: (n) => [
+        { method: 'GET', url: `${api}/tracks/5`, status: 200, ok: true },
+        { method: 'GET', url: `${api}/extra/${n}`, status: 200, ok: true },
+      ] }, PORT + 3);
     expect(r.code).toBe(1);
     expect(r.errs.join(' ')).toMatch(/ENDPOINT_DRIFT_BETWEEN_RUNS run1 vs run2/);
   }, 30000);
@@ -4972,13 +4984,15 @@ describe('S4 관찰 계약 — canary·hook 버전·격리·재현성', () => {
   });
   it('반복 실행은 exact 일치해야 한다', () => {
     expect(capSrc()).toContain('ENDPOINT_DRIFT_BETWEEN_RUNS');
-    const a = CAP.canonicalEndpoints([{ method: 'GET', url: '/a', status: 200, ok: true }]);
-    const b = CAP.canonicalEndpoints([{ method: 'GET', url: '/a', status: 200, ok: true }]);
-    expect(a.digest).toBe(b.digest);
-    // method·status·ok가 전부 집합에 남는다 — 하나라도 빠지면 합쳐진다
-    expect(CAP.canonicalEndpoints([{ method: 'PATCH', url: '/a', status: 200, ok: true }]).digest).not.toBe(a.digest);
-    expect(CAP.canonicalEndpoints([{ method: 'GET', url: '/a', status: 304, ok: false }]).digest).not.toBe(a.digest);
-    expect(a.set[0]).toBe('GET /a 200 ok');
+    const E = (over) => [{ surface: 'canvas', method: 'GET', url: '/a', status: 200, ok: true, ...over }];
+    const a = CAP.canonicalEndpoints(E());
+    expect(a.digest).toBe(CAP.canonicalEndpoints(E()).digest);
+    expect(a.set[0]).toBe('canvas GET /a 200 ok x1');
+    // surface·method·status·ok·횟수가 전부 남는다 — 하나라도 빠지면 교환·중복이 숨는다
+    expect(CAP.canonicalEndpoints(E({ surface: 'detail' })).digest).not.toBe(a.digest);
+    expect(CAP.canonicalEndpoints(E({ method: 'PATCH' })).digest).not.toBe(a.digest);
+    expect(CAP.canonicalEndpoints(E({ status: 304, ok: false })).digest).not.toBe(a.digest);
+    expect(CAP.canonicalEndpoints([...E(), ...E()]).digest).not.toBe(a.digest);   // 횟수
   });
   it('ok 기준이 fetch/XHR 동일하다(200-299)', () => {
     const src = PROBE.NETWORK_INSTALL_SOURCE;
@@ -4986,6 +5000,11 @@ describe('S4 관찰 계약 — canary·hook 버전·격리·재현성', () => {
     // 이전 판: fetch는 r.ok(200-299), XHR은 <400 — 같은 3xx가 채널에 따라 다르게 기록됐다.
     expect(src).not.toContain('record(method, url, r.status, r.ok)');
     expect(src).not.toContain('xhr.status < 400');
+  });
+  it('어댑터는 shutdown 응답 직후 clean break한다', () => {
+    // 응답 후 다시 /next를 폴링하면 CLI가 이미 닫은 서버에 붙어 fetch failed로 죽는다(실증).
+    const src = adapterSrc();
+    expect(src).toContain("if (cmd.method === 'shutdown') { log.push('clean-exit'); break; }");
   });
   it('어댑터는 일회용 context에서 돌고 반드시 닫는다', () => {
     const src = adapterSrc();

@@ -98,6 +98,9 @@ async (page) => {
         data: JSON.stringify({ id: cmd.id, value, error }),
         headers: { 'content-type': 'application/json' },
       });
+      // shutdown 응답을 **보낸 직후** 끝낸다. 여기서 다시 /next를 폴링하면 CLI가 이미 닫은
+      // 서버에 붙어 fetch failed로 죽는다(실증: CLI는 0인데 어댑터는 오류 종료).
+      if (cmd.method === 'shutdown') { log.push('clean-exit'); break; }
     }
   } finally {
     await closeChild();
