@@ -27,7 +27,8 @@ import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import * as RAW_SPEC from '../library/s4Spec.mjs';
 import { runCapture, writeCandidate, executeSurfaceSteps, PHASES } from '../library/s4CaptureRunner.mjs';
-import { NETWORK_INSTALL_SOURCE, NETWORK_DRAIN_SOURCE, NETWORK_IDLE_SOURCE } from '../library/s4DomProbe.mjs';
+import { NETWORK_INSTALL_SOURCE, NETWORK_DRAIN_SOURCE, NETWORK_IDLE_SOURCE,
+  NETWORK_HOOK_VERSION } from '../library/s4DomProbe.mjs';
 import { snapshotSpec, specFingerprint, datasetDigest } from '../library/s4Evaluator.mjs';
 import { createHash } from 'node:crypto';
 import { headBlobBinding } from '../library/s4Promote.mjs';
@@ -36,24 +37,42 @@ import { execSync } from 'node:child_process';
 // 이 파일 전체 바이트도 신뢰 입력이다 — 우회 어댑터가 생기면 이 바이트가 그대로인지가 단서다.
 export const ADAPTER_MODULE_PATH = fileURLToPath(import.meta.url);
 
-export const BRIDGE_METHODS = ['setViewport', 'setStorage', 'goto', 'reload', 'settle',
+export const BRIDGE_METHODS = ['hello', 'setViewport', 'setStorage', 'goto', 'reload', 'settle',
   'click', 'hover', 'evaluate', 'screenshot', 'sleep', 'addInitScript'];
+// 브리지에 **어떤 어댑터가 붙었는지**를 확인한다. HEAD blob은 디스크의 어댑터를 증명할 뿐
+// 실제로 그 어댑터가 연결됐다는 증거가 아니다.
+export const BRIDGE_PROTOCOL = 's4-bridge/1';
 
-export function parseCaptureArgs(argv) {
-  const out = { phase: null, port: 10098, discover: false };
+export function parseCaptureArgs(argv, spec) {
+  const out = { phase: null, port: 10098, discover: false, canary: null, repeat: 1 };
   const rest = [];
   for (const a of argv) { if (a === '--discover') out.discover = true; else rest.push(a); }
   for (let i = 0; i < rest.length; i += 2) {
     const k = rest[i], v = rest[i + 1];
+    if (v === undefined) return { error: `MISSING_VALUE ${k}` };
     if (k === '--phase') out.phase = v;
     else if (k === '--port') out.port = Number(v);
+    else if (k === '--canary') out.canary = v;
+    else if (k === '--repeat') out.repeat = Number(v);
     else return { error: `UNKNOWN_ARG ${k}` };
   }
-  // discovery는 관찰만 한다 — phase도 필요 없고 아무것도 쓰지 않는다.
-  if (!out.discover && !PHASES.includes(out.phase)) return { error: `PHASE_REQUIRED (${PHASES.join('|')})` };
-  if (out.discover && out.phase) return { error: 'DISCOVER_TAKES_NO_PHASE' };
+  const modes = [out.discover, !!out.canary, !!out.phase].filter(Boolean).length;
+  if (modes !== 1) return { error: 'EXACTLY_ONE_MODE (--discover | --canary <surface> | --phase <light|dark>)' };
+  if (out.phase && !PHASES.includes(out.phase)) return { error: `PHASE_REQUIRED (${PHASES.join('|')})` };
+  if (out.canary) {
+    const names = (spec && spec.REQUIRED_SMOKE_SURFACES ? spec.REQUIRED_SMOKE_SURFACES : []).map((x) => x.name);
+    if (names.length && !names.includes(out.canary)) return { error: `UNKNOWN_SURFACE ${out.canary}` };
+    if (!Number.isInteger(out.repeat) || out.repeat < 2 || out.repeat > 5)
+      return { error: `REPEAT_RANGE ${out.repeat} (2..5 — 1회는 재현성 증거가 아니다)` };
+  } else if (out.repeat !== 1) return { error: 'REPEAT_ONLY_WITH_CANARY' };
   if (!Number.isInteger(out.port) || out.port < 1024 || out.port > 65535) return { error: `BAD_PORT ${out.port}` };
   return out;
+}
+
+// 관찰 결과를 canonical 집합 + digest로. 두 실행이 같은지 exact 비교할 수 있어야 한다.
+export function canonicalEndpoints(observed) {
+  const set = [...new Set(observed.map((e) => `${e.method} ${e.url} ${e.status} ${e.ok ? 'ok' : 'fail'}`))].sort();
+  return { set, digest: createHash('sha256').update(set.join('\n')).digest('hex') };
 }
 
 // 브리지 driver. 모든 메서드가 {method,args}를 큐에 넣고 어댑터 응답을 기다린다 —
@@ -100,16 +119,20 @@ export const CAPTURE_SCENARIO = {
 // 액션 해석·paintRect 파생·검증에 직접 관여한다 — 그것들이 바뀌면 산출물의 의미가 달라진다.
 // discovery는 관찰만 한다 — 승격 모듈이 clean일 필요가 없고, 요구하면 discovery가
 // 승격 준비 상태에 묶여 (b) 순서(discovery 먼저)가 성립하지 않는다.
+// 이 CLI의 **정적 import closure**(기계 산출) + 브라우저를 실제로 모는 어댑터.
+// 손으로 열거하면 빠진다 — 실증: s4Evaluator가 쓰는 cssColorLiterals.mjs가 없었다.
+// 상설 테스트가 closure를 다시 계산해 이 목록과 exact 대조한다.
+export const DISCOVERY_ENTRY = 'frontend/scripts/s4-capture.mjs';
 export const DISCOVERY_HASHED_MODULES = [
-  'frontend/library/s4Spec.mjs',
+  'frontend/library/cssColorLiterals.mjs',
+  'frontend/library/s4Canonicalize.mjs',
+  'frontend/library/s4CaptureRunner.mjs',
   'frontend/library/s4DomProbe.mjs',
   'frontend/library/s4Evaluator.mjs',
-  'frontend/library/s4CaptureRunner.mjs',
-  'frontend/library/s4Canonicalize.mjs',
-  // 검증기 자신(headBlobBinding)이 여기 있다 — 빠지면 검증기를 바꿔도 gate가 못 잡는다.
   'frontend/library/s4Promote.mjs',
+  'frontend/library/s4Spec.mjs',
   'frontend/scripts/s4-capture.mjs',
-  // 브라우저를 실제로 모는 코드. ignored 파일이면 무엇이 몰았는지 diff에 남지 않는다.
+  // 어댑터는 import되지 않는다(브라우저 프로세스에서 돈다) — 그래서 명시적으로 더한다.
   'frontend/scripts/s4-adapter.playwright.js',
 ];
 // 캡처는 산출물을 만든다 — 승격까지의 전 경로가 clean이어야 한다.
@@ -145,8 +168,13 @@ function makeBridgeServer(state) {
 }
 
 export async function main(argv, { log = console.log, err = console.error } = {}) {
-  const cli = parseCaptureArgs(argv);
-  if (cli.error) { err(`usage: node scripts/s4-capture.mjs --phase <light|dark> [--port 10098]\n  ${cli.error}`); return 2; }
+  const rawSnap0 = snapshotSpec(RAW_SPEC);
+  const cli = parseCaptureArgs(argv, rawSnap0.spec);
+  if (cli.error) {
+    err('usage: node scripts/s4-capture.mjs (--discover | --canary <surface> --repeat 2 | --phase <light|dark>) [--port 10098]');
+    err(`  ${cli.error}`);
+    return 2;
+  }
 
   // spec은 캡처 시작 전에 한 번 스냅샷한다 — 캡처 도중 값이 갈리면 산출물의 의미가 흔들린다.
   const snap = snapshotSpec(RAW_SPEC);
@@ -155,7 +183,7 @@ export async function main(argv, { log = console.log, err = console.error } = {}
 
   // 캡처 시작 전에 해시 입력 모듈이 clean HEAD인지 확인한다. 그렇지 않으면 산출물의
   // "어떤 코드가 만들었나"가 리뷰 diff에 남지 않는다.
-  const head = headBlobBinding(REPO_DIR, cli.discover ? DISCOVERY_HASHED_MODULES : HASHED_MODULES,
+  const head = headBlobBinding(REPO_DIR, (cli.discover || cli.canary) ? DISCOVERY_HASHED_MODULES : HASHED_MODULES,
     (c) => execSync(c, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }));
   if (head.errors.length) {
     err(`HEAD_BINDING_FAILED — total=${head.errors.length}`);
@@ -163,79 +191,100 @@ export async function main(argv, { log = console.log, err = console.error } = {}
     return 1;
   }
 
-  // ── discovery-only ─────────────────────────────────────────────────────────
-  // 실제 XHR/fetch의 origin·path·query를 **관찰만** 한다. 산출물은 쓰지 않는다.
-  //
-  // 세 가지를 캡처와 동일하게 맞춘다:
-  //  1) 후크를 **navigation 이전**에 심는다(addInitScript). goto 뒤에 심으면 로드 중 요청을 놓친다.
-  //  2) 액션은 **공용 executeSurfaceSteps**로 실행한다. 따로 해석하면 postcondition이 빠져
-  //     "그 상태가 아니었던" 관찰 목록이 나온다.
-  //  3) 오류를 삼키지 않는다. 도달하지 못한 화면의 관찰은 근거가 아니다.
-  if (cli.discover) {
-    const { driver: dd, state: ds } = createBridgeDriver();
-    const server0 = makeBridgeServer(ds);
-    await new Promise((r) => server0.listen(cli.port, '127.0.0.1', r));
-    err(`discovery bridge on ${cli.port}`);
-    const observed = [];
-    const failures = [];
-    const waitIdle = async (surfaceName) => {
-      // 고정 sleep 대신 **정말 조용해졌는지** 본다: pending 0 + quiet window.
-      for (let t = 0; t < 60; t += 1) {
-        const st = await dd.evaluate(NETWORK_IDLE_SOURCE, 400);
-        if (!st || !st.installed) return `NETWORK_HOOK_MISSING ${surfaceName}`;
-        if (st.idle) return null;
-        await dd.sleep(200);
+  // ── 관찰(discovery / canary) ────────────────────────────────────────────────
+  // 두 모드는 **같은 코드**를 쓴다. 다른 것은 대상 surface 집합과 반복 횟수뿐이다.
+  if (cli.discover || cli.canary) {
+    const targets = cli.canary
+      ? SPEC.REQUIRED_SMOKE_SURFACES.filter((x) => x.name === cli.canary)
+      : SPEC.REQUIRED_SMOKE_SURFACES;
+    const runs = [];
+    for (let attempt = 0; attempt < cli.repeat; attempt += 1) {
+      const { driver: dd, state: ds } = createBridgeDriver();
+      const server0 = makeBridgeServer(ds);
+      await new Promise((r) => server0.listen(cli.port, '127.0.0.1', r));
+      err(`bridge on ${cli.port} — ${cli.canary ? `canary ${cli.canary} #${attempt + 1}/${cli.repeat}` : 'discovery'}`);
+      const observed = [];
+      const failures = [];
+      const waitIdle = async (name) => {
+        for (let t = 0; t < 60; t += 1) {
+          const st = await dd.evaluate(NETWORK_IDLE_SOURCE, 400);
+          if (!st || !st.installed) return `NETWORK_HOOK_MISSING ${name}`;
+          if (st.stale) return `NETWORK_HOOK_STALE ${name} v${st.version}`;
+          if (st.idle) return null;
+          await dd.sleep(200);
+        }
+        return `NETWORK_NEVER_IDLE ${name}`;
+      };
+      try {
+        // 어댑터 handshake — 붙은 쪽이 같은 protocol의 커밋된 어댑터인지 확인한다.
+        const hello = await dd.hello(BRIDGE_PROTOCOL);
+        if (!hello || hello.protocol !== BRIDGE_PROTOCOL) {
+          err(`BRIDGE_PROTOCOL_MISMATCH ${hello && hello.protocol} != ${BRIDGE_PROTOCOL}`);
+          return 1;
+        }
+        if (typeof dd.addInitScript !== 'function') { err('DRIVER_NO_ADD_INIT_SCRIPT'); return 1; }
+        // ACK는 hook이 실제로 심겼다는 응답이어야 한다 — 예외를 삼키고 true를 돌려주면 안 된다.
+        const ack = await dd.addInitScript(NETWORK_INSTALL_SOURCE);
+        if (!ack || ack.ok !== true || ack.version !== NETWORK_HOOK_VERSION) {
+          err(`ADD_INIT_SCRIPT_NOT_ACKED ${JSON.stringify(ack)}`);
+          return 1;
+        }
+        for (const surface of targets) {
+          const r = await executeSurfaceSteps({ surface, rawContext: CAPTURE_SCENARIO, driver: dd,
+            raster: SPEC.RASTER_CONTRACT });
+          if (r.errors.length) { failures.push(`${surface.name}: ${r.errors[0]}`); continue; }
+          const idleErr = await waitIdle(surface.name);
+          if (idleErr) { failures.push(idleErr); continue; }
+          const drained = await dd.evaluate(NETWORK_DRAIN_SOURCE, null);
+          if (!drained || drained.ok !== true) { failures.push(`${surface.name}: DRAIN ${JSON.stringify(drained)}`); continue; }
+          // 새 문서에서 hook이 **로드 이전**에 심겼는지 — navigation-time 요청을 잡았다는 증거다.
+          if (drained.installedAtReadyState !== 'loading')
+            failures.push(`${surface.name}: HOOK_INSTALLED_TOO_LATE ${drained.installedAtReadyState}`);
+          for (const e of drained.entries)
+            observed.push({ surface: surface.name, method: e.method, url: e.url, status: e.status, ok: e.ok });
+        }
+      } finally { ds.done = true; await new Promise((r) => server0.close(r)); }
+      if (failures.length) {
+        err(`OBSERVE_INCOMPLETE — ${failures.length}건`);
+        for (const f of failures) err(`  ${f}`);
+        return 1;
       }
-      return `NETWORK_NEVER_IDLE ${surfaceName}`;
-    };
-    try {
-      if (typeof dd.addInitScript !== 'function') { err('DRIVER_NO_ADD_INIT_SCRIPT'); return 1; }
-      const installed = await dd.addInitScript(NETWORK_INSTALL_SOURCE);   // navigation 이전 주입
-      if (installed !== true) { err('ADD_INIT_SCRIPT_NOT_ACKED'); return 1; }
-      for (const surface of SPEC.REQUIRED_SMOKE_SURFACES) {
-        const r = await executeSurfaceSteps({ surface, rawContext: CAPTURE_SCENARIO, driver: dd,
-          raster: SPEC.RASTER_CONTRACT });
-        if (r.errors.length) { failures.push(`${surface.name}: ${r.errors[0]}`); continue; }
-        const idleErr = await waitIdle(surface.name);
-        if (idleErr) { failures.push(idleErr); continue; }
-        const entries = await dd.evaluate(NETWORK_DRAIN_SOURCE, null);
-        if (!Array.isArray(entries)) { failures.push(`${surface.name}: DRAIN_INVALID`); continue; }
-        for (const e of entries) observed.push({ surface: surface.name, method: e.method, url: e.url, status: e.status, ok: e.ok });
-      }
-    } finally { ds.done = true; setTimeout(() => server0.close(), 200); }
-    if (failures.length) {
-      // 도달하지 못한 surface가 있으면 목록은 불완전하다 — 그 사실을 숨기지 않는다.
-      err(`DISCOVERY_INCOMPLETE — ${failures.length} surface 실패`);
-      for (const f of failures) err(`  ${f}`);
-      return 1;
+      runs.push({ observed, ...canonicalEndpoints(observed) });
     }
+
     // 종료 시점 HEAD 재검증 — 관찰 도중 워킹카피가 바뀌면 이 목록의 출처가 흔들린다.
     const head2 = headBlobBinding(REPO_DIR, DISCOVERY_HASHED_MODULES,
       (c) => execSync(c, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }), head.headCommit);
     if (head2.errors.length || JSON.stringify(head2.blobs) !== JSON.stringify(head.blobs)) {
-      err('HEAD_BINDING_DRIFTED_DURING_DISCOVERY');
+      err('HEAD_BINDING_DRIFTED_DURING_OBSERVE');
       for (const e of head2.errors) err(`  ${e}`);
       return 1;
     }
-    // method별로 구별해 집계한다 — GET과 PATCH가 합쳐지면 endpoint 우주가 거짓이 된다.
-    const key = (e) => `${e.method} ${e.url}`;
-    const byKey = new Map();
-    for (const e of observed) {
-      const k = key(e);
-      const cur = byKey.get(k) || { method: e.method, url: e.url, statuses: new Set(), surfaces: new Set() };
-      cur.statuses.add(e.status); cur.surfaces.add(e.surface); byKey.set(k, cur);
+    // 반복 실행은 **exact 일치**해야 한다. 다르면 그 화면은 아직 결정적이지 않다.
+    const drift = runs.slice(1).findIndex((r) => r.digest !== runs[0].digest);
+    if (drift >= 0) {
+      err(`ENDPOINT_DRIFT_BETWEEN_RUNS run1 vs run${drift + 2}`);
+      const a = new Set(runs[0].set), b = new Set(runs[drift + 1].set);
+      for (const x of runs[0].set) if (!b.has(x)) err(`  -${x}`);
+      for (const x of runs[drift + 1].set) if (!a.has(x)) err(`  +${x}`);
+      return 1;
     }
     log(JSON.stringify({
+      mode: cli.canary ? 'canary' : 'discovery',
+      // 카나리는 일부 화면만 본다 — manifest 근거로 쓰면 안 된다.
+      eligibleForManifest: !cli.canary,
       provenance: { headCommit: head.headCommit, blobs: head.blobs,
-        specFingerprint: specFingerprint(SPEC, (v) => createHash('sha256').update(v).digest('hex')) },
-      surfaces: SPEC.REQUIRED_SMOKE_SURFACES.map((x) => x.name),
-      surfacesCompleted: SPEC.REQUIRED_SMOKE_SURFACES.length - failures.length,
-      requestCount: observed.length,
-      endpoints: [...byKey.values()].map((v) => ({ method: v.method, url: v.url,
-        statuses: [...v.statuses].sort(), surfaces: [...v.surfaces].sort() }))
-        .sort((a, b) => (`${a.method} ${a.url}` < `${b.method} ${b.url}` ? -1 : 1)),
+        specFingerprint: specFingerprint(SPEC, (v) => createHash('sha256').update(v).digest('hex')),
+        hookVersion: NETWORK_HOOK_VERSION, bridgeProtocol: BRIDGE_PROTOCOL },
+      surfaces: targets.map((x) => x.name),
+      surfacesCompleted: targets.length,
+      repeats: cli.repeat,
+      digest: runs[0].digest,
+      endpoints: runs[0].set,
     }, null, 1));
-    err('discovery 완료 — 아무것도 쓰지 않았다. 사람이 검수해 EXPECTED_DATASET_MANIFEST를 별도 커밋할 것.');
+    err(cli.canary
+      ? 'canary 완료 — 부분 관찰이므로 manifest 근거로 쓸 수 없다(eligibleForManifest:false).'
+      : 'discovery 완료 — 아무것도 쓰지 않았다. 사람이 검수해 EXPECTED_DATASET_MANIFEST를 별도 커밋할 것.');
     return 0;
   }
 

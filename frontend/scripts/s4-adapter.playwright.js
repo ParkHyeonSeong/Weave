@@ -27,44 +27,69 @@
 async (page) => {
   const BRIDGE = 'http://127.0.0.1:10098';
   const ORIGIN = 'http://localhost:10000';
+  const PROTOCOL = 's4-bridge/1';        // CLI의 BRIDGE_PROTOCOL과 일치해야 한다
   // selector + nth + hasText 를 Playwright locator 문자열로. **대상 선택만** 한다.
   const T = (sel, nth, hasText) => (sel || '')
     + (hasText ? `:has-text("${hasText}")` : '')
     + ' >> nth=' + (nth == null ? 0 : nth);
+
+  // ── disposable context ─────────────────────────────────────────────────────
+  // 전달받은 page를 직접 몰면 URL·viewport·localStorage·init script가 누적되고 복원되지
+  // 않는다. 특히 23개 중 19개가 `setStorage → goto` 순서라, 시작 탭이 앱 origin이 아니면
+  // 엉뚱한 origin에 기록된다. 인증 상태만 복사한 일회용 context에서 돌고 finally에서 닫는다.
+  const browser = page.context().browser();
+  if (!browser) {
+    return JSON.stringify({ fatal: 'NO_BROWSER — persistent context에서는 disposable context를 만들 수 없다' });
+  }
+  const storageState = await page.context().storageState();
+  const ctx = await browser.newContext({ storageState });
+  const p = await ctx.newPage();
   const log = [];
-  for (let i = 0; i < 2000; i += 1) {
-    const cmd = await (await page.request.get(`${BRIDGE}/next`)).json();
-    if (cmd.done) { log.push('done'); break; }
-    let value = null;
-    let error = null;
-    try {
-      const [a, b, c] = cmd.args;
-      if (cmd.method === 'setViewport') await page.setViewportSize({ width: a, height: b });
-      else if (cmd.method === 'setStorage') await page.evaluate((p) => { localStorage.setItem(p[0], p[1]); }, [a, b]);
-      else if (cmd.method === 'goto') await page.goto(ORIGIN + a, { waitUntil: 'domcontentloaded' });
-      else if (cmd.method === 'reload') await page.reload({ waitUntil: 'domcontentloaded' });
-      else if (cmd.method === 'settle') await page.locator(a).first().waitFor({ state: b === 'hidden' ? 'hidden' : 'visible', timeout: c || 12000 });
-      else if (cmd.method === 'click') { await page.locator(T(a, b, c)).first().click({ timeout: 8000 }); await page.waitForTimeout(300); }
-      else if (cmd.method === 'hover') { await page.locator(T(a, b)).first().hover({ timeout: 8000 }); await page.waitForTimeout(200); }
-      else if (cmd.method === 'sleep') await page.waitForTimeout(a);
-      else if (cmd.method === 'evaluate') value = await page.evaluate(new Function(`return (${a})`)(), b);
-      else if (cmd.method === 'addInitScript') {
-        // 매 문서에 navigation **이전** 실행. 현재 문서에도 한 번 적용해 첫 화면을 놓치지 않는다.
-        await page.addInitScript({ content: `(${a})()` });
-        try { await page.evaluate(new Function(`return (${a})`)()); } catch (e) { /* 첫 적용 실패는 다음 navigation이 덮는다 */ }
-        value = true;
-      } else if (cmd.method === 'screenshot') {
-        await page.evaluate(() => document.fonts.ready);
-        value = (await page.screenshot({ type: 'png', scale: 'css' })).toString('base64');
-      } else error = `unknown method ${cmd.method}`;
-    } catch (e) {
-      error = String((e && e.message) || e).split('\n')[0].slice(0, 200);
+  try {
+    // 앱 origin으로 prime — 첫 setStorage가 about:blank에 기록되지 않게 한다.
+    await p.goto(ORIGIN, { waitUntil: 'domcontentloaded' });
+    for (let i = 0; i < 2000; i += 1) {
+      const cmd = await (await p.request.get(`${BRIDGE}/next`)).json();
+      if (cmd.done) { log.push('done'); break; }
+      let value = null;
+      let error = null;
+      try {
+        const [a, b, c] = cmd.args;
+        if (cmd.method === 'hello') value = { protocol: PROTOCOL, echo: a };
+        else if (cmd.method === 'setViewport') await p.setViewportSize({ width: a, height: b });
+        else if (cmd.method === 'setStorage') {
+          // origin이 앱이 아닌 상태에서 쓰면 그 기록은 다음 goto에서 사라진다 — 명시적으로 막는다.
+          const origin = await p.evaluate(() => location.origin);
+          if (origin !== ORIGIN) throw new Error(`WRONG_ORIGIN_FOR_STORAGE ${origin}`);
+          await p.evaluate((q) => { localStorage.setItem(q[0], q[1]); }, [a, b]);
+        } else if (cmd.method === 'goto') await p.goto(ORIGIN + a, { waitUntil: 'domcontentloaded' });
+        else if (cmd.method === 'reload') await p.reload({ waitUntil: 'domcontentloaded' });
+        else if (cmd.method === 'settle') await p.locator(a).first().waitFor({ state: b === 'hidden' ? 'hidden' : 'visible', timeout: c || 12000 });
+        else if (cmd.method === 'click') { await p.locator(T(a, b, c)).first().click({ timeout: 8000 }); await p.waitForTimeout(300); }
+        else if (cmd.method === 'hover') { await p.locator(T(a, b)).first().hover({ timeout: 8000 }); await p.waitForTimeout(200); }
+        else if (cmd.method === 'sleep') await p.waitForTimeout(a);
+        else if (cmd.method === 'evaluate') value = await p.evaluate(new Function(`return (${a})`)(), b);
+        else if (cmd.method === 'addInitScript') {
+          // 매 문서에 navigation **이전** 실행으로 등록하고, 현재 문서에도 한 번 적용한다.
+          // ACK는 그 적용 결과를 그대로 돌려준다 — 예외를 삼키고 true를 주면 검증이 무의미하다.
+          await p.addInitScript({ content: `(${a})()` });
+          value = await p.evaluate(new Function(`return (${a})`)());
+        } else if (cmd.method === 'screenshot') {
+          await p.evaluate(() => document.fonts.ready);
+          value = (await p.screenshot({ type: 'png', scale: 'css' })).toString('base64');
+        } else error = `unknown method ${cmd.method}`;
+      } catch (e) {
+        error = String((e && e.message) || e).split('\n')[0].slice(0, 200);
+      }
+      log.push(cmd.method + (error ? ` ERR:${error}` : ''));
+      await p.request.post(`${BRIDGE}/`, {
+        data: JSON.stringify({ id: cmd.id, value, error }),
+        headers: { 'content-type': 'application/json' },
+      });
     }
-    log.push(cmd.method + (error ? ` ERR:${error}` : ''));
-    await page.request.post(`${BRIDGE}/`, {
-      data: JSON.stringify({ id: cmd.id, value, error }),
-      headers: { 'content-type': 'application/json' },
-    });
+  } finally {
+    // 일회용 context를 닫는다 — 두 번의 반복 실행이 서로 독립 증거가 되려면 필수다.
+    await ctx.close();
   }
   return JSON.stringify(log);
 }

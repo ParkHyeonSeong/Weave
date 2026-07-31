@@ -366,3 +366,31 @@ export function headBlobBinding(repoDir, relPaths, exec, pinnedCommit) {
   }
   return { errors, blobs: errors.length ? null : blobs, headCommit };
 }
+
+
+// ── 정적 import closure ───────────────────────────────────────────────────────
+// HEAD 결속 목록을 손으로 열거하면 빠진다 — 실증: s4Evaluator가 import하는
+// cssColorLiterals.mjs가 목록에 없었다. 진입점에서 로컬 import를 기계적으로 따라가
+// 목록을 산출하고, 선언된 목록과 exact 대조한다.
+export function staticImportClosure(entryRelPaths, readFile, repoRelBase) {
+  const seen = new Set(), out = [];
+  const norm = (p) => p.split(sep).join('/');
+  const visit = (rel) => {
+    if (seen.has(rel)) return;
+    seen.add(rel); out.push(rel);
+    let src = null;
+    try { src = readFile(rel); } catch (e) { return; }
+    // 로컬 상대 import만 따라간다(패키지 의존성은 대상이 아니다).
+    for (const m of src.matchAll(/^\s*(?:import|export)[^'"]*?from\s+['"](\.[^'"]+)['"]/gm)) {
+      const child = norm(join(dirname(rel), m[1]));
+      if (child.endsWith('.mjs') || child.endsWith('.js')) visit(child);
+    }
+    for (const m of src.matchAll(/^\s*import\s+['"](\.[^'"]+)['"]/gm)) {
+      const child = norm(join(dirname(rel), m[1]));
+      if (child.endsWith('.mjs') || child.endsWith('.js')) visit(child);
+    }
+  };
+  for (const e of entryRelPaths) visit(norm(e));
+  void repoRelBase;
+  return out.sort();
+}

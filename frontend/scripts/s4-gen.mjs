@@ -11,6 +11,12 @@ import * as CANON from '../library/s4Canonicalize.mjs';
 // 무거운 작업(Sass 컴파일·fixture 읽기) **전에** 인자 문법을 강제한다.
 const CLI = PROMOTE_IO.parseCliArgs(process.argv.slice(2));
 if (CLI.error) { console.error(`${PROMOTE_IO.CLI_USAGE}\n  ${CLI.error}`); process.exit(2); }
+// 승격 하드 비활성은 **CLI 파싱 직후** 본다. 뒤에 두면 bundle 부재 같은 다른 오류가 먼저 나와
+// "CLI에서 즉시 막힌다"는 말이 사실이 아니게 된다(실증: CAPTURE_BUNDLE_MISSING이 먼저 났다).
+if (CLI.mode === 'promote' && !PROMOTE_IO.PROMOTION_ENABLED) {
+  console.error('PROMOTION_DISABLED — discovery-only 체크포인트에서는 승격할 수 없다.');
+  process.exit(1);
+}
 
 // spec은 **여기서 한 번** 스냅샷하고, 이후 raw 네임스페이스에는 접근하지 않는다.
 // 단계마다 다시 읽으면 조회할 때마다 값이 달라지는 루트에서 해시된 것과 소비되는 것이 갈린다.
@@ -101,11 +107,6 @@ const pngOf = (name) => { const b = bundlePng(name);
 //                                  : staging을 재생성하지 않고 읽어, 지금 재계산한 canonical bytes와
 //                                    exact 대조하고 lock 안에서 CAS 후 atomic rename
 const PROMOTING = CLI.mode === 'promote';
-// 승격은 하드 비활성 상태다 — CLI에서도 즉시 멈춘다(라이브러리 게이트에만 의존하지 않는다).
-if (PROMOTING && !PROMOTE_IO.PROMOTION_ENABLED) {
-  console.error('PROMOTION_DISABLED — discovery-only 체크포인트에서는 승격할 수 없다.');
-  process.exit(1);
-}
 const contextRawStr = ctxRaw.toString('utf8');
 
 // 승인 경로는 한 번만 정의한다. writer만 바꿔 끼운다 — 승격도 같은 검증을 통과한 bytes만 쓴다.

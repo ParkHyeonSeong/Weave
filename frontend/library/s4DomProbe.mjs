@@ -223,16 +223,34 @@ export const DATASET_PROBE_SOURCE = `function (urls) {
 // ⚠️ 이 소스는 **navigation 이전에** 심어야 한다. goto 이후에 evaluate로 심으면
 // 페이지 로드 중 발생한 요청(대부분의 API 호출)은 이미 지나가 관찰되지 않는다(실증).
 // driver.addInitScript(source)로 매 문서에 자동 주입한다.
+// hook 버전. 소스가 바뀌면 올린다 — 같은 page에 남은 **구버전 hook**을 최신인 양 쓰지 않도록.
+export const NETWORK_HOOK_VERSION = 2;
+
 export const NETWORK_INSTALL_SOURCE = `function () {
-  if (window.__s4net) return true;
-  var st = { entries: [], pending: 0, lastActivity: Date.now() };
+  var VERSION = 2;
+  var st = window.__s4net;
+  if (st) {
+    // 이미 있으면 **버전을 확인한다.** 이전 판은 존재하기만 하면 true를 돌려줘서,
+    // 같은 page에 남은 구버전 hook으로 최신 HEAD를 시험한 것처럼 보일 수 있었다.
+    if (st.version !== VERSION) return { ok: false, reason: 'STALE_HOOK', version: st.version, want: VERSION };
+    return { ok: true, version: st.version, documentId: st.documentId,
+      installedAtReadyState: st.installedAtReadyState, reused: true };
+  }
+  var docId;
+  try { docId = String(performance.timeOrigin) + ':' + String(performance.now()) + ':' + location.href; }
+  catch (e) { docId = String(Date.now()) + ':' + location.href; }
+  st = { version: VERSION, documentId: docId, installedAtReadyState: document.readyState,
+    entries: [], pending: 0, lastActivity: Date.now() };
   window.__s4net = st;
   function abs(raw) {
     try { return new URL(String(raw), location.href).href; } catch (e) { return String(raw); }
   }
-  function record(method, url, status, ok) {
+  // ok 기준을 **통일**한다: 200-299. 이전 판은 fetch가 r.ok(200-299), XHR이 <400이라
+  // 같은 3xx 응답이 채널에 따라 다르게 기록됐다.
+  function isOk(status) { return status >= 200 && status < 300; }
+  function record(method, url, status) {
     st.entries.push({ method: String(method || 'GET').toUpperCase(), url: abs(url),
-      status: typeof status === 'number' ? status : -1, ok: !!ok });
+      status: typeof status === 'number' ? status : -1, ok: isOk(status) });
     st.lastActivity = Date.now();
   }
   var of = window.fetch;
@@ -241,8 +259,8 @@ export const NETWORK_INSTALL_SOURCE = `function () {
     var method = (init && init.method) || (input && input.method) || 'GET';
     st.pending++; st.lastActivity = Date.now();
     return of.apply(this, arguments).then(function (r) {
-      record(method, url, r.status, r.ok); st.pending--; st.lastActivity = Date.now(); return r;
-    }, function (e) { record(method, url, -1, false); st.pending--; st.lastActivity = Date.now(); throw e; });
+      record(method, url, r.status); st.pending--; st.lastActivity = Date.now(); return r;
+    }, function (e) { record(method, url, -1); st.pending--; st.lastActivity = Date.now(); throw e; });
   };
   var oo = XMLHttpRequest.prototype.open;
   var osend = XMLHttpRequest.prototype.send;
@@ -251,31 +269,35 @@ export const NETWORK_INSTALL_SOURCE = `function () {
     var xhr = this;
     st.pending++; st.lastActivity = Date.now();
     xhr.addEventListener('loadend', function () {
-      record(xhr.__s4m, xhr.__s4u, xhr.status, xhr.status >= 200 && xhr.status < 400);
+      record(xhr.__s4m, xhr.__s4u, xhr.status);
       st.pending--; st.lastActivity = Date.now();
     });
     return osend.apply(this, arguments);
   };
-  return true;
+  return { ok: true, version: VERSION, documentId: st.documentId,
+    installedAtReadyState: st.installedAtReadyState, reused: false };
 }`;
 
 // 네트워크가 **정말 조용해졌는지** 본다. 고정 sleep은 느린 응답을 놓치고 빠른 화면에서는 낭비다.
-// pending === 0 이고 마지막 활동 이후 quietMs가 지나야 idle이다.
 export const NETWORK_IDLE_SOURCE = `function (quietMs) {
   var st = window.__s4net;
-  if (!st) return { installed: false, idle: false, pending: -1, sinceMs: -1 };
+  if (!st) return { installed: false, idle: false, pending: -1, sinceMs: -1, version: null };
+  if (st.version !== 2) return { installed: true, stale: true, idle: false, pending: -1, sinceMs: -1, version: st.version };
   var since = Date.now() - st.lastActivity;
-  return { installed: true, idle: st.pending === 0 && since >= quietMs, pending: st.pending, sinceMs: since };
+  return { installed: true, stale: false, idle: st.pending === 0 && since >= quietMs,
+    pending: st.pending, sinceMs: since, version: st.version, documentId: st.documentId,
+    installedAtReadyState: st.installedAtReadyState };
 }`;
 
-// 관찰 결과를 비우고 돌려준다. **구조화된 증거**다 — URL 문자열만 모으면 GET과 PATCH가
-// 합쳐지고 실패한 요청과 성공한 요청이 구별되지 않는다.
+// 관찰 결과를 비우고 돌려준다. 버전이 다르면 **비우지 않고** 거부한다.
 export const NETWORK_DRAIN_SOURCE = `function () {
   var st = window.__s4net;
-  if (!st) return null;
+  if (!st) return { ok: false, reason: 'NOT_INSTALLED' };
+  if (st.version !== 2) return { ok: false, reason: 'STALE_HOOK', version: st.version };
   var out = st.entries;
   st.entries = [];
-  return out;
+  return { ok: true, version: st.version, documentId: st.documentId,
+    installedAtReadyState: st.installedAtReadyState, entries: out };
 }`;
 
 // 1/64 CSS px 양자화 — 캡처 시점과 검증 시점이 같은 규칙을 쓴다.

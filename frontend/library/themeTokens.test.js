@@ -4808,79 +4808,131 @@ describe('S4 승격 하드 비활성 — discovery-only 체크포인트', () => 
   });
 });
 
+describe('S4 관찰 계약 — canary·hook 버전·격리·재현성', () => {
+  const capSrc = () => readFileSync(new URL('../scripts/s4-capture.mjs', import.meta.url), 'utf8');
+  const adapterSrc = () => readFileSync(new URL('../scripts/s4-adapter.playwright.js', import.meta.url), 'utf8');
+
+  it('strict CLI: 모드는 정확히 하나, canary는 2회 이상', () => {
+    const t = (a) => CAP.parseCaptureArgs(a, SPEC);
+    expect(t(['--canary', 'canvas', '--repeat', '2'])).toMatchObject({ canary: 'canvas', repeat: 2 });
+    expect(t(['--canary', 'canvas']).error).toMatch(/REPEAT_RANGE/);       // 1회는 재현성 증거가 아니다
+    expect(t(['--canary', 'canvas', '--repeat', '9']).error).toMatch(/REPEAT_RANGE/);
+    expect(t(['--canary', 'nope', '--repeat', '2']).error).toMatch(/UNKNOWN_SURFACE nope/);
+    expect(t(['--discover', '--canary', 'canvas']).error).toMatch(/EXACTLY_ONE_MODE/);
+    expect(t([]).error).toMatch(/EXACTLY_ONE_MODE/);
+    expect(t(['--phase', 'light', '--repeat', '2']).error).toMatch(/REPEAT_ONLY_WITH_CANARY/);
+    expect(t(['--surface', 'canvas']).error).toMatch(/UNKNOWN_ARG/);
+    expect(t(['--canary']).error).toMatch(/MISSING_VALUE/);
+  });
+  it('canary 결과는 manifest 근거로 쓸 수 없다고 출력에 박힌다', () => {
+    expect(capSrc()).toContain('eligibleForManifest: !cli.canary');
+  });
+  it('hook은 버전을 확인한다 — 구버전 재사용을 최신인 양 쓰지 않는다', () => {
+    const install = new Function(`return (${PROBE.NETWORK_INSTALL_SOURCE})`)();
+    const g = globalThis;
+    const saved = g.window;
+    try {
+      // 구버전 hook이 남아 있는 문서
+      g.window = { __s4net: { version: 1 } };
+      expect(install()).toMatchObject({ ok: false, reason: 'STALE_HOOK', version: 1, want: PROBE.NETWORK_HOOK_VERSION });
+      // 같은 버전이면 재사용을 알린다
+      g.window = { __s4net: { version: PROBE.NETWORK_HOOK_VERSION, documentId: 'd', installedAtReadyState: 'loading' } };
+      expect(install()).toMatchObject({ ok: true, reused: true, documentId: 'd' });
+    } finally { if (saved === undefined) delete g.window; else g.window = saved; }
+  });
+  it('drain/idle도 버전이 다르면 거부한다', () => {
+    const drain = new Function(`return (${PROBE.NETWORK_DRAIN_SOURCE})`)();
+    const idle = new Function(`return (${PROBE.NETWORK_IDLE_SOURCE})`)();
+    const g = globalThis; const saved = g.window;
+    try {
+      g.window = {};
+      expect(drain()).toMatchObject({ ok: false, reason: 'NOT_INSTALLED' });
+      g.window = { __s4net: { version: 1, entries: [{ a: 1 }] } };
+      expect(drain()).toMatchObject({ ok: false, reason: 'STALE_HOOK' });
+      expect(g.window.__s4net.entries).toHaveLength(1);                    // 거부 시 비우지 않는다
+      expect(idle(0)).toMatchObject({ stale: true, idle: false });
+    } finally { if (saved === undefined) delete g.window; else g.window = saved; }
+  });
+  it('navigation-time 증거: 새 문서에서 loading 상태로 심겼는지 본다', () => {
+    expect(capSrc()).toContain("drained.installedAtReadyState !== 'loading'");
+    expect(capSrc()).toContain('HOOK_INSTALLED_TOO_LATE');
+  });
+  it('ACK는 실제 적용 결과다 — 예외를 삼키고 true를 주지 않는다', () => {
+    expect(capSrc()).toContain('ack.version !== NETWORK_HOOK_VERSION');
+    expect(adapterSrc()).toContain('value = await p.evaluate(new Function(`return (${a})`)());');
+  });
+  it('반복 실행은 exact 일치해야 한다', () => {
+    expect(capSrc()).toContain('ENDPOINT_DRIFT_BETWEEN_RUNS');
+    const a = CAP.canonicalEndpoints([{ method: 'GET', url: '/a', status: 200, ok: true }]);
+    const b = CAP.canonicalEndpoints([{ method: 'GET', url: '/a', status: 200, ok: true }]);
+    expect(a.digest).toBe(b.digest);
+    // method·status·ok가 전부 집합에 남는다 — 하나라도 빠지면 합쳐진다
+    expect(CAP.canonicalEndpoints([{ method: 'PATCH', url: '/a', status: 200, ok: true }]).digest).not.toBe(a.digest);
+    expect(CAP.canonicalEndpoints([{ method: 'GET', url: '/a', status: 304, ok: false }]).digest).not.toBe(a.digest);
+    expect(a.set[0]).toBe('GET /a 200 ok');
+  });
+  it('ok 기준이 fetch/XHR 동일하다(200-299)', () => {
+    const src = PROBE.NETWORK_INSTALL_SOURCE;
+    expect(src).toContain('function isOk(status) { return status >= 200 && status < 300; }');
+    // 이전 판: fetch는 r.ok(200-299), XHR은 <400 — 같은 3xx가 채널에 따라 다르게 기록됐다.
+    expect(src).not.toContain('record(method, url, r.status, r.ok)');
+    expect(src).not.toContain('xhr.status < 400');
+  });
+  it('어댑터는 일회용 context에서 돌고 반드시 닫는다', () => {
+    const src = adapterSrc();
+    expect(src).toContain('browser.newContext({ storageState })');
+    expect(src).toContain('await ctx.close();');
+    expect(src).toContain('WRONG_ORIGIN_FOR_STORAGE');          // 잘못된 origin 기록 방지
+    expect(src).toContain('NO_BROWSER');                        // persistent context는 fail-closed
+    // 전달받은 page를 직접 몰지 않는다
+    for (const banned of ['page.setViewportSize', 'page.goto(', 'page.addInitScript'])
+      expect(src).not.toContain(banned);
+  });
+  it('브리지 handshake로 붙은 어댑터를 확인한다', () => {
+    expect(CAP.BRIDGE_PROTOCOL).toBe('s4-bridge/1');
+    expect(CAP.BRIDGE_METHODS[0]).toBe('hello');
+    expect(capSrc()).toContain('BRIDGE_PROTOCOL_MISMATCH');
+    expect(adapterSrc()).toContain(`const PROTOCOL = '${CAP.BRIDGE_PROTOCOL}';`);
+  });
+  it('HEAD 목록은 정적 import closure와 exact 일치한다', () => {
+    const repo = fileURLToPath(new URL('../../', import.meta.url));
+    const read = (rel) => readFileSync(join(repo, rel), 'utf8');
+    const closure = PROM.staticImportClosure([CAP.DISCOVERY_ENTRY], read);
+    // 어댑터는 import되지 않으므로(브라우저 프로세스) 명시적으로 더한다.
+    expect([...CAP.DISCOVERY_HASHED_MODULES].sort())
+      .toEqual([...closure, 'frontend/scripts/s4-adapter.playwright.js'].sort());
+    // 실증된 누락이 다시 들어오면 여기서 잡힌다
+    expect(closure).toContain('frontend/library/cssColorLiterals.mjs');
+  });
+});
+
 describe('S4 discovery-only — 관찰 전용 계약', () => {
-  it('HEAD 결속이 캡처와 분리돼 있다(승격 모듈을 요구하지 않는다)', () => {
-    expect(CAP.DISCOVERY_HASHED_MODULES).toEqual([
-      'frontend/library/s4Spec.mjs',
-      'frontend/library/s4DomProbe.mjs',
-      'frontend/library/s4Evaluator.mjs',
-      'frontend/library/s4CaptureRunner.mjs',
-      'frontend/library/s4Canonicalize.mjs',
-      'frontend/library/s4Promote.mjs',              // 검증기(headBlobBinding) 자신
-      'frontend/scripts/s4-capture.mjs',
-      'frontend/scripts/s4-adapter.playwright.js',   // 브라우저를 실제로 모는 코드
-    ]);
-    // 캡처는 승격 CLI까지 요구한다
+  const capSrc = readFileSync(new URL('../scripts/s4-capture.mjs', import.meta.url), 'utf8');
+  it('HEAD 결속이 캡처와 분리돼 있다(승격 CLI를 요구하지 않는다)', () => {
     expect(CAP.HASHED_MODULES).toEqual([...CAP.DISCOVERY_HASHED_MODULES, 'frontend/scripts/s4-promote-capture.mjs']);
-    for (const m of CAP.DISCOVERY_HASHED_MODULES) expect(CAP.HASHED_MODULES).toContain(m);
-    // 실제 파일이 전부 존재해야 한다(목록만 늘리는 우회 차단)
     for (const rel of CAP.HASHED_MODULES)
       expect(existsSync(new URL(`../../${rel}`, import.meta.url))).toBe(true);
   });
-  it('네트워크 후크는 navigation 이전에 심어야 한다 — addInitScript primitive가 있다', () => {
-    expect(CAP.BRIDGE_METHODS).toContain('addInitScript');
-    const src = readFileSync(new URL('../scripts/s4-capture.mjs', import.meta.url), 'utf8');
-    // goto 이후 evaluate로 심으면 로드 중 요청을 놓친다 — 그 형태가 남아 있으면 안 된다.
-    expect(src).toContain('dd.addInitScript(NETWORK_INSTALL_SOURCE)');
-    expect(src).not.toContain('dd.evaluate(NETWORK_INSTALL_SOURCE');
-  });
   it('액션 의미론을 따로 구현하지 않는다 — 공용 executeSurfaceSteps를 쓴다', () => {
-    const src = readFileSync(new URL('../scripts/s4-capture.mjs', import.meta.url), 'utf8');
-    expect(src).toContain('executeSurfaceSteps({ surface, rawContext: CAPTURE_SCENARIO');
-    // op 분기를 다시 적으면 postcondition이 빠진다
+    expect(capSrc).toContain('executeSurfaceSteps({ surface, rawContext: CAPTURE_SCENARIO');
     for (const banned of ["step.op === 'setStorage'", "step.op === 'goto'", "step.op === 'click'"])
-      expect(src).not.toContain(banned);
+      expect(capSrc).not.toContain(banned);
   });
   it('오류를 삼키지 않는다 — 도달 못한 surface가 있으면 목록을 내지 않는다', () => {
-    const src = readFileSync(new URL('../scripts/s4-capture.mjs', import.meta.url), 'utf8');
-    expect(src).toContain('DISCOVERY_INCOMPLETE');
-    expect(src).not.toContain('discovery는 실패해도 관찰을 계속한다');
+    expect(capSrc).toContain('OBSERVE_INCOMPLETE');
+    expect(capSrc).not.toContain('discovery는 실패해도 관찰을 계속한다');
   });
-  it('tracked 어댑터가 11개 method를 전부 구현한다', () => {
-    const src = readFileSync(new URL('../scripts/s4-adapter.playwright.js', import.meta.url), 'utf8');
-    for (const m of CAP.BRIDGE_METHODS) expect(src).toContain(`cmd.method === '${m}'`);
-    // addInitScript는 실제로 등록돼야 한다 — 분기만 있고 no-op이면 로드 중 요청을 놓친다.
-    expect(src).toContain('page.addInitScript({ content:');
-    // 어댑터는 아무것도 쓰지 않는다
-    const code = src.replace(/\/\*[\s\S]*?\*\//g, '').split('\n')
-      .map((l) => l.replace(/(^|[^:'"`])\/\/.*$/, '$1')).join('\n');
-    for (const banned of ['require(', 'node:fs', 'writeFileSync', 'mkdirSync']) expect(code).not.toContain(banned);
-  });
-  it('네트워크 증거는 구조화돼 있고 절대 URL로 정규화된다', () => {
-    const src = PROBE.NETWORK_INSTALL_SOURCE;
-    expect(src).toContain('new URL(String(raw), location.href)');   // 상대 URL 정규화
-    expect(src).toContain('method: String(method');                  // GET/PATCH 분리
-    expect(src).toContain('status:');
-    expect(src).toContain('st.pending++');                           // idle 판정용 카운터
-    // idle 계약은 고정 sleep이 아니다
-    expect(PROBE.NETWORK_IDLE_SOURCE).toContain('st.pending === 0 && since >= quietMs');
-    const cap = readFileSync(new URL('../scripts/s4-capture.mjs', import.meta.url), 'utf8');
-    expect(cap).toContain('NETWORK_IDLE_SOURCE');
-    expect(cap).toContain('NETWORK_NEVER_IDLE');
-  });
-  it('discovery 출력에 provenance와 surface 완료 상태가 들어간다', () => {
-    const cap = readFileSync(new URL('../scripts/s4-capture.mjs', import.meta.url), 'utf8');
-    expect(cap).toContain('HEAD_BINDING_DRIFTED_DURING_DISCOVERY');   // 종료 재검증
-    for (const k of ['provenance:', 'surfacesCompleted:', 'endpoints:', 'requestCount:'])
-      expect(cap).toContain(k);
+  it('종료 시점 HEAD 재검증과 provenance 출력이 있다', () => {
+    expect(capSrc).toContain('HEAD_BINDING_DRIFTED_DURING_OBSERVE');
+    for (const k of ['provenance:', 'surfacesCompleted:', 'endpoints:', 'hookVersion:', 'bridgeProtocol:'])
+      expect(capSrc).toContain(k);
   });
   it('discovery는 산출물을 쓰지 않는다', () => {
-    const src = readFileSync(new URL('../scripts/s4-capture.mjs', import.meta.url), 'utf8')
-      .replace(/\/\*[\s\S]*?\*\//g, '').split('\n').map((l) => l.replace(/(^|[^:'"`])\/\/.*$/, '$1')).join('\n');
-    for (const banned of ['node:fs', 'writeFileSync', 'mkdirSync']) expect(src).not.toContain(banned);
+    const code = capSrc.replace(/\/\*[\s\S]*?\*\//g, '').split('\n')
+      .map((l) => l.replace(/(^|[^:'"`])\/\/.*$/, '$1')).join('\n');
+    for (const banned of ['node:fs', 'writeFileSync', 'mkdirSync']) expect(code).not.toContain(banned);
   });
   it('공용 실행기는 캡처와 같은 postcondition을 판정한다', async () => {
-    // discovery가 쓰는 그 함수가 실제로 postcondition을 본다는 것을 직접 확인한다.
     const surface = { name: 'd1', captureName: 'd1.png', requiredElements: [], darkReviewSelectors: [],
       coverageSelectors: [], actions: [{ op: 'goto', url: '/x' }, { op: 'expectPresent', selector: '.Never' }] };
     const driver = {
@@ -4969,7 +5021,7 @@ describe('S4 HEAD 결속 — 캡처 시작 시점에 강제한다', () => {
   });
   it('해시 입력 모듈 목록이 fingerprint 입력과 일치한다', () => {
     expect(CAP.HASHED_MODULES).toEqual([...CAP.DISCOVERY_HASHED_MODULES, 'frontend/scripts/s4-promote-capture.mjs']);
-    expect(CAP.HASHED_MODULES.length).toBe(9);
+    expect(CAP.HASHED_MODULES.length).toBe(10);
   });
 });
 
@@ -4994,20 +5046,22 @@ describe('S4 캡처 진입점 — core를 우회하는 어댑터를 막는다', 
     for (const banned of ['resolveActions', 'derivePaintRect', 'normalizeOccurrence', 'expectPresent'])
       expect(t).not.toContain(banned);
   });
-  it('브리지 method는 원시 동작 11종뿐이다(selector 술어를 받는 primitive 없음)', () => {
-    expect([...CAP.BRIDGE_METHODS].sort()).toEqual(['addInitScript', 'click', 'evaluate', 'goto', 'hover',
-      'reload', 'screenshot', 'setStorage', 'setViewport', 'settle', 'sleep'].sort());
+  it('브리지 method는 원시 동작 12종뿐이다(selector 술어를 받는 primitive 없음)', () => {
+    expect([...CAP.BRIDGE_METHODS].sort()).toEqual(['addInitScript', 'click', 'evaluate', 'goto', 'hello',
+      'hover', 'reload', 'screenshot', 'setStorage', 'setViewport', 'settle', 'sleep'].sort());
   });
   it('인자 문법이 엄격하다', () => {
-    expect(CAP.parseCaptureArgs(['--phase', 'light'])).toEqual({ phase: 'light', port: 10098, discover: false });
-    expect(CAP.parseCaptureArgs(['--phase', 'dark', '--port', '10099'])).toEqual({ phase: 'dark', port: 10099, discover: false });
-    // discovery는 관찰 전용 — phase를 받지 않는다
-    expect(CAP.parseCaptureArgs(['--discover'])).toEqual({ phase: null, port: 10098, discover: true });
-    expect(CAP.parseCaptureArgs(['--discover', '--phase', 'light']).error).toMatch(/DISCOVER_TAKES_NO_PHASE/);
-    expect(CAP.parseCaptureArgs([]).error).toMatch(/PHASE_REQUIRED/);
-    expect(CAP.parseCaptureArgs(['--phase', 'sepia']).error).toMatch(/PHASE_REQUIRED/);
-    expect(CAP.parseCaptureArgs(['--bogus', '1']).error).toMatch(/UNKNOWN_ARG/);
-    expect(CAP.parseCaptureArgs(['--phase', 'light', '--port', '80']).error).toMatch(/BAD_PORT/);
+    expect(CAP.parseCaptureArgs(['--phase', 'light'], SPEC))
+      .toEqual({ phase: 'light', port: 10098, discover: false, canary: null, repeat: 1 });
+    expect(CAP.parseCaptureArgs(['--phase', 'dark', '--port', '10099'], SPEC))
+      .toEqual({ phase: 'dark', port: 10099, discover: false, canary: null, repeat: 1 });
+    expect(CAP.parseCaptureArgs(['--discover'], SPEC))
+      .toEqual({ phase: null, port: 10098, discover: true, canary: null, repeat: 1 });
+    expect(CAP.parseCaptureArgs(['--discover', '--phase', 'light'], SPEC).error).toMatch(/EXACTLY_ONE_MODE/);
+    expect(CAP.parseCaptureArgs([], SPEC).error).toMatch(/EXACTLY_ONE_MODE/);
+    expect(CAP.parseCaptureArgs(['--phase', 'sepia'], SPEC).error).toMatch(/PHASE_REQUIRED/);
+    expect(CAP.parseCaptureArgs(['--bogus', '1'], SPEC).error).toMatch(/UNKNOWN_ARG/);
+    expect(CAP.parseCaptureArgs(['--phase', 'light', '--port', '80'], SPEC).error).toMatch(/BAD_PORT/);
   });
   it('어댑터 바이트가 fingerprint 입력이다', () => {
     const realSha = (v) => createHash('sha256').update(v).digest('hex');
