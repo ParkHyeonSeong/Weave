@@ -124,7 +124,9 @@ export function requiredRouteLoad(surface, scenario) {
   if (!goto) return null;
   const url = String(goto.url).replace('{id}', String(scenario.trackId));
   if (!/^\/tracks\/\d+$/.test(url)) return null;
-  return `GET ${scenario.apiOrigin}/tracks/${scenario.trackId}`;
+  // **surface에 결속한다.** 전역 method+URL 집합으로 보면 한 화면의 GET이 다른 화면의
+  // route-load 의무까지 충족한다(실증: canvas의 /tracks/5가 detail 몫까지 대신했다).
+  return { surface: surface.name, method: 'GET', url: `${scenario.apiOrigin}/tracks/${scenario.trackId}` };
 }
 
 // 관찰이 **실제로 무언가를 잡았는지**. 빈 집합은 두 번 반복해도 digest가 같아 GREEN이 된다.
@@ -141,9 +143,13 @@ export function liveEvidenceErrors(observed, apiOrigin, expectedSurfaces = [], r
   const apiHits = observed.filter((e) => isApiRequest(e.url, apiOrigin));
   if (!apiHits.length) errors.push(`NO_API_REQUESTS ${apiOrigin}`);
   else if (!apiHits.some((e) => e.ok)) errors.push(`NO_SUCCESSFUL_API_REQUEST ${apiOrigin}`);
-  // 알려진 route-load 요청은 성공으로 관찰돼야 한다.
-  const seen = new Set(observed.filter((e) => e.ok).map((e) => `${e.method} ${e.url}`));
-  for (const req of requiredRequests) if (req && !seen.has(req)) errors.push(`MISSING_ROUTE_LOAD ${req}`);
+  // 알려진 route-load 요청은 **그 surface에서** 성공으로 관찰돼야 한다.
+  const seen = new Set(observed.filter((e) => e.ok).map((e) => `${e.surface} ${e.method} ${e.url}`));
+  for (const req of requiredRequests) {
+    if (!req) continue;
+    const key = `${req.surface} ${req.method} ${req.url}`;
+    if (!seen.has(key)) errors.push(`MISSING_ROUTE_LOAD ${key}`);
+  }
   return errors;
 }
 
@@ -344,31 +350,44 @@ export async function runObservation({ SPEC, cli, head, log = console.log, err =
         }
         runs.push({ observed, ...canonicalEndpoints(observed) });
       }
+      // **drift는 shutdown 전에 확정한다.** finally 뒤에서 판정하면 shutdown 무응답이 먼저
+      // fatal을 세워 drift가 통째로 사라진다(실증: BRIDGE_SHUTDOWN_UNACKED만 남았다).
+      // 여기서 fatal이 서면 아래 shutdown은 자동으로 best-effort가 된다.
+      if (!fatal) {
+        const drift = runs.slice(1).findIndex((r) => r.digest !== runs[0].digest);
+        if (drift >= 0) {
+          err(`ENDPOINT_DRIFT_BETWEEN_RUNS run1 vs run${drift + 2}`);
+          const a = new Set(runs[0].set), b = new Set(runs[drift + 1].set);
+          for (const x of runs[0].set) if (!b.has(x)) err(`  -${x}`);
+          for (const x of runs[drift + 1].set) if (!a.has(x)) err(`  +${x}`);
+          fatal = 1;
+        }
+      }
     } catch (e) {
       err(String((e && e.message) || e));
       fatal = 1;
     } finally {
-      // shutdown은 짧게만 기다린다. 상대가 없으면 RPC timeout(60s)을 통째로 기다리게 된다.
+      // shutdown은 짧게만 기다린다(상대가 없으면 RPC timeout 60s를 통째로 기다린다).
+      // **정상 경로에서는 ACK가 필수다** — 삼키면 어댑터가 죽어도 CLI가 exit 0을 낸다(실증).
+      // 이미 실패 중인 경로에서만 best-effort로 둔다.
+      const SHUTDOWN_UNACKED = Symbol('unacked');
+      let ack = SHUTDOWN_UNACKED;
       try {
-        await Promise.race([
+        ack = await Promise.race([
           dd.shutdown(),
-          new Promise((r) => setTimeout(r, SHUTDOWN_TIMEOUT_MS)),
+          new Promise((r) => setTimeout(() => r(SHUTDOWN_UNACKED), SHUTDOWN_TIMEOUT_MS)),
         ]);
-      } catch (e) { /* 어댑터가 이미 떠났을 수 있다 */ }
+      } catch (e) { ack = SHUTDOWN_UNACKED; }
+      if (!fatal && (ack === SHUTDOWN_UNACKED || !ack || ack.ok !== true)) {
+        err(`BRIDGE_SHUTDOWN_UNACKED ${ack === SHUTDOWN_UNACKED ? '(timeout/throw)' : JSON.stringify(ack)}`);
+        fatal = 1;
+      }
       dd.cancelAll('BRIDGE_CLOSING');
       ds.done = true;
       await new Promise((r) => server0.close(r));
     }
     if (fatal) return { code: fatal, payload: null };
 
-    const drift = runs.slice(1).findIndex((r) => r.digest !== runs[0].digest);
-    if (drift >= 0) {
-      err(`ENDPOINT_DRIFT_BETWEEN_RUNS run1 vs run${drift + 2}`);
-      const a = new Set(runs[0].set), b = new Set(runs[drift + 1].set);
-      for (const x of runs[0].set) if (!b.has(x)) err(`  -${x}`);
-      for (const x of runs[drift + 1].set) if (!a.has(x)) err(`  +${x}`);
-      return { code: 1, payload: null };
-    }
     const payload = {
       mode: cli.canary ? 'canary' : 'discovery',
       eligibleForManifest: !cli.canary,

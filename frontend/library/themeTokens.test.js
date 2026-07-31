@@ -4809,13 +4809,15 @@ describe('S4 승격 하드 비활성 — discovery-only 체크포인트', () => 
 });
 
 describe('S4 브리지 통합 — 단일 브리지로 반복 attempt를 완주한다', () => {
-  // 실제 main()을 돌리고, fake adapter가 HTTP로 붙어 attempt 2회 + shutdown까지 간다.
+  // **범위: 브리지 수명주기**다. main()이 아니라 runObservation()을 직접 호출한다.
+  // HEAD pre/postflight는 여기서 검증하지 않는다 — main()을 실행하는 테스트는 없고,
+  // 실제 clean-HEAD 카나리가 그 통합 경로의 증거다.
   // 이전 판은 반복마다 서버를 새로 만들어 두 번째 hello가 무기한 대기했다(실증).
   const PORT = 10197;
   const api = 'http://localhost:10001/api';
   // fake adapter — **커밋된 어댑터와 같은 종료 규약**을 따른다: shutdown 응답을 보낸 뒤
   // 곧바로 break한다. 연결 오류를 삼키지 않고 terminal로 보고해 종료 실패를 드러낸다.
-  const fakeAdapter = async ({ requestsPerAttempt, stopAfterAttempt }, port = PORT) => {
+  const fakeAdapter = async ({ requestsPerAttempt, stopAfterAttempt, ackShutdown = true }, port = PORT) => {
     const seen = { attempts: 0, ended: 0, shutdown: false, done: false, terminal: null, methods: [] };
     for (let i = 0; i < 4000; i += 1) {
       let cmd;
@@ -4823,6 +4825,8 @@ describe('S4 브리지 통합 — 단일 브리지로 반복 attempt를 완주�
       catch (e) { seen.terminal = `POLL_FAILED ${String(e.message).slice(0, 40)}`; break; }
       if (cmd.done) { seen.done = true; break; }
       seen.methods.push(cmd.method);
+      // shutdown 명령은 받았지만 응답하지 않고 떠난다(어댑터가 죽은 상황).
+      if (cmd.method === 'shutdown' && !ackShutdown) { seen.shutdown = true; seen.terminal = 'NO_ACK'; break; }
       let value = null; const error = null;
       const [a] = cmd.args;
       if (cmd.method === 'hello') value = { protocol: 's4-bridge/2', echo: a };
@@ -4914,6 +4918,53 @@ describe('S4 브리지 통합 — 단일 브리지로 반복 attempt를 완주�
     expect(r.errs.join(' ')).toMatch(/BRIDGE_RPC_TIMEOUT/);
   }, 30000);
 
+  it('RED: drift가 shutdown 오류에 덮이지 않는다', async () => {
+    // drift 판정이 shutdown finally **뒤에** 있으면, shutdown 무응답이 먼저 fatal을 세워
+    // ENDPOINT_DRIFT_BETWEEN_RUNS가 통째로 사라진다(실증). drift가 primary failure다.
+    const port = PORT + 7;
+    const r = await runObs(['--canary', 'canvas', '--repeat', '2', '--port', String(port)], {
+      requestsPerAttempt: (n) => (n === 1 ? GOOD()
+        : [...GOOD(), { method: 'GET', url: `${api}/labels`, status: 200, ok: true }]),
+      ackShutdown: false,
+    }, port);
+    expect(r.code).toBe(1);
+    expect(r.errs.join(' ')).toMatch(/ENDPOINT_DRIFT_BETWEEN_RUNS run1 vs run2/);
+    // 이미 실패 중인 경로에서 shutdown은 best-effort다 — 원래 오류를 덮어선 안 된다.
+    expect(r.errs.join(' ')).not.toMatch(/BRIDGE_SHUTDOWN_UNACKED/);
+    expect(r.seen.shutdown).toBe(true);
+  }, 30000);
+
+  it('RED: shutdown ACK가 없으면 성공하지 않는다', async () => {
+    const port = PORT + 6;
+    const errs = [];
+    const cli = CAP.parseCaptureArgs(['--canary', 'canvas', '--repeat', '2', '--port', String(port), '--timeoutMs', '1200'], SPEC);
+    const p = CAP.runObservation({ SPEC, cli, head: HEAD, log: () => {}, err: (m) => errs.push(m) });
+    await new Promise((r) => setTimeout(r, 250));
+    for (let i = 0; i < 500; i += 1) {
+      let cmd;
+      try { cmd = await (await fetch(`http://127.0.0.1:${port}/next`)).json(); } catch (e) { break; }
+      if (cmd.done) break;
+      if (cmd.method === 'shutdown') break;                       // 명령은 받되 응답하지 않는다
+      let value = null; const [a] = cmd.args;
+      if (cmd.method === 'hello') value = { protocol: 's4-bridge/2', echo: a };
+      else if (/Attempt/.test(cmd.method)) value = { ok: true };
+      else if (cmd.method === 'addInitScript') value = { ok: true, version: PROBE.NETWORK_HOOK_VERSION };
+      else if (cmd.method === 'evaluate') {
+        if (a === PROBE.NETWORK_IDLE_SOURCE) value = { installed: true, stale: false, idle: true, pending: 0 };
+        else if (a === PROBE.NETWORK_DRAIN_SOURCE) value = { ok: true, installedAtReadyState: 'loading', entries: GOOD() };
+        else if (a === PROBE.ASSERT_SOURCE) value = Object.fromEntries((cmd.args[1] || []).map((s2) => [s2, { count: 1, visible: 1 }]));
+        else value = {};
+      }
+      try {
+        await fetch(`http://127.0.0.1:${port}/`, { method: 'POST',
+          body: JSON.stringify({ id: cmd.id, value }), headers: { 'content-type': 'application/json' } });
+      } catch (e) { break; }
+    }
+    const r = await p;
+    expect(r.code).toBe(1);
+    expect(errs.join(' ')).toMatch(/BRIDGE_SHUTDOWN_UNACKED/);
+  }, 30000);
+
   it('RED: protocol이 다른 어댑터는 거부된다', async () => {
     const port = PORT + 5;
     const out = []; const errs = [];
@@ -4981,6 +5032,81 @@ describe('S4 관찰 계약 — canary·hook 버전·격리·재현성', () => {
   it('ACK는 실제 적용 결과다 — 예외를 삼키고 true를 주지 않는다', () => {
     expect(capSrc()).toContain('ack.version !== NETWORK_HOOK_VERSION');
     expect(adapterSrc()).toContain('value = await p.evaluate(new Function(`return (${a})`)());');
+  });
+  // 필수 route-load는 **{surface, method, url} triple**로 결속된다. 전역 method+URL 집합이면
+  // 한 화면의 GET이 다른 화면 몫까지 충족한다(실증: canvas의 /tracks/5가 detail을 대신했다).
+  // 표는 결속의 **세 축을 각각** 흔든다 — 축 하나라도 무시하는 구현은 여기서 죽는다.
+  const RL_API = 'http://localhost:10001/api';
+  const RL_SCEN = { trackId: 5, apiOrigin: RL_API };
+  const RL_HIT = (surface, method, url, ok = true) => ({ surface, method, url, status: ok ? 200 : 500, ok });
+  const RL_TRACK = `${RL_API}/tracks/5`;
+  const RL_TABLE = [
+    ['canvas 요청이 detail을 대체하지 못한다',
+      [RL_HIT('canvas', 'GET', RL_TRACK), RL_HIT('detail', 'GET', `${RL_API}/auth/me`)],
+      [`MISSING_ROUTE_LOAD detail GET ${RL_TRACK}`]],
+    ['detail 요청이 canvas를 대체하지 못한다',
+      [RL_HIT('detail', 'GET', RL_TRACK), RL_HIT('canvas', 'GET', `${RL_API}/auth/me`)],
+      [`MISSING_ROUTE_LOAD canvas GET ${RL_TRACK}`]],
+    ['같은 surface·URL이라도 POST는 GET을 충족하지 못한다',
+      [RL_HIT('canvas', 'POST', RL_TRACK), RL_HIT('detail', 'GET', RL_TRACK)],
+      [`MISSING_ROUTE_LOAD canvas GET ${RL_TRACK}`]],
+    ['같은 surface·GET이라도 다른 URL은 충족하지 못한다',
+      [RL_HIT('canvas', 'GET', `${RL_API}/tracks/6`), RL_HIT('detail', 'GET', RL_TRACK)],
+      [`MISSING_ROUTE_LOAD canvas GET ${RL_TRACK}`]],
+    ['실패한 요청(ok:false)은 충족하지 못한다',
+      [RL_HIT('canvas', 'GET', RL_TRACK, false), RL_HIT('detail', 'GET', RL_TRACK)],
+      [`MISSING_ROUTE_LOAD canvas GET ${RL_TRACK}`]],
+    ['양쪽이 각자 정상 GET을 내면 통과한다',
+      [RL_HIT('canvas', 'GET', RL_TRACK), RL_HIT('detail', 'GET', RL_TRACK)],
+      []],
+  ];
+  const RL_REQ = () => ['canvas', 'detail']
+    .map((n) => CAP.requiredRouteLoad(SPEC.REQUIRED_SMOKE_SURFACES.find((x) => x.name === n), RL_SCEN));
+
+  it('requiredRouteLoad는 surface에 결속된 triple을 낸다', () => {
+    expect(RL_REQ()).toEqual([
+      { surface: 'canvas', method: 'GET', url: RL_TRACK },
+      { surface: 'detail', method: 'GET', url: RL_TRACK },
+    ]);
+    // goto가 /tracks/{id}가 아닌 화면은 의무가 없다 — null이어야 한다.
+    const noGoto = { name: 'x', actions: [{ op: 'reload' }] };
+    expect(CAP.requiredRouteLoad(noGoto, RL_SCEN)).toBe(null);
+  });
+
+  it.each(RL_TABLE)('필수 route-load 결속: %s', (_name, observed, expected) => {
+    // exact 배열이다 — 부분 정규식은 다른 오류가 섞여 들어와도 통과한다.
+    expect(CAP.liveEvidenceErrors(observed, RL_API, ['canvas', 'detail'], RL_REQ())).toEqual(expected);
+  });
+
+  it('표는 triple의 세 축을 실제로 죽인다(mutation 검증)', () => {
+    // 표가 통과만 시켜서는 계약이 잠기지 않는다. 축을 하나씩 무시하는 구현을 실제로 만들어
+    // 표가 그것들을 **죽이는지** 확인한다. 죽이지 못하면 표가 약해진 것이다.
+    const withSeen = (keys) => (observed, required) => {
+      const seen = new Set(observed.filter((e) => e.ok).flatMap(keys));
+      return required.filter(Boolean)
+        .map((r) => `${r.surface} ${r.method} ${r.url}`)
+        .filter((k) => !seen.has(k))
+        .map((k) => `MISSING_ROUTE_LOAD ${k}`);
+    };
+    const MUTANTS = {
+      // surface 축 무시: 어느 화면이 냈든 같은 method+URL이면 충족으로 본다(수정 전 동작).
+      SURFACE_IGNORED: withSeen((e) => ['canvas', 'detail'].map((s2) => `${s2} ${e.method} ${e.url}`)),
+      // method 축 무시: POST도 GET으로 친다.
+      METHOD_IGNORED: withSeen((e) => [`${e.surface} GET ${e.url}`]),
+      // url 축 무시: 같은 surface면 어떤 URL이든 충족으로 본다.
+      URL_IGNORED: withSeen((e) => [`${e.surface} ${e.method} ${RL_TRACK}`]),
+      // ok 축 무시: 실패한 요청도 충족으로 본다.
+      OK_IGNORED: (observed, required) => withSeen((e) => [`${e.surface} ${e.method} ${e.url}`])(
+        observed.map((e) => ({ ...e, ok: true })), required),
+    };
+    for (const [name, mutant] of Object.entries(MUTANTS)) {
+      const killedBy = RL_TABLE.filter(([, observed, expected]) =>
+        JSON.stringify(mutant(observed, RL_REQ())) !== JSON.stringify(expected)).map(([n]) => n);
+      expect(killedBy.length, `${name}: 표가 죽이지 못한다`).toBeGreaterThan(0);
+    }
+    // 정상 구현은 표 전체를 통과한다 — 표가 무조건 RED를 내는 게 아님을 같이 고정한다.
+    for (const [, observed, expected] of RL_TABLE)
+      expect(CAP.liveEvidenceErrors(observed, RL_API, ['canvas', 'detail'], RL_REQ())).toEqual(expected);
   });
   it('반복 실행은 exact 일치해야 한다', () => {
     expect(capSrc()).toContain('ENDPOINT_DRIFT_BETWEEN_RUNS');
