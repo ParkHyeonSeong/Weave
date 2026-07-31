@@ -1,0 +1,6 @@
+# 캡처 candidate는 커밋 대상이 아니다 — 검증된 bundle 승격으로만 committed가 된다.
+s4-smoke-context.*.candidate.json
+s4-expected.candidate.json
+s4-shots/candidate-*/
+s4-capture/.staging-*/
+.s4-promote.lock

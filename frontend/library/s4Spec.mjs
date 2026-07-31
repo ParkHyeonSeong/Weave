@@ -8,6 +8,10 @@ export const FILES = { T: { rel: 'styles/components/track/track.scss', blob: 'dd
 // raster 계약 정본 — "PNG 크기 == context.viewport" 자기정합만 보면 둘을 함께 2880x1800으로
 // 바꿔도 통과한다. 고정 스모크 환경이므로 값을 여기에 못박고 parsed context·PNG IHDR·DPR·
 // screenshotScale을 각각 **이 상수와** 대조한다.
+// 측정 코드의 신원 — s4DomProbe.mjs의 PROBE_SOURCE 바이트 해시. 측정 방식이 바뀌면
+// (예: parentElement를 재도록 고치면) 동결된 좌표의 의미가 달라지므로 fingerprint를 흔들어야 한다.
+// 값은 s4-gen이 실제 소스에서 계산해 대조한다(여기에 하드코딩하지 않는다).
+export const PROBE_CONTRACT = { module: 'library/s4DomProbe.mjs', export: 'PROBE_SOURCE' };
 export const RASTER_CONTRACT = { width: 1440, height: 900, dpr: 1, screenshotScale: 'css' };
 export const COUNTS = { conversions: 106, changedDecls: 100, newDecls: 27, newRules: 22, residual: 65, rawLiterals: 157, processedLiterals: 92, allowIds: 15 };
 export const DARK_DECL_COUNTS = { T: 26, X: 1, S: 0 };   // 검수 §3
@@ -84,22 +88,153 @@ export const ANNOTATIONS = [   // 검수 §1: 고유 marker + BASE 원문 줄 ex
 //  · 여기 키 집합은 CONVERSIONS의 allow ID 집합과 **exact 일치**해야 한다(예외 개념 없음).
 // s4PixelDiff.mjs가 이 상수를 import한다(단일 원천). specFingerprint에도 포함된다.
 export const LIGHT_DIFF_MASKS = {
-  1:  { selector: '.TrackNode__PrioFlag',              paintOutsetPx: 0 , expectedScale: 1 },
-  2:  { selector: '.TrackTree__Priority--high',        paintOutsetPx: 0 , expectedScale: 1 },
-  5:  { selector: '.SettingsBranches__Swatch--active', paintOutsetPx: 3 , expectedScale: 1.08 },  // box-shadow 0 0 0 3px
-  6:  { selector: '.SettingsGeneral__Swatch--active',  paintOutsetPx: 3 , expectedScale: 1.08 },  // box-shadow 0 0 0 3px
-  7:  { selector: '.TrackNode--restricted',            paintOutsetPx: 0 , expectedScale: 1 },
-  8:  { selector: '.TrackTree__Row--restricted',       paintOutsetPx: 0 , expectedScale: 1 },
-  9:  { selector: '.SourcePicker__BranchKey',          paintOutsetPx: 0 , expectedScale: 1 },
-  10: { selector: '.TrackTree__GroupKey',              paintOutsetPx: 0 , expectedScale: 1 },
-  12: { selector: '.CreateTrack__BranchKey',           paintOutsetPx: 0 , expectedScale: 1 },
-  13: { selector: '.TrackNode__ParentChip',            paintOutsetPx: 0 , expectedScale: 1 },
-  14: { selector: '.TrackNode__SubProgress',           paintOutsetPx: 0 , expectedScale: 1 },
-  15: { selector: '.TrackTimeline__LaneParentChip',    paintOutsetPx: 0 , expectedScale: 1 },
-  16: { selector: '.TrackTree__ParentChip',            paintOutsetPx: 0 , expectedScale: 1 },
-  17: { selector: '.BulkAdd__TaskParentChip',          paintOutsetPx: 0 , expectedScale: 1 },
-  18: { selector: '.TrackTree__Priority--low',         paintOutsetPx: 0 , expectedScale: 1 },
+  1:  { selector: '.TrackNode__PrioFlag',              paintOutsetPx: 0  },
+  2:  { selector: '.TrackTree__Priority--high',        paintOutsetPx: 0  },
+  5:  { selector: '.SettingsBranches__Swatch--active', paintOutsetPx: 3  },  // box-shadow 0 0 0 3px
+  6:  { selector: '.SettingsGeneral__Swatch--active',  paintOutsetPx: 3  },  // box-shadow 0 0 0 3px
+  7:  { selector: '.TrackNode--restricted',            paintOutsetPx: 0  },
+  8:  { selector: '.TrackTree__Row--restricted',       paintOutsetPx: 0  },
+  9:  { selector: '.SourcePicker__BranchKey',          paintOutsetPx: 0  },
+  10: { selector: '.TrackTree__GroupKey',              paintOutsetPx: 0  },
+  12: { selector: '.CreateTrack__BranchKey',           paintOutsetPx: 0  },
+  13: { selector: '.TrackNode__ParentChip',            paintOutsetPx: 0  },
+  14: { selector: '.TrackNode__SubProgress',           paintOutsetPx: 0  },
+  15: { selector: '.TrackTimeline__LaneParentChip',    paintOutsetPx: 0  },
+  16: { selector: '.TrackTree__ParentChip',            paintOutsetPx: 0  },
+  17: { selector: '.BulkAdd__TaskParentChip',          paintOutsetPx: 0  },
+  18: { selector: '.TrackTree__Priority--low',         paintOutsetPx: 0  },
 };
+
+
+// (surface, selector)별 **실측** 유효 배율. selector 전역값이 아니다 —
+// 같은 selector가 화면에 따라 다른 좌표계에 놓인다(캔버스 노드 0.5 vs 트리 행 1).
+//
+// 왜 이 표가 필요한가: 이전 판은 LIGHT_DIFF_MASKS에 selector당 하나의 `expectedScale`을 뒀고
+// 캔버스 4개 selector를 전부 `1`로 선언했다. 실측은 **0.5**다(committed probe로 24화면 측정).
+// paintRect = borderRect ⊕ (outset × scale) 이므로 배율이 틀리면 outset>0인 마스크가 실제와
+// 다른 크기로 확장된다. 게다가 selector 전역 선언은 "한 화면에서만 맞으면 통과"라 구조적으로
+// 틀린 값을 감췄다.
+//
+// 0.5의 출처: 캔버스는 React Flow `fitView`(fitViewOptions maxZoom 1.1)를 쓰고, 합성 데이터셋의
+// 그래프가 충분히 커서 fit 요구 배율이 React Flow 기본 `minZoom`(0.5)에 **클램프**된다.
+// 즉 설계 상수가 아니라 (spec, 데이터셋) 공동의 산물이다. 데이터셋이 작아져 클램프가 풀리면
+// 이 표가 깨지고 재동결을 요구한다 — 의도된 동작이다.
+//
+// 검증 계약(s4Evaluator.validateMaskContract):
+//   - 이 표의 (surface, selector) 키 집합 == context에서 occurrence가 1건 이상인 셀 집합 (양방향)
+//   - occurrence의 scale == 이 표의 값
+//   - occurrence 내부에서 두 독립 파생(rect/borderBox vs transform 행렬 곱)이 서로 일치
+// 이 표 자체는 오라클이 아니라 **동일성 고정(fingerprint)** 이다. 오라클은 세 번째 항목이다.
+export const ELEMENT_SCALES = {
+  'canvas': { '.TrackNode__PrioFlag': 0.5, '.TrackNode--restricted': 0.5, '.SourcePicker__BranchKey': 1, '.TrackNode__ParentChip': 0.5, '.TrackNode__SubProgress': 0.5 },
+  'canvas-toolbar-active': { '.TrackNode__PrioFlag': 0.5, '.TrackNode--restricted': 0.5, '.SourcePicker__BranchKey': 1, '.TrackNode__ParentChip': 0.5, '.TrackNode__SubProgress': 0.5 },
+  'canvas-matpill-on': { '.TrackNode__PrioFlag': 0.5, '.TrackNode--restricted': 0.5, '.SourcePicker__BranchKey': 1, '.TrackNode__ParentChip': 0.5, '.TrackNode__SubProgress': 0.5 },
+  'sourcepicker-branch-hover': { '.TrackNode__PrioFlag': 0.5, '.TrackNode--restricted': 0.5, '.SourcePicker__BranchKey': 1, '.TrackNode__ParentChip': 0.5, '.TrackNode__SubProgress': 0.5 },
+  'sourcepicker-group-hover': { '.TrackNode__PrioFlag': 0.5, '.TrackNode--restricted': 0.5, '.SourcePicker__BranchKey': 1, '.TrackNode__ParentChip': 0.5, '.TrackNode__SubProgress': 0.5 },
+  'sourcepicker-task-hover': { '.TrackNode__PrioFlag': 0.5, '.TrackNode--restricted': 0.5, '.SourcePicker__BranchKey': 1, '.TrackNode__ParentChip': 0.5, '.TrackNode__SubProgress': 0.5 },
+  'sourcepicker-unparticipate-hover': { '.TrackNode__PrioFlag': 0.5, '.TrackNode--restricted': 0.5, '.SourcePicker__BranchKey': 1, '.TrackNode__ParentChip': 0.5, '.TrackNode__SubProgress': 0.5 },
+  'sourcepicker-search-focus': { '.TrackNode__PrioFlag': 0.5, '.TrackNode--restricted': 0.5, '.SourcePicker__BranchKey': 1, '.TrackNode__ParentChip': 0.5, '.TrackNode__SubProgress': 0.5 },
+  'sourcepicker-addmenu-open': { '.TrackNode__PrioFlag': 0.5, '.TrackNode--restricted': 0.5, '.SourcePicker__BranchKey': 1, '.TrackNode__ParentChip': 0.5, '.TrackNode__SubProgress': 0.5 },
+  'detail': { '.TrackNode__PrioFlag': 0.5, '.TrackNode--restricted': 0.5, '.SourcePicker__BranchKey': 1, '.TrackNode__ParentChip': 0.5, '.TrackNode__SubProgress': 0.5 },
+  'detail-originlink-hover': { '.TrackNode__PrioFlag': 0.5, '.TrackNode--restricted': 0.5, '.SourcePicker__BranchKey': 1, '.TrackNode__ParentChip': 0.5, '.TrackNode__SubProgress': 0.5 },
+  'detail-trackchip-hover': { '.TrackNode__PrioFlag': 0.5, '.TrackNode--restricted': 0.5, '.SourcePicker__BranchKey': 1, '.TrackNode__ParentChip': 0.5, '.TrackNode__SubProgress': 0.5 },
+  'timeline': { '.SourcePicker__BranchKey': 1, '.TrackTimeline__LaneParentChip': 1 },
+  'timeline-lane-hover': { '.SourcePicker__BranchKey': 1, '.TrackTimeline__LaneParentChip': 1 },
+  'timeline-lane-selected': { '.SourcePicker__BranchKey': 1, '.TrackTimeline__LaneParentChip': 1 },
+  'tree': { '.TrackTree__Priority--high': 1, '.TrackTree__Row--restricted': 1, '.SourcePicker__BranchKey': 1, '.TrackTree__GroupKey': 1, '.TrackTree__ParentChip': 1, '.TrackTree__Priority--low': 1 },
+  'tree-row-hover': { '.TrackTree__Priority--high': 1, '.TrackTree__Row--restricted': 1, '.SourcePicker__BranchKey': 1, '.TrackTree__GroupKey': 1, '.TrackTree__ParentChip': 1, '.TrackTree__Priority--low': 1 },
+  'tree-row-selected': { '.TrackTree__Priority--high': 1, '.TrackTree__Row--restricted': 1, '.SourcePicker__BranchKey': 1, '.TrackTree__GroupKey': 1, '.TrackTree__ParentChip': 1, '.TrackTree__Priority--low': 1 },
+  'bulkadd': { '.TrackNode__PrioFlag': 0.5, '.TrackNode--restricted': 0.5, '.SourcePicker__BranchKey': 1, '.TrackNode__ParentChip': 0.5, '.TrackNode__SubProgress': 0.5, '.BulkAdd__TaskParentChip': 1 },
+  'createtrack': { '.CreateTrack__BranchKey': 1 },
+  'createtrack-visopt-active': { '.CreateTrack__BranchKey': 1 },
+  'settings-branches-edit': { '.SettingsBranches__Swatch--active': 1.08 },
+  'settings-general-swatch': { '.SettingsGeneral__Swatch--active': 1.08 },
+};
+
+
+// selector별 **변환 전** border-box 크기 범위(실측). 배율과 좌표만으로는 "그 요소를 재었는지"를
+// 가릴 수 없다 — 부모를 재도 자기정합적이고 배율도 같다(캔버스 노드와 그 안의 칩은 둘 다 0.5).
+// 이 표는 그 치환을 크기로 잡는다: .TrackNode__PrioFlag는 16x16이고 부모 .TrackNode--restricted는
+// 180x109.75이므로 대입 즉시 범위를 벗어난다.
+//
+// 계약: 모든 occurrence가 [min, max] 안에 있어야 하고, **양 극단이 실제로 도달돼야 한다**.
+// 도달 조건이 없으면 max를 크게 적어 검사를 무력화할 수 있다(범위만 넓히면 전부 통과).
+// 폭이 min!=max인 항목은 내용 길이에 따라 변하는 것들이다(.TrackTree__GroupKey 2건).
+export const SELECTOR_SIZE_ENVELOPE = {
+  '.TrackNode__PrioFlag': { minW: 16, maxW: 16, minH: 16, maxH: 16 },
+  '.TrackTree__Priority--high': { minW: 39.171875, maxW: 39.171875, minH: 20.5, maxH: 20.5 },
+  '.SettingsBranches__Swatch--active': { minW: 22, maxW: 22, minH: 22, maxH: 22 },
+  '.SettingsGeneral__Swatch--active': { minW: 26, maxW: 26, minH: 26, maxH: 26 },
+  '.TrackNode--restricted': { minW: 180, maxW: 180, minH: 109.75, maxH: 109.75 },
+  '.TrackTree__Row--restricted': { minW: 748, maxW: 748, minH: 40, maxH: 40 },
+  '.SourcePicker__BranchKey': { minW: 46.609375, maxW: 46.609375, minH: 19, maxH: 19 },
+  '.TrackTree__GroupKey': { minW: 582.390625, maxW: 619.265625, minH: 16, maxH: 16 },
+  '.CreateTrack__BranchKey': { minW: 46.234375, maxW: 46.234375, minH: 16.5, maxH: 16.5 },
+  '.TrackNode__ParentChip': { minW: 187, maxW: 187, minH: 16.5, maxH: 16.5 },
+  '.TrackNode__SubProgress': { minW: 26.609375, maxW: 26.609375, minH: 15, maxH: 15 },
+  '.TrackTimeline__LaneParentChip': { minW: 52.984375, maxW: 52.984375, minH: 15, maxH: 15 },
+  '.TrackTree__ParentChip': { minW: 58.265625, maxW: 58.265625, minH: 16.5, maxH: 16.5 },
+  '.BulkAdd__TaskParentChip': { minW: 58.265625, maxW: 58.265625, minH: 16.5, maxH: 16.5 },
+  '.TrackTree__Priority--low': { minW: 36.75, maxW: 36.75, minH: 20.5, maxH: 20.5 },
+};
+
+// surface별 마스크가 실제로 덮는 픽셀 수(겹침 반영, fillRects와 동일한 floor/ceil 규칙).
+// paintOutsetPx/배율/좌표가 각각 계약을 지켜도 "마스크가 화면을 얼마나 먹는지"는 아무도 보지
+// 않았다. 이 수는 그 총량을 못으로 박는다 — 넓히면 즉시 어긋난다.
+// tree 계열 4.2%는 allow #8(.TrackTree__Row--restricted 748x40)과 #10(.TrackTree__GroupKey 2건)의
+// 정직한 결과다. 가리는 면적이 큰 것 자체가 리뷰 대상이므로 숫자로 드러내 둔다.
+export const MASK_PIXEL_BUDGET = {
+  'canvas': 7057,                             // 0.545%
+  'canvas-toolbar-active': 7057,              // 0.545%
+  'canvas-matpill-on': 7057,                  // 0.545%
+  'sourcepicker-branch-hover': 7057,          // 0.545%
+  'sourcepicker-group-hover': 7057,           // 0.545%
+  'sourcepicker-task-hover': 7057,            // 0.545%
+  'sourcepicker-unparticipate-hover': 7057,   // 0.545%
+  'sourcepicker-search-focus': 7057,          // 0.545%
+  'sourcepicker-addmenu-open': 7057,          // 0.545%
+  'detail': 7057,                             // 0.545%
+  'detail-originlink-hover': 7057,            // 0.545%
+  'detail-trackchip-hover': 7057,             // 0.545%
+  'timeline': 1824,                           // 0.141%
+  'timeline-lane-hover': 1824,                // 0.141%
+  'timeline-lane-selected': 1824,             // 0.141%
+  'tree': 54750,                              // 4.225%
+  'tree-row-hover': 54750,                    // 4.225%
+  'tree-row-selected': 54750,                 // 4.225%
+  'bulkadd': 8077,                            // 0.623%
+  'createtrack': 799,                         // 0.062%
+  'createtrack-visopt-active': 799,           // 0.062%
+  'settings-branches-edit': 992,              // 0.077%
+  'settings-general-swatch': 1260,            // 0.097%
+};
+
+
+// 23개 surface가 실제로 소비하는 데이터 원천. light/dark가 **같은 데이터**에서 찍혔음을
+// 증명하기 위해 캡처 때 수집하고, 검증기가 원본 응답에서 digest를 재계산한다.
+// (URL의 {id} 등은 buildActionContext로 해석된다.)
+// ⚠️ **미확정.** 이 목록은 아직 사람이 검수한 정본이 아니다 —
+// discovery-only 실행으로 실제 XHR/fetch를 관찰해 확정해야 한다(리뷰 지정 (b) 변형안 3~5단계).
+// 지금은 비워 둔다: 추정 목록을 넣으면 "검증했다"는 착각만 만들고 누락을 못 찾는다.
+// URL은 apiOrigin을 붙인 **절대 URL**로 해석된다.
+export const DATASET_ENDPOINTS = [];
+
+// digest에서 제거할 **비시각·휘발** 필드. 화면을 바꾸지 않는 값만 넣는다 —
+// 넓히면 데이터 동일성 증명이 약해지므로 항목마다 이유를 적는다.
+// endpoint별로 좁힌다. 전역 이름 기준으로 지우면 어떤 화면에서는 렌더에 쓰이는 필드까지 사라진다.
+// '*'는 모든 endpoint 공통이고, 나머지 키는 endpoint URL이다.
+// **0개에서 시작한다.** `updated_at`은 화면 정렬에 영향을 줄 수 있어 전역 제거가 위험하다.
+// 꼭 필요한 항목만 endpoint + JSON pointer exact로 열되, 그때 이유를 함께 적는다.
+export const DATASET_VOLATILE_FIELDS = {};
+
+// **순서가 의미 없는** 배열만 여기 적는다(`<url><jsonPath>[]` 형태). 나머지는 순서를 보존한다 —
+// UI 정렬은 화면을 바꾸므로 digest가 그 변화를 봐야 한다.
+// 지금은 비어 있다: 실제 응답을 관찰해 "순서 무관"임을 확인한 것만 추가한다.
+export const DATASET_UNORDERED_PATHS = [];
+
+// discovery로 관찰한 endpoint 집합을 사람이 검수해 여기 고정한다.
+// 비어 있으면 dataset 계약이 아직 성립하지 않았다는 뜻이고, 캡처 승격은 그 사실을 보고해야 한다.
+export const EXPECTED_DATASET_MANIFEST = null;
 
 // dead 예외는 삭제했다. `DEAD_ALLOW_IDS`/`DEAD_SELECTORS`는 자기신고 우회였다 —
 // mask에서 ID를 지우고 dead에 등록하고 surface를 빼면 allow #6 false-green을 그대로 재개통할 수 있었다.
@@ -110,10 +245,14 @@ export const REQUIRED_SMOKE_SURFACES = [
   { name: "canvas", captureName: "canvas.png",
     actions: [{ op: "setStorage", key: "track:{id}:lastView", value: "flow" },
       { op: "goto", url: "/tracks/{id}" },
-      { op: "waitFor", selector: ".TrackNode--restricted", state: "visible" }],
+      { op: "waitFor", selector: ".TrackNode--restricted", state: "visible" },
+      // SourcePicker는 같은 Track__Body에 동시에 렌더된다(실측: 두 요소가 한 화면에 함께 visible).
+      // 그래서 별도 sourcepicker base surface는 같은 픽셀을 두 번 찍을 뿐이었다 — 통합했다.
+      { op: "waitFor", selector: ".SourcePicker__BranchRow", state: "visible" }],
     requiredElements: [".TrackNode"],
-    coverageSelectors: [{ selector: ".TrackCanvas" }, { selector: ".TrackNode--restricted" }, { selector: ".TrackCanvas__Vignette" }, { selector: ".Track::before", locator: { selector: ".Track", pseudo: "::before" } }, { selector: ".TrackCanvas__Legend" }, { selector: ".TrackNode__ParentChip" }, { selector: ".TrackNode__SubProgress" }, { selector: ".TrackNode__PrioFlag" }, { selector: ".TrackEdgeLabel__Badge" }, { selector: ".TrackEdgeLabel__Badge--draft" }, { selector: ".TrackEdgeLabel__Badge--rel" }, { selector: ".TrackHeader__WeaveBar" }, { selector: ".TrackHeader__ViewBtn--active", state: "selected", provenBy: 0 }],
-    darkReviewSelectors: [".TrackCanvas__Vignette", ".Track::before", ".TrackNode--restricted"] },   // 다크 육안 검토 대상(비교 baseline 없음)
+    coverageSelectors: [{ selector: ".TrackCanvas" }, { selector: ".TrackNode--restricted" }, { selector: ".TrackCanvas__Vignette" }, { selector: ".Track::before", locator: { selector: ".Track", pseudo: "::before" } }, { selector: ".TrackCanvas__Legend" }, { selector: ".TrackNode__ParentChip" }, { selector: ".TrackNode__SubProgress" }, { selector: ".TrackNode__PrioFlag" }, { selector: ".TrackEdgeLabel__Badge" }, { selector: ".TrackEdgeLabel__Badge--draft" }, { selector: ".TrackEdgeLabel__Badge--rel" }, { selector: ".TrackHeader__WeaveBar" }, { selector: ".TrackHeader__ViewBtn--active", state: "selected", provenBy: 1 }, { selector: ".SourcePicker__BranchKey" }, { selector: ".SourcePicker__Group" }, { selector: ".SourcePicker__GroupHint" }],
+    darkReviewSelectors: [".TrackCanvas__Vignette", ".Track::before", ".TrackNode--restricted",
+      ".SourcePicker__BranchKey", ".SourcePicker__GroupHint"] },   // 다크 육안 검토 대상(비교 baseline 없음)
   // 실측: edgeType 기본값 flow_to → nth:0 버튼이 진입 시 이미 --active. nth:0 클릭은 무전이라 항상 통과(위양성).
   //   실제 전이를 만들도록 title로 대상을 지정한다. 전환 후 MatToggle이 disabled가 되므로 mat surface와 분리 유지.
   { name: "canvas-toolbar-active", captureName: "canvas-toolbar-active.png",
@@ -139,13 +278,6 @@ export const REQUIRED_SMOKE_SURFACES = [
     coverageSelectors: [{ selector: ".TrackCanvas__MatPill--on", state: "selected", provenBy: 5,
       produces: ".TrackCanvas__MatPill--on" }],
     darkReviewSelectors: [".TrackCanvas__MatPill--on"] },
-  { name: "sourcepicker", captureName: "sourcepicker.png",
-    requiredElements: [],
-    actions: [{ op: "setStorage", key: "track:{id}:lastView", value: "flow" },
-      { op: "goto", url: "/tracks/{id}" },
-      { op: "waitFor", selector: ".SourcePicker__BranchRow", state: "visible" }],
-    coverageSelectors: [{ selector: ".SourcePicker__BranchKey" }, { selector: ".SourcePicker__Group" }, { selector: ".SourcePicker__GroupHint" }],
-    darkReviewSelectors: [".SourcePicker__BranchKey", ".SourcePicker__GroupHint"] },
   { name: "sourcepicker-branch-hover", captureName: "sourcepicker-branch-hover.png",
     requiredElements: [],
     actions: [{ op: "setStorage", key: "track:{id}:lastView", value: "flow" },

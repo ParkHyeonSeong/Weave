@@ -1,0 +1,20 @@
+# S4 다크모드 검증 하네스 — 바이트 해시 입력의 체크아웃 정규화 고정.
+#
+# 왜: s4DomProbe.mjs와 s4CaptureRunner.mjs는 **파일 전체 바이트**가 specFingerprint 입력이고,
+# s4-smoke-context.json은 원문 바이트가 fixture.smoke.contextSha256으로 잠겨 있다.
+# CRLF 체크아웃이면 같은 커밋인데 해시가 달라져 동결이 무의미해진다.
+#
+# 레포 전역 `* text=auto`는 쓰지 않는다 — 동결된 context/PNG까지 건드려 false RED가 난다.
+library/s4DomProbe.mjs          text eol=lf
+library/s4CaptureRunner.mjs     text eol=lf
+library/s4Evaluator.mjs         text eol=lf
+library/s4PixelDiff.mjs         text eol=lf
+library/s4Spec.mjs              text eol=lf
+library/s4Promote.mjs           text eol=lf
+library/s4Canonicalize.mjs      text eol=lf
+scripts/s4-capture.mjs          text eol=lf
+
+# 동결 산출물 — 원문 바이트가 해시 대상이다.
+library/__fixtures__/s4-expected.json       text eol=lf
+library/__fixtures__/s4-smoke-context.json  text eol=lf
+library/__fixtures__/s4-shots/**/*.png      binary

@@ -1,8 +1,10 @@
+import { fileURLToPath } from 'node:url';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
-import * as SPEC from '/Users/hyeonseongpark/Documents/GitHub/Weave/frontend/library/s4Spec.mjs';
-import * as EV from '/Users/hyeonseongpark/Documents/GitHub/Weave/frontend/library/s4Evaluator.mjs';
-const REPO = '/Users/hyeonseongpark/Documents/GitHub/Weave';
+import * as SPEC from '../library/s4Spec.mjs';
+import * as EV from '../library/s4Evaluator.mjs';
+// 절대경로 고정은 다른 checkout/CI에서 **다른 레포**를 읽게 한다. 파일 위치에서 파생한다.
+const REPO = fileURLToPath(new URL('../../', import.meta.url));
 // 인자는 정확히 두 형태만 허용한다. 알 수 없는 옵션·여분 positional을 무시하면
 // `--chek 4` 같은 오타가 조용히 **쓰기 모드**로 떨어진다(검사하려다 파일을 덮어씀).
 const args = process.argv.slice(2);

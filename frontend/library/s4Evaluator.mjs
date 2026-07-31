@@ -175,6 +175,197 @@ export function evaluateConformance(actualDecls, actualRaw, preAnnSources, spec,
   return errors;
 }
 
+// paintRect = borderRect ⊕ (outset × scale). **단일 원천**이다 —
+// 캡처 실행기가 이 값을 만들고 validateMaskContract가 같은 함수로 재파생해 대조한다.
+// 러너가 공식을 따로 적으면 MASK_PAINT_MISMATCH가 동전던지기가 되고, 바깥으로 편향된 rect가
+// 회귀를 삼킨다(위험 방향). outset의 오라클은 maxOutwardPaintPx, scale의 오라클은 crossCheckScale이다.
+export function derivePaintRect(occ, outsetPx) {
+  const d = outsetPx * occ.scale;
+  return { x: occ.x - d, y: occ.y - d, width: occ.width + 2 * d, height: occ.height + 2 * d };
+}
+
+// selector → paintOutsetPx. 한 selector에 두 allow가 붙을 수 있으므로 집합에서 파생한다.
+export function outsetBySelector(spec) {
+  const out = new Map();
+  for (const m of Object.values(spec.LIGHT_DIFF_MASKS || {})) if (m) out.set(m.selector, m.paintOutsetPx);
+  return out;
+}
+
+// ── plain JSON 계약 ───────────────────────────────────────────────────────────
+// context/observed는 "JSON에서 나온 것과 구별 불가"해야 한다.
+//
+// 왜 필요한가: `diffSurfaceLight`는 호출부가 준 객체를 검증하고 **그 다음에** 같은 객체에서
+// paintRect를 다시 읽는다. accessor(getter)를 심으면 검증 때는 작은 rect를, 소비 때는 화면 전체를
+// 돌려줄 수 있다(읽을 때마다 값이 달라지는 TOCTOU). 비열거 속성·심볼 키·이상한 prototype도
+// 같은 부류다 — 검증 순회에서는 보이지 않는데 다른 경로에서는 읽힌다.
+// 동결 파일에서 JSON.parse한 값은 항상 이 계약을 만족하므로, 정상 경로에는 비용이 없다.
+export function plainJsonErrors(value, path = '$', seen = new Set()) {
+  const errors = [];
+  const t = typeof value;
+  if (value === null || t === 'boolean' || t === 'string') return errors;
+  if (t === 'number') { if (!Number.isFinite(value)) errors.push(`JSON_NONFINITE ${path}`); return errors; }
+  if (t !== 'object') { errors.push(`JSON_BAD_TYPE ${path} ${t}`); return errors; }
+  if (seen.has(value)) { errors.push(`JSON_CYCLE ${path}`); return errors; }
+  seen.add(value);
+  const proto = Object.getPrototypeOf(value);
+  const isArr = Array.isArray(value);
+  if (isArr ? proto !== Array.prototype : !(proto === Object.prototype || proto === null))
+    errors.push(`JSON_BAD_PROTO ${path}`);
+  if (Object.getOwnPropertySymbols(value).length) errors.push(`JSON_SYMBOL_KEY ${path}`);
+  const names = Object.getOwnPropertyNames(value);
+  const idx = isArr ? new Set(Array.from({ length: value.length }, (_, i) => String(i))) : null;
+  for (const k of names) {
+    if (isArr && k === 'length') continue;                 // 배열의 length는 정의상 비열거다
+    if (isArr && !idx.has(k)) { errors.push(`JSON_ARRAY_EXTRA_KEY ${path}.${k}`); continue; }
+    const d = Object.getOwnPropertyDescriptor(value, k);
+    if (typeof d.get === 'function' || typeof d.set === 'function') { errors.push(`JSON_ACCESSOR ${path}.${k}`); continue; }
+    if (!d.enumerable) { errors.push(`JSON_NON_ENUMERABLE ${path}.${k}`); continue; }
+    errors.push(...plainJsonErrors(d.value, `${path}.${k}`, seen));
+  }
+  seen.delete(value);
+  return errors;
+}
+
+// ── 마스크가 덮는 실제 픽셀 ───────────────────────────────────────────────────
+// rect → 픽셀 범위 규칙의 **단일 원천**. s4PixelDiff.fillRects가 이 함수를 쓰고 예산 검증도
+// 이 함수를 쓴다. 두 곳에 같은 floor/ceil을 따로 적어두면 한쪽만 바뀌어도 예산이 거짓이 된다.
+export function rectPixelBounds(r, width, height, scale = 1) {
+  return {
+    x0: Math.max(0, Math.floor(r.x * scale)), y0: Math.max(0, Math.floor(r.y * scale)),
+    x1: Math.min(width, Math.ceil((r.x + r.width) * scale)), y1: Math.min(height, Math.ceil((r.y + r.height) * scale)),
+  };
+}
+// 겹침을 반영한 마스크 픽셀 수. 면적 합이 아니라 **집합의 크기**여야 한다 —
+// 겹치는 rect를 여러 개 넣어 면적 합만 맞추는 우회를 막는다.
+export function countMaskedPixels(rects, width, height, scale = 1) {
+  const grid = new Uint8Array(width * height);
+  let n = 0;
+  for (const r of rects) {
+    const b = rectPixelBounds(r, width, height, scale);
+    for (let y = b.y0; y < b.y1; y++) for (let x = b.x0; x < b.x1; x++) {
+      const i = y * width + x;
+      if (!grid[i]) { grid[i] = 1; n++; }
+    }
+  }
+  return n;
+}
+
+// ── paintOutsetPx의 오라클 ────────────────────────────────────────────────────
+// 선언된 outset이 "그 allow가 실제로 바꾼 property가 border box 밖에 칠할 수 있는 최대 거리"와
+// 같은지 본다. 이전 판은 outset이 손으로 적은 숫자였고 아무것도 그걸 검사하지 않았다 —
+// 값을 키우면 마스크가 넓어져 실제 회귀를 삼키는데(위험 방향) 통과했다.
+//
+// 방향성: outset이 **작으면** 허용 변화가 마스크 밖으로 새어나가 RED가 된다(시끄럽지만 안전).
+// **크면** 무관한 픽셀까지 덮어 회귀를 감춘다(위험). 그래서 상한을 계약으로 잠근다.
+//
+// 괄호 안 콤마를 보존하는 분할 — computed 값의 색은 `rgba(0, 0, 0, 0.03)`처럼 콤마를 품는다.
+export function splitTopLevel(str) {
+  const out = []; let depth = 0, cur = '';
+  for (const ch of String(str)) {
+    if (ch === '(') depth++;
+    else if (ch === ')') depth--;
+    if (ch === ',' && depth === 0) { out.push(cur.trim()); cur = ''; continue; }
+    cur += ch;
+  }
+  if (cur.trim()) out.push(cur.trim());
+  return out;
+}
+// `name(...)`의 인자를 **괄호 균형을 세어** 뽑는다.
+// `/drop-shadow\(([^)]*)\)/`는 인자 안의 `rgb(0, 0, 0)`의 첫 `)`에서 끊겨
+// `rgb(0, 0, 0)`만 남기고 길이를 0개로 만들었다(실측: 정상 drop-shadow가 파싱 오류로 떨어짐).
+export function extractFunctionArgs(str, name) {
+  const s = String(str), lower = s.toLowerCase(), tag = `${name.toLowerCase()}(`;
+  const args = [];
+  let i = 0;
+  for (;;) {
+    const at = lower.indexOf(tag, i);
+    if (at < 0) break;
+    let depth = 0, j = at + tag.length - 1;
+    for (; j < s.length; j++) {
+      if (s[j] === '(') depth++;
+      else if (s[j] === ')') { depth--; if (depth === 0) break; }
+    }
+    if (depth !== 0) return { args, rest: '', err: `UNBALANCED_${name.toUpperCase()}` };
+    args.push(s.slice(at + tag.length, j));
+    i = j + 1;
+  }
+  // 인자를 걷어낸 나머지 — 모델에 없는 함수가 섞여 있으면 여기 남는다.
+  let rest = '', k = 0;
+  for (;;) {
+    const at = lower.indexOf(tag, k);
+    if (at < 0) { rest += s.slice(k); break; }
+    rest += s.slice(k, at);
+    let depth = 0, j = at + tag.length - 1;
+    for (; j < s.length; j++) { if (s[j] === '(') depth++; else if (s[j] === ')') { depth--; if (depth === 0) break; } }
+    k = j + 1;
+  }
+  return { args, rest: rest.trim(), err: null };
+}
+
+// 한 shadow 레이어에서 border box 밖으로 나가는 최대 거리. inset은 0.
+// blur는 상한으로 **전체 반경**을 쓴다(스펙상 실제 확산은 그보다 작다). 현 allow에는 blur>0인
+// 항목이 없어 이 느슨함은 실사용에서 발현되지 않는다 — 생기면 RED로 드러나고 재검토 대상이다.
+// wantLengths: box-shadow의 computed 값은 항상 4개(dx dy blur spread)지만
+// filter의 drop-shadow()는 spread가 없어 3개(dx dy blur)다. 개수를 property별로 못박아,
+// 형태가 다르면 0으로 떨어지지 않고 오류가 되게 한다.
+function shadowLayerOutset(layer, wantLengths) {
+  if (/(^|\s)inset(\s|$)/.test(layer)) return { px: 0, err: null };
+  const lens = (layer.replace(/[a-z-]+\([^)]*\)/gi, ' ').match(/-?[0-9.]+px/g) || []).map(parseFloat);
+  if (lens.length !== wantLengths) return { px: 0, err: `SHADOW_LAYER_UNPARSEABLE ${JSON.stringify(layer)}` };
+  const [dx, dy, blur, spread = 0] = lens;
+  const reach = blur + spread;
+  return { px: Math.max(0, reach - dx, reach + dx, reach - dy, reach + dy), err: null };
+}
+// property → 그 property가 border box 밖에 칠할 수 있는 최대 거리(변환 전 CSS px).
+// 모델에 없는 property는 0으로 떨어지지 않고 **오류**다. 새 allow가 조용히 outset 0을 얻으면
+// 그 property의 외곽 페인트가 검사 없이 통과한다.
+export function maxOutwardPaintPx(property, paint) {
+  const p = paint || {};
+  const num = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : NaN; };
+  switch (property) {
+    // 배경/전경 잉크/테두리는 모두 border box 안이다.
+    case 'background': case 'background-color': case 'background-image':
+    case 'color':
+    case 'border': case 'border-color':
+    case 'border-top-color': case 'border-right-color': case 'border-bottom-color': case 'border-left-color':
+      return { px: 0, errors: [] };
+    case 'box-shadow': {
+      if (typeof p.boxShadow !== 'string') return { px: NaN, errors: ['PAINT_BOX_SHADOW_MISSING'] };
+      if (p.boxShadow === 'none') return { px: 0, errors: [] };
+      let px = 0; const errors = [];
+      for (const layer of splitTopLevel(p.boxShadow)) {
+        const r = shadowLayerOutset(layer, 4);
+        if (r.err) errors.push(r.err); else px = Math.max(px, r.px);
+      }
+      return { px: errors.length ? NaN : px, errors };
+    }
+    case 'outline': case 'outline-color': {
+      if (typeof p.outlineStyle !== 'string') return { px: NaN, errors: ['PAINT_OUTLINE_MISSING'] };
+      if (p.outlineStyle === 'none') return { px: 0, errors: [] };
+      const w = num(p.outlineWidth), off = num(p.outlineOffset);
+      if (!Number.isFinite(w) || !Number.isFinite(off)) return { px: NaN, errors: ['PAINT_OUTLINE_UNPARSEABLE'] };
+      return { px: Math.max(0, w + off), errors: [] };
+    }
+    case 'filter': {
+      if (typeof p.filter !== 'string') return { px: NaN, errors: ['PAINT_FILTER_MISSING'] };
+      if (p.filter === 'none') return { px: 0, errors: [] };
+      const errors = [];
+      const { args, rest, err } = extractFunctionArgs(p.filter, 'drop-shadow');
+      if (err) errors.push(`PAINT_FILTER_${err}`);
+      // drop-shadow 말고 다른 함수가 섞여 있으면 그 외곽 영향을 모델링하지 않은 것이다.
+      if (rest) errors.push(`PAINT_FILTER_UNMODELED ${rest}`);
+      let px = 0;
+      for (const a of args) {                     // drop-shadow는 spread가 없어 길이 3개다
+        const r = shadowLayerOutset(a, 3);
+        if (r.err) errors.push(`FILTER_${r.err}`); else px = Math.max(px, r.px);
+      }
+      return { px: errors.length ? NaN : px, errors };
+    }
+    default:
+      return { px: NaN, errors: [`PAINT_PROPERTY_UNMODELED ${property}`] };
+  }
+}
+
 // ── 오버라이드 branch·smoke-light/allow 선언이 surface에 매핑되는지 — exact selector/state(검수 §3)
 // 마스크 계약 — allow 선언 → 마스크 정본 → 브라우저 좌표를 한 곳에서 잠근다.
 // 이 함수가 없던 동안 LIGHT_DIFF_MASKS와 context.baseLightMaskRects는 서로를 검사하지 않았고,
@@ -186,6 +377,7 @@ export function validateMaskContract(fixture, spec, ctx) {
   const idToKey = fixture.allowIdToKey || {};
   const byKey = new Map((fixture.changed || []).map((c) => [c.key, c]));
   const selOf = (key) => String(key).split('|')[2];
+  const propOf = (key) => (key === undefined ? undefined : String(key).split('|')[3]);
 
   // 1) allow ID 우주 = LIGHT_DIFF_MASKS 키 == fixture allowIdToKey (dead 예외 개념 없음)
   // allow ID 키는 canonical 양의 정수 문자열이어야 한다. '01'과 '1'은 서로 다른 object key인데
@@ -207,7 +399,7 @@ export function validateMaskContract(fixture, spec, ctx) {
     if (key === undefined) continue;                       // 1)에서 이미 보고됨
     if (!m || typeof m.selector !== 'string') { errors.push(`MASK_SHAPE ${idStr}`); continue; }
     if (!Number.isFinite(m.paintOutsetPx) || m.paintOutsetPx < 0) errors.push(`MASK_OUTSET ${idStr}`);
-    if (!Number.isFinite(m.expectedScale) || !(m.expectedScale > 0)) errors.push(`MASK_EXPECTED_SCALE ${idStr}`);
+    if (m.expectedScale !== undefined) errors.push(`MASK_EXPECTED_SCALE_OBSOLETE ${idStr}`);   // selector 전역 배율은 폐기됨
     if (m.selector !== selOf(key)) errors.push(`MASK_SELECTOR_MISMATCH ${idStr} ${m.selector} != ${selOf(key)}`);
     if (!byKey.has(key)) errors.push(`MASK_KEY_MISSING ${idStr}`);
   }
@@ -221,14 +413,15 @@ export function validateMaskContract(fixture, spec, ctx) {
     }
   for (const [idStr, m] of Object.entries(masks))
     if (m && !owner.has(m.selector)) errors.push(`MASK_NOT_COVERED ${idStr} ${m.selector}`);
-  const outsetBySel = new Map();
+  // selector → { outset, 변경 property 집합 }. 같은 selector에 두 allow가 붙으면 둘 다 일치해야 한다.
+  const bySel = new Map();
   for (const [idStr, m] of Object.entries(masks)) {
     if (!m) continue;
-    if (outsetBySel.has(m.selector) && outsetBySel.get(m.selector).o !== m.paintOutsetPx)
-      errors.push(`MASK_OUTSET_CONFLICT ${m.selector} ${outsetBySel.get(m.selector).o}!=${m.paintOutsetPx}`);
-    if (outsetBySel.has(m.selector) && outsetBySel.get(m.selector).s !== m.expectedScale)
-      errors.push(`MASK_SCALE_CONFLICT ${m.selector} ${outsetBySel.get(m.selector).s}!=${m.expectedScale}`);
-    outsetBySel.set(m.selector, { o: m.paintOutsetPx, s: m.expectedScale });
+    const prop = propOf(idToKey[idStr]);
+    if (!bySel.has(m.selector)) bySel.set(m.selector, { o: m.paintOutsetPx, props: new Set() });
+    const e = bySel.get(m.selector);
+    if (e.o !== m.paintOutsetPx) errors.push(`MASK_OUTSET_CONFLICT ${m.selector} ${e.o}!=${m.paintOutsetPx}`);
+    if (prop !== undefined) e.props.add(prop);
   }
 
   if (!ctx) return errors;                                  // context 없이 spec/fixture만 검사하는 호출 허용
@@ -254,6 +447,13 @@ export function validateMaskContract(fixture, spec, ctx) {
   for (const s of ctxSurfaces) if (!surfaceSet.has(s)) errors.push(`MASK_UNKNOWN_SURFACE ${s}`);
   for (const s of surfaceNames) if (!Object.prototype.hasOwnProperty.call(ctx.baseLightMaskRects || {}, s))
     errors.push(`MASK_SURFACE_NOT_SCANNED ${s}`);
+  // 배율 표(정본) ↔ occurrence 점유(관측) 양방향 대조용 수집
+  const scaleTable = spec.ELEMENT_SCALES;
+  if (!scaleTable || typeof scaleTable !== 'object') errors.push('MASK_SCALE_TABLE_MISSING');
+  const envHit = new Map();            // selector -> 실제 도달한 극단(envelope 도달 검사용)
+  const occupied = new Map();          // surface -> Set<selector>. occurrence가 1건 이상인 셀.
+  // 문자열 결합 키(`a b`)는 쓰지 않는다 — 구분자가 눈에 안 보여 실제로 NUL이 섞여 들어가도
+  // 컴파일되고, 두 방향 검사가 서로 다른 키를 보며 99건씩 헛돌았다(실측).
   const seen = new Map();
   for (const sel of specSels) seen.set(sel, 0);
   for (const [surface, byselRaw] of Object.entries(ctx.baseLightMaskRects || {})) {
@@ -265,19 +465,57 @@ export function validateMaskContract(fixture, spec, ctx) {
       if (!specSels.has(sel)) { errors.push(`MASK_FOREIGN_SELECTOR ${surface} ${sel}`); continue; }
       if (!Array.isArray(rects)) { errors.push(`MASK_RECT_NOT_ARRAY ${surface} ${sel}`); continue; }
       seen.set(sel, seen.get(sel) + rects.length);
-      const outset = (Object.values(masks).find((m) => m.selector === sel) || {}).paintOutsetPx;
+      if (rects.length) { if (!occupied.has(surface)) occupied.set(surface, new Set()); occupied.get(surface).add(sel); }
+      const entry = bySel.get(sel) || {};
+      const outset = entry.o;
+      const declaredScale = ((scaleTable || {})[surface] || {})[sel];
       for (const r of rects) {
-        const need = ['x', 'y', 'width', 'height', 'scale'];
+        const need = ['x', 'y', 'width', 'height', 'scale', 'borderBoxWidth', 'borderBoxHeight',
+          'transformScaleX', 'transformScaleY'];
         if (need.some((k) => !Number.isFinite(r[k]))) { errors.push(`MASK_RECT_NONFINITE ${surface} ${sel}`); continue; }
-        if (!(r.width > 0) || !(r.height > 0) || !(r.scale > 0)) { errors.push(`MASK_RECT_DEGENERATE ${surface} ${sel}`); continue; }
+        if (!(r.width > 0) || !(r.height > 0) || !(r.scale > 0)
+          || !(r.borderBoxWidth > 0) || !(r.borderBoxHeight > 0)) { errors.push(`MASK_RECT_DEGENERATE ${surface} ${sel}`); continue; }
         if (!r.paintRect || need.slice(0, 4).some((k) => !Number.isFinite(r.paintRect[k]))
           || !(r.paintRect.width > 0) || !(r.paintRect.height > 0)) { errors.push(`MASK_PAINT_MISSING ${surface} ${sel}`); continue; }
-        // paintRect는 borderRect를 outset×scale 만큼 사방 확장한 것과 정확히 같아야 한다
-        const specM = Object.values(masks).find((mm) => mm.selector === sel) || {};
-        if (specM.expectedScale !== undefined && Math.abs(r.scale - specM.expectedScale) > 1e-9)
-          { errors.push(`MASK_SCALE_UNEXPECTED ${surface} ${sel} ${r.scale}!=${specM.expectedScale}`); continue; }
-        const o = outset * r.scale, EPS = 1e-6;
-        const want = { x: r.x - o, y: r.y - o, width: r.width + 2 * o, height: r.height + 2 * o };
+        // (a) 배율은 (surface, selector)별 정본 표와 일치해야 한다
+        if (!Number.isFinite(declaredScale) || !(declaredScale > 0))
+          { errors.push(`MASK_SCALE_UNDECLARED ${surface} ${sel}`); continue; }
+        if (qs(r.scale) !== qs(declaredScale))
+          { errors.push(`MASK_SCALE_UNEXPECTED ${surface} ${sel} ${r.scale}!=${declaredScale}`); continue; }
+        // (b) 오라클: 같은 occurrence 안에서 rect/borderBox 파생과 transform 행렬 곱이 일치해야 한다.
+        //     scale과 paintRect를 함께 부풀리는 위조는 여기서 걸린다 — scale을 키우면 width가
+        //     borderBox×scale에서 벗어나고, width까지 맞추면 정본 표·PNG 좌표와 어긋난다.
+        const cross = crossCheckScale(r);
+        if (cross.length) { errors.push(...cross.map((e) => `MASK_${e} ${surface} ${sel}`)); continue; }
+        // (c) outset은 **그 allow가 실제로 바꾼 property**의 computed 외곽 페인트에서 파생돼야 한다
+        const props = [...(entry.props || [])];
+        if (!props.length) { errors.push(`MASK_OUTSET_NO_PROPERTY ${surface} ${sel}`); continue; }
+        let derived = 0; let derr = [];
+        for (const prop of props) {
+          const d = maxOutwardPaintPx(prop, r);
+          derr.push(...d.errors);
+          derived = Math.max(derived, d.px);
+        }
+        if (derr.length) { errors.push(...derr.map((e) => `MASK_${e} ${surface} ${sel}`)); continue; }
+        if (!Number.isFinite(derived) || q(outset) !== q(derived))
+          { errors.push(`MASK_OUTSET_UNJUSTIFIED ${surface} ${sel} 선언=${outset} 파생=${derived} (${props.join(',')})`); continue; }
+        // (d) 변환 전 크기가 selector별 envelope 안이어야 한다 — 부모/형제 요소를 대입하면
+        //     좌표·배율은 자기정합적이어도 크기가 어긋난다.
+        const envE = (spec.SELECTOR_SIZE_ENVELOPE || {})[sel];
+        if (!envE) { errors.push(`MASK_ENVELOPE_UNDECLARED ${sel}`); continue; }
+        if (q(r.borderBoxWidth) < q(envE.minW) || q(r.borderBoxWidth) > q(envE.maxW)
+          || q(r.borderBoxHeight) < q(envE.minH) || q(r.borderBoxHeight) > q(envE.maxH)) {
+          errors.push(`MASK_ENVELOPE_VIOLATION ${surface} ${sel} ${r.borderBoxWidth}x${r.borderBoxHeight} 밖 [${envE.minW}..${envE.maxW}]x[${envE.minH}..${envE.maxH}]`);
+          continue;
+        }
+        envHit.set(sel, {
+          minW: Math.min((envHit.get(sel) || {}).minW ?? Infinity, r.borderBoxWidth),
+          maxW: Math.max((envHit.get(sel) || {}).maxW ?? -Infinity, r.borderBoxWidth),
+          minH: Math.min((envHit.get(sel) || {}).minH ?? Infinity, r.borderBoxHeight),
+          maxH: Math.max((envHit.get(sel) || {}).maxH ?? -Infinity, r.borderBoxHeight),
+        });
+        const EPS = 1e-6;
+        const want = derivePaintRect(r, outset);   // 러너가 쓰는 바로 그 함수
         for (const k of ['x', 'y', 'width', 'height'])
           if (Math.abs(r.paintRect[k] - want[k]) > EPS) { errors.push(`MASK_PAINT_MISMATCH ${surface} ${sel} ${k}`); break; }
         if (vp && (r.paintRect.x < 0 || r.paintRect.y < 0
@@ -288,6 +526,55 @@ export function validateMaskContract(fixture, spec, ctx) {
   }
   // 전 surface 합계가 0이면 그 live selector는 어디서도 관측되지 않은 것 — 마스크가 무의미해진다.
   for (const sel of specSels) if (!seen.get(sel)) errors.push(`MASK_RECT_ABSENT ${sel}`);
+  // 5) 배율 표 ↔ occurrence 점유 **양방향** 일치.
+  //    한 방향만 보면 우회가 남는다: 표에만 있으면 "쓰이지 않는 선언"이 방치되고(그 셀의 rect를
+  //    지워 검사에서 도망칠 수 있다), occurrence에만 있으면 (a)에서 걸리지만 그건 rect 단위라
+  //    빈 배열로 셀을 지우는 경우를 못 잡는다.
+  for (const [surface, bysel] of Object.entries(scaleTable || {})) {
+    if (!surfaceSet.has(surface)) { errors.push(`MASK_SCALE_UNKNOWN_SURFACE ${surface}`); continue; }
+    if (!bysel || typeof bysel !== 'object') { errors.push(`MASK_SCALE_ROW_SHAPE ${surface}`); continue; }
+    for (const sel of Object.keys(bysel)) {
+      if (!specSels.has(sel)) errors.push(`MASK_SCALE_FOREIGN_SELECTOR ${surface} ${sel}`);
+      else if (!(occupied.get(surface) || new Set()).has(sel)) errors.push(`MASK_SCALE_UNUSED ${surface} ${sel}`);
+    }
+  }
+  for (const [surface, sels] of occupied) for (const sel of sels)
+    if (!Object.prototype.hasOwnProperty.call((scaleTable || {})[surface] || {}, sel))
+      errors.push(`MASK_SCALE_UNDECLARED_CELL ${surface} ${sel}`);
+
+  // 6) envelope 극단 **도달** 검사 + 표 키 집합.
+  //    범위 검사만으로는 max를 크게 적어 무력화할 수 있다. 선언한 극단이 실제로 관측돼야 한다.
+  const envTable = spec.SELECTOR_SIZE_ENVELOPE || {};
+  for (const sel of Object.keys(envTable)) if (!specSels.has(sel)) errors.push(`MASK_ENVELOPE_FOREIGN_SELECTOR ${sel}`);
+  for (const sel of specSels) {
+    const d = envTable[sel];
+    if (!d) { errors.push(`MASK_ENVELOPE_UNDECLARED ${sel}`); continue; }
+    for (const k of ['minW', 'maxW', 'minH', 'maxH'])
+      if (!Number.isFinite(d[k]) || !(d[k] > 0)) errors.push(`MASK_ENVELOPE_SHAPE ${sel} ${k}`);
+    if (q(d.minW) > q(d.maxW) || q(d.minH) > q(d.maxH)) errors.push(`MASK_ENVELOPE_INVERTED ${sel}`);
+    const hit = envHit.get(sel);
+    if (!hit) { errors.push(`MASK_ENVELOPE_UNREACHED ${sel}`); continue; }
+    for (const k of ['minW', 'maxW', 'minH', 'maxH'])
+      if (q(hit[k]) !== q(d[k])) errors.push(`MASK_ENVELOPE_SLACK ${sel} ${k} 선언=${d[k]} 실측=${hit[k]}`);
+  }
+
+  // 7) surface별 마스크 픽셀 예산 — 마스크가 화면을 얼마나 먹는지의 총량을 못박는다.
+  //    개별 rect가 전부 계약을 지켜도 rect 수를 늘리거나 겹치게 배치해 면적을 키울 수 있었다.
+  const budget = spec.MASK_PIXEL_BUDGET || {};
+  const RCb = spec.RASTER_CONTRACT;
+  if (!RCb || !Number.isFinite(RCb.width) || !Number.isFinite(RCb.height)) errors.push('MASK_BUDGET_NO_RASTER');
+  else {
+    for (const s of Object.keys(budget)) if (!surfaceSet.has(s)) errors.push(`MASK_BUDGET_UNKNOWN_SURFACE ${s}`);
+    for (const surface of surfaceNames) {
+      const want = budget[surface];
+      if (!Number.isInteger(want) || want < 0) { errors.push(`MASK_BUDGET_UNDECLARED ${surface}`); continue; }
+      const rects = [];
+      for (const rs of Object.values((ctx.baseLightMaskRects || {})[surface] || {}))
+        if (Array.isArray(rs)) for (const r of rs) if (r && r.paintRect) rects.push(r.paintRect);
+      const got = countMaskedPixels(rects, RCb.width, RCb.height);
+      if (got !== want) errors.push(`MASK_BUDGET_MISMATCH ${surface} ${got} != ${want}`);
+    }
+  }
   return errors;
 }
 
@@ -296,7 +583,11 @@ export function validateSmokeCoverage(fixture, surfaces, spec) {
   const errors = [];
   const names = surfaces.map((x) => x.name);
   if (new Set(names).size !== names.length) errors.push('SURFACE_NAME_DUP');
-  const STATE_OPS = { hover: ['hover'], focus: ['click', 'focus'], selected: ['click', 'setStorage'] };
+  // selected를 만드는 op: 클릭, 또는 저장된 뷰를 **소비하는 goto**.
+  // setStorage는 뺐다 — localStorage에 값을 쓰는 것은 DOM 상태를 증명하지 못한다.
+  // 실증: canvas의 .TrackHeader__ViewBtn--active가 provenBy:0(setStorage)이었고, 러너가 그
+  // 액션 직후에 단정하자 아직 이동 전인 화면을 검사해 RUN_STATE_UNPROVEN이 났다.
+  const STATE_OPS = { hover: ['hover'], focus: ['click', 'focus'], selected: ['click', 'goto'] };
   const ASSERT_OPS = new Set(['expectPresent', 'expectAbsent']);
   // requiredElements는 런타임 전제(변환 대상 아님) — schema 필수이고 coverage와 겹치면 안 된다
   for (const x of surfaces) {
@@ -419,15 +710,326 @@ export function decodePngHeader(bytes) {
   try { img = PNG.sync.read(Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes)); }
   catch (e) { return { ok: false, reason: `PNG_DECODE_FAILED ${e && e.message}` }; }
   if (!img || !(img.width > 0) || !(img.height > 0)) return { ok: false, reason: 'PNG_BAD_DIMENSIONS' };
-  return { ok: true, width: img.width, height: img.height };
+  // depth/colorType/interlace도 돌려준다 — pixelmatch의 픽셀 해석을 바꿀 수 있는 축들이다.
+  return { ok: true, width: img.width, height: img.height,
+    depth: img.depth, colorType: img.colorType, interlace: !!img.interlace };
 }
+
+// ── raster 계약 ───────────────────────────────────────────────────────────────
+// context가 신고한 캡처 조건이 정본 상수와 정확히 같은지. **단일 원천**이다 —
+// 승인 경로(artifactsCore)와 public 픽셀 비교 경로(diffSurfaceLight)가 같은 함수를 쓴다.
+// 이전에는 승인 경로에만 있었고 픽셀 비교 경로에는 없었다. 그래서 계약이 1440x900인데
+// 40x40이나 3000x2000 PNG를 넘겨도 errors=0 diff=0 ok=true가 났다(실측).
+// 두 곳에 따로 적으면 한쪽만 느슨해져 같은 구멍이 재개통된다.
+export function validateRasterContext(ctx, spec) {
+  const RC = spec && spec.RASTER_CONTRACT;
+  if (!RC) return ['FROZEN_RASTER_CONTRACT_MISSING'];
+  const errors = [];
+  const vp = (ctx && ctx.viewport) || {};
+  if (vp.width !== RC.width || vp.height !== RC.height)
+    errors.push(`RASTER_CONTEXT_VIEWPORT ${vp.width}x${vp.height} != ${RC.width}x${RC.height}`);
+  const cap = (ctx && ctx.capture) || {};
+  if (cap.scale !== RC.screenshotScale) errors.push(`RASTER_SCREENSHOT_SCALE ${cap.scale} != ${RC.screenshotScale}`);
+  if (cap.dpr !== RC.dpr) errors.push(`RASTER_DPR ${cap.dpr} != ${RC.dpr}`);
+  return errors;
+}
+
+// PNG 바이트가 정본 raster 규격과 정확히 같은지. 치수는 **바이트에서 파생**한다(신고 금지).
+// 색심도·컬러타입도 잠근다: 커밋된 24개 BASE가 전부 depth 8 / colorType 2(RGB) / 비인터레이스다.
+// 이게 없으면 팔레트 PNG나 16비트 PNG로 바꿔 pixelmatch의 픽셀 해석을 바꿀 수 있다.
+export function validatePngRaster(bytes, spec, label) {
+  const RC = spec && spec.RASTER_CONTRACT;
+  if (!RC) return ['FROZEN_RASTER_CONTRACT_MISSING'];
+  const hdr = decodePngHeader(bytes);
+  if (!hdr.ok) return [`RASTER_PNG_DECODE ${label} ${hdr.reason}`];
+  const errors = [];
+  if (hdr.width !== RC.width || hdr.height !== RC.height)
+    errors.push(`RASTER_PNG_SIZE ${label} ${hdr.width}x${hdr.height} != ${RC.width}x${RC.height}`);
+  if (hdr.depth !== 8) errors.push(`RASTER_PNG_DEPTH ${label} ${hdr.depth} != 8`);
+  if (hdr.colorType !== 2 && hdr.colorType !== 6) errors.push(`RASTER_PNG_COLOR_TYPE ${label} ${hdr.colorType}`);
+  if (hdr.interlace) errors.push(`RASTER_PNG_INTERLACED ${label}`);
+  return errors;
+}
+
+// ── action log 계약 ───────────────────────────────────────────────────────────
+// context가 **커밋된 실행기로 만들어졌는지**를 승인 경로에서 강제한다.
+//
+// 왜: 실행기를 커밋해도 s4-gen은 디스크의 context를 읽을 뿐이므로, 손으로 만든 context를
+// 그대로 승인시킬 수 있다. 실행기가 남긴 실행 기록을 계약으로 검사하면 그 경로가 막힌다.
+// 실행 기록은 "어느 action이 어느 상태를 증명했는가"를 담으므로, 없으면 만들 수 없고
+// 있으면 manifest와 대조 가능하다(선언만으로 통과하지 않는다).
+//
+// ⚠️ **이것은 provenance 증명이 아니다.** 로그의 모든 값은 spec에서 계산 가능하므로
+// 브라우저 없이 만든 합성 로그는 이 검사를 통과한다(적대검증에서 실증). 값어치는
+// "실행 주장이 명시되고 manifest와 교차검증된다"이지 "실행기를 우회할 수 없다"가 아니다.
+// 환원 불가능한 신뢰 루트는 s4CaptureRunner.mjs 최상단에 적어 두었다.
+//
+// 검사 항목:
+//  1) surface 키 집합 == manifest exact
+//  2) 각 surface의 로그 길이·순서·op가 resolveActions 결과와 exact 일치
+//  3) 단정 op(waitFor/expectPresent/expectAbsent)는 decided를 갖고, 그 값이 op의 기대와 맞는다
+//  4) manifest가 선언한 상태 증거(state/produces)는 그 action 단계의 decided에서 visible>0
+export function validateActionLog(spec, ctx) {
+  const errors = [];
+  const surfaces = spec.REQUIRED_SMOKE_SURFACES || [];
+  const log = ctx.actionLog;
+  if (!log || typeof log !== 'object' || Array.isArray(log)) return ['ACTIONLOG_MISSING'];
+  const names = new Set(surfaces.map((x) => x.name));
+  for (const k of Object.keys(log)) if (!names.has(k)) errors.push(`ACTIONLOG_UNKNOWN_SURFACE ${k}`);
+  const intOk = (v) => Number.isInteger(v) && v >= 0;
+  for (const surface of surfaces) {
+    const entries = log[surface.name];
+    if (!Array.isArray(entries)) { errors.push(`ACTIONLOG_SURFACE_MISSING ${surface.name}`); continue; }
+    const { steps, errors: planErrors } = planSurface(surface, ctx);
+    if (planErrors.length) { errors.push(...planErrors.map((e) => `ACTIONLOG_${e}`)); continue; }
+    if (entries.length !== steps.length) {
+      errors.push(`ACTIONLOG_LENGTH ${surface.name} ${entries.length}!=${steps.length}`);
+      continue;
+    }
+    for (let i = 0; i < steps.length; i++) {
+      const s = steps[i], e = entries[i], at = `${surface.name}[${i}]`;
+      if (!e || typeof e !== 'object') { errors.push(`ACTIONLOG_ENTRY_SHAPE ${at}`); continue; }
+      if (e.index !== i) errors.push(`ACTIONLOG_INDEX ${at} ${e.index}`);
+      if (e.op !== s.op) errors.push(`ACTIONLOG_OP ${at} ${e.op} != ${s.op}`);
+      if (!OP_SCHEMA[s.op]) { errors.push(`ACTIONLOG_UNKNOWN_OP ${at} ${s.op}`); continue; }
+      const asserting = ['waitFor', 'expectPresent', 'expectAbsent'].includes(s.op);
+      if (asserting) {
+        const d = e.decided;
+        if (!d || !intOk(d.count) || !intOk(d.visible)) { errors.push(`ACTIONLOG_NO_DECISION ${at} ${s.op}`); continue; }
+        const wantVisible = !(s.op === 'expectAbsent' || (s.op === 'waitFor' && s.state === 'hidden'));
+        if (wantVisible ? !(d.visible > 0) : d.visible !== 0)
+          errors.push(`ACTIONLOG_DECISION_CONTRADICTS ${at} ${s.op} visible=${d.visible}`);
+      }
+      for (const p of s.postAssert || []) {
+        const d = e.decided && e.decided[p.selector];
+        if (!d || !intOk(d.count) || !intOk(d.visible)) { errors.push(`ACTIONLOG_STATE_UNRECORDED ${at} ${p.why} ${p.selector}`); continue; }
+        if (!(d.visible > 0)) errors.push(`ACTIONLOG_STATE_UNPROVEN ${at} ${p.why} ${p.selector} visible=${d.visible}`);
+      }
+    }
+  }
+  return errors;
+}
+
+// ── phase별 증거 계약 ─────────────────────────────────────────────────────────
+// 러너가 기록만 하고 아무도 검증하지 않으면, 지우거나 바꾼 뒤 해시를 다시 만들면 통과한다.
+// coverageEvidence·darkReview·provenance를 승인 계약에 넣는다.
+export function validateCaptureEvidence(spec, ctx, provenanceRefs) {
+  const errors = [];
+  const surfaces = spec.REQUIRED_SMOKE_SURFACES || [];
+  const phase = ctx.phase;
+  if (!['light', 'dark'].includes(phase)) return [`EVIDENCE_PHASE_INVALID ${String(phase)}`];
+  // provenance 대조 입력은 **필수**다. 생략하면 provenance의 존재만 보는 것이라 아무 의미가 없다.
+  if (!provenanceRefs || typeof provenanceRefs !== 'object') return ['EVIDENCE_PROVENANCE_REFS_REQUIRED'];
+  const { headCommit, headBlobs, specFingerprintNow } = provenanceRefs;
+  for (const [k, v] of [['headCommit', headCommit], ['specFingerprintNow', specFingerprintNow]])
+    if (typeof v !== 'string' || !v) errors.push(`EVIDENCE_PROVENANCE_REF_MISSING ${k}`);
+  if (!headBlobs || typeof headBlobs !== 'object') errors.push('EVIDENCE_PROVENANCE_REF_MISSING headBlobs');
+  if (errors.length) return errors;
+
+  const flat = buildActionContext(ctx);
+  const resolveP = (v) => String(v).replace(/\{([A-Za-z0-9_]+)\}/g, (m, k) => (flat[k] !== undefined ? String(flat[k]) : m));
+  // evidence 항목의 스키마·범위. count/visible(또는 present)이 정수이고 0 <= seen <= count여야 한다.
+  const checkEntry = (where, sel, v, kind) => {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) { errors.push(`EVIDENCE_SHAPE ${where} ${sel}`); return null; }
+    if (!Number.isInteger(v.count)) { errors.push(`EVIDENCE_NO_COUNT ${where} ${sel}`); return null; }
+    const seen = kind === 'pseudo' ? v.present : v.visible;
+    if (!Number.isInteger(seen)) { errors.push(`EVIDENCE_NO_${kind === 'pseudo' ? 'PRESENT' : 'VISIBLE'} ${where} ${sel}`); return null; }
+    if (seen < 0 || seen > v.count) { errors.push(`EVIDENCE_RANGE ${where} ${sel} ${seen}/${v.count}`); return null; }
+    return seen;
+  };
+
+  // 1) coverageEvidence: surface 집합 exact + **resolved selector 키 집합 exact** + 관측됨
+  //    개수만 비교하면 `.Real`을 `.Bogus`로 바꿔도 통과한다(실증).
+  const cov = ctx.coverageEvidence;
+  if (!cov || typeof cov !== 'object' || Array.isArray(cov)) errors.push('EVIDENCE_COVERAGE_MISSING');
+  else {
+    const names = new Set(surfaces.map((x) => x.name));
+    for (const k of Object.keys(cov)) if (!names.has(k)) errors.push(`EVIDENCE_COVERAGE_UNKNOWN_SURFACE ${k}`);
+    for (const x of surfaces) {
+      const got = cov[x.name];
+      if (!got || typeof got !== 'object' || Array.isArray(got)) { errors.push(`EVIDENCE_COVERAGE_SURFACE_MISSING ${x.name}`); continue; }
+      const wantPseudo = new Set(), want = new Set();
+      for (const o of x.coverageSelectors || []) {
+        if (o.locator && o.locator.pseudo) { const k = `${resolveP(o.locator.selector)}${o.locator.pseudo}`; want.add(k); wantPseudo.add(k); }
+        else want.add(resolveP(o.selector));
+      }
+      for (const r of x.requiredElements || []) want.add(resolveP(r));
+      const gotKeys = Object.keys(got).sort(), wantKeys = [...want].sort();
+      if (JSON.stringify(gotKeys) !== JSON.stringify(wantKeys)) {
+        errors.push(`EVIDENCE_COVERAGE_KEYSET ${x.name} missing=[${wantKeys.filter((k) => !gotKeys.includes(k))}] extra=[${gotKeys.filter((k) => !wantKeys.includes(k))}]`);
+        continue;
+      }
+      for (const sel of wantKeys) {
+        const seen = checkEntry(`coverage ${x.name}`, sel, got[sel], wantPseudo.has(sel) ? 'pseudo' : 'visible');
+        if (seen !== null && !(seen > 0)) errors.push(`EVIDENCE_COVERAGE_UNSEEN ${x.name} ${sel} ${seen}`);
+      }
+    }
+  }
+
+  // 2) darkReview: dark phase에만, 선언 selector 집합 exact, pass가 관측과 **일관**
+  if (phase === 'light') {
+    if (ctx.darkReview !== undefined) errors.push('EVIDENCE_DARK_REVIEW_IN_LIGHT');
+  } else {
+    const dr = ctx.darkReview;
+    if (!dr || typeof dr !== 'object' || Array.isArray(dr)) errors.push('EVIDENCE_DARK_REVIEW_MISSING');
+    else {
+      const names = new Set(surfaces.map((x) => x.name));
+      for (const k of Object.keys(dr)) if (!names.has(k)) errors.push(`EVIDENCE_DARK_REVIEW_UNKNOWN_SURFACE ${k}`);
+      for (const x of surfaces) {
+        const got = dr[x.name];
+        if (!got || typeof got !== 'object' || Array.isArray(got)) { errors.push(`EVIDENCE_DARK_REVIEW_SURFACE_MISSING ${x.name}`); continue; }
+        const wantKeys = (x.darkReviewSelectors || []).map((v) => (String(v).includes('::')
+          ? `${resolveP(String(v).slice(0, String(v).indexOf('::')))}${String(v).slice(String(v).indexOf('::'))}`
+          : resolveP(v))).sort();
+        const gotKeys = Object.keys(got).sort();
+        if (JSON.stringify(gotKeys) !== JSON.stringify(wantKeys)) {
+          errors.push(`EVIDENCE_DARK_REVIEW_KEYSET ${x.name} missing=[${wantKeys.filter((k) => !gotKeys.includes(k))}] extra=[${gotKeys.filter((k) => !wantKeys.includes(k))}]`);
+          continue;
+        }
+        for (const sel of wantKeys) {
+          const kind = sel.includes('::') ? 'pseudo' : 'visible';
+          const seen = checkEntry(`darkReview ${x.name}`, sel, got[sel], kind);
+          if (seen === null) continue;
+          // pass는 자기신고다 — 관측값과 **일치**해야 한다.
+          if (got[sel].pass !== (seen > 0)) errors.push(`EVIDENCE_DARK_REVIEW_PASS_INCONSISTENT ${x.name} ${sel} pass=${got[sel].pass} seen=${seen}`);
+          if (!(seen > 0)) errors.push(`EVIDENCE_DARK_REVIEW_FAIL ${x.name} ${sel}`);
+        }
+      }
+    }
+  }
+
+  // 3) provenance: 지금 HEAD·blob·fingerprint·dataset digest와 exact 대조
+  const pv = ctx.provenance;
+  if (!pv || typeof pv !== 'object' || Array.isArray(pv)) errors.push('EVIDENCE_PROVENANCE_MISSING');
+  else {
+    if (pv.headCommit !== headCommit) errors.push(`EVIDENCE_PROVENANCE_HEAD ${pv.headCommit} != ${headCommit}`);
+    if (pv.specFingerprint !== specFingerprintNow) errors.push(`EVIDENCE_PROVENANCE_FINGERPRINT ${pv.specFingerprint} != ${specFingerprintNow}`);
+    const got = pv.blobs || {};
+    const gk = Object.keys(got).sort(), wk = Object.keys(headBlobs).sort();
+    if (JSON.stringify(gk) !== JSON.stringify(wk)) errors.push(`EVIDENCE_PROVENANCE_BLOB_SET [${gk}] != [${wk}]`);
+    for (const k of wk) if (got[k] !== headBlobs[k]) errors.push(`EVIDENCE_PROVENANCE_BLOB ${k}`);
+    // dataset digest는 **원본 응답에서 재계산**한다 — 기록된 값을 그대로 믿으면 자기신고다.
+    if ((spec.DATASET_ENDPOINTS || []).length) {
+      const rec = datasetDigest(ctx.datasetResponses, spec, (v) => createHash('sha256').update(v).digest('hex'));
+      if (rec.errors.length) errors.push(...rec.errors.map((e) => `EVIDENCE_${e}`));
+      else if (pv.datasetDigest !== rec.digest)
+        errors.push(`EVIDENCE_PROVENANCE_DATASET ${pv.datasetDigest} != ${rec.digest}`);
+      const urls = (ctx.datasetResponses || []).map((r) => r && r.url).sort();
+      const flat2 = buildActionContext(ctx);
+      const want = (spec.DATASET_ENDPOINTS || [])
+        .map((u) => String(u).replace(/\{([A-Za-z0-9_]+)\}/g, (m, k) => (flat2[k] !== undefined ? String(flat2[k]) : m))).sort();
+      if (JSON.stringify(urls) !== JSON.stringify(want)) errors.push(`EVIDENCE_DATASET_ENDPOINT_SET [${urls}] != [${want}]`);
+    }
+  }
+  return errors;
+}
+
+// ── dataset digest ────────────────────────────────────────────────────────────
+// **검증기가 raw 응답에서 직접 계산한다.** 브리지나 candidate가 준 digest를 그대로 쓰면
+// 자기신고다. 휘발 필드를 제거하고 정렬한 뒤 canonicalize해서 해시한다.
+export function datasetDigest(responses, spec, sha256Hex) {
+  const errors = [];
+  if (!Array.isArray(responses)) return { digest: null, errors: ['DATASET_RESPONSES_SHAPE'] };
+  const volatile = spec.DATASET_VOLATILE_FIELDS || {};
+  const unordered = new Set(spec.DATASET_UNORDERED_PATHS || []);
+  // **배열 순서는 기본 보존한다.** 전부 정렬하면 UI 정렬 변화(에픽 순서·아이템 순서)가
+  // digest에 안 보인다 — 실측: [1,2]와 [2,1]의 digest가 같았다.
+  // 정말 순서가 의미 없는 endpoint+JSON path만 명시적으로 정렬한다.
+  const strip = (v, url, path) => {
+    if (Array.isArray(v)) {
+      const mapped = v.map((x, i) => strip(x, url, `${path}[]`));
+      return unordered.has(`${url}${path}[]`)
+        ? mapped.slice().sort((a, b) => (JSON.stringify(canonicalize(a)) < JSON.stringify(canonicalize(b)) ? -1 : 1))
+        : mapped;
+    }
+    if (v && typeof v === 'object') {
+      const out = {};
+      for (const k of Object.keys(v)) {
+        // 휘발 필드는 **endpoint+path 단위**로 지운다. 전역 이름 기준으로 지우면
+        // 어떤 화면에서는 렌더에 쓰이는 필드까지 함께 사라진다.
+        const full = `${url}${path}.${k}`;
+        const globals = Array.isArray(volatile) ? volatile : (volatile['*'] || []);
+        const scoped = Array.isArray(volatile) ? [] : (volatile[url] || []);
+        if (globals.includes(k) || scoped.includes(k) || scoped.includes(`${path}.${k}`)) continue;
+        void full;
+        out[k] = strip(v[k], url, `${path}.${k}`);
+      }
+      return out;
+    }
+    return v;
+  };
+  const parts = [];
+  for (const r of responses) {
+    if (!r || typeof r !== 'object') { errors.push('DATASET_ENTRY_SHAPE'); continue; }
+    if (r.status !== 200) { errors.push(`DATASET_STATUS ${r.url} ${r.status}`); continue; }
+    let body = null;
+    try { body = JSON.parse(r.body); } catch (e) { errors.push(`DATASET_UNPARSEABLE ${r.url}`); continue; }
+    parts.push([String(r.url), JSON.stringify(canonicalize(strip(body, String(r.url), '')))]);
+  }
+  if (errors.length) return { digest: null, errors };
+  parts.sort((a, b) => (a[0] < b[0] ? -1 : 1));   // endpoint 간 순서만 정규화한다
+  return { digest: sha256Hex(parts.map((p) => `${p[0]}\n${p[1]}`).join('\n--\n')), errors: [] };
+}
+
+// ── bundle 단일 검증기 ────────────────────────────────────────────────────────
+// 승격이 호출하는 **구체 검증기**다. 주입받지 않는다 — `validateBundle: () => []`로
+// dark context와 비-PNG를 light bundle로 승격시킨 전례가 있다(실증).
+// 캡처 산출물이 committed가 되기 위해 통과해야 하는 모든 계약을 여기 한 곳에 모은다.
+export function validateCaptureBundle({ spec, phase, contextRaw, pngByName, provenanceRefs }) {
+  const errors = [];
+  if (!['light', 'dark'].includes(phase)) return [`BUNDLE_PHASE_INVALID ${String(phase)}`];
+  if (typeof contextRaw !== 'string') return ['BUNDLE_CONTEXT_RAW_REQUIRED'];
+  if (!pngByName || typeof pngByName !== 'object') return ['BUNDLE_PNGS_REQUIRED'];
+  let ctx = null;
+  try { ctx = JSON.parse(contextRaw); } catch (e) { return ['BUNDLE_CONTEXT_UNPARSEABLE']; }
+  if (!ctx || typeof ctx !== 'object' || Array.isArray(ctx)) return ['BUNDLE_CONTEXT_SHAPE'];
+  if (ctx.phase !== phase) return [`BUNDLE_CONTEXT_PHASE ${ctx.phase} != ${phase}`];
+
+  // PNG 이름 집합 exact + 각 바이트가 실제 PNG이고 raster 계약을 만족
+  const want = (spec.REQUIRED_SMOKE_SURFACES || []).map((x) => x.captureName).sort();
+  const got = Object.keys(pngByName).sort();
+  if (JSON.stringify(got) !== JSON.stringify(want))
+    errors.push(`BUNDLE_CAPTURE_SET missing=[${want.filter((n) => !got.includes(n))}] extra=[${got.filter((n) => !want.includes(n))}]`);
+  for (const n of got.filter((x) => want.includes(x))) errors.push(...validatePngRaster(pngByName[n], spec, n));
+
+  errors.push(...validateRasterContext(ctx, spec));
+  errors.push(...validateActionLog(spec, ctx));
+  errors.push(...validateCaptureEvidence(spec, ctx, provenanceRefs));
+
+  // ⚠️ **마스크 geometry는 여기서 보지 않는다.**
+  // 이전 판은 빈 fixture(stub)를 넣고 오류 문자열을 정규식으로 걸렀는데, 두 방향으로 틀렸다:
+  //  - fail-open: `MASK_ID_NONCANONICAL` 같은 진짜 spec 오류가 필터에 지워졌다.
+  //  - false-red: stub은 변경 property를 못 찾아 `MASK_OUTSET_NO_PROPERTY`에서 continue하고,
+  //    그 결과 envelope 도달 카운트가 비어 정상 후보가 `MASK_ENVELOPE_UNREACHED`로 떨어졌다(실증).
+  // 마스크 계약은 **projector가 만든 실제 allowIdToKey/changed**가 있어야 판정할 수 있다.
+  // 그래서 그 검증은 fixture 승인 경로(artifactsCore)의 몫이고, 그때까지 이 캡처는
+  // committed가 아니라 candidate로만 존재해야 한다.
+  //
+  // privacy audit은 **여기서** 본다 — 승격 후에 보면 미감사 PNG가 이미 committed가 된다.
+  errors.push(...validatePrivacyAudit(ctx.privacyAudit, {
+    captures: got.filter((n) => want.includes(n)).map((n) => ({ captureName: n, sha256: sha256Static(pngByName[n]) })),
+    contextSubjectSha256: contextSubjectSha256(ctx),
+  }));
+  return errors;
+}
+
+// privacy subject는 audit 자신을 제외한 context를 canonical 직렬화해 해시한다(승인 경로와 동일 규칙).
+export function contextSubjectSha256(ctx) {
+  const { privacyAudit, ...subject } = ctx;
+  return sha256Static(JSON.stringify(canonicalize(subject)));
+}
+const sha256Static = (v) => createHash('sha256').update(Buffer.isBuffer(v) ? v : Buffer.from(v)).digest('hex');
 
 // ── 산출물 검증 코어 ────────────────────────────────────────────────────────
 // 입력은 **raw bytes만** 받는다. caller가 이미 파싱한 객체·해시·validator 결과를 정답으로
 // 주입할 수 없어야 한다(그게 self-validation의 근원이다). context도 여기서 직접 파싱한다.
-function artifactsCore({ fixture, spec, contextRaw, sha256, readPng, baseDecls }) {
+function artifactsCore({ fixture, spec: rawSpec, contextRaw, sha256, readPng, baseDecls, provenanceRefs }) {
   const errors = [];
   if (typeof sha256 !== 'function' || typeof readPng !== 'function') return ['ARTIFACTS_IO_REQUIRED'];
+  // spec은 **여기서 한 번** 스냅샷한다. 이후 fingerprint·마스크·actionLog가 전부 같은 값을 본다.
+  const snap = snapshotSpec(rawSpec);
+  if (snap.errors.length) return snap.errors;
+  const spec = snap.spec;
   if (typeof contextRaw !== 'string') return ['ARTIFACTS_CONTEXT_RAW_REQUIRED'];
   let ctx = null;
   try { ctx = JSON.parse(contextRaw); } catch (e) { return ['ARTIFACTS_CONTEXT_UNPARSEABLE']; }
@@ -456,16 +1058,10 @@ function artifactsCore({ fixture, spec, contextRaw, sha256, readPng, baseDecls }
     errors.push(`FROZEN_CONTEXT_SHA_DRIFT ${fixture.smoke.contextSha256} != ${sha256(contextRaw)}`);
 
   // 4) raster 계약 — 정본 상수와 각각 대조(자기정합 금지)
-  const RC = spec.RASTER_CONTRACT;
-  if (!RC) errors.push('FROZEN_RASTER_CONTRACT_MISSING');
-  else {
-    const vp = ctx.viewport || {};
-    if (vp.width !== RC.width || vp.height !== RC.height)
-      errors.push(`RASTER_CONTEXT_VIEWPORT ${vp.width}x${vp.height} != ${RC.width}x${RC.height}`);
-    const cap = ctx.capture || {};
-    if (cap.scale !== RC.screenshotScale) errors.push(`RASTER_SCREENSHOT_SCALE ${cap.scale} != ${RC.screenshotScale}`);
-    if (cap.dpr !== RC.dpr) errors.push(`RASTER_DPR ${cap.dpr} != ${RC.dpr}`);
-  }
+  errors.push(...validateRasterContext(ctx, spec));
+  // BASE는 **라이트 캡처만** 허용한다. 두 phase가 같은 스키마를 공유하므로, 이 단정이 없으면
+  // 수동 복사 과정에서 다크 PNG가 BASE로 들어가도 아무도 잡지 못한다.
+  if (ctx.phase !== 'light') errors.push(`BASE_CONTEXT_PHASE ${ctx.phase} != light`);
 
   // 5) PNG 이름 집합·바이트 해시·IHDR 크기(정본 대조)
   const want = (spec.REQUIRED_SMOKE_SURFACES || []).map((x) => x.captureName).sort();
@@ -477,15 +1073,19 @@ function artifactsCore({ fixture, spec, contextRaw, sha256, readPng, baseDecls }
     try { const r = readPng(c.captureName); bytes = (r && r.bytes) ? r.bytes : r; } catch (e) { bytes = null; }
     if (!bytes) { errors.push(`FROZEN_PNG_UNREADABLE ${c.captureName}`); continue; }
     if (sha256(bytes) !== c.sha256) errors.push(`FROZEN_PNG_SHA_DRIFT ${c.captureName}`);
-    // 치수는 caller 신고가 아니라 바이트에서 파생한다.
-    const hdr = decodePngHeader(bytes);
-    if (!hdr.ok) { errors.push(`RASTER_PNG_DECODE ${c.captureName} ${hdr.reason}`); continue; }
-    if (RC && (hdr.width !== RC.width || hdr.height !== RC.height))
-      errors.push(`RASTER_PNG_SIZE ${c.captureName} ${hdr.width}x${hdr.height} != ${RC.width}x${RC.height}`);
+    // 치수·색심도·컬러타입·인터레이스는 caller 신고가 아니라 바이트에서 파생한다.
+    // 픽셀 비교 경로와 **같은 함수**를 쓴다(따로 적으면 한쪽만 느슨해진다).
+    errors.push(...validatePngRaster(bytes, spec, c.captureName));
   }
 
   // 6) 마스크·좌표 계약 — 방금 파싱한 그 객체로만 검사한다
   errors.push(...validateMaskContract(fixture, spec, ctx));
+
+  // 6b) 이 context가 **커밋된 실행기로** 만들어졌는지 — 손으로 만든 context는 승인되지 않는다
+  errors.push(...validateActionLog(spec, ctx));
+  // 6c) 러너가 남긴 증거(coverage·darkReview·provenance)를 계약으로 검증한다.
+  //     기록만 하고 검증하지 않으면 지우거나 바꾼 뒤 해시를 다시 만들면 통과한다.
+  errors.push(...validateCaptureEvidence(spec, ctx, provenanceRefs));
 
   // 7) privacy audit — subject를 **재계산**한다. audit에 적힌 값을 기대값으로 되쓰면 자기비교다.
   const { privacyAudit, ...subject } = ctx;
@@ -515,16 +1115,16 @@ function artifactsCore({ fixture, spec, contextRaw, sha256, readPng, baseDecls }
 }
 
 // 디스크에 **커밋된** fixture 원문을 검증한다(정상 운영·CI 계약: errors === []).
-export function validateCommittedArtifacts({ committedFixtureRaw, spec, contextRaw, sha256, readPng, baseDecls }) {
+export function validateCommittedArtifacts({ committedFixtureRaw, spec, contextRaw, sha256, readPng, baseDecls, provenanceRefs }) {
   if (typeof committedFixtureRaw !== 'string') return ['COMMITTED_FIXTURE_RAW_REQUIRED'];
   let fixture = null;
   try { fixture = JSON.parse(committedFixtureRaw); } catch (e) { return ['COMMITTED_FIXTURE_UNPARSEABLE']; }
-  return artifactsCore({ fixture, spec, contextRaw, sha256, readPng, baseDecls });
+  return artifactsCore({ fixture, spec, contextRaw, sha256, readPng, baseDecls, provenanceRefs });
 }
 
 // 메모리에서 새로 만든 candidate를 검증한다. **커밋된 fixture를 정답으로 쓰지 않는다.**
-export function validateCandidateArtifacts({ fixture, spec, contextRaw, sha256, readPng, baseDecls }) {
-  return artifactsCore({ fixture, spec, contextRaw, sha256, readPng, baseDecls });
+export function validateCandidateArtifacts({ fixture, spec, contextRaw, sha256, readPng, baseDecls, provenanceRefs }) {
+  return artifactsCore({ fixture, spec, contextRaw, sha256, readPng, baseDecls, provenanceRefs });
 }
 
 // ── 승인 orchestration ─────────────────────────────────────────────────────
@@ -534,12 +1134,16 @@ export function validateCandidateArtifacts({ fixture, spec, contextRaw, sha256, 
 export function approveAndWrite({
   fixture, spec, contrastResults,
   actualDecls, actualRaw, preAnnSources, actualAllowIdToKey, baseDecls,
-  contextRaw, sha256, readPng,
+  contextRaw, sha256, readPng, provenanceRefs,
   serialize, write,
 }) {
   const calls = { candidate: 0, conformance: 0, artifacts: 0 };
   if (typeof serialize !== 'function' || typeof write !== 'function')
     return { errors: ['APPROVE_IO_REQUIRED'], wrote: false, bytes: null, calls };
+  // 승인 경로 전체가 **하나의** spec 스냅샷을 소비한다(단계마다 다시 읽으면 값이 갈릴 수 있다).
+  const snapped = snapshotSpec(spec);
+  if (snapped.errors.length) return { errors: snapped.errors, wrote: false, bytes: null, calls };
+  spec = snapped.spec;
   // 비배열 반환도, 예외도 내부 결함으로 보고 write하지 않는다(예외가 그대로 튀면 fail-closed가 아니다).
   const step = (name, fn) => { let r;
     try { r = fn(); } catch (e) { return [`APPROVE_VALIDATOR_THREW ${name} ${e && e.message}`]; }
@@ -555,7 +1159,7 @@ export function approveAndWrite({
   if (errors.length) return { errors, wrote: false, bytes: null, calls };
 
   calls.artifacts = 1;
-  errors = step('artifacts', () => validateCandidateArtifacts({ fixture, spec, contextRaw, sha256, readPng, baseDecls }));
+  errors = step('artifacts', () => validateCandidateArtifacts({ fixture, spec, contextRaw, sha256, readPng, baseDecls, provenanceRefs }));
   if (errors.length) return { errors, wrote: false, bytes: null, calls };
 
   const bytes = serialize(fixture);
@@ -564,20 +1168,150 @@ export function approveAndWrite({
 }
 function safeParse(raw) { try { return JSON.parse(raw); } catch (e) { return null; } }
 
-export function specFingerprint(spec, sha256Hex) {   // 검수 §7: surfaces·marker·override target 포함
-  return sha256Hex(JSON.stringify({ base: spec.BASE, files: spec.FILES, counts: spec.COUNTS,
+// fingerprint payload에 들어가는 키의 **정본 목록**. payload 조립과 이 배열이 어긋나면
+// 상설 테스트가 잡는다(주석만 두면 '주석은 있었다'가 반복된다).
+export const FINGERPRINT_PAYLOAD_KEYS = [
+  'base', 'files', 'counts', 'darkCounts', 'groupStage', 'surfaces', 'lightDiffMasks',
+  'elementScales', 'selectorSizeEnvelope', 'maskPixelBudget', 'contrastReference', 'rasterContract',
+  'probeContract', 'probeSourceSha', 'probeModuleSha', 'runnerModuleSha', 'adapterModuleSha',
+  'overrideTargets', 'conversions', 'annotations',
+  'datasetEndpoints', 'datasetVolatileFields', 'datasetUnorderedPaths', 'expectedDatasetManifest',
+  'overrides', 'contrast',
+];
+
+// 값을 **정확히 한 번** 읽어 plain 사본을 만들면서 동시에 검증한다.
+//
+// 왜 한 번인가: 검증과 복제를 따로 하면 그 사이에 값이 바뀔 수 있다(루트 Proxy가 3번째 조회부터
+// 다른 배열을 돌려주게 하자 fingerprint는 정상 SPEC과 동일한데 소비값은 106→105가 됐다 — 실증).
+// 각 own property를 descriptor로 한 번만 읽고 그 값을 검증과 사본에 **함께** 쓰면,
+// 값이 조회마다 달라지더라도 해시된 것과 소비되는 것이 같은 스냅샷이 된다.
+export function plainJsonSnapshot(value, path = '$', seen = new Set()) {
+  const t = typeof value;
+  if (value === null || t === 'boolean' || t === 'string') return { value, errors: [] };
+  if (t === 'number') return Number.isFinite(value) ? { value, errors: [] } : { value: null, errors: [`JSON_NONFINITE ${path}`] };
+  if (t !== 'object') return { value: null, errors: [`JSON_BAD_TYPE ${path} ${t}`] };
+  if (seen.has(value)) return { value: null, errors: [`JSON_CYCLE ${path}`] };
+  seen.add(value);
+  const errors = [];
+  const isArr = Array.isArray(value);
+  const proto = Object.getPrototypeOf(value);
+  if (isArr ? proto !== Array.prototype : !(proto === Object.prototype || proto === null))
+    errors.push(`JSON_BAD_PROTO ${path}`);
+  if (Object.getOwnPropertySymbols(value).length) errors.push(`JSON_SYMBOL_KEY ${path}`);
+  const out = isArr ? [] : {};
+  const names = Object.getOwnPropertyNames(value);
+  const idx = isArr ? new Set(Array.from({ length: value.length }, (_, i) => String(i))) : null;
+  for (const k of names) {
+    if (isArr && k === 'length') continue;
+    if (isArr && !idx.has(k)) { errors.push(`JSON_ARRAY_EXTRA_KEY ${path}.${k}`); continue; }
+    const d = Object.getOwnPropertyDescriptor(value, k);
+    if (typeof d.get === 'function' || typeof d.set === 'function') { errors.push(`JSON_ACCESSOR ${path}.${k}`); continue; }
+    if (!d.enumerable) { errors.push(`JSON_NON_ENUMERABLE ${path}.${k}`); continue; }
+    const r = plainJsonSnapshot(d.value, `${path}.${k}`, seen);   // ← 이 한 번의 읽기만 쓴다
+    errors.push(...r.errors);
+    if (!r.errors.length) out[k] = r.value;
+  }
+  seen.delete(value);
+  return { value: errors.length ? null : out, errors };
+}
+
+const deepFreeze = (v) => {
+  if (v && typeof v === 'object') { Object.freeze(v); for (const k of Object.keys(v)) deepFreeze(v[k]); }
+  return v;
+};
+
+// spec 진입점. **정확히 한 번** plain snapshot을 만들고, 이후 모든 소비자는 이 snapshot만 쓴다.
+//
+// 루트도 descriptor로 읽는다. `{...spec}`은 accessor를 **호출해 값으로 바꾸고** 비열거 속성을
+// 지워버린다 — 검사하기 전에 증거가 사라진다(실증: 루트에 비열거·accessor를 주입해도 오류 0건).
+// 모듈 네임스페이스의 Symbol.toStringTag만 예외로 둔다(모든 ESM 네임스페이스가 갖는다).
+export function snapshotSpec(spec) {
+  if (!spec || typeof spec !== 'object') return { spec: null, errors: ['SPEC_SHAPE'] };
+  const errors = [];
+  for (const sym of Object.getOwnPropertySymbols(spec))
+    if (sym !== Symbol.toStringTag) errors.push(`SPEC_NOT_PLAIN JSON_SYMBOL_KEY SPEC ${String(sym)}`);
+  const out = {};
+  for (const k of Object.getOwnPropertyNames(spec)) {
+    const d = Object.getOwnPropertyDescriptor(spec, k);
+    if (!d) { errors.push(`SPEC_NOT_PLAIN JSON_NO_DESCRIPTOR SPEC.${k}`); continue; }
+    // 비열거 루트 키는 거부한다 — ESM 네임스페이스에는 존재하지 않으며, 숨긴 필드의 통로다.
+    if (!d.enumerable) { errors.push(`SPEC_NOT_PLAIN JSON_NON_ENUMERABLE SPEC.${k}`); continue; }
+    // ⚠️ **루트의 accessor는 거부하지 않는다.** ESM live binding이 accessor이기 때문이다:
+    //    node 네이티브 네임스페이스는 데이터 속성(accessor 0개)이지만 vitest 변환 아래에서는
+    //    17개 export가 **전부 getter**다(실측). 거부하면 정상 입력이 영구 false RED가 된다.
+    //    대신 여기서 **정확히 한 번만** 읽는다 — 조회마다 값이 달라져도 해시된 것과
+    //    소비되는 것이 같은 스냅샷이라는 성질은 그대로 지켜진다.
+    //    (중첩 값의 accessor는 그런 정당한 이유가 없으므로 plainJsonSnapshot이 계속 거부한다.)
+    const value = d.get ? d.get.call(spec) : d.value;           // ← 이 한 번의 읽기만 쓴다
+    const r = plainJsonSnapshot(value, `SPEC.${k}`);
+    errors.push(...r.errors.map((e) => `SPEC_NOT_PLAIN ${e}`));
+    if (!r.errors.length) out[k] = r.value;
+  }
+  if (errors.length) return { spec: null, errors };
+  return { spec: deepFreeze(out), errors: [] };
+}
+
+// spec 값이 **plain JSON**이 아니면 fingerprint는 전수를 덮지 못한다.
+//
+// 실증된 회피: `Object.defineProperty(CONVERSIONS[0], 'skipVerify', { value: true, enumerable: false })`
+// → JSON.stringify는 그 필드를 건너뛰므로 fingerprint 불변, 그러나 코드는 `.skipVerify === true`를
+// 읽는다. toJSON·accessor·심볼 키도 같은 부류다. payload를 아무리 넓혀도 직렬화 기반인 한 못 막는다.
+// 구조적 폐쇄는 "직렬화가 값 전체를 본다"를 먼저 보장하는 것뿐이다.
+//
+// spec은 모듈 네임스페이스라 Symbol.toStringTag를 갖는다 — 그래서 네임스페이스 자체가 아니라
+// **전개한 값들**을 검사한다.
+export function specPlainJsonErrors(spec) {
+  return snapshotSpec(spec).errors;
+}
+
+export function specFingerprintPayload(spec, sha256Hex) {
+  return { base: spec.BASE, files: spec.FILES, counts: spec.COUNTS,
     darkCounts: spec.DARK_DECL_COUNTS, groupStage: spec.GROUP_STAGE,
+    // canonicalize로 키 순서를 정규화한다. 순수 포매팅(필드 순서) 정리가 fingerprint를 흔들면
+    // 재캡처를 요구하게 되는데, 그건 계약이 아니라 잡음이다. 값이 바뀌면 여전히 흔들린다.
     surfaces: spec.REQUIRED_SMOKE_SURFACES.map((x) => [x.name, x.captureName,
-      JSON.stringify(x.coverageSelectors), JSON.stringify(x.darkReviewSelectors),
-      JSON.stringify(x.requiredElements || []), JSON.stringify(x.actions)]),
+      JSON.stringify(canonicalize(x.coverageSelectors)), JSON.stringify(canonicalize(x.darkReviewSelectors)),
+      JSON.stringify(canonicalize(x.requiredElements || [])), JSON.stringify(canonicalize(x.actions))]),
     lightDiffMasks: spec.LIGHT_DIFF_MASKS,
+    elementScales: spec.ELEMENT_SCALES,        // (surface,selector)별 실측 배율 — 캔버스 0.5 포함
+    selectorSizeEnvelope: spec.SELECTOR_SIZE_ENVELOPE,
+    maskPixelBudget: spec.MASK_PIXEL_BUDGET,
     contrastReference: spec.CONTRAST_REFERENCE,   // 참고치 삭제·변조도 fingerprint를 흔든다
     rasterContract: spec.RASTER_CONTRACT,        // viewport·DPR·scale이 바뀌면 다른 spec identity다
+    probeContract: spec.PROBE_CONTRACT,
+    probeSourceSha: sha256Hex(PROBE_SOURCE),     // 브라우저에 주입되는 코드
+    // 측정 모듈 **전체 바이트**. PROBE_SOURCE만 해시하면 양자화 격자(QUANT/SCALE_QUANT)·정규화
+    // (normalizeOccurrence)·거부 규칙(validateProbeResult)·교차검증 엄격도(crossCheckScale)가
+    // 잠기지 않는다. 실측: QUANT 64→32 변경이 fingerprint를 흔들지 못했다.
+    probeModuleSha: sha256Hex(PROBE_MODULE_BYTES),
+    // 캡처 실행기 전체 바이트. op 화이트리스트·중단 규칙·postcondition 판정·산출물 경로가 전부
+    // 여기 있고, 전부 "이 캡처가 어떻게 만들어졌는가"의 의미를 바꾼다.
+    // (순환 import: evaluator ↔ runner. 둘 다 최상위에서 상대 함수를 호출하지 않으므로 안전하며
+    //  두 로드 순서 모두 실측 확인했다.)
+    runnerModuleSha: sha256Hex(RUNNER_MODULE_BYTES),
+    // 커밋된 진입점. core를 우회하는 어댑터가 생기면 이 바이트가 단서가 된다.
+    adapterModuleSha: sha256Hex(ADAPTER_MODULE_BYTES),
     overrideTargets: Object.entries(spec.OVERRIDES).map(([k, v]) =>
       [k, (v.match(/^\s{2}\.[^{]+\{/gm) || []).map((t) => t.trim())]),
-    conversions: spec.CONVERSIONS.map((c) => [c.id, c.f, c.l, c.k, c.from, c.to, c.group, c.stage, JSON.stringify(c.ident)]),
+    conversions: spec.CONVERSIONS.map((c) => [c.id, c.f, c.l, c.k, c.from, c.to, c.group, c.stage, JSON.stringify(canonicalize(c.ident))]),
     annotations: spec.ANNOTATIONS.map((a) => [a.f, a.l, a.marker, a.anchor, a.text]),
-    overrides: spec.OVERRIDES, contrast: spec.CONTRAST_CASES }));
+    datasetEndpoints: spec.DATASET_ENDPOINTS,
+    datasetVolatileFields: spec.DATASET_VOLATILE_FIELDS,
+    datasetUnorderedPaths: spec.DATASET_UNORDERED_PATHS,
+    // 검수된 기대 dataset. null이면 "아직 확정되지 않음"이고 그 사실 자체가 fingerprint에 남는다.
+    expectedDatasetManifest: spec.EXPECTED_DATASET_MANIFEST,
+    overrides: spec.OVERRIDES, contrast: spec.CONTRAST_CASES };
+}
+
+export function specFingerprint(spec, sha256Hex) {   // 검수 §7: surfaces·marker·override target 포함
+  // non-plain이면 **해시를 돌려주지 않는다**. 이전 판은 오류 문자열을 해시했는데, 그러면
+  // 서로 다른 EVIL/SAFE 값이 같은 오류 문자열 → 같은 fingerprint가 됐다(실증).
+  // "해시가 baseline과 다르다"는 거부의 증거가 아니다. 거부는 중단이어야 한다.
+  // 스냅샷을 **한 번** 만들고 그 스냅샷만 해시한다. 이전 판은 검증에서 한 번, payload 생성에서
+  // 다시 raw spec을 읽었다 — 조회마다 값이 달라지는 루트에서 해시된 것과 소비되는 것이 갈렸다(실증).
+  const snap = snapshotSpec(spec);
+  if (snap.errors.length) throw new Error(`SPEC_NOT_PLAIN ${snap.errors.slice(0, 3).join('; ')}`);
+  return sha256Hex(JSON.stringify(specFingerprintPayload(snap.spec, sha256Hex)));
 }
 // ── 검수 Minor: 3/4/6/8자리만
 export function parseColorLiteral(str) {
@@ -597,6 +1331,11 @@ export function parseColorLiteral(str) {
 import { extractColorLiterals } from './cssColorLiterals.mjs';
 import { canonicalize } from './s4Canonicalize.mjs';
 import { PNG } from 'pngjs';
+import { createHash } from 'node:crypto';   // dataset digest 재계산 — 주입 금지
+// 양자화·배율 교차검증은 probe와 **같은 규칙**을 써야 한다(캡처 시점과 검증 시점의 격자가 다르면
+// exact 비교가 무의미해진다). 그래서 재정의하지 않고 committed probe 모듈에서 가져온다.
+import { PROBE_SOURCE, PROBE_MODULE_BYTES, q, qs, crossCheckScale } from './s4DomProbe.mjs';
+import { RUNNER_MODULE_BYTES, ADAPTER_MODULE_BYTES, planSurface, OP_SCHEMA } from './s4CaptureRunner.mjs';
 export function normColor(s) { let v = String(s).toLowerCase().replace(/\s+/g, '');
   const m = v.match(/^#([0-9a-f]{3,4})$/); if (m) v = '#' + [...m[1]].map((c) => c + c).join(''); return v; }
 export function resolveLight(token, vals, d = 0) { const v = vals[token]; if (v === undefined || d > 8) return v;

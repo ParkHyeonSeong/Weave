@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync, readdirSync, mkdtempSync, writeFileSync, rmSync, symlinkSync, utimesSync } from 'node:fs';
-import { resolve, join } from 'node:path';
+import { readFileSync, readdirSync, mkdtempSync, writeFileSync, rmSync, symlinkSync, utimesSync, existsSync, mkdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { resolve, join, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { compile, compileString } from 'sass';
@@ -10,6 +11,10 @@ import * as EV from './s4Evaluator.mjs';
 import * as CANON from './s4Canonicalize.mjs';
 import * as PIX from './s4PixelDiff.mjs';
 import * as PROM from './s4Promote.mjs';
+import * as PROBE from './s4DomProbe.mjs';   // committed 측정 코드 — fingerprint 결속 확인용
+import * as RUN from './s4CaptureRunner.mjs';   // committed 캡처 실행기
+import * as CAP from '../scripts/s4-capture.mjs';   // committed 캡처 진입점(어댑터)
+import { execSync as __exec } from 'node:child_process';
 import { PNG } from 'pngjs';                          // 픽셀 테스트용(ESM — require 금지)
 import { execSync } from 'node:child_process';        // 기존 파일에 없으므로 신규 추가
 import { pathToFileURL } from 'node:url';             // compileString에 실제 파일 URL을 줘야 상대 @use가 풀린다
@@ -20,7 +25,9 @@ const pngBytes = (w, h, tint = 0) => { const p = new PNG({ width: w, height: h }
   for (let i = 0; i < p.data.length; i += 4) { p.data[i] = tint; p.data[i + 1] = tint; p.data[i + 2] = tint; p.data[i + 3] = 255; }
   return PNG.sync.write(p); };   // createHash는 기존 import 재사용
 // SURFACE_NAMES: 24개 이름 exact manifest(순서 포함) — spec과 독립 정의라야 drift를 잡는다
-const SURFACE_NAMES = ['canvas', 'canvas-toolbar-active', 'canvas-matpill-on', 'sourcepicker',
+// sourcepicker base surface는 canvas로 통합됐다(같은 화면·바이트 동일 PNG였다 — 실측).
+// hover/focus/add-menu SourcePicker surface 6개는 서로 다른 상태이므로 유지한다.
+const SURFACE_NAMES = ['canvas', 'canvas-toolbar-active', 'canvas-matpill-on',
   'sourcepicker-branch-hover', 'sourcepicker-group-hover', 'sourcepicker-task-hover',
   'sourcepicker-unparticipate-hover', 'sourcepicker-search-focus', 'sourcepicker-addmenu-open',
   'detail', 'detail-originlink-hover', 'detail-trackchip-hover', 'timeline',
@@ -3963,7 +3970,7 @@ describe('S4 privacy audit', () => {
     expect(EV.validatePrivacyAudit(a, EXP).join()).toMatch(/PRIVACY_AUDIT_SUBJECT_DRIFT/); });
 });
 describe('S4 smoke manifest', () => {
-  it('surface 수 고정', () => expect(SPEC.REQUIRED_SMOKE_SURFACES.length).toBe(24));
+  it('surface 수 고정', () => expect(SPEC.REQUIRED_SMOKE_SURFACES.length).toBe(23));
   it('이름 exact manifest', () => expect(SPEC.REQUIRED_SMOKE_SURFACES.map((s) => s.name)).toEqual(SURFACE_NAMES));
   it('schema 필수 필드', () => SPEC.REQUIRED_SMOKE_SURFACES.forEach((s) => {
     expect(Array.isArray(s.actions)).toBe(true); expect(Array.isArray(s.coverageSelectors)).toBe(true);
@@ -4006,18 +4013,49 @@ describe('S4 fixture 동결', () => {
 // (b) spec 밖 selector가 context에 유입 (c) border rect를 paint rect로 오인 (d) no-op validator
 // 주입 (e) unknown surface 빈 비교가 전부 GREEN이었다. 아래는 그 폐쇄를 고정한다.
 // ─────────────────────────────────────────────────────────────────────────────
-const S4_MK = (x, y, w, h, scale, outset) => ({ x, y, width: w, height: h, scale,
-  paintRect: { x: x - outset * scale, y: y - outset * scale, width: w + 2 * outset * scale, height: h + 2 * outset * scale } });
+// occurrence 생성기. **변환 전 border-box(bw, bh)를 받아 rect를 파생**한다 — rect를 직접 받으면
+// width와 borderBox가 서로 무관해져서 두 파생 교차검증이 GREEN 대조군에서부터 깨진다.
+// computed paint 문자열도 함께 붙인다(outset이 여기서 파생되므로 없으면 검증 자체가 불가능).
+const S4_PAINT = {
+  plain: { boxShadow: 'none', outlineStyle: 'none', outlineWidth: '0px', outlineOffset: '0px', filter: 'none' },
+  ring: { boxShadow: 'rgb(0, 0, 0) 0px 0px 0px 3px', outlineStyle: 'none', outlineWidth: '0px', outlineOffset: '0px', filter: 'none' },
+};
+const S4_MK = (x, y, bw, bh, scale, outset, paint = S4_PAINT.plain) => {
+  const width = bw * scale, height = bh * scale, d = outset * scale;
+  return { x, y, width, height, borderBoxWidth: bw, borderBoxHeight: bh,
+    transformScaleX: scale, transformScaleY: scale, scale, ...paint,
+    paintRect: { x: x - d, y: y - d, width: width + 2 * d, height: height + 2 * d } };
+};
 
 // ── 단위 mutation 전용 독립 정본 ────────────────────────────────────────────
 // 프로덕션 SPEC/fixture에서 파생하지 않는다. 파생하면 spec 자체의 좌표·property 오류가
 // "정답"으로 함께 이동해 self-oracle이 된다(리뷰 지적). ID를 1,4로 비연속으로 둬서
 // 연속 번호 가정(1..N)이 다시 들어오면 즉시 드러나게 한다.
 const UNIT_SPEC = {
+  BASE: 'unitbase',
   LIGHT_DIFF_MASKS: {
-    1: { selector: '.UnitPlain', paintOutsetPx: 0, expectedScale: 1 },
-    4: { selector: '.UnitRing', paintOutsetPx: 3, expectedScale: 1.08 },
+    1: { selector: '.UnitPlain', paintOutsetPx: 0 },
+    4: { selector: '.UnitRing', paintOutsetPx: 3 },
   },
+  // 래스터 계약은 이제 public 픽셀 비교 경로에서도 강제된다(viewport == raster == PNG 치수).
+  // UNIT 세계는 200x200로 잠근다 — 1440x900 PNG를 테스트마다 만들면 5MB 버퍼가 반복된다.
+  RASTER_CONTRACT: { width: 200, height: 200, dpr: 1, screenshotScale: 'css' },
+  // (surface, selector)별 배율. .UnitPlain은 두 화면에 다 뜬다(모달 뒤 캔버스에 해당).
+  ELEMENT_SCALES: {
+    'unit-a': { '.UnitPlain': 1 },
+    'unit-b': { '.UnitPlain': 1, '.UnitRing': 1.08 },
+  },
+  SELECTOR_SIZE_ENVELOPE: {
+    '.UnitPlain': { minW: 20, maxW: 20, minH: 20, maxH: 20 },
+    '.UnitRing': { minW: 20, maxW: 20, minH: 20, maxH: 20 },
+  },
+  // 손으로 센 값(countMaskedPixels로 만들지 않는다 — 검사 대상 함수로 기대치를 만들면 항진명제다):
+  //   unit-a: .UnitPlain paintRect (100,100,20,20) -> x 100..120, y 100..120 = 20*20 = 400
+  //   unit-b: .UnitPlain (150,20,20,20)  -> x 150..170, y 20..40 = 400
+  //           .UnitRing  rect 21.6x21.6 @ (100,100), d = 3*1.08 = 3.24
+  //                      paintRect (96.76, 96.76, 28.08, 28.08) -> floor 96 .. ceil 125(배타) = 29, 29*29 = 841
+  //           두 사각형은 겹치지 않으므로 400 + 841 = 1241
+  MASK_PIXEL_BUDGET: { 'unit-a': 400, 'unit-b': 1241 },
   REQUIRED_SMOKE_SURFACES: [
     { name: 'unit-a', captureName: 'unit-a.png', actions: [], requiredElements: [], coverageSelectors: [{ selector: '.UnitPlain' }], darkReviewSelectors: [] },
     { name: 'unit-b', captureName: 'unit-b.png', actions: [], requiredElements: [], coverageSelectors: [{ selector: '.UnitRing' }], darkReviewSelectors: [] },
@@ -4077,22 +4115,57 @@ const unitFixture = () => ({
 });
 const U_OWNER = (sel) => UNIT_SPEC.REQUIRED_SMOKE_SURFACES.find((x) => x.coverageSelectors.some((o) => o.selector === sel)).name;
 // full matrix: 2 surface × 2 live selector, 미발견은 []
-const unitCtx = () => {
-  const ctx = { viewport: { width: 1440, height: 900 }, baseLightMaskRects: {} };
-  for (const x of UNIT_SPEC.REQUIRED_SMOKE_SURFACES) {
-    const bysel = {};
-    for (const m of Object.values(UNIT_SPEC.LIGHT_DIFF_MASKS))
-      bysel[m.selector] = U_OWNER(m.selector) === x.name
-        ? [S4_MK(100, 100, 20, 20, m.expectedScale, m.paintOutsetPx)] : [];
-    ctx.baseLightMaskRects[x.name] = bysel;
-  }
-  return ctx;
-};
+// unit-a: .UnitPlain / unit-b: .UnitPlain(비소유 — 모달 뒤 캔버스에 해당) + .UnitRing
+const unitCtx = () => ({
+  viewport: { width: 200, height: 200 },                       // RASTER_CONTRACT와 일치해야 한다
+  capture: { type: 'png', scale: 'css', dpr: 1 },              // 캡처 조건도 계약 대상이다
+  baseLightMaskRects: {
+    'unit-a': { '.UnitPlain': [S4_MK(100, 100, 20, 20, 1, 0, S4_PAINT.plain)], '.UnitRing': [] },
+    'unit-b': { '.UnitPlain': [S4_MK(150, 20, 20, 20, 1, 0, S4_PAINT.plain)],
+      '.UnitRing': [S4_MK(100, 100, 20, 20, 1.08, 3, S4_PAINT.ring)] },
+  },
+});
+// 재측정 결과 = 동결값에서 paintRect만 뺀 것(paintRect는 관측물이 아니라 파생물이다)
 const unitObs = (ctx, surf) => Object.fromEntries(Object.values(UNIT_SPEC.LIGHT_DIFF_MASKS).map((m) => {
   const rects = (ctx.baseLightMaskRects[surf] || {})[m.selector] || [];
-  return [m.selector, rects.map((r) => ({ x: r.x, y: r.y, width: r.width, height: r.height, scale: r.scale }))];
+  return [m.selector, rects.map(({ paintRect, ...r }) => r)];
 }));
 const U_RING = '.UnitRing';
+
+// ── diff 경로 하네스 ────────────────────────────────────────────────────────
+// public API가 **raw 문자열만** 받으므로 테스트도 문자열을 만들어 넘긴다.
+// fixture는 "승인된 산출물"을 흉내내어 contextRaw/BASE bytes의 해시를 담는다.
+// 이건 self-oracle이 아니다 — 여기서 만드는 것은 **유효한 입력**이고, 불일치를 잡는다는 사실은
+// 아래 DIFF_*_NOT_APPROVED RED 테스트가 따로 증명한다. 프로덕션에서 그 해시의 권위는
+// 승인 경로(artifactsCore)가 fingerprint와 대조하는 데서 나온다.
+const D_SHA = (v) => createHash('sha256').update(Buffer.isBuffer(v) ? v : Buffer.from(v)).digest('hex');
+const D_W = 200, D_H = 200;
+const D_IMG = (fill = [255, 255, 255]) => s4Png(D_W, D_H, fill);
+const D_PX = (x, y) => { const p = PNG.sync.read(D_IMG());
+  const i = (D_W * y + x) << 2; p.data[i] = 0; p.data[i + 1] = 0; p.data[i + 2] = 0; return PNG.sync.write(p); };
+const D_FIXTURE_RAW = ({ contextRaw, baseBuf, spec, over }) => JSON.stringify({
+  ...unitFixture(),
+  // fixture ↔ spec 신뢰 루트. 이걸 채우지 않으면 DIFF_FINGERPRINT_DRIFT로 먼저 막힌다 —
+  // 즉 "관대한 spec + 손수 만든 fixture" 조합이 구조적으로 불가능하다.
+  fingerprint: EV.specFingerprint(spec, D_SHA),
+  base: spec.BASE,
+  smoke: {
+    contextSha256: D_SHA(contextRaw),
+    captures: spec.REQUIRED_SMOKE_SURFACES.map((x) => ({ captureName: x.captureName, sha256: D_SHA(baseBuf) })),
+  },
+  ...over,
+});
+const D_CALL = ({ ctx, spec = UNIT_SPEC, surfaceName = 'unit-b', observed, baseBuf, afterBuf,
+  contextRawOver, fixtureRawOver, ...rest } = {}) => {
+  const c = ctx || unitCtx();
+  const base = baseBuf || D_IMG();
+  const contextRaw = contextRawOver !== undefined ? contextRawOver : JSON.stringify(c);
+  const fixtureRaw = fixtureRawOver !== undefined ? fixtureRawOver
+    : D_FIXTURE_RAW({ contextRaw: JSON.stringify(c), baseBuf: base, spec });
+  const obs = observed !== undefined ? observed : unitObs(c, surfaceName);
+  return PIX.diffSurfaceLight({ baseBuf: base, afterBuf: afterBuf || base, spec, surfaceName,
+    fixtureRaw, contextRaw, observedRaw: typeof obs === 'string' ? obs : JSON.stringify(obs), ...rest });
+};
 
 const s4Png = (w, h, fill) => { const p = new PNG({ width: w, height: h });
   for (let i = 0; i < p.data.length; i += 4) { p.data[i] = fill[0]; p.data[i+1] = fill[1]; p.data[i+2] = fill[2]; p.data[i+3] = 255; }
@@ -4154,67 +4227,130 @@ describe('S4 마스크 좌표 계약 — context rect', () => {
   it('RED: width 0 / NaN / viewport 밖', () => {
     expect(bad((c, s) => { c.baseLightMaskRects[s][U_RING][0].width = 0; })).toMatch(/MASK_RECT_DEGENERATE/);
     expect(bad((c, s) => { c.baseLightMaskRects[s][U_RING][0].x = NaN; })).toMatch(/MASK_RECT_NONFINITE/);
-    expect(bad((c, s) => { c.baseLightMaskRects[s][U_RING][0] = S4_MK(1439, 899, 20, 20, 1.08, 3); })).toMatch(/MASK_RECT_OUT_OF_VIEWPORT/);
+    // .UnitRing의 변경 property는 box-shadow다 — ring paint를 줘야 outset 3이 파생된다.
+    expect(bad((c, s) => { c.baseLightMaskRects[s][U_RING][0] = S4_MK(1439, 899, 20, 20, 1.08, 3, S4_PAINT.ring); })).toMatch(/MASK_RECT_OUT_OF_VIEWPORT/);
   });
   it('GREEN: coverage owner가 아닌 surface의 정상 occurrence도 허용(모달 뒤 캔버스)', () => {
-    const c = unitCtx();   // unit-a 소유 selector가 unit-b에도 실제로 보이는 상황
-    c.baseLightMaskRects['unit-b']['.UnitPlain'].push(S4_MK(200, 200, 10, 10, 1, 0));
-    expect(EV.validateMaskContract(fx, UNIT_SPEC, c)).toEqual([]);
+    // .UnitPlain의 coverage owner는 unit-a인데 unit-b에도 실제로 렌더된다. 기본 ctx가 이미 그 상태다.
+    expect(U_OWNER('.UnitPlain')).toBe('unit-a');
+    expect(unitCtx().baseLightMaskRects['unit-b']['.UnitPlain'].length).toBe(1);
+    expect(EV.validateMaskContract(fx, UNIT_SPEC, unitCtx())).toEqual([]);
   });
 });
 
-describe('S4 pixel diff 소비 — 단일 경로만 허용', () => {
-  const fx = unitFixture();
-  const IMG = () => s4Png(40, 40, [255, 255, 255]);
-  const call = (over) => PIX.diffSurfaceLight({ baseBuf: IMG(), afterBuf: IMG(), fixture: fx, spec: UNIT_SPEC,
-    context: unitCtx(), surfaceName: U_OWNER(U_RING), observed: unitObs(unitCtx(), U_OWNER(U_RING)), ...over });
-  it('validator를 주입할 수 없다(정적 결속) — 인자를 넘겨도 무시된다', () => {
-    const r = call({ validateMaskContract: () => [] });
-    expect(r.errors).toEqual([]);                       // 정상 입력이라 GREEN
-    const forged = unitCtx();
-    forged.baseLightMaskRects[U_OWNER(U_RING)][U_RING][0].paintRect.width = 9999;
-    const r2 = PIX.diffSurfaceLight({ baseBuf: IMG(), afterBuf: IMG(), fixture: fx, spec: UNIT_SPEC, context: forged,
-      surfaceName: U_OWNER(U_RING), observed: unitObs(forged, U_OWNER(U_RING)), validateMaskContract: () => [] });
-    expect(r2.errors.join()).toMatch(/MASK_PAINT_MISMATCH/);   // no-op validator로도 우회 불가
+describe('S4 pixel diff 소비 — raw snapshot만 받는 단일 경로', () => {
+  it('GREEN 대조군: 정상 입력', () => {
+    const r = D_CALL();
+    expect(r.errors).toEqual([]); expect(r.diff).toBe(0); expect(r.ok).toBe(true);
   });
-  it('RED: observed 생략', () => expect(call({ observed: undefined }).errors.join()).toMatch(/OBSERVE_REQUIRED/));
+  it('validator를 주입할 수 없다(정적 결속) — 인자를 넘겨도 무시된다', () => {
+    expect(D_CALL({ validateMaskContract: () => [] }).errors).toEqual([]);
+    const forged = unitCtx();
+    forged.baseLightMaskRects['unit-b'][U_RING][0].paintRect.width = 9999;
+    expect(D_CALL({ ctx: forged, validateMaskContract: () => [] }).errors.join())
+      .toMatch(/MASK_PAINT_MISMATCH/);
+  });
+  it('RED: 파싱된 객체는 아예 받지 않는다 — Proxy가 들어올 통로 자체가 없다', () => {
+    const ctx = unitCtx();
+    expect(PIX.diffSurfaceLight({ baseBuf: D_IMG(), afterBuf: D_IMG(), spec: UNIT_SPEC, surfaceName: 'unit-b',
+      fixture: unitFixture(), context: ctx, observed: unitObs(ctx, 'unit-b') }).errors.join())
+      .toMatch(/DIFF_FIXTURERAW_REQUIRED/);
+    expect(D_CALL({ contextRawOver: { not: 'a string' } }).errors.join()).toMatch(/DIFF_CONTEXTRAW_REQUIRED/);
+  });
+  it('RED: 검증 중과 소비 시점에 다른 값을 주는 Proxy — 직렬화되어 무력화된다', () => {
+    // 이전 판(객체 인자)에서는 이 공격이 errors=0 diff=0 ok=true 로 통했다.
+    // 이제 문자열만 받으므로 Proxy를 JSON.stringify한 결과(= target의 정직한 값)만 들어온다.
+    const ctx = unitCtx();
+    const target = ctx.baseLightMaskRects['unit-b'][U_RING][0];
+    const honest = { ...target.paintRect };
+    let reads = 0;
+    ctx.baseLightMaskRects['unit-b'][U_RING][0] = new Proxy(target, {
+      get(t, k) { if (k !== 'paintRect') return t[k]; reads++; return reads > 1 ? { x: 0, y: 0, width: 3000, height: 3000 } : honest; },
+    });
+    const contextRaw = JSON.stringify(ctx);                       // 여기서 한 번만 읽힌다
+    const r = D_CALL({ contextRawOver: contextRaw,
+      fixtureRawOver: D_FIXTURE_RAW({ contextRaw, baseBuf: D_IMG(), spec: UNIT_SPEC }),
+      observed: JSON.parse(contextRaw).baseLightMaskRects['unit-b'] && undefined,
+      ctx: JSON.parse(contextRaw), afterBuf: D_PX(150, 150) });
+    // 마스크 밖(150,150) 회귀가 그대로 검출된다 — 소비 시점 위조가 통하지 않는다
+    expect(r.errors).toEqual([]); expect(r.diff).toBe(1); expect(r.ok).toBe(false);
+  });
+  it('RED: contextRaw가 승인된 해시와 다르다', () => {
+    const c = unitCtx();
+    const approved = JSON.stringify(c);
+    const tampered = JSON.stringify({ ...c, injected: 1 });
+    expect(D_CALL({ ctx: c, contextRawOver: tampered,
+      fixtureRawOver: D_FIXTURE_RAW({ contextRaw: approved, baseBuf: D_IMG(), spec: UNIT_SPEC }) })
+      .errors.join()).toMatch(/DIFF_CONTEXT_NOT_APPROVED/);
+  });
+  it('RED: BASE PNG가 승인된 바이트와 다르다', () => {
+    const other = D_IMG([254, 255, 255]);
+    expect(D_CALL({ baseBuf: other, fixtureRawOver: D_FIXTURE_RAW({ contextRaw: JSON.stringify(unitCtx()), baseBuf: D_IMG(), spec: UNIT_SPEC }) })
+      .errors.join()).toMatch(/DIFF_BASE_NOT_APPROVED unit-b\.png/);
+  });
+  it('RED: 이 surface의 captureName이 fixture에 없다', () => {
+    const contextRaw = JSON.stringify(unitCtx());
+    const raw = JSON.parse(D_FIXTURE_RAW({ contextRaw, baseBuf: D_IMG(), spec: UNIT_SPEC }));
+    raw.smoke.captures = raw.smoke.captures.filter((c) => c.captureName !== 'unit-b.png');
+    expect(D_CALL({ fixtureRawOver: JSON.stringify(raw) }).errors.join()).toMatch(/DIFF_BASE_NOT_IN_FIXTURE unit-b\.png/);
+  });
+  it('RED: raster 계약 위반 — PNG 치수 / viewport / dpr / screenshotScale', () => {
+    // PNG가 계약 치수가 아니면 거부한다. 이전 판은 40x40이든 3000x2000이든 errors=0 diff=0 ok=true였다.
+    const small = s4Png(40, 40, [255, 255, 255]);
+    expect(D_CALL({ baseBuf: small,
+      fixtureRawOver: D_FIXTURE_RAW({ contextRaw: JSON.stringify(unitCtx()), baseBuf: small, spec: UNIT_SPEC }) })
+      .errors.join()).toMatch(/RASTER_PNG_SIZE BASE 40x40 != 200x200/);
+    expect(D_CALL({ afterBuf: s4Png(400, 400, [255, 255, 255]) }).errors.join())
+      .toMatch(/RASTER_PNG_SIZE AFTER 400x400/);
+    const badVp = unitCtx(); badVp.viewport = { width: 1440, height: 900 };
+    expect(D_CALL({ ctx: badVp }).errors.join()).toMatch(/RASTER_CONTEXT_VIEWPORT 1440x900 != 200x200/);
+    const noDpr = unitCtx(); delete noDpr.capture.dpr;
+    expect(D_CALL({ ctx: noDpr }).errors.join()).toMatch(/RASTER_DPR undefined != 1/);
+    const badScale = unitCtx(); badScale.capture.scale = 'device';
+    expect(D_CALL({ ctx: badScale }).errors.join()).toMatch(/RASTER_SCREENSHOT_SCALE device != css/);
+  });
+  it('RED: PNG 바이트 손상은 decode 단계에서 거부된다', () => {
+    const ok = D_IMG(); const broken = Buffer.from(ok); broken[Math.floor(broken.length / 2)] ^= 0xff;
+    expect(D_CALL({ afterBuf: broken }).errors.join()).toMatch(/RASTER_PNG_DECODE AFTER/);
+  });
+  it('RED: observed 생략', () => expect(D_CALL({ observed: null }).errors.join()).toMatch(/OBSERVE_REQUIRED/));
   it('RED: selector 값이 배열이 아님 → KEY_MISSING', () => {
-    const o = unitObs(unitCtx(), U_OWNER(U_RING)); o[U_RING] = {};
-    expect(call({ observed: o }).errors.join()).toMatch(/OBSERVE_KEY_MISSING/);
+    const o = unitObs(unitCtx(), 'unit-b'); o[U_RING] = {};
+    expect(D_CALL({ observed: o }).errors.join()).toMatch(/OBSERVE_KEY_MISSING/);
   });
   it('RED: 같은 개수인데 좌표 누락 [{}] → NONFINITE', () => {
-    const o = unitObs(unitCtx(), U_OWNER(U_RING)); o[U_RING] = [{}];
-    expect(call({ observed: o }).errors.join()).toMatch(/OBSERVE_NONFINITE/);
+    const o = unitObs(unitCtx(), 'unit-b'); o[U_RING] = [{}];
+    expect(D_CALL({ observed: o }).errors.join()).toMatch(/OBSERVE_NONFINITE/);
   });
   it('RED: occurrence 개수 불일치', () => {
-    const o = unitObs(unitCtx(), U_OWNER(U_RING)); o[U_RING] = [];
-    expect(call({ observed: o }).errors.join()).toMatch(/OBSERVE_COUNT/);
+    const o = unitObs(unitCtx(), 'unit-b'); o[U_RING] = [];
+    expect(D_CALL({ observed: o }).errors.join()).toMatch(/OBSERVE_COUNT/);
   });
   it('RED: 요소 이동(정규화 경계 초과)', () => {
-    const o = unitObs(unitCtx(), U_OWNER(U_RING));
+    const o = unitObs(unitCtx(), 'unit-b');
     o[U_RING][0] = { ...o[U_RING][0], x: o[U_RING][0].x + 0.02 };
-    expect(call({ observed: o }).errors.join()).toMatch(/OBSERVE_GEOMETRY/);
+    expect(D_CALL({ observed: o }).errors.join()).toMatch(/OBSERVE_GEOMETRY/);
   });
   it('GREEN: 양자(1/64px) 미만 흔들림은 동일 좌표로 정규화', () => {
-    const o = unitObs(unitCtx(), U_OWNER(U_RING));
+    const o = unitObs(unitCtx(), 'unit-b');
     o[U_RING][0] = { ...o[U_RING][0], x: o[U_RING][0].x + 0.005 };
-    expect(call({ observed: o }).errors).toEqual([]);
+    expect(D_CALL({ observed: o }).errors).toEqual([]);
   });
   it('RED: manifest에 없는 surface는 빈 비교로 통과하지 못한다', () =>
-    expect(call({ surfaceName: 'NOPE' }).errors.join()).toMatch(/SURFACE_UNKNOWN/));
+    expect(D_CALL({ surfaceName: 'NOPE', observed: {} }).errors.join()).toMatch(/SURFACE_UNKNOWN/));
   it('RED: context에 없는 surface', () => {
-    const c = unitCtx(); const s = U_OWNER(U_RING); const o = unitObs(c, s); delete c.baseLightMaskRects[s];
-    expect(PIX.diffSurfaceLight({ baseBuf: IMG(), afterBuf: IMG(), fixture: fx, spec: UNIT_SPEC, context: c, surfaceName: s, observed: o })
-      .errors.join()).toMatch(/SURFACE_NOT_IN_CONTEXT/);
+    const c = unitCtx(); const o = unitObs(c, 'unit-b'); delete c.baseLightMaskRects['unit-b'];
+    expect(D_CALL({ ctx: c, observed: o }).errors.join()).toMatch(/SURFACE_NOT_IN_CONTEXT/);
   });
   it('GREEN: 그 화면에 live selector가 하나도 없어도 정상(전부 빈 배열, maskCount 0)', () => {
-    // UNIT 정본에 3번째 surface를 추가해 "조사했고 전부 0건"인 화면을 만든다.
     const spec = { ...UNIT_SPEC, REQUIRED_SMOKE_SURFACES: [...UNIT_SPEC.REQUIRED_SMOKE_SURFACES,
-      { name: 'unit-empty', captureName: 'unit-empty.png', actions: [], requiredElements: [], coverageSelectors: [], darkReviewSelectors: [] }] };
+      { name: 'unit-empty', captureName: 'unit-empty.png', actions: [], requiredElements: [], coverageSelectors: [], darkReviewSelectors: [] }],
+      // surface를 추가하면 예산도 선언해야 한다 — 0건 화면의 예산은 0이다.
+      MASK_PIXEL_BUDGET: { ...UNIT_SPEC.MASK_PIXEL_BUDGET, 'unit-empty': 0 } };
     const c = unitCtx();
     c.baseLightMaskRects['unit-empty'] = Object.fromEntries(Object.values(spec.LIGHT_DIFF_MASKS).map((m) => [m.selector, []]));
     const o = Object.fromEntries(Object.values(spec.LIGHT_DIFF_MASKS).map((m) => [m.selector, []]));
-    const r = PIX.diffSurfaceLight({ baseBuf: IMG(), afterBuf: IMG(), fixture: fx, spec, context: c, surfaceName: 'unit-empty', observed: o });
+    const r = D_CALL({ ctx: c, spec, surfaceName: 'unit-empty', observed: o });
     expect(r.errors).toEqual([]); expect(r.maskCount).toBe(0);
   });
 });
@@ -4233,39 +4369,1098 @@ describe('S4 게이트 배선 — helper가 아니라 공용 경로가 잡는다
   });
 });
 
-describe('S4 public diffSurfaceLight — 마스크가 실제 픽셀 비교에 적용된다', () => {
+describe('S4 outset 파생 — 선언값이 아니라 변경 property의 computed 페인트에서 나온다', () => {
+  const P = (over) => ({ boxShadow: 'none', outlineStyle: 'none', outlineWidth: '0px', outlineOffset: '0px', filter: 'none', ...over });
+  it('괄호 안 콤마를 보존해 레이어를 나눈다', () => {
+    expect(EV.splitTopLevel('rgba(0, 0, 0, 0.03) 0px 1px 2px 0px, rgb(1, 2, 3) 0px 0px 0px 3px'))
+      .toEqual(['rgba(0, 0, 0, 0.03) 0px 1px 2px 0px', 'rgb(1, 2, 3) 0px 0px 0px 3px']);
+  });
+  it('border box 안에만 칠하는 property는 0', () => {
+    for (const prop of ['background', 'background-color', 'color', 'border', 'border-color'])
+      expect(EV.maxOutwardPaintPx(prop, P({ boxShadow: 'rgba(0, 0, 0, 0.5) 0px 40px 40px 40px' })))
+        .toEqual({ px: 0, errors: [] });   // 그림자가 있어도 **변경된 것은 배경**이라 무관하다
+  });
+  it('box-shadow: spread·blur·offset에서 최대 외곽 거리를 뽑는다', () => {
+    const f = (bs) => EV.maxOutwardPaintPx('box-shadow', P({ boxShadow: bs })).px;
+    expect(f('none')).toBe(0);
+    expect(f('rgb(255, 255, 255) 0px 0px 0px 2px, rgb(229, 229, 229) 0px 0px 0px 3px')).toBe(3);  // 실제 스와치
+    expect(f('rgba(0, 0, 0, 0.03) 0px 1px 2px 0px')).toBe(3);                                     // blur 2 + dy 1
+    expect(f('rgb(0, 0, 0) -5px 0px 0px 0px')).toBe(5);                                            // 음수 오프셋
+    expect(f('rgb(0, 0, 0) 0px 0px 0px 9px inset')).toBe(0);                                       // inset은 안쪽
+  });
+  it('outline은 width+offset, filter는 drop-shadow', () => {
+    expect(EV.maxOutwardPaintPx('outline', P({ outlineStyle: 'solid', outlineWidth: '2px', outlineOffset: '1px' })).px).toBe(3);
+    expect(EV.maxOutwardPaintPx('outline', P({ outlineStyle: 'none', outlineWidth: '9px' })).px).toBe(0);
+    // drop-shadow는 spread가 없다 — 길이 3개(dx dy blur). blur 4px는 실제로 4px 밖까지 칠한다.
+    expect(EV.maxOutwardPaintPx('filter', P({ filter: 'drop-shadow(rgb(0, 0, 0) 0px 0px 4px)' })).px).toBe(4);
+    expect(EV.maxOutwardPaintPx('filter', P({ filter: 'drop-shadow(rgb(0, 0, 0) 2px 0px 1px)' })).px).toBe(3);
+    // box-shadow 형태(길이 4개)를 filter에 넣으면 0이 아니라 오류다
+    expect(EV.maxOutwardPaintPx('filter', P({ filter: 'drop-shadow(rgb(0, 0, 0) 0px 0px 4px 4px)' })).errors.join())
+      .toMatch(/SHADOW_LAYER_UNPARSEABLE/);
+  });
+  it('RED: 모델에 없는 property는 0으로 떨어지지 않고 오류다', () => {
+    const r = EV.maxOutwardPaintPx('mystery-prop', P());
+    expect(r.errors.join()).toMatch(/PAINT_PROPERTY_UNMODELED mystery-prop/);
+    expect(Number.isFinite(r.px)).toBe(false);
+  });
+  it('RED: 파싱 불가한 shadow 레이어는 0이 아니라 오류다', () => {
+    const r = EV.maxOutwardPaintPx('box-shadow', P({ boxShadow: 'rgb(0, 0, 0) 1px' }));
+    expect(r.errors.join()).toMatch(/SHADOW_LAYER_UNPARSEABLE/);
+    expect(Number.isFinite(r.px)).toBe(false);
+  });
+  it('filter가 drop-shadow가 아니면 모델 밖으로 신고한다', () => {
+    expect(EV.maxOutwardPaintPx('filter', P({ filter: 'blur(4px)' })).errors.join()).toMatch(/PAINT_FILTER_UNMODELED/);
+  });
+});
+
+describe('S4 마스크 픽셀 예산 — 겹침을 반영한 집합 크기', () => {
+  it('겹치는 rect는 한 번만 센다(면적 합이 아니다)', () => {
+    const a = { x: 0, y: 0, width: 10, height: 10 };
+    expect(EV.countMaskedPixels([a], 100, 100)).toBe(100);
+    expect(EV.countMaskedPixels([a, a], 100, 100)).toBe(100);              // 면적 합이면 200
+    expect(EV.countMaskedPixels([a, { x: 5, y: 0, width: 10, height: 10 }], 100, 100)).toBe(150);
+  });
+  it('fillRects와 같은 픽셀 규칙을 쓴다(경계 floor/ceil)', () => {
+    const r = { x: 0.5, y: 0.5, width: 1, height: 1 };
+    expect(EV.rectPixelBounds(r, 100, 100)).toEqual({ x0: 0, y0: 0, x1: 2, y1: 2 });
+    const png = PNG.sync.read(s4Png(4, 4, [255, 255, 255]));
+    PIX.fillRects(png, [r]);
+    let black = 0;
+    for (let i = 0; i < png.data.length; i += 4) if (png.data[i] === 0) black++;
+    expect(black).toBe(EV.countMaskedPixels([r], 4, 4));                   // 두 경로가 같은 픽셀 수
+  });
+  it('뷰포트 밖은 잘린다', () => {
+    expect(EV.countMaskedPixels([{ x: -5, y: -5, width: 10, height: 10 }], 100, 100)).toBe(25);
+  });
+});
+
+describe('S4 커밋된 캡처 실행기 — 세만틱은 러너가 소유하고 driver는 원시 동작만 한다', () => {
+  // ── fake driver ────────────────────────────────────────────────────────────
+  // 페이지 상태를 아주 단순한 모델로 흉내낸다: url → 보이는 selector 집합.
+  // driver는 "상태를 만드는" 역할만 하고, 판정은 러너가 evaluate(ASSERT_SOURCE)로 한다.
+  const mkDriver = (opts = {}) => {
+    const st = { url: null, storage: { ...(opts.storage || {}) }, visible: new Set(), calls: [], viewport: null };
+    const model = opts.model || {};
+    const apply = () => { st.visible = new Set(model[st.url] || []); };
+    const d = {
+      state: st,
+      async setViewport(w, h) { st.viewport = [w, h]; st.calls.push(['setViewport', w, h]); },
+      async setStorage(k, v) { st.storage[k] = v; st.calls.push(['setStorage', k, v]); },
+      async goto(u) { st.url = u; apply(); st.calls.push(['goto', u]); },
+      async settle(sel, state) { st.calls.push(['settle', sel, state]); if (opts.settleThrows) throw new Error('settle timeout'); },
+      async click(sel, nth, hasText) { st.calls.push(['click', sel, nth, hasText]);
+        for (const s2 of (opts.clickAdds || {})[sel] || []) st.visible.add(s2);
+        for (const s2 of (opts.clickRemoves || {})[sel] || []) st.visible.delete(s2); },
+      async hover(sel, nth) { st.calls.push(['hover', sel, nth]); st.visible.add(`${sel}:hover`); },
+      async evaluate(source, arg) {
+        st.calls.push(['evaluate', source === PROBE.PROBE_SOURCE ? 'PROBE' : source === PROBE.ASSERT_SOURCE ? 'ASSERT' : 'OTHER']);
+        if (opts.evaluate) { const r = opts.evaluate(source, arg, st); if (r !== undefined) return r; }
+        if (source === RUN.READ_STORAGE_SOURCE)
+          return Object.fromEntries(arg.map((k) => [k, { present: st.storage[k] !== undefined, value: st.storage[k] ?? null }]));
+        if (source === PROBE.THEME_PROBE_SOURCE)
+          return { dataTheme: opts.dataTheme === undefined ? st.storage.theme ?? null : opts.dataTheme,
+            stored: st.storage.theme ?? null, colorScheme: '' };
+        if (source === PROBE.RASTER_PROBE_SOURCE)
+          return { innerWidth: st.viewport ? st.viewport[0] : 0, innerHeight: st.viewport ? st.viewport[1] : 0,
+            dpr: opts.dpr === undefined ? 1 : opts.dpr, scrollX: 0, scrollY: 0, docScrollWidth: st.viewport ? st.viewport[0] : 0 };
+        if (source === RUN.RESTORE_STORAGE_SOURCE) {
+          for (const [k, v] of arg) { if (v && v.present) st.storage[k] = v.value; else delete st.storage[k]; }
+          return true;
+        }
+        if (source === PROBE.ASSERT_SOURCE)
+          return Object.fromEntries(arg.map((sel) => [sel, { count: st.visible.has(sel) ? 1 : 0, visible: st.visible.has(sel) ? 1 : 0 }]));
+        if (source === PROBE.PROBE_SOURCE)
+          return Object.fromEntries(arg.map((sel) => [sel, st.visible.has(sel) ? [{
+            x: 10, y: 10, width: 20, height: 20, borderBoxWidth: 20, borderBoxHeight: 20,
+            transformScaleX: 1, transformScaleY: 1, chainDepth: 2, skewCount: 0, nonFlatCount: 0, zoomCount: 0,
+            offsetWidth: 20, offsetHeight: 20, display: 'block', boxSizing: 'border-box',
+            cssWidth: '20px', cssHeight: '20px', padX: 0, padY: 0, brdX: 0, brdY: 0,
+            boxShadow: 'none', outlineStyle: 'none', outlineWidth: '0px', outlineOffset: '0px', filter: 'none',
+          }] : []]));
+        throw new Error('unknown source');
+      },
+      async sleep(ms) { st.calls.push(['sleep', ms]); },
+      async reload() { st.calls.push(['reload']); apply(); },
+      // 실제 PNG를 돌려준다 — 러너가 IHDR을 decode해 래스터 계약과 대조하기 때문이다.
+      async screenshot() { st.calls.push(['screenshot']);
+        return opts.screenshot ? opts.screenshot(st) : s4Png(st.viewport ? st.viewport[0] : 200, st.viewport ? st.viewport[1] : 200, [250, 250, 250]); },
+    };
+    return d;
+  };
+  const SURF = {
+    name: 'r-a', captureName: 'r-a.png', requiredElements: [], darkReviewSelectors: [],
+    actions: [
+      { op: 'setStorage', key: 'track:{id}:lastView', value: 'flow' },
+      { op: 'goto', url: '/tracks/{id}' },
+      { op: 'click', selector: '.Toggle', nth: 0 },
+      { op: 'expectPresent', selector: '.Pill--on' },
+    ],
+    coverageSelectors: [{ selector: '.Pill--on', state: 'selected', provenBy: 2, produces: '.Pill--on' }],
+  };
+  const R200 = { width: 200, height: 200, dpr: 1, screenshotScale: 'css' };
+  // 러너는 paintRect를 spec의 outset에서 파생한다 — 정본 없이는 fail-closed(RUN_NO_OUTSET).
+  const SPEC_R = { LIGHT_DIFF_MASKS: { 1: { selector: '.Target', paintOutsetPx: 2 } } };
+  const CTXIN = { trackId: 7 };
+  const SELS = ['.Target'];
+  const MODEL = { '/tracks/7': ['.Toggle', '.Target'] };
+  const good = () => mkDriver({ model: MODEL, storage: { theme: 'light' }, clickAdds: { '.Toggle': ['.Pill--on'] } });
+
+  it('실행 계획: placeholder를 해석하고 op/필드를 화이트리스트로 강제한다', () => {
+    const { steps, errors } = RUN.planSurface(SURF, CTXIN);
+    expect(errors).toEqual([]);
+    expect(steps.map((s) => s.op)).toEqual(['setStorage', 'goto', 'click', 'expectPresent']);
+    expect(steps[0].key).toBe('track:7:lastView');
+    expect(steps[1].url).toBe('/tracks/7');
+    expect(steps[2].postAssert.map((p) => p.why)).toEqual(['state:selected', 'produces']);
+  });
+  it('RED: 미해결 placeholder / 미지 op / 필드 누락 / 여분 필드', () => {
+    expect(RUN.planSurface(SURF, {}).errors.join()).toMatch(/PLAN_UNRESOLVED_PLACEHOLDER/);
+    expect(RUN.planSurface({ ...SURF, actions: [{ op: 'evalJs', code: '1' }] }, CTXIN).errors.join()).toMatch(/PLAN_UNKNOWN_OP r-a\[0\] evalJs/);
+    expect(RUN.planSurface({ ...SURF, actions: [{ op: 'goto' }] }, CTXIN).errors.join()).toMatch(/PLAN_MISSING_FIELD r-a\[0\] goto\.url/);
+    expect(RUN.planSurface({ ...SURF, actions: [{ op: 'goto', url: '/x', sneaky: 1 }] }, CTXIN).errors.join()).toMatch(/PLAN_EXTRA_FIELD/);
+    expect(RUN.planSurface({ ...SURF, actions: [{ op: 'waitFor', selector: '.X', state: 'maybe' }] }, CTXIN).errors.join()).toMatch(/PLAN_BAD_STATE/);
+  });
+  it('GREEN: 정상 실행 — 로그·측정·PNG가 모두 나온다', async () => {
+    const r = await RUN.runSurface({ surface: SURF, rawContext: CTXIN, driver: good(), selectors: SELS,
+      raster: R200, spec: SPEC_R });
+    expect(r.errors).toEqual([]);
+    expect(r.log.map((l) => [l.index, l.op])).toEqual([[0, 'setStorage'], [1, 'goto'], [2, 'click'], [3, 'expectPresent']]);
+    expect(r.log[2].decided['.Pill--on']).toEqual({ count: 1, visible: 1 });   // 상태 증거가 기록된다
+    expect(r.occurrences['.Target'].length).toBe(1);
+    // paintRect는 검증기와 **같은 함수**로 파생돼 붙는다(outset 2 x scale 1)
+    expect(r.occurrences['.Target'][0].paintRect)
+      .toEqual(EV.derivePaintRect(r.occurrences['.Target'][0], 2));
+    expect(r.occurrences['.Target'][0].paintRect.width).toBe(20 + 4);
+    expect(EV.decodePngHeader(r.png)).toMatchObject({ ok: true, width: 200, height: 200 });
+    expect(r.settled).toBe(true);                                              // 픽셀 정착 게이트 통과
+  });
+  it('RED: 거짓말하는 driver — settle이 즉시 resolve해도 postcondition은 통과하지 못한다', async () => {
+    // click이 아무 상태도 만들지 않는 driver. settle은 성공한 척한다.
+    const liar = mkDriver({ model: MODEL, storage: { theme: 'light' }, clickAdds: {} });
+    const r = await RUN.runSurface({ surface: SURF, rawContext: CTXIN, driver: liar, selectors: SELS, raster: R200, spec: SPEC_R, phase: 'light' });
+    expect(r.errors.join()).toMatch(/RUN_STATE_UNPROVEN r-a\[2\] state:selected \.Pill--on count=0 visible=0/);
+    expect(r.occurrences).toBeNull();                    // 측정까지 가지 않는다
+  });
+  it('RED: settle이 throw해도 러너가 최종 판정한다(도달했으면 GREEN)', async () => {
+    const d = mkDriver({ model: MODEL, storage: { theme: 'light' }, clickAdds: { '.Toggle': ['.Pill--on'] }, settleThrows: true });
+    const r = await RUN.runSurface({ surface: SURF, rawContext: CTXIN, driver: d, selectors: SELS, raster: R200, spec: SPEC_R, phase: 'light' });
+    expect(r.errors).toEqual([]);                        // settle 실패는 판정이 아니다
+  });
+  it('RED: expectAbsent는 실제로 사라졌는지 확인한다', async () => {
+    const surface = { ...SURF, actions: [...SURF.actions, { op: 'expectAbsent', selector: '.Pill--on' }] };
+    const r = await RUN.runSurface({ surface, rawContext: CTXIN, driver: good(), selectors: SELS, raster: R200, spec: SPEC_R, phase: 'light' });
+    expect(r.errors.join()).toMatch(/RUN_POSTCONDITION_FAILED r-a\[4\] expectAbsent \.Pill--on count=1 visible=1/);
+  });
+  it('RED: driver가 assert 결과를 위조하면 형태 검증이 잡는다', async () => {
+    const d = mkDriver({ model: MODEL, storage: { theme: 'light' }, clickAdds: { '.Toggle': ['.Pill--on'] },
+      evaluate: (src, arg) => (src === PROBE.ASSERT_SOURCE ? { '.Pill--on': { count: 1, visible: 9 } } : undefined) });
+    const r = await RUN.runSurface({ surface: SURF, rawContext: CTXIN, driver: d, selectors: SELS, raster: R200, spec: SPEC_R, phase: 'light' });
+    expect(r.errors.join()).toMatch(/RUN_ASSERT_INVALID .*ASSERT_VISIBLE_GT_COUNT/);
+  });
+  it('RED: driver가 probe 결과를 위조하면 probe 계약이 잡는다', async () => {
+    const d = mkDriver({ model: MODEL, storage: { theme: 'light' }, clickAdds: { '.Toggle': ['.Pill--on'] },
+      evaluate: (src, arg) => (src === PROBE.PROBE_SOURCE ? { '.Target': [{ x: 1, y: 1, width: 1, height: 1 }] } : undefined) });
+    const r = await RUN.runSurface({ surface: SURF, rawContext: CTXIN, driver: d, selectors: SELS, raster: R200, spec: SPEC_R, phase: 'light' });
+    expect(r.errors.join()).toMatch(/RUN_PROBE_INVALID/);
+  });
+  it('RED: 빈 스크린샷', async () => {
+    const d = good(); d.screenshot = async () => Buffer.alloc(0);
+    const r = await RUN.runSurface({ surface: SURF, rawContext: CTXIN, driver: d, selectors: SELS, raster: R200, spec: SPEC_R, phase: 'light' });
+    expect(r.errors.join()).toMatch(/RUN_SCREENSHOT_EMPTY/);
+  });
+  it('viewport를 래스터 계약으로 먼저 맞춘다', async () => {
+    const d = good();
+    await RUN.runSurface({ surface: SURF, rawContext: CTXIN, driver: d, selectors: SELS, raster: { width: 1440, height: 900, dpr: 1, screenshotScale: 'css' } });
+    expect(d.state.calls[0]).toEqual(['setViewport', 1440, 900]);
+  });
+  it('theme·현재 view를 finally에서 복원한다(실패 경로에서도)', async () => {
+    const spec = { REQUIRED_SMOKE_SURFACES: [SURF], RASTER_CONTRACT: R200, LIGHT_DIFF_MASKS: SPEC_R.LIGHT_DIFF_MASKS };
+    const dir = mkdtempSync(join(tmpdir(), 's4-run-'));
+    try {
+      const d = mkDriver({ model: MODEL, storage: { theme: 'dark' }, clickAdds: { '.Toggle': ['.Pill--on'] } });
+      const r = await RUN.runCapture({ spec, rawContext: CTXIN, driver: d, selectors: SELS, phase: 'light' });
+      expect(r.errors).toEqual([]);
+      expect(d.state.storage.theme).toBe('dark');                     // 복원됨
+      expect(d.state.storage['track:7:lastView']).toBeUndefined();     // 원래 없었으므로 제거됨
+      expect(r.context.prevTheme).toEqual({ present: true, value: 'dark' });
+      expect(r.context.capture).toEqual({ type: 'png', scale: 'css', dpr: 1 });
+      expect(r.context.viewport).toEqual({ width: 200, height: 200 });
+      expect(Object.keys(r.context.actionLog)).toEqual(['r-a']);
+      // **캡처는 아무것도 쓰지 않는다** — 쓰기는 postflight를 통과한 호출부의 몫이다.
+      expect(existsSync(join(dir, RUN.CANDIDATE_CONTEXT_NAME('light')))).toBe(false);
+      expect(RUN.writeCandidate({ fixturesDir: dir, phase: 'light', contextRaw: r.contextRaw,
+        pngByCaptureName: r.pngByCaptureName, expectedCaptureNames: r.expectedCaptureNames })).toEqual([]);
+      expect(readFileSync(join(dir, RUN.CANDIDATE_CONTEXT_NAME('light')), 'utf8')).toBe(r.contextRaw);
+      expect(EV.decodePngHeader(readFileSync(join(dir, 's4-shots', RUN.CANDIDATE_SHOTS_DIR('light'), 'r-a.png'))))
+        .toMatchObject({ ok: true, width: 200, height: 200 });
+      expect(existsSync(join(dir, 's4-smoke-context.json'))).toBe(false);   // committed는 건드리지 않는다
+      // 실패 경로에서도 복원된다
+      const bad = mkDriver({ model: MODEL, storage: { theme: 'dark' }, clickAdds: {} });
+      const r2 = await RUN.runCapture({ spec, rawContext: CTXIN, driver: bad, selectors: SELS, phase: 'light' });
+      expect(r2.errors.join()).toMatch(/RUN_STATE_UNPROVEN/);
+      expect(bad.state.storage.theme).toBe('dark');
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  it('RED: dpr/viewport/스크롤을 페이지에서 실측해 대조한다(자기신고 폐쇄)', async () => {
+    const d2 = mkDriver({ model: MODEL, storage: { theme: 'light' }, clickAdds: { '.Toggle': ['.Pill--on'] }, dpr: 2 });
+    expect((await RUN.runSurface({ surface: SURF, rawContext: CTXIN, driver: d2, selectors: SELS, raster: R200, spec: SPEC_R, phase: 'light' }))
+      .errors.join()).toMatch(/RUN_RASTER_DPR r-a 2 != 1/);
+    const d3 = mkDriver({ model: MODEL, storage: { theme: 'light' }, clickAdds: { '.Toggle': ['.Pill--on'] },
+      evaluate: (src, a, st) => (src === PROBE.RASTER_PROBE_SOURCE
+        ? { innerWidth: 800, innerHeight: 600, dpr: 1, scrollX: 0, scrollY: 0, docScrollWidth: 800 } : undefined) });
+    expect((await RUN.runSurface({ surface: SURF, rawContext: CTXIN, driver: d3, selectors: SELS, raster: R200, spec: SPEC_R, phase: 'light' }))
+      .errors.join()).toMatch(/RUN_RASTER_VIEWPORT r-a 800x600 != 200x200/);
+    const d4 = mkDriver({ model: MODEL, storage: { theme: 'light' }, clickAdds: { '.Toggle': ['.Pill--on'] },
+      evaluate: (src) => (src === PROBE.RASTER_PROBE_SOURCE
+        ? { innerWidth: 200, innerHeight: 200, dpr: 1, scrollX: 0, scrollY: 40, docScrollWidth: 200 } : undefined) });
+    expect((await RUN.runSurface({ surface: SURF, rawContext: CTXIN, driver: d4, selectors: SELS, raster: R200, spec: SPEC_R, phase: 'light' }))
+      .errors.join()).toMatch(/RUN_RASTER_SCROLLED r-a 0,40/);
+  });
+  it('RED: produces는 전이를 요구한다 — 이미 켜져 있었다면 그 action의 증거가 아니다', async () => {
+    // .Pill--on이 처음부터 보이는 모델. 직후 검사만 하면 통과하지만 전이 검사는 잡는다.
+    const d = mkDriver({ model: { '/tracks/7': ['.Toggle', '.Target', '.Pill--on'] }, storage: { theme: 'light' } });
+    expect((await RUN.runSurface({ surface: SURF, rawContext: CTXIN, driver: d, selectors: SELS, raster: R200, spec: SPEC_R, phase: 'light' }))
+      .errors.join()).toMatch(/RUN_NO_TRANSITION r-a\[2\] \.Pill--on before count=1/);
+  });
+  it('RED: manifest가 선언한 coverage 요소가 캡처 시점에 없으면 그 PNG는 증거가 아니다', async () => {
+    const surface = { ...SURF, requiredElements: ['.MustExist'] };
+    const d = mkDriver({ model: MODEL, storage: { theme: 'light' }, clickAdds: { '.Toggle': ['.Pill--on'] } });
+    expect((await RUN.runSurface({ surface, rawContext: CTXIN, driver: d, selectors: SELS, raster: R200, spec: SPEC_R, phase: 'light' }))
+      .errors.join()).toMatch(/RUN_COVERAGE_ABSENT r-a \.MustExist count=0/);
+  });
+  it('RED: 스크린샷이 래스터 계약과 다른 치수 / decode 불가', async () => {
+    const d = mkDriver({ model: MODEL, storage: { theme: 'light' }, clickAdds: { '.Toggle': ['.Pill--on'] },
+      screenshot: () => s4Png(400, 400, [1, 2, 3]) });
+    expect((await RUN.runSurface({ surface: SURF, rawContext: CTXIN, driver: d, selectors: SELS, raster: R200, spec: SPEC_R, phase: 'light' }))
+      .errors.join()).toMatch(/RUN_SCREENSHOT_SIZE r-a 400x400 != 200x200/);
+    const d2 = mkDriver({ model: MODEL, storage: { theme: 'light' }, clickAdds: { '.Toggle': ['.Pill--on'] },
+      screenshot: () => Buffer.from('not a png at all........') });
+    expect((await RUN.runSurface({ surface: SURF, rawContext: CTXIN, driver: d2, selectors: SELS, raster: R200, spec: SPEC_R, phase: 'light' }))
+      .errors.join()).toMatch(/RUN_SCREENSHOT_DECODE r-a/);
+  });
+  it('RED: 픽셀이 정착하지 않으면 재현 가능한 증거가 아니다', async () => {
+    let n = 0;
+    const d = mkDriver({ model: MODEL, storage: { theme: 'light' }, clickAdds: { '.Toggle': ['.Pill--on'] },
+      screenshot: () => s4Png(200, 200, [n++, 0, 0]) });     // 매번 다른 픽셀
+    expect((await RUN.runSurface({ surface: SURF, rawContext: CTXIN, driver: d, selectors: SELS, raster: R200, spec: SPEC_R, phase: 'light' }))
+      .errors.join()).toMatch(/RUN_UNSTABLE_PIXELS r-a/);
+  });
+  it('RED: phase 없이는 캡처가 시작되지 않는다', async () => {
+    const spec = { REQUIRED_SMOKE_SURFACES: [SURF], RASTER_CONTRACT: R200, LIGHT_DIFF_MASKS: SPEC_R.LIGHT_DIFF_MASKS };
+    const d = good();
+    const r = await RUN.runCapture({ spec, rawContext: CTXIN, driver: d, selectors: SELS, phase: undefined });
+    expect(r.errors).toEqual(['RUN_PHASE_INVALID undefined']);
+    expect(d.state.calls.length).toBe(0);                       // 브라우저를 건드리지도 않는다
+  });
+  it('phase를 실제로 적용하고 data-theme으로 확인한다', async () => {
+    const spec = { REQUIRED_SMOKE_SURFACES: [SURF], RASTER_CONTRACT: R200, LIGHT_DIFF_MASKS: SPEC_R.LIGHT_DIFF_MASKS };
+    const dir = mkdtempSync(join(tmpdir(), 's4-phase-'));
+    try {
+      const d = mkDriver({ model: MODEL, storage: { theme: 'dark' }, clickAdds: { '.Toggle': ['.Pill--on'] } });
+      const r = await RUN.runCapture({ spec, rawContext: CTXIN, driver: d, selectors: SELS, phase: 'light' });
+      expect(r.errors).toEqual([]);
+      const ops = d.state.calls.map((c) => c[0]);
+      // 원래 상태 읽기 → theme 설정 → reload → data-theme 확인
+      // 원래 상태 읽기(storage) → 원래 data-theme 읽기 → theme 설정 → reload → 확인
+      expect(ops.slice(0, 5)).toEqual(['evaluate', 'evaluate', 'setStorage', 'reload', 'evaluate']);
+      expect(d.state.calls[2]).toEqual(['setStorage', 'theme', 'light']);
+      expect(r.context.phase).toBe('light');
+      expect(d.state.storage.theme).toBe('dark');                              // 원복
+      expect(ops.filter((o) => o === 'reload').length).toBe(2);                 // 적용 1 + 복원 확인 1
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  it('RED: 테마가 적용되지 않으면 캡처하지 않는다', async () => {
+    const spec = { REQUIRED_SMOKE_SURFACES: [SURF], RASTER_CONTRACT: R200, LIGHT_DIFF_MASKS: SPEC_R.LIGHT_DIFF_MASKS };
+    // localStorage는 바뀌지만 문서에 반영되지 않는 상황(다크로 남은 브라우저)
+    const d = mkDriver({ model: MODEL, storage: { theme: 'dark' }, clickAdds: { '.Toggle': ['.Pill--on'] }, dataTheme: 'dark' });
+    const r = await RUN.runCapture({ spec, rawContext: CTXIN, driver: d, selectors: SELS, phase: 'light' });
+    expect(r.errors.join()).toMatch(/RUN_THEME_NOT_APPLIED data-theme=dark != light/);
+  });
+  it('RED: 캡처 직전에 테마가 되돌아가면 잡는다', async () => {
+    // runSurface는 캡처 직전에 테마를 한 번 재확인한다 — 그 시점에 되돌아가 있는 상황.
+    const d = mkDriver({ model: MODEL, storage: { theme: 'light' }, clickAdds: { '.Toggle': ['.Pill--on'] },
+      evaluate: (src) => (src === PROBE.THEME_PROBE_SOURCE ? { dataTheme: 'dark', stored: 'light' } : undefined) });
+    const r = await RUN.runSurface({ surface: SURF, rawContext: CTXIN, driver: d, selectors: SELS, raster: R200, spec: SPEC_R, phase: 'light' });
+    expect(r.errors.join()).toMatch(/RUN_THEME_MISMATCH r-a data-theme=dark != light/);
+  });
+  it('RED: 캡처 직전에 상태가 사라지면 잡는다(액션 직후만 보면 놓친다)', async () => {
+    // click 직후엔 있지만 캡처 직전엔 사라지는 상태.
+    // .Pill--on 조회 순서: (1) 전이 사전 0건 → (2) 액션 직후 1건 → (3) 캡처 직전 재단정.
+    const surface = { ...SURF, actions: SURF.actions.slice(0, 3) };   // 뒤의 expectPresent 제거
+    let seen = 0;
+    const d = mkDriver({ model: MODEL, storage: { theme: 'light' }, clickAdds: { '.Toggle': ['.Pill--on'] },
+      evaluate: (src, arg) => {
+        if (src !== PROBE.ASSERT_SOURCE || !arg.includes('.Pill--on')) return undefined;
+        seen += 1;
+        if (seen === 1) return { '.Pill--on': { count: 0, visible: 0 } };
+        if (seen === 2) return { '.Pill--on': { count: 1, visible: 1 } };
+        return { '.Pill--on': { count: 1, visible: 0 } };
+      } });
+    const r = await RUN.runSurface({ surface, rawContext: CTXIN, driver: d, selectors: SELS, raster: R200, spec: SPEC_R, phase: 'light' });
+    expect(r.errors.join()).toMatch(/RUN_STATE_LOST r-a \.Pill--on visible=0/);
+  });
+  it('RED: 정착 검사를 못 하는 driver는 캡처 자격이 없다(선택 아님)', async () => {
+    const d = good(); delete d.sleep;
+    const r = await RUN.runSurface({ surface: SURF, rawContext: CTXIN, driver: d, selectors: SELS, raster: R200, spec: SPEC_R, phase: 'light' });
+    expect(r.errors.join()).toMatch(/RUN_DRIVER_NO_SLEEP/);
+  });
+  it('실행기 전체 바이트가 fingerprint 입력이다', () => {
+    const realSha = (v) => createHash('sha256').update(v).digest('hex');
+    const base = EV.specFingerprint(SPEC, realSha);
+    const tampered = EV.specFingerprint(SPEC,
+      (v) => (Buffer.isBuffer(v) && v.equals(RUN.RUNNER_MODULE_BYTES) ? 'TAMPERED_RUNNER' : realSha(v)));
+    expect(tampered).not.toBe(base);
+    expect(RUN.RUNNER_MODULE_BYTES.equals(readFileSync(RUN.RUNNER_MODULE_PATH))).toBe(true);
+  });
+  it('지원 op는 정확히 manifest가 쓰는 7개다', () => {
+    expect(Object.keys(RUN.OP_SCHEMA).sort())
+      .toEqual(['click', 'expectAbsent', 'expectPresent', 'goto', 'hover', 'setStorage', 'waitFor']);
+    const used = new Set();
+    for (const x of SPEC.REQUIRED_SMOKE_SURFACES) for (const a of x.actions) used.add(a.op);
+    for (const op of used) expect(RUN.OP_SCHEMA[op]).toBeDefined();     // manifest가 쓰는 op는 전부 지원
+  });
+});
+
+describe('S4 캡처 산출물 — phase 분리·exact set·atomic 교체', () => {
+  const PNG_A = () => s4Png(4, 4, [1, 2, 3]);
+  const PNG_B = () => s4Png(4, 4, [9, 9, 9]);
+  it('phase마다 다른 context 파일·디렉터리를 쓴다(덮어쓰기 불가)', () => {
+    expect(RUN.CANDIDATE_CONTEXT_NAME('light')).not.toBe(RUN.CANDIDATE_CONTEXT_NAME('dark'));
+    expect(RUN.CANDIDATE_SHOTS_DIR('light')).not.toBe(RUN.CANDIDATE_SHOTS_DIR('dark'));
+    expect(RUN.COMMITTED_SHOTS_DIR('light')).toBe('base');
+    expect(RUN.COMMITTED_SHOTS_DIR('dark')).toBe('dark-review');
+  });
+  it('GREEN: light와 dark를 연달아 써도 서로를 덮지 않는다', () => {
+    const dir = mkdtempSync(join(tmpdir(), 's4-cand-'));
+    try {
+      for (const [phase, png] of [['light', PNG_A()], ['dark', PNG_B()]])
+        expect(RUN.writeCandidate({ fixturesDir: dir, phase, contextRaw: `{"phase":"${phase}"}`,
+          pngByCaptureName: { 'a.png': png }, expectedCaptureNames: ['a.png'] })).toEqual([]);
+      expect(JSON.parse(readFileSync(join(dir, RUN.CANDIDATE_CONTEXT_NAME('light')), 'utf8')).phase).toBe('light');
+      expect(JSON.parse(readFileSync(join(dir, RUN.CANDIDATE_CONTEXT_NAME('dark')), 'utf8')).phase).toBe('dark');
+      expect(readFileSync(join(dir, 's4-shots', RUN.CANDIDATE_SHOTS_DIR('light'), 'a.png')).equals(PNG_A())).toBe(true);
+      expect(readFileSync(join(dir, 's4-shots', RUN.CANDIDATE_SHOTS_DIR('dark'), 'a.png')).equals(PNG_B())).toBe(true);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  it('RED: 파일명 집합이 기대와 다르면 아무것도 쓰지 않는다', () => {
+    const dir = mkdtempSync(join(tmpdir(), 's4-cand-'));
+    try {
+      const e = RUN.writeCandidate({ fixturesDir: dir, phase: 'light', contextRaw: '{}',
+        pngByCaptureName: { 'a.png': PNG_A() }, expectedCaptureNames: ['a.png', 'b.png'] });
+      expect(e.join()).toMatch(/WRITE_CAPTURE_SET_MISMATCH .*missing=\[b\.png\]/);
+      expect(existsSync(join(dir, RUN.CANDIDATE_CONTEXT_NAME('light')))).toBe(false);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  it('잔존 파일이 살아남지 않는다 — 디렉터리를 통째로 교체한다', () => {
+    const dir = mkdtempSync(join(tmpdir(), 's4-cand-'));
+    try {
+      RUN.writeCandidate({ fixturesDir: dir, phase: 'light', contextRaw: '{}',
+        pngByCaptureName: { 'a.png': PNG_A(), 'stale.png': PNG_A() }, expectedCaptureNames: ['a.png', 'stale.png'] });
+      RUN.writeCandidate({ fixturesDir: dir, phase: 'light', contextRaw: '{}',
+        pngByCaptureName: { 'a.png': PNG_A() }, expectedCaptureNames: ['a.png'] });
+      const shots = join(dir, 's4-shots', RUN.CANDIDATE_SHOTS_DIR('light'));
+      expect(readdirSync(shots)).toEqual(['a.png']);                 // stale.png가 사라졌다
+      expect(RUN.exactCaptureSet(shots, ['a.png'])).toEqual([]);
+      expect(RUN.exactCaptureSet(shots, ['a.png', 'b.png']).join()).toMatch(/CAPTURE_SET_MISMATCH/);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  it('RED: 승인 경로는 BASE context가 light phase임을 요구한다', () => {
+    const errs = EV.validateCommittedArtifacts({
+      committedFixtureRaw: JSON.stringify(unitFixture()), spec: UNIT_SPEC,
+      contextRaw: JSON.stringify({ ...unitCtx(), phase: 'dark' }),
+      sha256: (v) => createHash('sha256').update(v).digest('hex'), readPng: () => s4Png(4, 4, [0, 0, 0]),
+    });
+    expect(errs.join(' | ')).toMatch(/BASE_CONTEXT_PHASE dark != light/);
+  });
+});
+
+describe('S4 승격 하드 비활성 — discovery-only 체크포인트', () => {
+  it('PROMOTION_ENABLED가 false이고 promoteRelease는 아무것도 쓰지 않는다', () => {
+    expect(PROM.PROMOTION_ENABLED).toBe(false);
+    const d = mkdtempSync(join(tmpdir(), 's4-hd-'));
+    try {
+      const r = PROM.promoteRelease({ fixturesDir: d, spec: {}, provenanceRefs: {}, fixture: {}, expectedBytes: '{}' });
+      expect(r).toEqual({ errors: ['PROMOTION_DISABLED'], promoted: false });
+      expect(readdirSync(d)).toEqual([]);                    // 디렉터리조차 만들지 않는다
+    } finally { rmSync(d, { recursive: true, force: true }); }
+  });
+  it('승격 CLI도 실행되지 않는다', async () => {
+    // 이 체크포인트에서 승격 경로를 여는 유일한 방법은 PROMOTION_ENABLED를 바꾸는 명시적 커밋이다.
+    const src = readFileSync(new URL('../scripts/s4-promote-capture.mjs', import.meta.url), 'utf8');
+    expect(src).toContain('PROMOTE_NOT_WIRED');
+  });
+});
+
+describe('S4 discovery-only — 관찰 전용 계약', () => {
+  it('HEAD 결속이 캡처와 분리돼 있다(승격 모듈을 요구하지 않는다)', () => {
+    expect(CAP.DISCOVERY_HASHED_MODULES).toEqual([
+      'frontend/library/s4Spec.mjs',
+      'frontend/library/s4DomProbe.mjs',
+      'frontend/library/s4Evaluator.mjs',
+      'frontend/library/s4CaptureRunner.mjs',
+      'frontend/library/s4Canonicalize.mjs',
+      'frontend/scripts/s4-capture.mjs',
+    ]);
+    // 캡처는 승격까지의 전 경로를 요구한다
+    expect(CAP.HASHED_MODULES).toEqual([...CAP.DISCOVERY_HASHED_MODULES,
+      'frontend/library/s4Promote.mjs', 'frontend/scripts/s4-promote-capture.mjs']);
+    for (const m of CAP.DISCOVERY_HASHED_MODULES) expect(CAP.HASHED_MODULES).toContain(m);
+  });
+  it('네트워크 후크는 navigation 이전에 심어야 한다 — addInitScript primitive가 있다', () => {
+    expect(CAP.BRIDGE_METHODS).toContain('addInitScript');
+    const src = readFileSync(new URL('../scripts/s4-capture.mjs', import.meta.url), 'utf8');
+    // goto 이후 evaluate로 심으면 로드 중 요청을 놓친다 — 그 형태가 남아 있으면 안 된다.
+    expect(src).toContain('dd.addInitScript(NETWORK_INSTALL_SOURCE)');
+    expect(src).not.toContain('dd.evaluate(NETWORK_INSTALL_SOURCE');
+  });
+  it('액션 의미론을 따로 구현하지 않는다 — 공용 executeSurfaceSteps를 쓴다', () => {
+    const src = readFileSync(new URL('../scripts/s4-capture.mjs', import.meta.url), 'utf8');
+    expect(src).toContain('executeSurfaceSteps({ surface, rawContext: CAPTURE_SCENARIO');
+    // op 분기를 다시 적으면 postcondition이 빠진다
+    for (const banned of ["step.op === 'setStorage'", "step.op === 'goto'", "step.op === 'click'"])
+      expect(src).not.toContain(banned);
+  });
+  it('오류를 삼키지 않는다 — 도달 못한 surface가 있으면 목록을 내지 않는다', () => {
+    const src = readFileSync(new URL('../scripts/s4-capture.mjs', import.meta.url), 'utf8');
+    expect(src).toContain('DISCOVERY_INCOMPLETE');
+    expect(src).not.toContain('discovery는 실패해도 관찰을 계속한다');
+  });
+  it('discovery는 산출물을 쓰지 않는다', () => {
+    const src = readFileSync(new URL('../scripts/s4-capture.mjs', import.meta.url), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '').split('\n').map((l) => l.replace(/(^|[^:'"`])\/\/.*$/, '$1')).join('\n');
+    for (const banned of ['node:fs', 'writeFileSync', 'mkdirSync']) expect(src).not.toContain(banned);
+  });
+  it('공용 실행기는 캡처와 같은 postcondition을 판정한다', async () => {
+    // discovery가 쓰는 그 함수가 실제로 postcondition을 본다는 것을 직접 확인한다.
+    const surface = { name: 'd1', captureName: 'd1.png', requiredElements: [], darkReviewSelectors: [],
+      coverageSelectors: [], actions: [{ op: 'goto', url: '/x' }, { op: 'expectPresent', selector: '.Never' }] };
+    const driver = {
+      async setViewport() {}, async setStorage() {}, async goto() {}, async settle() {},
+      async click() {}, async hover() {}, async sleep() {}, async reload() {}, async addInitScript() {},
+      async evaluate(src, arg) {
+        if (src === PROBE.ASSERT_SOURCE) return Object.fromEntries(arg.map((s2) => [s2, { count: 0, visible: 0 }]));
+        return {};
+      },
+    };
+    const r = await RUN.executeSurfaceSteps({ surface, rawContext: {}, driver, raster: null });
+    expect(r.errors.join()).toMatch(/RUN_POSTCONDITION_FAILED d1\[1\] expectPresent \.Never/);
+  });
+});
+
+describe('S4 캡처 증거 계약 — 기록만으로는 통과하지 못한다', () => {
+  const SURF = { name: 's1', captureName: 's1.png', actions: [], requiredElements: ['.Req'],
+    coverageSelectors: [{ selector: '.Cov' }, { selector: '.Track::before', locator: { selector: '.Track', pseudo: '::before' } }],
+    darkReviewSelectors: ['.Dark1'] };
+  const SPEC_E = { REQUIRED_SMOKE_SURFACES: [SURF] };
+  const lightCtx = () => ({ phase: 'light',
+    coverageEvidence: { s1: { '.Cov': { count: 1, visible: 1 }, '.Track::before': { count: 1, present: 1 }, '.Req': { count: 2, visible: 2 } } },
+    provenance: { headCommit: 'abc', blobs: { 'x.mjs': 'b1' }, specFingerprint: 'fp' } });
+  const REFS_E = { headCommit: 'abc', headBlobs: { 'x.mjs': 'b1' }, specFingerprintNow: 'fp' };
+  const bad = (mut) => { const c = lightCtx(); mut(c); return EV.validateCaptureEvidence(SPEC_E, c, REFS_E).join(' | '); };
+
+  it('GREEN 대조군', () => expect(EV.validateCaptureEvidence(SPEC_E, lightCtx(), REFS_E)).toEqual([]));
+  it('RED: 대조 기준(HEAD·fingerprint·blobs)을 생략하면 fail-closed', () => {
+    // 생략을 허용하면 provenance의 **존재만** 보는 것이라 아무 의미가 없다.
+    expect(EV.validateCaptureEvidence(SPEC_E, lightCtx())).toEqual(['EVIDENCE_PROVENANCE_REFS_REQUIRED']);
+    expect(EV.validateCaptureEvidence(SPEC_E, lightCtx(), { ...REFS_E, headCommit: undefined }).join())
+      .toMatch(/EVIDENCE_PROVENANCE_REF_MISSING headCommit/);
+  });
+  it('RED: coverage 증거 삭제·집합 불일치·미관측', () => {
+    expect(bad((c) => { delete c.coverageEvidence; })).toMatch(/EVIDENCE_COVERAGE_MISSING/);
+    expect(bad((c) => { delete c.coverageEvidence.s1['.Req']; })).toMatch(/EVIDENCE_COVERAGE_KEYSET s1 missing=\[\.Req\]/);
+    expect(bad((c) => { c.coverageEvidence.s1['.Cov'] = { count: 3, visible: 0 }; })).toMatch(/EVIDENCE_COVERAGE_UNSEEN s1 \.Cov 0/);
+    expect(bad((c) => { c.coverageEvidence.s1['.Track::before'] = { count: 1, present: 0 }; })).toMatch(/EVIDENCE_COVERAGE_UNSEEN/);
+    expect(bad((c) => { c.coverageEvidence.ghost = {}; })).toMatch(/EVIDENCE_COVERAGE_UNKNOWN_SURFACE ghost/);
+  });
+  it('RED: provenance 누락·불일치', () => {
+    expect(bad((c) => { delete c.provenance; })).toMatch(/EVIDENCE_PROVENANCE_MISSING/);
+    const c = lightCtx();
+    expect(EV.validateCaptureEvidence(SPEC_E, c, { ...REFS_E, headCommit: 'zzz' }).join()).toMatch(/EVIDENCE_PROVENANCE_HEAD abc != zzz/);
+    expect(EV.validateCaptureEvidence(SPEC_E, c, { ...REFS_E, specFingerprintNow: 'other' }).join()).toMatch(/EVIDENCE_PROVENANCE_FINGERPRINT/);
+    expect(EV.validateCaptureEvidence(SPEC_E, c, { ...REFS_E, headBlobs: { 'x.mjs': 'DIFFERENT' } }).join()).toMatch(/EVIDENCE_PROVENANCE_BLOB x\.mjs/);
+    expect(EV.validateCaptureEvidence(SPEC_E, c, { ...REFS_E, headBlobs: { 'x.mjs': 'b1', 'y.mjs': 'b2' } }).join()).toMatch(/EVIDENCE_PROVENANCE_BLOB_SET/);
+  });
+  it('darkReview는 dark phase에만 있고 전부 pass여야 한다', () => {
+    expect(bad((c) => { c.darkReview = {}; })).toMatch(/EVIDENCE_DARK_REVIEW_IN_LIGHT/);
+    const dark = { ...lightCtx(), phase: 'dark', darkReview: { s1: { '.Dark1': { count: 1, visible: 1, pass: true } } } };
+    expect(EV.validateCaptureEvidence(SPEC_E, dark, REFS_E)).toEqual([]);
+    expect(EV.validateCaptureEvidence(SPEC_E, { ...dark, darkReview: { s1: { '.Dark1': { count: 1, visible: 0, pass: false } } } }, REFS_E).join())
+      .toMatch(/EVIDENCE_DARK_REVIEW_FAIL s1 \.Dark1/);
+    expect(EV.validateCaptureEvidence(SPEC_E, { ...dark, darkReview: { s1: {} } }, REFS_E).join()).toMatch(/EVIDENCE_DARK_REVIEW_KEYSET s1 missing=\[\.Dark1\]/);
+    expect(EV.validateCaptureEvidence(SPEC_E, { ...dark, darkReview: undefined }, REFS_E).join()).toMatch(/EVIDENCE_DARK_REVIEW_MISSING/);
+  });
+  it('phase가 없거나 이상하면 즉시 거부', () => {
+    for (const p of [undefined, 'sepia', null])
+      expect(EV.validateCaptureEvidence(SPEC_E, { ...lightCtx(), phase: p }, REFS_E)).toEqual([`EVIDENCE_PHASE_INVALID ${String(p)}`]);
+  });
+  it('승인 경로(artifactsCore)에 배선돼 있다', () => {
+    const dirUrl = new URL('./__fixtures__/', import.meta.url);
+    const errs = EV.validateCommittedArtifacts({
+      committedFixtureRaw: readFileSync(new URL('s4-expected.json', dirUrl), 'utf8'), spec: SPEC,
+      contextRaw: readFileSync(new URL('s4-smoke-context.json', dirUrl), 'utf8'),
+      sha256: (v) => createHash('sha256').update(v).digest('hex'),
+      readPng: (n) => readFileSync(new URL(`s4-shots/base/${n}`, dirUrl)),
+    });
+    expect(errs.join(' | ')).toMatch(/EVIDENCE_PHASE_INVALID|EVIDENCE_COVERAGE_MISSING/);
+  });
+});
+
+describe('S4 HEAD 결속 — 캡처 시작 시점에 강제한다', () => {
+  const REPO = fileURLToPath(new URL('../../', import.meta.url));
+  const exec = (c) => __exec(c, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  it('tracked + working blob === HEAD blob 을 모두 본다', () => {
+    // tracked 여부만 보면 로컬 수정본이 통과한다(LAYOUT_UNIT 1/64→1/8 후 재동결 시나리오).
+    const clean = PROM.headBlobBinding(REPO, ['frontend/package.json'], exec);
+    expect(clean.errors).toEqual([]);
+    expect(clean.headCommit).toMatch(/^[0-9a-f]{40}$/);
+    expect(clean.blobs['frontend/package.json']).toMatch(/^[0-9a-f]{40}$/);
+    const missing = PROM.headBlobBinding(REPO, ['frontend/__definitely_not_tracked__.mjs'], exec);
+    expect(missing.errors.join()).toMatch(/HASH_OBJECT_FAILED|NOT_TRACKED_AT_HEAD/);
+    expect(missing.blobs).toBeNull();
+  });
+  it('해시 입력 모듈 목록이 fingerprint 입력과 일치한다', () => {
+    // 캡처 실행에 관여하는 **전체** 모듈. discovery 집합 + 승격 경로.
+    expect(CAP.HASHED_MODULES).toEqual([...CAP.DISCOVERY_HASHED_MODULES,
+      'frontend/library/s4Promote.mjs', 'frontend/scripts/s4-promote-capture.mjs']);
+    expect(CAP.HASHED_MODULES.length).toBe(8);
+  });
+});
+
+describe('S4 캡처 진입점 — core를 우회하는 어댑터를 막는다', () => {
+  // 금지 대상은 **코드의 어휘**다. 주석에서 그 이름을 설명하는 것까지 막으면 계약을 문서화할 수 없다.
+  const stripComments = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').split('\n')
+    .map((l) => l.replace(/(^|[^:'"`])\/\/.*$/, '$1')).join('\n');
+  const src = () => stripComments(readFileSync(new URL('../scripts/s4-capture.mjs', import.meta.url), 'utf8'));
+  it('산출물 쓰기 어휘가 없다 — 쓰기는 해시된 core의 writeCandidate에만 있다', () => {
+    const t = src();
+    for (const banned of ['node:fs', 'writeFileSync', 'mkdirSync', 'appendFileSync', 'createWriteStream'])
+      expect(t).not.toContain(banned);
+    expect(stripComments(readFileSync(new URL('./s4CaptureRunner.mjs', import.meta.url), 'utf8'))).toContain('writeFileSync');
+  });
+  it('세만틱을 재구현하지 않는다 — runCapture만 호출한다', () => {
+    const t = src();
+    expect(t).toContain('runCapture(');
+    // 브라우저 주입 소스를 다시 정의하면 core와 갈라진다
+    for (const banned of ['ASSERT_SOURCE =', 'PROBE_SOURCE =', 'THEME_PROBE_SOURCE =', 'querySelectorAll'])
+      expect(t).not.toContain(banned);
+    // 액션 해석·paintRect 파생도 core 몫이다
+    for (const banned of ['resolveActions', 'derivePaintRect', 'normalizeOccurrence', 'expectPresent'])
+      expect(t).not.toContain(banned);
+  });
+  it('브리지 method는 원시 동작 11종뿐이다(selector 술어를 받는 primitive 없음)', () => {
+    expect([...CAP.BRIDGE_METHODS].sort()).toEqual(['addInitScript', 'click', 'evaluate', 'goto', 'hover',
+      'reload', 'screenshot', 'setStorage', 'setViewport', 'settle', 'sleep'].sort());
+  });
+  it('인자 문법이 엄격하다', () => {
+    expect(CAP.parseCaptureArgs(['--phase', 'light'])).toEqual({ phase: 'light', port: 10098, discover: false });
+    expect(CAP.parseCaptureArgs(['--phase', 'dark', '--port', '10099'])).toEqual({ phase: 'dark', port: 10099, discover: false });
+    // discovery는 관찰 전용 — phase를 받지 않는다
+    expect(CAP.parseCaptureArgs(['--discover'])).toEqual({ phase: null, port: 10098, discover: true });
+    expect(CAP.parseCaptureArgs(['--discover', '--phase', 'light']).error).toMatch(/DISCOVER_TAKES_NO_PHASE/);
+    expect(CAP.parseCaptureArgs([]).error).toMatch(/PHASE_REQUIRED/);
+    expect(CAP.parseCaptureArgs(['--phase', 'sepia']).error).toMatch(/PHASE_REQUIRED/);
+    expect(CAP.parseCaptureArgs(['--bogus', '1']).error).toMatch(/UNKNOWN_ARG/);
+    expect(CAP.parseCaptureArgs(['--phase', 'light', '--port', '80']).error).toMatch(/BAD_PORT/);
+  });
+  it('어댑터 바이트가 fingerprint 입력이다', () => {
+    const realSha = (v) => createHash('sha256').update(v).digest('hex');
+    const tampered = EV.specFingerprint(SPEC,
+      (v) => (Buffer.isBuffer(v) && v.equals(RUN.ADAPTER_MODULE_BYTES) ? 'TAMPERED_ADAPTER' : realSha(v)));
+    expect(tampered).not.toBe(EV.specFingerprint(SPEC, realSha));
+    expect(RUN.ADAPTER_MODULE_BYTES.equals(readFileSync(new URL('../scripts/s4-capture.mjs', import.meta.url)))).toBe(true);
+  });
+  it('브리지 driver는 판정하지 않고 응답만 기다린다', async () => {
+    const { driver, state } = CAP.createBridgeDriver();
+    const p = driver.evaluate('SRC', [1, 2]);
+    expect(state.pending).toEqual({ id: 1, method: 'evaluate', args: ['SRC', [1, 2]] });
+    expect(CAP.bridgeResolve(state, { id: 1, value: { ok: 1 } })).toBe(true);
+    await expect(p).resolves.toEqual({ ok: 1 });
+    const p2 = driver.goto('/x');
+    CAP.bridgeResolve(state, { id: 2, error: 'nav failed' });
+    await expect(p2).rejects.toThrow(/nav failed/);
+  });
+});
+
+describe('S4 action log 계약 — 손으로 만든 context는 승인되지 않는다', () => {
+  const SURF = {
+    name: 'r-a', captureName: 'r-a.png', requiredElements: [], darkReviewSelectors: [],
+    actions: [
+      { op: 'goto', url: '/tracks/{id}' },
+      { op: 'click', selector: '.Toggle', nth: 0 },
+      { op: 'expectPresent', selector: '.Pill--on' },
+      { op: 'expectAbsent', selector: '.Gone' },
+    ],
+    coverageSelectors: [{ selector: '.Pill--on', state: 'selected', provenBy: 1, produces: '.Pill--on' }],
+  };
+  const SPEC_A = { REQUIRED_SMOKE_SURFACES: [SURF] };
+  const honest = () => ({
+    trackId: 7,
+    actionLog: { 'r-a': [
+      { index: 0, op: 'goto', decided: null },
+      { index: 1, op: 'click', selector: '.Toggle', decided: { '.Pill--on': { count: 1, visible: 1 } } },
+      { index: 2, op: 'expectPresent', selector: '.Pill--on', decided: { count: 1, visible: 1 } },
+      { index: 3, op: 'expectAbsent', selector: '.Gone', decided: { count: 0, visible: 0 } },
+    ] },
+  });
+  const bad = (mut) => { const c = honest(); mut(c); return EV.validateActionLog(SPEC_A, c).join(' | '); };
+
+  it('GREEN 대조군: 실행기가 남긴 정상 로그', () => expect(EV.validateActionLog(SPEC_A, honest())).toEqual([]));
+  it('RED: actionLog 자체가 없다(= 실행기를 안 거친 context)', () =>
+    expect(EV.validateActionLog(SPEC_A, { trackId: 7 })).toEqual(['ACTIONLOG_MISSING']));
+  it('RED: surface 누락 / 미지 surface', () => {
+    expect(bad((c) => { delete c.actionLog['r-a']; })).toMatch(/ACTIONLOG_SURFACE_MISSING r-a/);
+    expect(bad((c) => { c.actionLog['ghost'] = []; })).toMatch(/ACTIONLOG_UNKNOWN_SURFACE ghost/);
+  });
+  it('RED: 길이·순서·op가 manifest와 다르다', () => {
+    expect(bad((c) => { c.actionLog['r-a'].pop(); })).toMatch(/ACTIONLOG_LENGTH r-a 3!=4/);
+    expect(bad((c) => { c.actionLog['r-a'][2].op = 'hover'; })).toMatch(/ACTIONLOG_OP r-a\[2\] hover != expectPresent/);
+    expect(bad((c) => { c.actionLog['r-a'][2].index = 9; })).toMatch(/ACTIONLOG_INDEX r-a\[2\] 9/);
+  });
+  it('RED: 단정 op에 판정 기록이 없다', () =>
+    expect(bad((c) => { c.actionLog['r-a'][2].decided = null; })).toMatch(/ACTIONLOG_NO_DECISION r-a\[2\] expectPresent/));
+  it('RED: **완전한 형태의 위조 로그** — 판정이 op와 모순된다', () => {
+    // 길이·순서·op를 모두 맞춘 채 숫자만 바꿔도 op의 의미와 모순되면 잡힌다.
+    expect(bad((c) => { c.actionLog['r-a'][2].decided = { count: 0, visible: 0 }; }))
+      .toMatch(/ACTIONLOG_DECISION_CONTRADICTS r-a\[2\] expectPresent visible=0/);
+    expect(bad((c) => { c.actionLog['r-a'][3].decided = { count: 1, visible: 1 }; }))
+      .toMatch(/ACTIONLOG_DECISION_CONTRADICTS r-a\[3\] expectAbsent visible=1/);
+  });
+  it('RED: manifest가 선언한 상태 증거가 기록되지 않았거나 실패했다', () => {
+    expect(bad((c) => { c.actionLog['r-a'][1].decided = {}; })).toMatch(/ACTIONLOG_STATE_UNRECORDED r-a\[1\] state:selected/);
+    expect(bad((c) => { c.actionLog['r-a'][1].decided = { '.Pill--on': { count: 1, visible: 0 } }; }))
+      .toMatch(/ACTIONLOG_STATE_UNPROVEN r-a\[1\] state:selected \.Pill--on visible=0/);
+  });
+  it('RED: placeholder를 해석할 수 없는 context(trackId 누락)', () =>
+    expect(bad((c) => { delete c.trackId; })).toMatch(/ACTIONLOG_PLAN_UNRESOLVED_PLACEHOLDER/));
+  it('승인 경로(artifactsCore)에 배선돼 있다 — helper 직접 호출만이 아니다', () => {
+    // 커밋된 실제 산출물에는 actionLog가 없다(실행기 도입 전에 동결됨) → 승인 경로가 그것을 잡아야 한다.
+    const dir = new URL('./__fixtures__/', import.meta.url);
+    const errs = EV.validateCommittedArtifacts({
+      committedFixtureRaw: readFileSync(new URL('s4-expected.json', dir), 'utf8'),
+      spec: SPEC,
+      contextRaw: readFileSync(new URL('s4-smoke-context.json', dir), 'utf8'),
+      sha256: (v) => createHash('sha256').update(v).digest('hex'),
+      readPng: (n) => readFileSync(new URL(`s4-shots/base/${n}`, dir)),
+    });
+    expect(errs.join(' | ')).toMatch(/ACTIONLOG_MISSING/);
+  });
+});
+
+describe('S4 committed probe — 측정 코드의 계약', () => {
+  const OCC = (over) => ({ x: 10, y: 20, width: 21.6, height: 21.6, borderBoxWidth: 20, borderBoxHeight: 20,
+    transformScaleX: 1.08, transformScaleY: 1.08, chainDepth: 3, skewCount: 0, nonFlatCount: 0, zoomCount: 0,
+    offsetWidth: 20, offsetHeight: 20, display: 'flex', boxSizing: 'border-box', cssWidth: '20px', cssHeight: '20px',
+    padX: 0, padY: 0, brdX: 0, brdY: 0,
+    boxShadow: 'none', outlineStyle: 'none', outlineWidth: '0px', outlineOffset: '0px', filter: 'none', ...over });
+  const RES = (over) => ({ '.A': [OCC()], '.B': [], ...over });
+  it('PROBE_SOURCE는 자기 요소만 재고 확장 rect를 만들지 않는다', () => {
+    const src = PROBE.PROBE_SOURCE;
+    expect(src).toContain('document.querySelectorAll(sel)');
+    for (const banned of ['parentElement.getBoundingClientRect', 'closest(', 'offsetParent'])
+      expect(src).not.toContain(banned);
+    // 조상 체인은 **computed transform 문자열만** 읽는다(rect를 재지 않는다)
+    expect(src).toContain('node.parentElement');
+    expect(src).toContain('var ncs = getComputedStyle(node)');
+    expect(src).toContain('mat(ncs.transform)');
+    // 체인 순회 구간에 rect 측정이 들어오면 "자기 요소만" 계약이 깨진다
+    const chain = src.slice(src.indexOf('while (node'), src.indexOf('list.push('));
+    expect(chain).not.toContain('getBoundingClientRect');
+  });
+  it('GREEN: 정상 결과는 오류 0', () => expect(PROBE.validateProbeResult(RES(), ['.A', '.B'])).toEqual([]));
+  it('RED: 키 누락 / 초과 / 배열 아님', () => {
+    expect(PROBE.validateProbeResult({ '.A': [OCC()] }, ['.A', '.B']).join()).toMatch(/PROBE_SELECTOR_MISSING \.B/);
+    expect(PROBE.validateProbeResult(RES({ '.C': [] }), ['.A', '.B']).join()).toMatch(/PROBE_SELECTOR_EXTRA \.C/);
+    expect(PROBE.validateProbeResult({ '.A': {}, '.B': [] }, ['.A', '.B']).join()).toMatch(/PROBE_NOT_ARRAY \.A/);
+    expect(PROBE.validateProbeResult(null, ['.A']).join()).toMatch(/PROBE_RESULT_SHAPE/);
+  });
+  it('RED: 측정 불가·모델 밖 좌표계는 통과하지 않는다', () => {
+    const bad = (over, re) => expect(PROBE.validateProbeResult({ '.A': [OCC(over)] }, ['.A']).join()).toMatch(re);
+    bad({ borderBoxWidth: NaN }, /PROBE_NONFINITE \.A\[0\] borderBoxWidth/);
+    bad({ borderBoxWidth: 0 }, /PROBE_BORDERBOX_UNMEASURABLE/);
+    bad({ width: 0 }, /PROBE_DEGENERATE/);
+    bad({ transformScaleX: 0 }, /PROBE_BAD_SCALE/);
+    bad({ skewCount: 1 }, /PROBE_SKEWED/);          // 회전·기울임
+    bad({ nonFlatCount: 1 }, /PROBE_NON_AFFINE/);   // 3D
+    bad({ zoomCount: 1 }, /PROBE_ZOOMED/);          // zoom은 좌표계를 바꾼다
+    bad({ chainDepth: 0 }, /PROBE_CHAIN_EMPTY/);
+    bad({ display: 42 }, /PROBE_NONSTRING \.A\[0\] display/);
+  });
+  it('두 파생 교차검증: 한쪽만 위조하면 걸린다', () => {
+    expect(PROBE.crossCheckScale(OCC())).toEqual([]);
+    expect(PROBE.crossCheckScale(OCC({ transformScaleX: 2, transformScaleY: 2 })).join()).toMatch(/SCALE_CROSSCHECK_X/);
+    expect(PROBE.crossCheckScale(OCC({ width: 40 })).join()).toMatch(/SCALE_CROSSCHECK_X/);
+    expect(PROBE.crossCheckScale(OCC({ transformScaleY: 1.2 })).join()).toMatch(/SCALE_ANISOTROPIC|SCALE_CROSSCHECK_Y/);
+  });
+  it('LayoutUnit(1/64) 만큼의 스냅 오차는 허용하고 그 이상은 아니다', () => {
+    expect(PROBE.crossCheckScale(OCC({ width: 21.6 + 1 / 64 }))).toEqual([]);
+    expect(PROBE.crossCheckScale(OCC({ width: 21.6 + 1 / 8 })).join()).toMatch(/SCALE_CROSSCHECK_X/);
+  });
+  it('normalizeOccurrence: 좌표는 1/64, 배율은 별도 격자로 양자화한다', () => {
+    // 10.001 은 1/64 격자에서 640.064 → 640 으로 내려간다(10.0078125는 격자 중간값이라 부적절)
+    const n = PROBE.normalizeOccurrence(OCC({ x: 10.001, transformScaleX: 0.5000004, transformScaleY: 0.5000004 }));
+    expect(n.x).toBe(10);                          // 1/64 격자
+    expect(PROBE.q(10.0078125 + 0.001)).toBe(10.015625);   // 중간값 바로 위는 올라간다
+    expect(n.scale).toBe(0.5);                     // 1e-6 격자 — 0.5와 0.503을 붙이지 않는다
+    expect(n.paintRect).toBeUndefined();           // paintRect는 관측물이 아니라 파생물이다
+    expect(PROBE.qs(0.503)).toBe(0.503);
+  });
+});
+
+describe('S4 마스크 위조 배터리 — 각 계약이 단독으로 물린다', () => {
   const fx = unitFixture();
-  const SURF = U_OWNER(U_RING);
-  // unitCtx의 ring rect = MK(100,100,20,20,1.08,3) → paintRect x/y 96.76, w/h 26.48 → 픽셀 96..123
-  const W = 200, H = 200;
-  const withPx = (x, y) => { const p = PNG.sync.read(s4Png(W, H, [255, 255, 255]));
-    const i = (W * y + x) << 2; p.data[i] = 0; p.data[i + 1] = 0; p.data[i + 2] = 0; return PNG.sync.write(p); };
-  const run = (afterBuf) => PIX.diffSurfaceLight({ baseBuf: s4Png(W, H, [255, 255, 255]), afterBuf,
-    fixture: fx, spec: UNIT_SPEC, context: unitCtx(), surfaceName: SURF, observed: unitObs(unitCtx(), SURF) });
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  const run = (mut) => {
+    const ctx = unitCtx(); const spec = { ...UNIT_SPEC }; const f = clone(fx);
+    mut({ ctx, spec, fx: f });
+    return EV.validateMaskContract(f, spec, ctx).join(' | ');
+  };
+  const RING = (ctx) => ctx.baseLightMaskRects['unit-b'][U_RING][0];
+  const PLAIN = (ctx) => ctx.baseLightMaskRects['unit-a']['.UnitPlain'][0];
+
+  it('GREEN 대조군: 손대지 않으면 오류 0', () => expect(run(() => {})).toBe(''));
+
+  it('M1 배율 단독 위조 → 정본 표와 불일치', () =>
+    expect(run(({ ctx }) => { PLAIN(ctx).scale = 0.5; })).toMatch(/MASK_SCALE_UNEXPECTED unit-a \.UnitPlain 0\.5!=1/));
+
+  it('M2 배율+paintRect 동시 위조(내부 정합) → 여전히 표와 불일치', () =>
+    expect(run(({ ctx }) => {
+      const r = RING(ctx); r.scale = 2.16; const d = 3 * 2.16;
+      r.paintRect = { x: r.x - d, y: r.y - d, width: r.width + 2 * d, height: r.height + 2 * d };
+    })).toMatch(/MASK_SCALE_UNEXPECTED/));
+
+  it('M2b 배율+paintRect+정본 표까지 동시 위조 → 두 파생 교차검증만 남고, 그것이 잡는다', () =>
+    expect(run(({ ctx, spec }) => {
+      const r = RING(ctx); r.scale = 2.16; r.transformScaleX = 2.16; r.transformScaleY = 2.16;
+      const d = 3 * 2.16;
+      r.paintRect = { x: r.x - d, y: r.y - d, width: r.width + 2 * d, height: r.height + 2 * d };
+      spec.ELEMENT_SCALES = { ...spec.ELEMENT_SCALES,
+        'unit-b': { ...spec.ELEMENT_SCALES['unit-b'], [U_RING]: 2.16 } };
+    })).toMatch(/MASK_SCALE_CROSSCHECK_X/));
+
+  it('M3 전면 위조(배율·transform·rect·borderBox 전부 정합) → 정본 표가 잡는다', () =>
+    expect(run(({ ctx }) => {
+      const r = PLAIN(ctx);
+      r.scale = 2; r.transformScaleX = 2; r.transformScaleY = 2;
+      r.width = r.borderBoxWidth * 2; r.height = r.borderBoxHeight * 2;
+      r.paintRect = { x: r.x, y: r.y, width: r.width, height: r.height };
+    })).toMatch(/MASK_SCALE_UNEXPECTED/));
+
+  it('M5 부모 요소 측정값 대입 → 크기 envelope가 잡는다', () =>
+    expect(run(({ ctx, spec }) => {
+      spec.SELECTOR_SIZE_ENVELOPE = { ...spec.SELECTOR_SIZE_ENVELOPE,
+        '.UnitPlain': { minW: 20, maxW: 20, minH: 20, maxH: 20 } };
+      const r = PLAIN(ctx);
+      r.borderBoxWidth = 180; r.borderBoxHeight = 110;      // 부모 크기
+      r.width = 180; r.height = 110;                        // 배율 1이므로 rect도 같다
+      r.paintRect = { x: r.x, y: r.y, width: 180, height: 110 };
+    })).toMatch(/MASK_ENVELOPE_VIOLATION unit-a \.UnitPlain 180x110/));
+
+  it('M6 envelope 상한만 넓히기 → 극단 도달 조건이 잡는다', () =>
+    expect(run(({ spec }) => {
+      spec.SELECTOR_SIZE_ENVELOPE = { ...spec.SELECTOR_SIZE_ENVELOPE,
+        '.UnitPlain': { minW: 20, maxW: 10000, minH: 20, maxH: 20 } };
+    })).toMatch(/MASK_ENVELOPE_SLACK \.UnitPlain maxW 선언=10000 실측=20/));
+
+  it('M7 outset 부풀리기(paintRect까지 정합) → 변경 property 파생이 잡는다', () =>
+    expect(run(({ ctx, spec }) => {
+      spec.LIGHT_DIFF_MASKS = { ...spec.LIGHT_DIFF_MASKS, 1: { selector: '.UnitPlain', paintOutsetPx: 8 } };
+      for (const surf of ['unit-a', 'unit-b']) for (const r of ctx.baseLightMaskRects[surf]['.UnitPlain']) {
+        const d = 8 * r.scale;
+        r.paintRect = { x: r.x - d, y: r.y - d, width: r.width + 2 * d, height: r.height + 2 * d };
+      }
+    })).toMatch(/MASK_OUTSET_UNJUSTIFIED unit-\w \.UnitPlain 선언=8 파생=0 \(background\)/));
+
+  it('M8 개별 계약을 모두 지키는 rect 추가 → 픽셀 예산만이 잡는다', () => {
+    const out = run(({ ctx }) => {
+      const r = clone(PLAIN(ctx));
+      r.x = 10; r.y = 10;                                    // 겹치지 않고 뷰포트 안인 정상 위치
+      r.paintRect = { x: r.x, y: r.y, width: r.width, height: r.height };
+      ctx.baseLightMaskRects['unit-a']['.UnitPlain'].push(r);
+    });
+    expect(out).toMatch(/MASK_BUDGET_MISMATCH unit-a 800 != 400/);
+    expect(out).not.toMatch(/MASK_SCALE|MASK_ENVELOPE|MASK_OUTSET|MASK_PAINT/);   // 다른 계약은 전부 통과
+  });
+
+  it('M9 예산 숫자 부풀리기', () =>
+    expect(run(({ spec }) => { spec.MASK_PIXEL_BUDGET = { ...spec.MASK_PIXEL_BUDGET, 'unit-a': 999999 }; }))
+      .toMatch(/MASK_BUDGET_MISMATCH unit-a 400 != 999999/));
+
+  it('M10 셀 비우기(정본 표는 그대로) → 미사용 선언으로 잡는다', () =>
+    expect(run(({ ctx }) => { ctx.baseLightMaskRects['unit-b']['.UnitPlain'] = []; }))
+      .toMatch(/MASK_SCALE_UNUSED unit-b \.UnitPlain/));
+
+  it('M11 표에 없는 셀에 occurrence 추가 → 미선언 셀로 잡는다', () =>
+    expect(run(({ ctx, spec }) => {
+      spec.ELEMENT_SCALES = { 'unit-a': { '.UnitPlain': 1 }, 'unit-b': { [U_RING]: 1.08 } };
+    })).toMatch(/MASK_SCALE_UNDECLARED_CELL unit-b \.UnitPlain/));
+
+  it('M12 변경 property를 모델 밖 값으로 바꿔치기 → outset 파생 자체가 거부된다', () =>
+    expect(run(({ fx }) => { fx.allowIdToKey['1'] = fx.allowIdToKey['1'].replace('|background|', '|mystery-prop|'); }))
+      .toMatch(/MASK_PAINT_PROPERTY_UNMODELED mystery-prop/));
+
+  it('M13 오위치는 정적 계약으로는 잡히지 않는다 — 재측정 대조가 잡는다(설계 확인)', () => {
+    // 픽셀 수가 보존되는 정수 이동을 고른다. 계약은 "그 요소가 어디 있어야 하는지"를 모른다.
+    const moved = unitCtx();
+    const r = moved.baseLightMaskRects['unit-a']['.UnitPlain'][0];
+    r.x += 50; r.paintRect.x += 50;                          // 정수 이동 → 픽셀 수 보존, 뷰포트 안
+    expect(EV.validateMaskContract(fx, UNIT_SPEC, moved)).toEqual([]);         // 정적 계약은 통과
+    const honestObs = unitObs(unitCtx(), 'unit-a');
+    expect(PIX.validateObserved(moved, 'unit-a', honestObs, UNIT_SPEC).join(' | '))
+      .toMatch(/OBSERVE_GEOMETRY unit-a \.UnitPlain\[0\] x/);                  // 재측정 대조가 RED
+    expect(PIX.validateObserved(unitCtx(), 'unit-a', honestObs, UNIT_SPEC)).toEqual([]);   // GREEN 대조군
+  });
+});
+
+describe('S4 fingerprint 결속 — 새 정본 표와 측정 코드', () => {
+  const realSha = (v) => createHash('sha256').update(v).digest('hex');
+  const base = () => EV.specFingerprint(SPEC, realSha);
+  it('probe 소스가 바뀌면 fingerprint가 흔들린다', () => {
+    const tampered = EV.specFingerprint(SPEC, (v) => (v === PROBE.PROBE_SOURCE ? 'TAMPERED' : realSha(v)));
+    expect(tampered).not.toBe(base());
+  });
+  it('probe 모듈 **전체 바이트**가 fingerprint 입력이다', () => {
+    // PROBE_SOURCE만 해시하면 양자화 격자·정규화·거부 규칙·교차검증 엄격도가 잠기지 않는다.
+    // 실측(수정 전): QUANT 64→32 변경이 fingerprint를 흔들지 못했다.
+    const tampered = EV.specFingerprint(SPEC,
+      (v) => (Buffer.isBuffer(v) && v.equals(PROBE.PROBE_MODULE_BYTES) ? 'TAMPERED_MODULE' : realSha(v)));
+    expect(tampered).not.toBe(base());
+  });
+  it('PROBE_MODULE_BYTES는 디스크 원본과 같고 잠겨야 할 것들을 실제로 담고 있다', () => {
+    expect(PROBE.PROBE_MODULE_BYTES.equals(readFileSync(PROBE.PROBE_MODULE_PATH))).toBe(true);
+    const src = PROBE.PROBE_MODULE_BYTES.toString('utf8');
+    for (const token of ['export const QUANT', 'export const SCALE_QUANT', 'export function normalizeOccurrence',
+      'export function validateProbeResult', 'export function crossCheckScale', 'export const PROBE_SOURCE'])
+      expect(src).toContain(token);
+  });
+  it('self-hash는 파일 바이트를 실제로 추적한다(임시 복사본으로 확인 — 실제 파일 불변)', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 's4-probe-'));
+    try {
+      const orig = readFileSync(PROBE.PROBE_MODULE_PATH);
+      const a = join(dir, 'a.mjs'); const b = join(dir, 'b.mjs');
+      writeFileSync(a, orig);
+      writeFileSync(b, orig.toString('utf8').replace('export const QUANT = 64;', 'export const QUANT = 32;'));
+      const [MA, MB] = [await import(pathToFileURL(a).href), await import(pathToFileURL(b).href)];
+      expect(MA.PROBE_MODULE_BYTES.equals(orig)).toBe(true);
+      expect(MB.QUANT).toBe(32);                                        // 사본은 실제로 바뀌었다
+      expect(MA.PROBE_SOURCE).toBe(MB.PROBE_SOURCE);                    // PROBE_SOURCE는 동일 — 이것만으론 못 잡는다
+      expect(realSha(MA.PROBE_MODULE_BYTES)).not.toBe(realSha(MB.PROBE_MODULE_BYTES));   // 모듈 해시는 다르다
+      expect(PROBE.QUANT).toBe(64);                                     // 실제 파일은 건드리지 않았다
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  it('ELEMENT_SCALES / SELECTOR_SIZE_ENVELOPE / MASK_PIXEL_BUDGET 변조가 각각 잡힌다', () => {
+    const muts = [
+      { ...SPEC, ELEMENT_SCALES: { ...SPEC.ELEMENT_SCALES, canvas: { ...SPEC.ELEMENT_SCALES.canvas, '.TrackNode__PrioFlag': 1 } } },
+      { ...SPEC, SELECTOR_SIZE_ENVELOPE: { ...SPEC.SELECTOR_SIZE_ENVELOPE, '.TrackNode__PrioFlag': { minW: 1, maxW: 9999, minH: 1, maxH: 9999 } } },
+      { ...SPEC, MASK_PIXEL_BUDGET: { ...SPEC.MASK_PIXEL_BUDGET, canvas: 1 } },
+    ];
+    for (const m of muts) expect(EV.specFingerprint(m, realSha)).not.toBe(base());
+  });
+  it('캔버스 배율은 1이 아니라 0.5로 동결돼 있다(실측)', () => {
+    for (const sel of ['.TrackNode__PrioFlag', '.TrackNode--restricted', '.TrackNode__ParentChip', '.TrackNode__SubProgress'])
+      expect(SPEC.ELEMENT_SCALES.canvas[sel]).toBe(0.5);
+    expect(SPEC.ELEMENT_SCALES.canvas['.SourcePicker__BranchKey']).toBe(1);   // 같은 화면, 다른 좌표계
+  });
+  it('LIGHT_DIFF_MASKS에 selector 전역 배율(expectedScale)이 남아 있지 않다', () => {
+    for (const [id, m] of Object.entries(SPEC.LIGHT_DIFF_MASKS)) expect(m.expectedScale).toBeUndefined();
+  });
+});
+
+describe('S4 fingerprint 전수성 — 직렬화가 값 전체를 본다', () => {
+  const realSha = (v) => createHash('sha256').update(v).digest('hex');
+  it('payload 키 집합이 정본 목록과 exact 일치한다', () => {
+    // 주석으로만 두면 payload가 조용히 좁아져도 아무도 모른다.
+    expect(Object.keys(EV.specFingerprintPayload(SPEC, realSha)).sort())
+      .toEqual([...EV.FINGERPRINT_PAYLOAD_KEYS].sort());
+  });
+  it('GREEN 대조군: 현재 SPEC은 plain JSON이고 fingerprint는 결정적 64자 hex', () => {
+    expect(EV.specPlainJsonErrors(SPEC)).toEqual([]);
+    const a = EV.specFingerprint(SPEC, realSha);
+    expect(a).toBe(EV.specFingerprint(SPEC, realSha));       // 2회 호출 동일
+    expect(a).toMatch(/^[0-9a-f]{64}$/);                     // 검사 대상 함수끼리 비교하는 것만이 아님
+  });
+  it('RED: 비열거 속성으로 필드를 숨기면 잡힌다', () => {
+    // 실증된 회피: JSON.stringify는 비열거 속성을 건너뛰므로 payload를 넓혀도 못 막는다.
+    const conv = JSON.parse(JSON.stringify(SPEC.CONVERSIONS));
+    Object.defineProperty(conv[0], 'skipVerify', { value: true, enumerable: false });
+    expect(JSON.parse(JSON.stringify(conv[0])).skipVerify).toBeUndefined();   // 직렬화에 안 보임
+    expect(conv[0].skipVerify).toBe(true);                                    // 코드에는 보임
+    const mut = { ...SPEC, CONVERSIONS: conv };
+    expect(EV.specPlainJsonErrors(mut).join()).toMatch(/JSON_NON_ENUMERABLE/);
+    // **해시를 돌려주지 않는다.** 이전 판은 오류 문자열을 해시했는데, 그러면 서로 다른
+    // EVIL/SAFE 값이 같은 오류 문자열 → 같은 fingerprint가 됐다(실증). 거부는 중단이어야 한다.
+    expect(() => EV.specFingerprint(mut, realSha)).toThrow(/SPEC_NOT_PLAIN/);
+    expect(EV.snapshotSpec(mut).spec).toBeNull();
+  });
+  it('RED: 오류 문자열이 같은 서로 다른 spec이 같은 해시를 받지 않는다', () => {
+    const mk = (val) => { const c = JSON.parse(JSON.stringify(SPEC.CONVERSIONS));
+      delete c[0].to; Object.defineProperty(c[0], 'to', { value: val, enumerable: false, configurable: true });
+      return { ...SPEC, CONVERSIONS: c }; };
+    const safe = mk('SAFE'), evil = mk('EVIL');
+    expect(safe.CONVERSIONS[0].to).toBe('SAFE');           // 소비값은 서로 다르다
+    expect(evil.CONVERSIONS[0].to).toBe('EVIL');
+    for (const sp of [safe, evil]) expect(() => EV.specFingerprint(sp, realSha)).toThrow(/SPEC_NOT_PLAIN/);
+  });
+  it('spec 스냅샷은 정확히 한 번 읽어 만들어진다 — 조회마다 달라지는 루트도 고정된다', () => {
+    let n = 0;
+    const full = SPEC.CONVERSIONS, short = SPEC.CONVERSIONS.slice(0, -1);
+    // snapshotSpec은 **descriptor로** 한 번 읽는다. 그 다음 조회부터 다른 값을 준다.
+    const proxied = new Proxy({ ...SPEC }, {
+      getOwnPropertyDescriptor(t, k) {
+        if (k !== 'CONVERSIONS') return Reflect.getOwnPropertyDescriptor(t, k);
+        n += 1;
+        return { value: n <= 1 ? full : short, enumerable: true, configurable: true, writable: true };
+      },
+      get(t, k) { if (k === 'CONVERSIONS') { n += 1; return n <= 1 ? full : short; } return t[k]; },
+    });
+    const snap = EV.snapshotSpec(proxied);
+    expect(snap.errors).toEqual([]);
+    expect(proxied.CONVERSIONS.length).toBe(short.length);   // 이후 조회는 달라진다
+    expect(snap.spec.CONVERSIONS.length).toBe(full.length);  // 스냅샷은 그 한 번의 값으로 고정
+    expect(Object.isFrozen(snap.spec)).toBe(true);           // 하류가 바꿀 수 없다
+  });
+  it('RED: toJSON / accessor / 심볼 키도 같은 부류다', () => {
+    const withToJson = JSON.parse(JSON.stringify(SPEC.CONVERSIONS)); withToJson[0].toJSON = () => ({});
+    const withGetter = JSON.parse(JSON.stringify(SPEC.CONVERSIONS));
+    Object.defineProperty(withGetter[0], 'g', { get: () => 1, enumerable: true, configurable: true });
+    const withSym = JSON.parse(JSON.stringify(SPEC.CONVERSIONS)); withSym[0][Symbol('h')] = 1;
+    for (const conv of [withToJson, withGetter, withSym]) {
+      const mut = { ...SPEC, CONVERSIONS: conv };
+      expect(EV.specPlainJsonErrors(mut).length).toBeGreaterThan(0);
+      expect(() => EV.specFingerprint(mut, realSha)).toThrow(/SPEC_NOT_PLAIN/);
+    }
+  });
+  it('spec export 17개 전부가 fingerprint에 반영된다(타입 보존 변이 스윕)', () => {
+    const base = EV.specFingerprint(SPEC, realSha);
+    const mutate = (v) => {
+      if (typeof v === 'string') return `${v}X`;
+      if (typeof v === 'number') return v + 1;
+      if (typeof v === 'boolean') return !v;
+      if (v === null) return { pinned: 'X' };   // null → 값이 생기는 변이
+      if (Array.isArray(v)) { if (!v.length) return ['X']; const c = v.slice(); c[0] = mutate(c[0]); return c; }
+      if (v && typeof v === 'object') { const ks = Object.keys(v); if (!ks.length) return { zz: 'X' };
+        return { ...v, [ks[0]]: mutate(v[ks[0]]) }; }
+      return 'X';
+    };
+    const uncovered = Object.keys(SPEC).filter((k) => EV.specFingerprint({ ...SPEC, [k]: mutate(SPEC[k]) }, realSha) === base);
+    expect(uncovered).toEqual([]);
+  });
+  it('키 순서만 바뀌면 fingerprint는 흔들리지 않는다(포매팅 정리는 재동결을 요구하지 않는다)', () => {
+    const reordered = SPEC.REQUIRED_SMOKE_SURFACES.map((x) => {
+      const { name, captureName, ...rest } = x;
+      return { ...rest, captureName, name };                 // 키 순서만 뒤집는다
+    });
+    expect(JSON.stringify(reordered[0])).not.toBe(JSON.stringify(SPEC.REQUIRED_SMOKE_SURFACES[0]));
+    expect(EV.specFingerprint({ ...SPEC, REQUIRED_SMOKE_SURFACES: reordered }, realSha))
+      .toBe(EV.specFingerprint(SPEC, realSha));
+  });
+  it('PROBE_CONTRACT.export가 실제 주입되는 문자열에 결속돼 있다', () => {
+    // module만 보면 두 번째 주입 소스를 만들어 러너가 그걸 쓰게 하고 export 이름은 그대로 둘 수 있다.
+    const name = SPEC.PROBE_CONTRACT.export;
+    expect(typeof PROBE[name]).toBe('string');
+    expect(PROBE[name]).toBe(PROBE.PROBE_SOURCE);
+    // 러너가 실제로 주입하는 소스와 동일해야 한다 — 러너 바이트에서 확인한다.
+    const runnerSrc = RUN.RUNNER_MODULE_BYTES.toString('utf8');
+    expect(runnerSrc).toContain('driver.evaluate(PROBE_SOURCE, selectors)');
+    // 경로도 접미사가 아니라 디렉터리까지 맞는지 본다(구분자 정규화).
+    const norm = (p2) => p2.split(sep).join('/');
+    expect(norm(PROBE.PROBE_MODULE_PATH).endsWith(`/${SPEC.PROBE_CONTRACT.module}`)).toBe(true);
+  });
+  it('해시되는 모듈 바이트는 테스트 자기 위치에서 만든 경로로도 같다(자기신고 경로 배제)', () => {
+    // 모듈이 신고한 PROBE_MODULE_PATH를 다시 읽으면 양변이 함께 틀려도 통과한다.
+    expect(PROBE.PROBE_MODULE_BYTES.equals(readFileSync(new URL('./s4DomProbe.mjs', import.meta.url)))).toBe(true);
+    expect(RUN.RUNNER_MODULE_BYTES.equals(readFileSync(new URL('./s4CaptureRunner.mjs', import.meta.url)))).toBe(true);
+  });
+});
+
+describe('S4 도구 모듈은 앱 번들에 들어가지 않는다', () => {
+  it('components/·pages/·hooks/의 어떤 파일도 s4* 도구 모듈을 import하지 않는다', () => {
+    // 이 모듈들은 node:fs/node:crypto를 정적으로 쓴다. 앱 코드가 import하면 브라우저 번들이 깨진다.
+    const roots = ['components', 'pages', 'hooks'];
+    const offenders = [];
+    const walk = (dirUrl) => {
+      for (const ent of readdirSync(dirUrl, { withFileTypes: true })) {
+        if (ent.name === 'node_modules' || ent.name.startsWith('.')) continue;
+        const child = new URL(`${ent.name}${ent.isDirectory() ? '/' : ''}`, dirUrl);
+        if (ent.isDirectory()) { walk(child); continue; }
+        if (!/\.(js|jsx|mjs|ts|tsx)$/.test(ent.name)) continue;
+        const src = readFileSync(child, 'utf8');
+        for (const m of src.matchAll(/from\s+['"]([^'"]*s4[A-Za-z]+\.mjs)['"]/g))
+          offenders.push(`${ent.name} -> ${m[1]}`);
+      }
+    };
+    for (const r of roots) { try { walk(new URL(`../${r}/`, import.meta.url)); } catch (e) { /* 없으면 통과 */ } }
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe('S4 plain JSON 계약 — 검증과 소비가 같은 값을 본다', () => {
+  it('JSON에서 나온 값은 통과한다', () => {
+    expect(EV.plainJsonErrors(JSON.parse('{"a":[1,2,{"b":"c"}],"d":null,"e":true}'))).toEqual([]);
+  });
+  it('accessor / 심볼 키 / 비열거 / 이상한 prototype / 비유한수를 거부한다', () => {
+    const acc = {}; Object.defineProperty(acc, 'x', { get: () => 1, enumerable: true, configurable: true });
+    expect(EV.plainJsonErrors(acc).join()).toMatch(/JSON_ACCESSOR \$\.x/);
+    const sym = { a: 1 }; sym[Symbol('s')] = 2;
+    expect(EV.plainJsonErrors(sym).join()).toMatch(/JSON_SYMBOL_KEY/);
+    const hidden = {}; Object.defineProperty(hidden, 'h', { value: 1, enumerable: false, configurable: true });
+    expect(EV.plainJsonErrors(hidden).join()).toMatch(/JSON_NON_ENUMERABLE \$\.h/);
+    expect(EV.plainJsonErrors(Object.assign(Object.create({ inherited: 1 }), { a: 1 })).join()).toMatch(/JSON_BAD_PROTO/);
+    expect(EV.plainJsonErrors({ n: NaN }).join()).toMatch(/JSON_NONFINITE \$\.n/);
+    expect(EV.plainJsonErrors({ f: () => 1 }).join()).toMatch(/JSON_BAD_TYPE \$\.f function/);
+    expect(EV.plainJsonErrors({ u: undefined }).join()).toMatch(/JSON_BAD_TYPE \$\.u undefined/);
+    const cyc = { a: {} }; cyc.a.back = cyc;
+    expect(EV.plainJsonErrors(cyc).join()).toMatch(/JSON_CYCLE/);
+  });
+  it('정상 배열은 length를 문제 삼지 않는다', () => {
+    expect(EV.plainJsonErrors({ list: [1, 2, 3] })).toEqual([]);
+    const arr = [1]; arr.extra = 2;
+    expect(EV.plainJsonErrors(arr).join()).toMatch(/JSON_ARRAY_EXTRA_KEY/);
+  });
+  it('accessor 검사는 살아있다 — 다만 public 경로의 방어는 raw 문자열 강제다', () => {
+    // descriptor 기반 검사는 Object.defineProperty getter는 잡지만 **Proxy는 원리적으로 못 잡는다**
+    // (getOwnPropertyDescriptor가 target으로 투과하므로 get 트랩이 보이지 않는다).
+    const withGetter = { a: 1 };
+    Object.defineProperty(withGetter, 'b', { get: () => 2, enumerable: true, configurable: true });
+    expect(EV.plainJsonErrors(withGetter).join()).toMatch(/JSON_ACCESSOR/);
+    let n = 0;
+    const proxied = new Proxy({ b: 1 }, { get(t, k) { if (k === 'b') return ++n; return t[k]; } });
+    expect(EV.plainJsonErrors(proxied)).toEqual([]);          // ← 못 잡는다. 그래서 문자열만 받는다.
+    expect(proxied.b).not.toBe(proxied.b);                    // 읽을 때마다 값이 다르다
+  });
+});
+
+describe('S4 public diffSurfaceLight — 마스크가 실제 픽셀 비교에 적용된다', () => {
+  // unitCtx의 ring: border-box 20x20, scale 1.08 → rect 21.6x21.6 @ (100,100)
+  //   d = outset 3 * 1.08 = 3.24 → paintRect x/y 96.76, w/h 28.08
+  //   픽셀 범위 = floor(96.76)=96 .. ceil(124.84)=125(배타) → **96..124가 마스크, 125가 첫 바깥**
+  // unit-b에는 .UnitPlain도 있다(150,20,20,20) → 150..170 x 20..40. maskCount는 2다.
+  const run = (afterBuf) => D_CALL({ afterBuf });
   it('마스크 내부 1픽셀 차이 → diff 0 (허용된 라이트 변화)', () => {
-    const r = run(withPx(110, 110));
-    expect(r.errors).toEqual([]); expect(r.maskCount).toBe(1); expect(r.diff).toBe(0); expect(r.ok).toBe(true);
+    const r = run(D_PX(110, 110));
+    expect(r.errors).toEqual([]); expect(r.maskCount).toBe(2); expect(r.diff).toBe(0); expect(r.ok).toBe(true);
   });
   it('마스크 외부 1픽셀 차이 → diff 1 (회귀 검출)', () => {
-    const r = run(withPx(150, 150));
+    const r = run(D_PX(60, 150));
     expect(r.errors).toEqual([]); expect(r.diff).toBe(1); expect(r.ok).toBe(false);
   });
-  it('마스크 경계 바로 바깥(124,124)도 검출된다', () => expect(run(withPx(124, 124)).diff).toBe(1));
+  it('마스크 경계 양쪽을 고정한다: 124는 안, 125는 바깥', () => {
+    expect(run(D_PX(124, 124)).diff).toBe(0);   // 마지막 마스크 픽셀
+    expect(run(D_PX(125, 125)).diff).toBe(1);   // 첫 바깥 픽셀 — 회귀가 새어나오면 잡힌다
+  });
+  it('두 번째 마스크(.UnitPlain)도 실제로 적용된다', () => {
+    expect(run(D_PX(155, 25)).diff).toBe(0);    // 150..170 x 20..40 안
+    expect(run(D_PX(155, 45)).diff).toBe(1);    // y 45는 바깥
+  });
 });
 
 describe('S4 observed 키 집합 — 누락·초과', () => {
-  const fx = unitFixture();
-  const SURF = U_OWNER(U_RING);
-  const IMG = () => s4Png(40, 40, [255, 255, 255]);
-  const call = (observed) => PIX.diffSurfaceLight({ baseBuf: IMG(), afterBuf: IMG(), fixture: fx, spec: UNIT_SPEC,
-    context: unitCtx(), surfaceName: SURF, observed });
   it('RED: live selector 키를 실제로 삭제 → OBSERVE_KEY_MISSING', () => {
-    const o = unitObs(unitCtx(), SURF); delete o[U_RING];
-    expect(call(o).errors.join()).toMatch(/OBSERVE_KEY_MISSING .*UnitRing/);
+    const o = unitObs(unitCtx(), 'unit-b'); delete o[U_RING];
+    expect(D_CALL({ observed: o }).errors.join()).toMatch(/OBSERVE_KEY_MISSING .*UnitRing/);
   });
   it('RED: 정본에 없는 키 추가 → OBSERVE_EXTRA', () => {
-    const o = unitObs(unitCtx(), SURF); o['.NotAMask'] = [];
-    expect(call(o).errors.join()).toMatch(/OBSERVE_EXTRA .*\.NotAMask/);
+    const o = unitObs(unitCtx(), 'unit-b'); o['.NotAMask'] = [];
+    expect(D_CALL({ observed: o }).errors.join()).toMatch(/OBSERVE_EXTRA .*\.NotAMask/);
   });
 });
 
@@ -4319,6 +5514,7 @@ describe('S4 allow ID 네 집합 exact equality — 비연속 집합과 단독 �
       fixture: unitFixture(), spec: UNIT_SPEC, contrastResults: [],
       actualDecls: UNIT_DECLS, actualRaw: '', preAnnSources: {},
       actualAllowIdToKey: UNIT_ACTUAL_ALLOW_MAP, baseDecls: UNIT_BASE_DECLS,
+      provenanceRefs: { headCommit: 'unit', headBlobs: {}, specFingerprintNow: 'unit' },
       contextRaw: U_CTX_RAW(), sha256, readPng: () => ({ bytes: Buffer.from('p'), width: 1440, height: 900 }),
       serialize: io.serialize, write: io.write, ...over });
     return { r, c: io.c }; };
@@ -4653,6 +5849,8 @@ describe('S4 커밋 산출물 게이트 — 실제 fixture 원문·context 원�
     contextRaw: 'contextRaw' in over ? over.contextRaw : ctxRaw(),
     sha256, readPng: over.readPng || readPng,
     baseDecls: 'baseDecls' in over ? over.baseDecls : BASE_DECLS,
+    provenanceRefs: 'provenanceRefs' in over ? over.provenanceRefs
+      : { headCommit: 'unit', headBlobs: {}, specFingerprintNow: 'unit' },
   });
   const BASE_DECLS = realBaseDecls();
   const mutFx = (f) => { const o = JSON.parse(fixRaw()); f(o); return JSON.stringify(o); };
@@ -4667,7 +5865,7 @@ describe('S4 커밋 산출물 게이트 — 실제 fixture 원문·context 원�
     expect(EV.validateCommittedArtifacts({ committedFixtureRaw: fixRaw(), spec: SPEC, contextRaw: ctxRaw() }))
       .toEqual(['ARTIFACTS_IO_REQUIRED']));
   it('fixture 원문 미전달·파싱 불가는 fail-closed', () => {
-    expect(EV.validateCommittedArtifacts({ spec: SPEC, contextRaw: ctxRaw(), sha256, readPng, baseDecls: BASE_DECLS }))
+    expect(EV.validateCommittedArtifacts({ spec: SPEC, contextRaw: ctxRaw(), sha256, readPng, baseDecls: BASE_DECLS , provenanceRefs: { headCommit: 'unit', headBlobs: {}, specFingerprintNow: 'unit' } }))
       .toEqual(['COMMITTED_FIXTURE_RAW_REQUIRED']);
     expect(run({ committedFixtureRaw: '{ nope' })).toEqual(['COMMITTED_FIXTURE_UNPARSEABLE']);
   });
@@ -4716,6 +5914,9 @@ const AW_SPEC = {
   ...UNIT_SPEC,
   BASE: 'unitbase',
   FILES: { P: { rel: 'unit.scss', blob: 'blobP' }, R: { rel: 'unit-settings.scss', blob: 'blobR' } },
+  // AW 세계는 승인 경로(approveAndWrite)를 보는 곳이고 자체 PNG가 1440x900이다.
+  // UNIT 세계(200x200)와 **다른 래스터 계약을 갖는다** — 두 세계가 같은 상수를 공유하면
+  // 한쪽 치수를 바꿀 때 다른 쪽이 조용히 따라간다.
   RASTER_CONTRACT: { width: 1440, height: 900, dpr: 1, screenshotScale: 'css' },
 };
 const AW_PNG = { 'unit-a.png': pngBytes(1440, 900, 1), 'unit-b.png': pngBytes(1440, 900, 2) };
@@ -4724,6 +5925,12 @@ const AW_CTX_RAW = () => {
   const subject = {
     viewport: { width: 1440, height: 900 },
     capture: { type: 'png', scale: 'css', dpr: 1 },
+    // 실행기가 남기는 실행 기록. AW 세계의 surface는 actions가 비어 있으므로 로그도 빈 배열이다.
+    phase: 'light',                                    // BASE는 라이트 캡처만 허용된다
+    coverageEvidence: { 'unit-a': { '.UnitPlain': { count: 1, visible: 1 } },
+      'unit-b': { '.UnitRing': { count: 1, visible: 1 } } },
+    provenance: { headCommit: 'unit', blobs: {}, specFingerprint: 'unit' },
+    actionLog: { 'unit-a': [], 'unit-b': [] },
     baseLightMaskRects: unitCtx().baseLightMaskRects,
   };
   const privacyAudit = {
@@ -4751,6 +5958,7 @@ describe('S4 승인 경로 정상 GREEN — write까지 실제로 도달한다',
       fixture: AW_FIXTURE(), spec: AW_SPEC, contrastResults: [],
       actualDecls: UNIT_DECLS, actualRaw: '', preAnnSources: {},
       actualAllowIdToKey: UNIT_ACTUAL_ALLOW_MAP, baseDecls: UNIT_BASE_DECLS,
+      provenanceRefs: { headCommit: 'unit', headBlobs: {}, specFingerprintNow: 'unit' },
       contextRaw: AW_CTX_RAW(), sha256, readPng: AW_READ_PNG,
       serialize: spy.serialize, write: spy.write, ...over });
     return { r, c: spy.c }; };
@@ -4767,7 +5975,7 @@ describe('S4 승인 경로 정상 GREEN — write까지 실제로 도달한다',
   });
   it('같은 입력으로 validateCommittedArtifacts도 [] (정상 대조군)', () =>
     expect(EV.validateCommittedArtifacts({ committedFixtureRaw: JSON.stringify(AW_FIXTURE()),
-      spec: AW_SPEC, contextRaw: AW_CTX_RAW(), sha256, readPng: AW_READ_PNG, baseDecls: UNIT_BASE_DECLS })).toEqual([]));
+      spec: AW_SPEC, contextRaw: AW_CTX_RAW(), sha256, readPng: AW_READ_PNG, baseDecls: UNIT_BASE_DECLS , provenanceRefs: { headCommit: 'unit', headBlobs: {}, specFingerprintNow: 'unit' } })).toEqual([]));
   // 정상 대조군 위에서 한 축씩 변이 → RED, 그리고 write 0회
   it('RED: fingerprint 변조 → artifacts 단계, write 0회', () => {
     const fx = AW_FIXTURE(); fx.fingerprint = 'z'.repeat(64);
@@ -4791,7 +5999,9 @@ describe('S4 raster 계약이 fingerprint에 포함된다', () => {
   const base = () => EV.specFingerprint(SPEC, sha256);
   const mut = (patch) => EV.specFingerprint({ ...SPEC, RASTER_CONTRACT: { ...SPEC.RASTER_CONTRACT, ...patch } }, sha256);
   it('RASTER_CONTRACT 자체가 payload에 있다', () =>
-    expect(EV.specFingerprint({ ...SPEC, RASTER_CONTRACT: undefined }, sha256)).not.toBe(base()));
+    // undefined를 넣으면 non-plain이라 throw한다 — 키를 아예 빼서 payload 반영만 본다.
+    expect(EV.specFingerprint((() => { const { RASTER_CONTRACT, ...rest } = { ...SPEC }; return rest; })(), sha256))
+      .not.toBe(base()));
   for (const [field, value] of [['width', 2880], ['height', 1800], ['dpr', 2], ['screenshotScale', 'device']])
     it(`${field} 변이 → fingerprint 변화`, () => expect(mut({ [field]: value })).not.toBe(base()));
 });
@@ -4941,7 +6151,10 @@ describe('S4 malformed PNG — 실제 decode만 통과', () => {
   const good = () => { const p = new PNG({ width: 8, height: 5 });
     for (let i = 0; i < p.data.length; i += 4) { p.data[i + 3] = 255; } return PNG.sync.write(p); };
   it('GREEN: 정상 PNG는 바이트에서 치수를 파생', () =>
-    expect(EV.decodePngHeader(good())).toEqual({ ok: true, width: 8, height: 5 }));
+    // depth/colorType/interlace도 함께 돌려준다 — pixelmatch의 픽셀 해석을 바꿀 수 있는 축들이라
+    // validatePngRaster가 이 값들로 계약을 강제한다.
+    expect(EV.decodePngHeader(good()))
+      .toEqual({ ok: true, width: 8, height: 5, depth: 8, colorType: 6, interlace: false }));
   it('RED: IHDR만 있는 33바이트(헤더 흉내)', () => {
     const b = Buffer.alloc(33);
     Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(b, 0);
@@ -5009,6 +6222,11 @@ describe('S4 PNG corruption을 public 경로에 고정', () => {
   const world = (pngFor) => {
     const pngs = { 'unit-a.png': pngFor('unit-a.png'), 'unit-b.png': pngFor('unit-b.png') };
     const subject = { viewport: { width: 1440, height: 900 }, capture: { type: 'png', scale: 'css', dpr: 1 },
+      phase: 'light',                                    // BASE는 라이트 캡처만 허용된다
+    coverageEvidence: { 'unit-a': { '.UnitPlain': { count: 1, visible: 1 } },
+      'unit-b': { '.UnitRing': { count: 1, visible: 1 } } },
+    provenance: { headCommit: 'unit', blobs: {}, specFingerprint: 'unit' },
+    actionLog: { 'unit-a': [], 'unit-b': [] },          // 실행기 기록(이 세계의 surface는 actions가 없다)
       baseLightMaskRects: unitCtx().baseLightMaskRects };
     const privacyAudit = { scope: 'dedicated-synthetic-account-workspace', contextPass: true,
       contextSubjectSha256: sha256(JSON.stringify(CANON.canonicalize(subject))),
@@ -5025,12 +6243,12 @@ describe('S4 PNG corruption을 public 경로에 고정', () => {
   it('정상 PNG 세계는 committed 경로가 []', () => {
     const w = world(() => pngBytes(1440, 900, 3));
     expect(EV.validateCommittedArtifacts({ committedFixtureRaw: JSON.stringify(w.fixture), spec: AW_SPEC,
-      contextRaw: w.contextRaw, sha256, readPng: w.readPng, baseDecls: UNIT_BASE_DECLS })).toEqual([]);
+      contextRaw: w.contextRaw, sha256, readPng: w.readPng, baseDecls: UNIT_BASE_DECLS , provenanceRefs: { headCommit: 'unit', headBlobs: {}, specFingerprintNow: 'unit' } })).toEqual([]);
   });
   it('corrupt PNG + 해시 재결속 → RASTER_PNG_DECODE 이고 SHA drift는 0', () => {
     const w = world(() => CORRUPT);
     const errs = EV.validateCommittedArtifacts({ committedFixtureRaw: JSON.stringify(w.fixture), spec: AW_SPEC,
-      contextRaw: w.contextRaw, sha256, readPng: w.readPng, baseDecls: UNIT_BASE_DECLS });
+      contextRaw: w.contextRaw, sha256, readPng: w.readPng, baseDecls: UNIT_BASE_DECLS , provenanceRefs: { headCommit: 'unit', headBlobs: {}, specFingerprintNow: 'unit' } });
     expect(errs.filter((e) => /RASTER_PNG_DECODE/.test(e)).length).toBe(2);      // 두 capture 모두
     expect(errs.filter((e) => /FROZEN_PNG_SHA_DRIFT/.test(e)).length).toBe(0);   // 해시는 맞춰놨다
   });
@@ -5041,6 +6259,7 @@ describe('S4 PNG corruption을 public 경로에 고정', () => {
       fixture: w.fixture, spec: AW_SPEC, contrastResults: [],
       actualDecls: UNIT_DECLS, actualRaw: '', preAnnSources: {},
       actualAllowIdToKey: UNIT_ACTUAL_ALLOW_MAP, baseDecls: UNIT_BASE_DECLS,
+      provenanceRefs: { headCommit: 'unit', headBlobs: {}, specFingerprintNow: 'unit' },
       contextRaw: w.contextRaw, sha256, readPng: w.readPng,
       serialize: () => { c.serialize++; return 'B'; }, write: () => { c.write++; } });
     expect(r.errors.join('|')).toMatch(/RASTER_PNG_DECODE/);

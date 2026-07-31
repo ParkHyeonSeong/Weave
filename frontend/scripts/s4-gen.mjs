@@ -1,18 +1,29 @@
 import { createRequire } from 'node:module';
 import { execSync } from 'node:child_process';
 import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
-import * as PROMOTE_IO from '/Users/hyeonseongpark/Documents/GitHub/Weave/frontend/library/s4Promote.mjs';
+import * as PROMOTE_IO from '../library/s4Promote.mjs';
+import { HASHED_MODULES, REPO_DIR } from './s4-capture.mjs';
 import { createHash } from 'node:crypto';
-import { pathToFileURL } from 'node:url';
-import * as SPEC from '/Users/hyeonseongpark/Documents/GitHub/Weave/frontend/library/s4Spec.mjs';
-import * as EV from '/Users/hyeonseongpark/Documents/GitHub/Weave/frontend/library/s4Evaluator.mjs';
-import * as CANON from '/Users/hyeonseongpark/Documents/GitHub/Weave/frontend/library/s4Canonicalize.mjs';
+import { pathToFileURL, fileURLToPath } from 'node:url';
+import * as RAW_SPEC from '../library/s4Spec.mjs';
+import * as EV from '../library/s4Evaluator.mjs';
+import * as CANON from '../library/s4Canonicalize.mjs';
 // 무거운 작업(Sass 컴파일·fixture 읽기) **전에** 인자 문법을 강제한다.
 const CLI = PROMOTE_IO.parseCliArgs(process.argv.slice(2));
 if (CLI.error) { console.error(`${PROMOTE_IO.CLI_USAGE}\n  ${CLI.error}`); process.exit(2); }
 
-const REPO = '/Users/hyeonseongpark/Documents/GitHub/Weave';
-const FRONT = `${REPO}/frontend`;
+// spec은 **여기서 한 번** 스냅샷하고, 이후 raw 네임스페이스에는 접근하지 않는다.
+// 단계마다 다시 읽으면 조회할 때마다 값이 달라지는 루트에서 해시된 것과 소비되는 것이 갈린다.
+const __snap = EV.snapshotSpec(RAW_SPEC);
+if (__snap.errors.length) {
+  console.error(`SPEC_NOT_PLAIN — total=${__snap.errors.length}`, __snap.errors.slice(0, 20));
+  process.exit(1);
+}
+const SPEC = __snap.spec;
+
+// 절대경로 고정은 다른 checkout/CI에서 **다른 레포**를 읽게 한다. 파일 위치에서 파생한다.
+const REPO = fileURLToPath(new URL('../../', import.meta.url));
+const FRONT = fileURLToPath(new URL('../', import.meta.url)).replace(/\/$/, '');
 const require = createRequire(`${FRONT}/package.json`);
 const sass = require('sass'); const postcss = require('postcss');
 const sha = (s) => createHash('sha256').update(s).digest('hex');
@@ -47,13 +58,24 @@ if (pr.errors.length) die('EVALUATE_PROJECTION', pr.errors);
 // 4) 참고치 드리프트 게이트
 
 const fingerprint = EV.specFingerprint(SPEC, sha);
+// provenance 대조 기준을 **지금** 계산한다. 생략하면 승인이 provenance의 존재만 보게 된다.
+const HEAD = PROMOTE_IO.headBlobBinding(REPO_DIR, HASHED_MODULES,
+  (c) => execSync(c, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }));
+if (HEAD.errors.length) die('HEAD_BINDING', HEAD.errors);
+const PROVENANCE_REFS = { headCommit: HEAD.headCommit, headBlobs: HEAD.blobs, specFingerprintNow: fingerprint };
 // 6b) smoke trust chain — context 원문과 destination PNG **24개**의 실제 바이트로 계산
 const FIXDIR = `${FRONT}/library/__fixtures__`;
-const ctxRaw = readFileSync(`${FIXDIR}/s4-smoke-context.json`);
-const captures = SPEC.REQUIRED_SMOKE_SURFACES.map((x) => {
-  const buf = readFileSync(`${FIXDIR}/s4-shots/base/${x.captureName}`);   // 없으면 여기서 throw → fail-closed
-  return { captureName: x.captureName, sha256: sha(buf) };
-});
+// **승격된 bundle이 유일한 입력이다.** legacy 경로(s4-smoke-context.json / s4-shots/base)를
+// 읽으면 승격 절차를 우회한 수동 복사본이 그대로 fixture가 된다 — 승격 경로가 무의미해진다.
+const BUNDLE = PROMOTE_IO.readCaptureBundle(FIXDIR, 'light');
+if (BUNDLE.errors.length) die('CAPTURE_BUNDLE', BUNDLE.errors);
+const ctxRaw = Buffer.from(BUNDLE.contextRaw, 'utf8');
+const bundlePng = (name) => {
+  const b = BUNDLE.pngByName[name];
+  if (!b) throw new Error(`BUNDLE_PNG_MISSING ${name}`);
+  return b;
+};
+const captures = SPEC.REQUIRED_SMOKE_SURFACES.map((x) => ({ captureName: x.captureName, sha256: sha(bundlePng(x.captureName)) }));
 if (captures.length !== SPEC.REQUIRED_SMOKE_SURFACES.length) die('SMOKE_CAPTURE_COUNT', [String(captures.length)]);
 // privacy audit을 **fixture 기록 전에** 강제한다(공용 helper 사용 — 상설 테스트와 동일 경로)
 // captures(이름+실제 PNG 바이트 해시)는 위에서 이미 계산됐다 — 그 값을 그대로 audit 대조에 쓴다.
@@ -71,7 +93,7 @@ if (fxErrors.length) die('BUILD_FIXTURE', fxErrors);
 // 단일 승인 경로 — 개별 validator를 여기서 따로 부르지 않는다(배선 누락·부분 배선 차단).
 // 승인·직렬화·쓰기는 단일 orchestration만 쓴다. validator는 주입하지 않는다 — 데이터와 순수 IO만
 // 넘기고 순서(candidate → conformance → artifacts → serialize → write)는 함수 안에서 고정된다.
-const pngOf = (name) => { const b = readFileSync(`${FIXDIR}/s4-shots/base/${name}`);
+const pngOf = (name) => { const b = bundlePng(name);
   return { bytes: b, width: b.readUInt32BE(16), height: b.readUInt32BE(20) }; };
 // 생성과 승격은 분리된 두 경로이고, **둘 다 전체 승인 경로를 통과해야 한다**.
 //  기본 실행                       : 승인 bytes를 staging에 기록하고 candidateSha·baseCommittedSha 출력
@@ -88,6 +110,7 @@ const runApproval = (write) => EV.approveAndWrite({
   actualDecls: pr.projDecls, actualRaw: pr.projSrc, preAnnSources: pr.preAnnSrc,
   actualAllowIdToKey: pr.attribution.allowIdToKey, baseDecls: pr.baseDecls,
   contextRaw: contextRawStr, sha256: sha, readPng: pngOf,
+  provenanceRefs: PROVENANCE_REFS,        // 계산해 놓고 안 넘기면 승인이 provenance를 못 본다
   serialize: EV.serializeFixture, write,
 });
 

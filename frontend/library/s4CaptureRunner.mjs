@@ -1,0 +1,529 @@
+// frontend/library/s4CaptureRunner.mjs
+// **커밋된 캡처 실행기.** surface manifest를 실제로 실행해 context와 PNG를 만드는 유일한 정본.
+//
+// 왜 필요한가: 이전까지 캡처는 매번 손으로 쓴 임시 드라이버가 만들었다. manifest의 action은
+// validateSmokeCoverage가 **구조만** 검사했고 아무도 실행하지 않았다. 그래서 드라이버가
+// expectPresent/expectAbsent를 아예 구현하지 않고 조용히 건너뛴 채로 24화면을 "성공" 처리한
+// 일이 실제로 있었다(실측). 그 캡처는 "상태에 도달했다"는 증거를 갖지 못한다.
+//
+// ── 왜 driver를 주입받는가 ────────────────────────────────────────────────────
+// playwright는 이 레포의 의존성이 아니다(frontend/node_modules에 없음). 브라우저를 직접
+// import하는 실행기는 레포 안에서 테스트할 수 없고, 테스트할 수 없는 실행기는 임시 드라이버와
+// 같은 문제를 반복한다. 그래서 **세만틱은 전부 이 파일이 소유**하고, driver는 원시 동작만 하는
+// 얇은 어댑터로 둔다. 이 파일은 fake driver로 전수 테스트된다.
+//
+// ── 이 하네스가 증명하지 못하는 것 (읽는 사람이 반드시 알아야 함) ──────────────
+// 1. **evaluate 채널은 환원 불가능한 신뢰 루트다.** driver.evaluate가 준 소스를 그 페이지에서
+//    정직하게 실행하고 반환값을 그대로 돌려준다는 가정은 레포 안에서 검증할 수 없다.
+//    모듈 해시는 "코드가 바뀌었는지"를 잡을 뿐 "그 코드가 실제로 브라우저를 몰았는지"의
+//    증거가 아니다. 해시를 provenance로 오해하지 말 것.
+// 2. **evaluate(DOM)와 screenshot(픽셀)은 별개 채널이다.** 둘을 잇는 단정은 PNG 치수와
+//    surface 개수뿐이다. 두 채널이 협조해 거짓말하면 구별할 방법이 없다.
+// 3. **actionLog는 provenance가 아니다.** validateActionLog는 로그가 manifest와 형태·의미상
+//    모순되지 않는지만 본다. 로그의 모든 값이 spec에서 계산 가능하므로, 브라우저 없이 만든
+//    합성 로그는 통과한다. 이 계약의 값어치는 "실행기를 우회하면 그 사실이 산출물에 남는다"가
+//    아니라 "실행 주장이 명시되고 manifest와 교차검증된다"이다.
+// 이 세 가지는 잔존 위험으로 수용한 것이고, 폐쇄가 아니라 **비용 상승**이 방어다.
+//
+// ── 신뢰 표면 ─────────────────────────────────────────────────────────────────
+// driver.settle()은 **판정하지 않는다**. 대기 힌트일 뿐이고, 모든 postcondition은 러너가
+// `driver.evaluate(ASSERT_SOURCE, ...)`로 직접 판정한다. 따라서 어댑터가 settle을 즉시
+// resolve하며 거짓말해도 통과할 수 없다 — 상태에 도달하지 않았으면 assert가 실패한다.
+// click/hover/goto/setStorage도 "상태에 도달시키는" 역할일 뿐 판정 권한이 없다.
+// 남는 신뢰 가정은 정확히 하나다: **evaluate가 준 소스를 페이지에서 정직하게 실행해
+// 그 반환값을 그대로 돌려준다.** probe도 같은 채널을 쓰므로 신뢰 가정이 늘지 않는다.
+//
+// driver 계약(전부 async 허용):
+//   setViewport(width, height)
+//   setStorage(key, value)
+//   goto(url)
+//   settle(selector, state, timeoutMs)   // 대기 힌트. 실패해도 러너가 assert로 최종 판정한다.
+//   reload()                             // 현재 URL 재로딩(테마 적용·복원 확인용)
+//   sleep(ms)                            // 픽셀 정착 확인용. **필수**다.
+//   click(selector, nth, hasText)
+//   hover(selector, nth)
+//   evaluate(source, arg)                // 유일한 신뢰 채널
+//   screenshot()                         // PNG bytes
+import { readFileSync, mkdirSync, writeFileSync, mkdtempSync, renameSync, rmSync, existsSync, readdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
+import { join, dirname } from 'node:path';
+import { buildActionContext, resolveActions } from './s4Evaluator.mjs';
+import { ASSERT_SOURCE, PROBE_SOURCE, RASTER_PROBE_SOURCE, THEME_PROBE_SOURCE, PSEUDO_PROBE_SOURCE,
+  DATASET_PROBE_SOURCE, validateProbeResult, normalizeOccurrence } from './s4DomProbe.mjs';
+import { decodePngHeader, derivePaintRect, outsetBySelector } from './s4Evaluator.mjs';
+
+// 이 파일 전체 바이트가 실행 계약이다. specFingerprint가 해시한다(probe 모듈과 같은 이유).
+export const RUNNER_MODULE_PATH = fileURLToPath(import.meta.url);
+export const RUNNER_MODULE_BYTES = readFileSync(RUNNER_MODULE_PATH);
+
+// 커밋된 진입점(어댑터)도 신뢰 입력이다. core만 해시하면 core를 우회해 자기 루프로 캡처를
+// 쓰는 어댑터가 그대로 통과한다 — 그게 결함 1의 메커니즘이었다.
+// 여기서 읽는 이유: evaluator가 scripts/를 import하면 의존 방향이 뒤집힌다(라이브러리 → 스크립트).
+export const ADAPTER_MODULE_PATH = join(dirname(RUNNER_MODULE_PATH), '..', 'scripts', 's4-capture.mjs');
+export const ADAPTER_MODULE_BYTES = readFileSync(ADAPTER_MODULE_PATH);
+
+// 지원 op는 정확히 이 7개다. manifest에 다른 op가 생기면 조용히 무시되지 않고 즉시 중단된다.
+// (실측: manifest 전체 op 분포 = setStorage 20 / goto 24 / waitFor 9 / click 23 / hover 10 /
+//  expectPresent 6 / expectAbsent 4)
+export const OP_SCHEMA = {
+  setStorage: { required: ['key', 'value'], optional: [] },
+  goto: { required: ['url'], optional: [] },
+  waitFor: { required: ['selector', 'state'], optional: ['nth'] },
+  click: { required: ['selector'], optional: ['nth', 'hasText'] },
+  hover: { required: ['selector'], optional: ['nth'] },
+  expectPresent: { required: ['selector'], optional: [] },
+  expectAbsent: { required: ['selector'], optional: [] },
+};
+const ASSERTING_OPS = new Set(['waitFor', 'expectPresent', 'expectAbsent']);
+export const SETTLE_TIMEOUT_MS = 12000;
+export const PIXEL_SETTLE_MS = 300;   // 정착 확인 간격
+export const PHASES = ['light', 'dark'];
+
+// 실행 계획 — 순수 함수. resolveActions 결과만 쓰고, 미해결 placeholder·미지 op·필드 누락을 잡는다.
+export function planSurface(surface, rawContext) {
+  const errors = [];
+  if (!surface || typeof surface !== 'object') return { steps: [], errors: ['PLAN_SURFACE_SHAPE'] };
+  if (!Array.isArray(surface.actions)) return { steps: [], errors: [`PLAN_NO_ACTIONS ${surface.name}`] };
+  const flat = buildActionContext(rawContext || {});
+  const { resolved, errors: rErrors } = resolveActions(surface.actions, flat);
+  errors.push(...rErrors.map((e) => `PLAN_${e} ${surface.name}`));
+  const steps = resolved.map((a, index) => {
+    const schema = OP_SCHEMA[a.op];
+    if (!schema) { errors.push(`PLAN_UNKNOWN_OP ${surface.name}[${index}] ${a.op}`); return { index, ...a }; }
+    for (const f of schema.required)
+      if (a[f] === undefined || a[f] === null || a[f] === '') errors.push(`PLAN_MISSING_FIELD ${surface.name}[${index}] ${a.op}.${f}`);
+    const allowed = new Set(['op', ...schema.required, ...schema.optional]);
+    for (const f of Object.keys(a)) if (!allowed.has(f)) errors.push(`PLAN_EXTRA_FIELD ${surface.name}[${index}] ${a.op}.${f}`);
+    if (a.op === 'waitFor' && !['visible', 'hidden'].includes(a.state))
+      errors.push(`PLAN_BAD_STATE ${surface.name}[${index}] ${a.state}`);
+    return { index, ...a };
+  });
+  // manifest가 선언한 상태 증거를 실행 단계에 결합한다.
+  //   coverageSelectors[*].provenBy = 그 상태를 만든 action의 인덱스
+  //   그 action 직후에 러너가 실제로 확인해야 하는 selector를 여기서 정한다.
+  const postByIndex = new Map();
+  for (const o of surface.coverageSelectors || []) {
+    if (!o.state) continue;
+    if (!Number.isInteger(o.provenBy) || !steps[o.provenBy]) { errors.push(`PLAN_PROVENBY_RANGE ${surface.name} ${o.selector}`); continue; }
+    const list = postByIndex.get(o.provenBy) || [];
+    // hover/focus는 의사클래스로 실제 확인 가능하다(querySelectorAll('.X:hover')는 현재 hover된
+    // 요소를 돌려준다). selected는 선언된 selector 자체가 결과 클래스를 담고 있다.
+    const target = o.state === 'hover' ? `${o.selector}:hover`
+      : o.state === 'focus' ? `${o.selector}:focus` : o.selector;
+    list.push({ selector: resolvePlaceholderish(target, flat), why: `state:${o.state}`, transition: false });
+    // produces는 **전이**를 요구한다: action 직전 0건, 직후 1건 이상.
+    // 직후만 보면 이미 켜져 있던 상태를 그 action이 만든 것처럼 통과시킬 수 있다(공허한 증거).
+    if (o.produces) list.push({ selector: resolvePlaceholderish(o.produces, flat), why: 'produces', transition: true });
+    postByIndex.set(o.provenBy, list);
+  }
+  for (const s of steps) s.postAssert = postByIndex.get(s.index) || [];
+  for (const s of steps) for (const p of s.postAssert)
+    if (/\{[A-Za-z0-9_]+\}/.test(p.selector)) errors.push(`PLAN_UNRESOLVED_POST ${surface.name}[${s.index}] ${p.selector}`);
+  return { steps, errors };
+}
+// coverageSelectors/produces에도 {placeholder}가 쓰인다(settings 계열 실측). resolveActions는
+// action만 다루므로 여기서 같은 규칙으로 치환한다.
+function resolvePlaceholderish(value, flat) {
+  return String(value).replace(/\{([A-Za-z0-9_]+)\}/g, (m, k) => (flat[k] !== undefined ? String(flat[k]) : m));
+}
+
+// ASSERT_SOURCE 결과 형태 검증 — 드라이버가 아무 값이나 돌려줘도 통과하지 못하게 한다.
+export function validateAssertResult(result, selectors) {
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return ['ASSERT_RESULT_SHAPE'];
+  const errors = [];
+  for (const sel of selectors) {
+    const v = result[sel];
+    if (!v || typeof v !== 'object') { errors.push(`ASSERT_MISSING ${sel}`); continue; }
+    for (const k of ['count', 'visible'])
+      if (!Number.isInteger(v[k]) || v[k] < 0) errors.push(`ASSERT_BAD_${k.toUpperCase()} ${sel}`);
+    if (Number.isInteger(v.count) && Number.isInteger(v.visible) && v.visible > v.count)
+      errors.push(`ASSERT_VISIBLE_GT_COUNT ${sel}`);
+  }
+  for (const sel of Object.keys(result)) if (!selectors.includes(sel)) errors.push(`ASSERT_EXTRA ${sel}`);
+  return errors;
+}
+
+async function assertVisibility(driver, selectors) {
+  const raw = await driver.evaluate(ASSERT_SOURCE, selectors);
+  const errors = validateAssertResult(raw, selectors);
+  return { raw, errors };
+}
+
+// manifest 액션을 실행하는 **공용 구간**. 캡처와 discovery가 같은 의미론을 쓴다.
+//
+// 왜 공용인가: discovery가 op를 따로 해석하면 postcondition 판정이 빠지고(실증: click/hover/
+// goto/setStorage만 처리, waitFor·expectPresent·expectAbsent 없음) "관찰은 됐지만 그 상태가
+// 아니었던" 목록이 나온다. 그 목록으로 endpoint를 동결하면 근거가 되지 못한다.
+//
+// 첫 오류에서 즉시 중단한다(fail-closed) — 어디까지 실제로 도달했는지가 흐려지면 안 된다.
+export async function executeSurfaceSteps({ surface, rawContext, driver, raster }) {
+  const log = [];
+  const { steps, errors: planErrors } = planSurface(surface, rawContext);
+  if (planErrors.length) return { errors: planErrors, log, steps: [] };
+  const fail = (e) => ({ errors: [e], log, steps });
+  if (raster) await driver.setViewport(raster.width, raster.height);
+  for (const s of steps) {
+    const entry = { index: s.index, op: s.op, selector: s.selector, decided: null };
+    try {
+      // 전이를 요구하는 증거는 action **직전** 상태를 먼저 읽어둔다.
+      const preSels = (s.postAssert || []).filter((p) => p.transition).map((p) => p.selector);
+      let pre = null;
+      if (preSels.length) {
+        const { raw, errors } = await assertVisibility(driver, preSels);
+        if (errors.length) return fail(`RUN_ASSERT_INVALID ${surface.name}[${s.index}] ${errors[0]}`);
+        pre = raw;
+      }
+      entry.pre = pre;
+      if (s.op === 'setStorage') await driver.setStorage(s.key, s.value);
+      else if (s.op === 'goto') await driver.goto(s.url);
+      else if (s.op === 'click') await driver.click(s.selector, s.nth == null ? 0 : s.nth, s.hasText);
+      else if (s.op === 'hover') await driver.hover(s.selector, s.nth == null ? 0 : s.nth);
+      else if (ASSERTING_OPS.has(s.op)) {
+        const wantVisible = !(s.op === 'expectAbsent' || (s.op === 'waitFor' && s.state === 'hidden'));
+        try { await driver.settle(s.selector, wantVisible ? 'visible' : 'hidden', SETTLE_TIMEOUT_MS); }
+        catch (e) { /* 힌트 실패는 아래 판정으로 넘긴다 */ }
+        const { raw, errors } = await assertVisibility(driver, [s.selector]);
+        if (errors.length) return fail(`RUN_ASSERT_INVALID ${surface.name}[${s.index}] ${errors[0]}`);
+        entry.decided = raw[s.selector];
+        const ok = wantVisible ? raw[s.selector].visible > 0 : raw[s.selector].visible === 0;
+        log.push(entry);
+        if (!ok) return fail(`RUN_POSTCONDITION_FAILED ${surface.name}[${s.index}] ${s.op} ${s.selector} ` +
+          `count=${raw[s.selector].count} visible=${raw[s.selector].visible}`);
+        continue;
+      } else return fail(`RUN_UNKNOWN_OP ${surface.name}[${s.index}] ${s.op}`);
+    } catch (e) { log.push(entry); return fail(`RUN_OP_THREW ${surface.name}[${s.index}] ${s.op} ${e && e.message}`); }
+
+    if (s.postAssert.length) {
+      const sels = s.postAssert.map((p) => p.selector);
+      const { raw, errors } = await assertVisibility(driver, sels);
+      if (errors.length) { log.push(entry); return fail(`RUN_ASSERT_INVALID ${surface.name}[${s.index}] ${errors[0]}`); }
+      entry.decided = raw;
+      log.push(entry);
+      for (const p of s.postAssert) {
+        if (!(raw[p.selector].visible > 0))
+          return fail(`RUN_STATE_UNPROVEN ${surface.name}[${s.index}] ${p.why} ${p.selector} ` +
+            `count=${raw[p.selector].count} visible=${raw[p.selector].visible}`);
+        if (p.transition && entry.pre && entry.pre[p.selector] && entry.pre[p.selector].count !== 0)
+          return fail(`RUN_NO_TRANSITION ${surface.name}[${s.index}] ${p.selector} ` +
+            `before count=${entry.pre[p.selector].count} (이미 존재했으므로 이 action의 증거가 아니다)`);
+      }
+      continue;
+    }
+    log.push(entry);
+  }
+  return { errors: [], log, steps };
+}
+
+// 한 surface 캡처. 액션 실행은 공용 함수에 맡기고, 여기서는 측정·증거·스크린샷을 한다.
+export async function runSurface({ surface, rawContext, driver, selectors, raster, spec, phase }) {
+  const exec = await executeSurfaceSteps({ surface, rawContext, driver, raster });
+  const log = exec.log, steps = exec.steps;
+  const fail = (e) => ({ errors: [e], log, occurrences: null, png: null });
+  if (exec.errors.length) return { errors: exec.errors, log, occurrences: null, png: null };
+
+  // 캡처 직전 테마 재확인 — 액션 중간에 reload가 일어나면 테마가 되돌아갈 수 있다.
+  if (phase) {
+    const th = await driver.evaluate(THEME_PROBE_SOURCE, null);
+    if (!th || typeof th !== 'object') return fail(`RUN_THEME_PROBE_INVALID ${surface.name}`);
+    if (th.dataTheme !== phase) return fail(`RUN_THEME_MISMATCH ${surface.name} data-theme=${th.dataTheme} != ${phase}`);
+    if (th.stored !== phase) return fail(`RUN_THEME_STORAGE ${surface.name} stored=${th.stored} != ${phase}`);
+  }
+  // 선언된 상태(hover/focus/selected)를 **캡처 직전에 다시** 단정한다.
+  // action 직후에만 보면 그 사이 hover가 풀리거나 포커스가 옮겨가도 그대로 찍힌다.
+  const stateSels = [...new Set(steps.flatMap((s2) => (s2.postAssert || []).map((p) => p.selector)))];
+  if (stateSels.length) {
+    const { raw, errors } = await assertVisibility(driver, stateSels);
+    if (errors.length) return fail(`RUN_ASSERT_INVALID ${surface.name} final-state ${errors[0]}`);
+    for (const sel of stateSels)
+      if (!(raw[sel].visible > 0))
+        return fail(`RUN_STATE_LOST ${surface.name} ${sel} visible=${raw[sel].visible} (캡처 직전에 상태가 사라졌다)`);
+  }
+  // 캡처 조건을 페이지에서 실측한다 — context.capture.dpr을 자기신고에서 실측으로 바꾼다.
+  if (raster) {
+    const rp = await driver.evaluate(RASTER_PROBE_SOURCE, null);
+    if (!rp || typeof rp !== 'object') return fail(`RUN_RASTER_PROBE_INVALID ${surface.name}`);
+    if (rp.innerWidth !== raster.width || rp.innerHeight !== raster.height)
+      return fail(`RUN_RASTER_VIEWPORT ${surface.name} ${rp.innerWidth}x${rp.innerHeight} != ${raster.width}x${raster.height}`);
+    if (rp.dpr !== raster.dpr) return fail(`RUN_RASTER_DPR ${surface.name} ${rp.dpr} != ${raster.dpr}`);
+    if (rp.scrollX !== 0 || rp.scrollY !== 0) return fail(`RUN_RASTER_SCROLLED ${surface.name} ${rp.scrollX},${rp.scrollY}`);
+  }
+  // manifest가 이 화면의 증거라고 선언한 요소들이 **캡처 시점에 실제로 보이는지** 확인한다.
+  // count가 아니라 **visible**이다 — DOM에만 있고 숨겨진 요소는 픽셀 증거가 아니다.
+  // (실증 지적: 숨은 BranchKey/Group/GroupHint도 통합 canvas의 증거로 통과했다.)
+  const flatCtx = buildActionContext(rawContext || {});
+  const covAll = surface.coverageSelectors || [];
+  const covSels = [...new Set([
+    ...covAll.filter((o) => !o.locator).map((o) => resolvePlaceholderish(o.selector, flatCtx)),
+    ...(surface.requiredElements || []),
+  ])];
+  const coverageEvidence = {};
+  if (covSels.length) {
+    const { raw, errors } = await assertVisibility(driver, covSels);
+    if (errors.length) return fail(`RUN_ASSERT_INVALID ${surface.name} coverage ${errors[0]}`);
+    for (const sel of covSels) {
+      coverageEvidence[sel] = raw[sel];
+      if (!(raw[sel].visible > 0))
+        return fail(`RUN_COVERAGE_ABSENT ${surface.name} ${sel} count=${raw[sel].count} visible=${raw[sel].visible}`);
+    }
+  }
+  // 의사요소는 selector로 잡을 수 없으므로 computed style 전용 probe로 판정한다.
+  const pseudoPairs = covAll.filter((o) => o.locator && o.locator.pseudo)
+    .map((o) => [resolvePlaceholderish(o.locator.selector, flatCtx), o.locator.pseudo]);
+  if (pseudoPairs.length) {
+    const praw = await driver.evaluate(PSEUDO_PROBE_SOURCE, pseudoPairs);
+    if (!praw || typeof praw !== 'object') return fail(`RUN_PSEUDO_PROBE_INVALID ${surface.name}`);
+    for (const [host, pseudo] of pseudoPairs) {
+      const v = praw[host + pseudo];
+      if (!v || !Number.isInteger(v.present)) return fail(`RUN_PSEUDO_SHAPE ${surface.name} ${host}${pseudo}`);
+      coverageEvidence[host + pseudo] = v;
+      if (!(v.present > 0)) return fail(`RUN_COVERAGE_ABSENT ${surface.name} ${host}${pseudo} present=0`);
+    }
+  }
+  // dark phase에서는 darkReviewSelectors를 **실제로 실행**한다. 선언만 있고 아무도 확인하지
+  // 않으면 "다크 육안 검토 대상"이 화면에 없어도 그대로 통과한다.
+  const darkReview = {};
+  if (phase === 'dark') {
+    const plain = (surface.darkReviewSelectors || []).filter((x) => !String(x).includes('::'));
+    const pseudo = (surface.darkReviewSelectors || []).filter((x) => String(x).includes('::'))
+      .map((x) => { const i = x.indexOf('::'); return [resolvePlaceholderish(x.slice(0, i), flatCtx), x.slice(i)]; });
+    if (plain.length) {
+      const { raw, errors } = await assertVisibility(driver, plain.map((x) => resolvePlaceholderish(x, flatCtx)));
+      if (errors.length) return fail(`RUN_ASSERT_INVALID ${surface.name} darkReview ${errors[0]}`);
+      for (const x of plain) {
+        const sel = resolvePlaceholderish(x, flatCtx);
+        darkReview[x] = { ...raw[sel], pass: raw[sel].visible > 0 };
+        if (!darkReview[x].pass) return fail(`RUN_DARK_REVIEW_ABSENT ${surface.name} ${x} visible=${raw[sel].visible}`);
+      }
+    }
+    if (pseudo.length) {
+      const praw = await driver.evaluate(PSEUDO_PROBE_SOURCE, pseudo);
+      if (!praw || typeof praw !== 'object') return fail(`RUN_PSEUDO_PROBE_INVALID ${surface.name} darkReview`);
+      for (const [host, ps] of pseudo) {
+        const v = praw[host + ps];
+        darkReview[host + ps] = { ...(v || {}), pass: !!(v && v.present > 0) };
+        if (!darkReview[host + ps].pass) return fail(`RUN_DARK_REVIEW_ABSENT ${surface.name} ${host}${ps} present=0`);
+      }
+    }
+  }
+
+  // 측정 — 정확히 committed PROBE_SOURCE로, 15 selector 전수.
+  const probeRaw = await driver.evaluate(PROBE_SOURCE, selectors);
+  const probeErrors = validateProbeResult(probeRaw, selectors);
+  if (probeErrors.length) return fail(`RUN_PROBE_INVALID ${surface.name} ${probeErrors[0]}`);
+  // paintRect는 **검증기와 같은 함수**로 파생한다(공식을 두 곳에 적으면 갈라진다).
+  // normalizeOccurrence는 일부러 paintRect를 만들지 않는다 — 관측물이 아니라 파생물이기 때문이다.
+  const outsets = outsetBySelector(spec || { LIGHT_DIFF_MASKS: {} });
+  const occurrences = {};
+  for (const sel of selectors) {
+    const outset = outsets.get(sel);
+    if (probeRaw[sel].length && !Number.isFinite(outset)) return fail(`RUN_NO_OUTSET ${surface.name} ${sel}`);
+    occurrences[sel] = probeRaw[sel].map((o) => {
+      const n = normalizeOccurrence(o);
+      return { ...n, paintRect: derivePaintRect(n, outset) };
+    });
+  }
+
+  const png = await driver.screenshot();
+  if (!png || typeof png.length !== 'number' || png.length === 0) return fail(`RUN_SCREENSHOT_EMPTY ${surface.name}`);
+  if (raster) {
+    const hdr = decodePngHeader(png);
+    if (!hdr.ok) return fail(`RUN_SCREENSHOT_DECODE ${surface.name} ${hdr.reason}`);
+    if (hdr.width !== raster.width || hdr.height !== raster.height)
+      return fail(`RUN_SCREENSHOT_SIZE ${surface.name} ${hdr.width}x${hdr.height} != ${raster.width}x${raster.height}`);
+  }
+  // 픽셀 정착 — 같은 상태에서 두 번 찍어 바이트가 같아야 한다. 다르면 애니메이션·비동기 렌더가
+  // 남아 있어 그 PNG는 재현 가능한 증거가 아니다. 수렴하지 않으면 RED다(은폐보다 낫다).
+  // **선택이 아니다.** 이전 판은 driver.sleep이 있을 때만 돌아서, sleep 없는 어댑터를 쓰면
+  // 변동하는 PNG도 GREEN이었다. 정착 검사를 못 하는 driver는 캡처를 만들 자격이 없다.
+  if (typeof driver.sleep !== 'function') return fail(`RUN_DRIVER_NO_SLEEP ${surface.name}`);
+  await driver.sleep(PIXEL_SETTLE_MS);
+  const again = await driver.screenshot();
+  const settled = !!again && again.length === png.length && Buffer.compare(Buffer.from(png), Buffer.from(again)) === 0;
+  if (!settled) return fail(`RUN_UNSTABLE_PIXELS ${surface.name} ${png.length} vs ${again ? again.length : 'null'}`);
+  return { errors: [], log, occurrences, png, settled, coverageEvidence, darkReview };
+}
+
+// 산출물은 **candidate 위치에만**, **phase별로 분리해서** 쓴다.
+//
+// 왜 분리인가: 이전 판은 light와 dark가 같은 context 파일과 같은 s4-shots/candidate/에 썼다.
+// dark 실행이 light 산출물을 덮어썼고, 매니페스트에서 빠진 PNG는 그대로 잔존했다(실증).
+// 두 phase는 역할이 다르다 — light는 diff의 BASE(baselineLight), dark는 육안 검토(reviewDark)다.
+//
+// 쓰기 규칙:
+//  - 파일명 집합이 manifest와 **exact** 일치해야 한다(모자라도 남아돌아도 거부).
+//  - temp 디렉터리에 전부 완성한 뒤 목적지를 통째로 교체한다 — 부분 산출물이나 잔존 파일이
+//    남지 않는다. committed 이름을 쓰려는 시도는 거부한다.
+export const CANDIDATE_CONTEXT_NAME = (phase) => `s4-smoke-context.${phase}.candidate.json`;
+export const CANDIDATE_SHOTS_DIR = (phase) => `candidate-${phase}`;
+export const COMMITTED_CONTEXT_NAME = (phase) => (phase === 'light' ? 's4-smoke-context.json' : `s4-smoke-context.${phase}.json`);
+export const COMMITTED_SHOTS_DIR = (phase) => (phase === 'light' ? 'base' : `${phase}-review`);
+const COMMITTED_NAMES = new Set(['s4-smoke-context.json', 's4-expected.json']);
+
+export function writeCandidate({ fixturesDir, phase, contextRaw, pngByCaptureName, expectedCaptureNames }) {
+  if (typeof contextRaw !== 'string') return ['WRITE_CONTEXT_RAW_REQUIRED'];
+  if (!PHASES.includes(phase)) return [`WRITE_PHASE_INVALID ${phase}`];
+  const ctxName = CANDIDATE_CONTEXT_NAME(phase);
+  if (COMMITTED_NAMES.has(ctxName)) return ['WRITE_WOULD_CLOBBER_COMMITTED'];
+  // 파일명 집합 exact — 하나라도 모자라거나 남으면 그 캡처는 완결되지 않은 것이다.
+  const got = Object.keys(pngByCaptureName).sort();
+  const want = [...(expectedCaptureNames || [])].sort();
+  if (JSON.stringify(got) !== JSON.stringify(want))
+    return [`WRITE_CAPTURE_SET_MISMATCH got=${got.length} want=${want.length} ` +
+      `missing=[${want.filter((n) => !got.includes(n))}] extra=[${got.filter((n) => !want.includes(n))}]`];
+  for (const name of got) if (name.includes('/') || name.includes('..')) return [`WRITE_BAD_NAME ${name}`];
+
+  const dest = join(fixturesDir, 's4-shots', CANDIDATE_SHOTS_DIR(phase));
+  let tmp = null;
+  try {
+    mkdirSync(join(fixturesDir, 's4-shots'), { recursive: true });
+    tmp = mkdtempSync(join(fixturesDir, 's4-shots', `.tmp-${phase}-`));
+    for (const [name, bytes] of Object.entries(pngByCaptureName)) writeFileSync(join(tmp, name), bytes);
+    // 목적지를 통째로 교체 — 잔존 파일이 살아남지 못한다.
+    if (existsSync(dest)) rmSync(dest, { recursive: true, force: true });
+    renameSync(tmp, dest); tmp = null;
+    writeFileSync(join(fixturesDir, ctxName), contextRaw);
+  } catch (e) {
+    return [`WRITE_FAILED ${e && e.message}`];
+  } finally { if (tmp) try { rmSync(tmp, { recursive: true, force: true }); } catch (e) { /* best effort */ } }
+  return [];
+}
+
+// 디렉터리의 파일명 집합이 정확히 기대와 같은지. BASE·candidate 양쪽에 쓴다.
+export function exactCaptureSet(dir, expectedCaptureNames) {
+  if (!existsSync(dir)) return [`CAPTURE_DIR_MISSING ${dir}`];
+  const got = readdirSync(dir).filter((n) => !n.startsWith('.')).sort();
+  const want = [...expectedCaptureNames].sort();
+  if (JSON.stringify(got) !== JSON.stringify(want))
+    return [`CAPTURE_SET_MISMATCH ${dir} missing=[${want.filter((n) => !got.includes(n))}] extra=[${got.filter((n) => !want.includes(n))}]`];
+  return [];
+}
+
+// 전체 실행.
+//
+// phase('light' | 'dark')를 **만들고 확인한다** — 읽고 복원만 하는 게 아니다.
+// 순서: 원래 상태 읽기 → theme=phase 설정 → reload → data-theme exact 확인 → surface 실행
+//       → (각 surface는 캡처 직전에 테마를 재확인) → finally에서 원복 → reload → 원복 확인.
+// 이전 판은 기존 theme을 읽어 복원만 했다. 다크로 남아 있던 브라우저에서 돌리면
+// "라이트 BASE"가 다크 픽셀이 되고 아무도 그것을 잡지 못했다.
+export async function runCapture({ spec, rawContext, driver, selectors, phase, provenance }) {
+  const errors = [];
+  if (!PHASES.includes(phase)) return { errors: [`RUN_PHASE_INVALID ${phase}`], context: null };
+  const surfaces = spec.REQUIRED_SMOKE_SURFACES || [];
+  const raster = spec.RASTER_CONTRACT;
+  const trackId = rawContext && rawContext.trackId;
+  const VIEW_KEY = `track:${trackId}:lastView`;
+
+  // 복원 대상 원래 값을 **먼저** 읽는다. resolved data-theme까지 기록한다 —
+  // localStorage만 되돌리고 문서가 다른 테마로 남아 있어도 이전 판은 errors=[]였다(실증).
+  let prev = { theme: { present: false, value: null }, lastView: { present: false, value: null }, dataTheme: null };
+  try {
+    const read = await driver.evaluate(READ_STORAGE_SOURCE, ['theme', VIEW_KEY]);
+    if (read && read.theme && read[VIEW_KEY]) prev = { ...prev, theme: read.theme, lastView: read[VIEW_KEY] };
+    else errors.push('RUN_PREV_STATE_UNREADABLE');
+    const th0 = await driver.evaluate(THEME_PROBE_SOURCE, null);
+    if (th0 && typeof th0 === 'object') prev.dataTheme = th0.dataTheme;
+    else errors.push('RUN_PREV_THEME_UNREADABLE');
+  } catch (e) { errors.push(`RUN_PREV_STATE_THREW ${e && e.message}`); }
+  if (errors.length) return { errors, context: null };
+
+  const baseLightMaskRects = {}, actionLog = {}, pngByCaptureName = {};
+  const coverageEvidence = {}, darkReview = {};
+  let datasetStart = null, datasetEnd = null;
+  let themeTouched = false;
+  try {
+    // phase를 실제로 적용하고 **확인**한다.
+    if (typeof driver.reload !== 'function') { errors.push('RUN_DRIVER_NO_RELOAD'); throw new Error('__abort');
+    }
+    themeTouched = true;                    // 이 시점부터는 실패해도 반드시 복원해야 한다
+    await driver.setStorage('theme', phase);
+    await driver.reload();
+    const th = await driver.evaluate(THEME_PROBE_SOURCE, null);
+    if (!th || typeof th !== 'object') { errors.push('RUN_THEME_PROBE_INVALID setup'); throw new Error('__abort'); }
+    if (th.dataTheme !== phase) { errors.push(`RUN_THEME_NOT_APPLIED data-theme=${th.dataTheme} != ${phase}`); throw new Error('__abort'); }
+
+    // 데이터셋을 **시작 시점에** 수집한다. 종료 시점과 비교해 캡처 도중 데이터가 바뀌지
+    // 않았음을 보이고, light/dark 쌍 승인에서 두 phase의 동일성을 본다.
+    const flatCtx0 = buildActionContext(rawContext || {});
+    const endpoints = (spec.DATASET_ENDPOINTS || []).map((u) => resolvePlaceholderish(u, flatCtx0));
+    if (endpoints.length) {
+      datasetStart = await driver.evaluate(DATASET_PROBE_SOURCE, endpoints);
+      if (!Array.isArray(datasetStart)) { errors.push('RUN_DATASET_PROBE_INVALID start'); throw new Error('__abort'); }
+    }
+
+    for (const surface of surfaces) {
+      const r = await runSurface({ surface, rawContext, driver, selectors, raster, spec, phase });
+      if (r.errors.length) { errors.push(...r.errors); throw new Error('__abort'); }
+      baseLightMaskRects[surface.name] = r.occurrences;
+      actionLog[surface.name] = r.log;
+      coverageEvidence[surface.name] = r.coverageEvidence;
+      if (phase === 'dark') darkReview[surface.name] = r.darkReview;
+      pngByCaptureName[surface.captureName] = r.png;
+    }
+    // 종료 시점 재수집 — 캡처 도중 데이터가 바뀌면 그 산출물은 한 데이터셋의 증거가 아니다.
+    if (endpoints.length) {
+      datasetEnd = await driver.evaluate(DATASET_PROBE_SOURCE, endpoints);
+      if (!Array.isArray(datasetEnd)) { errors.push('RUN_DATASET_PROBE_INVALID end'); throw new Error('__abort'); }
+    }
+  } catch (e) {
+    // __abort는 위에서 이미 errors에 이유를 넣은 정상 중단이다. 다른 예외는 그대로 기록한다.
+    // **조기 return을 쓰지 않는 이유**: finally에서 발생한 복원 실패가 결과에서 사라진다(실증).
+    if (!e || e.message !== '__abort') errors.push(`RUN_THREW ${e && e.message}`);
+  } finally {
+    // 복원은 **테마를 건드렸다면 무조건** 시도한다(setup probe가 실패해도 마찬가지다).
+    // 그리고 storage·resolved data-theme·lastView를 전부 exact 대조한다.
+    if (themeTouched) {
+      try {
+        await driver.evaluate(RESTORE_STORAGE_SOURCE, [['theme', prev.theme], [VIEW_KEY, prev.lastView]]);
+        await driver.reload();
+        const back = await driver.evaluate(THEME_PROBE_SOURCE, null);
+        const storage = await driver.evaluate(READ_STORAGE_SOURCE, ['theme', VIEW_KEY]);
+        const wantTheme = prev.theme.present ? prev.theme.value : null;
+        if (!back || back.stored !== wantTheme) errors.push(`RUN_RESTORE_THEME_STORAGE ${back && back.stored} != ${wantTheme}`);
+        if (!back || back.dataTheme !== prev.dataTheme) errors.push(`RUN_RESTORE_DATA_THEME ${back && back.dataTheme} != ${prev.dataTheme}`);
+        const lv = storage && storage[VIEW_KEY];
+        if (!lv || lv.present !== prev.lastView.present || lv.value !== prev.lastView.value)
+          errors.push(`RUN_RESTORE_LAST_VIEW ${JSON.stringify(lv)} != ${JSON.stringify(prev.lastView)}`);
+      } catch (e) { errors.push(`RUN_RESTORE_FAILED ${e && e.message}`); }
+    }
+  }
+  if (errors.length) return { errors, context: null };
+
+  const context = {
+    ...rawContext,
+    phase,
+    viewport: { width: raster.width, height: raster.height },
+    capture: { type: 'png', scale: raster.screenshotScale, dpr: raster.dpr },
+    prevTheme: prev.theme, prevLastView: prev.lastView, prevDataTheme: prev.dataTheme,
+    // 어떤 코드가 이 캡처를 만들었는지. 승인 시 fingerprint 입력 모듈과 재대조한다.
+    provenance: provenance || null,
+    // **원본 응답**을 남긴다 — 검증기가 digest를 직접 재계산할 수 있어야 자기신고가 아니다.
+    datasetResponses: datasetStart,
+    actionLog, coverageEvidence, baseLightMaskRects,
+    ...(phase === 'dark' ? { darkReview } : {}),
+  };
+  // **여기서 쓰지 않는다.** 이전 판은 candidate를 먼저 쓰고 호출부가 나중에 HEAD를 재검사해서,
+  // 도중 변경을 잡아 종료해도 오염된 candidate가 디스크에 남았다.
+  // 순서는 `메모리 캡처 → postflight → writeCandidate` 여야 한다.
+  const contextRaw = JSON.stringify(context, null, 1);
+  return { errors, context, contextRaw, pngByCaptureName, datasetStart, datasetEnd,
+    expectedCaptureNames: surfaces.map((x) => x.captureName) };
+}
+
+// 브라우저에서 실행되는 보조 소스 두 개. 여기 있으므로 RUNNER_MODULE_BYTES에 포함된다.
+export const READ_STORAGE_SOURCE = `function (keys) {
+  var out = {};
+  for (var i = 0; i < keys.length; i++) {
+    var k = keys[i], v = null, present = false;
+    try { v = localStorage.getItem(k); present = v !== null; } catch (e) { }
+    out[k] = { present: present, value: present ? v : null };
+  }
+  return out;
+}`;
+export const RESTORE_STORAGE_SOURCE = `function (pairs) {
+  for (var i = 0; i < pairs.length; i++) {
+    var k = pairs[i][0], s = pairs[i][1];
+    try { if (s && s.present) localStorage.setItem(k, s.value); else localStorage.removeItem(k); } catch (e) { }
+  }
+  return true;
+}`;
