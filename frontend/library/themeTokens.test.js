@@ -5675,8 +5675,10 @@ describe('S4 경계 — discovery 이후 제품 소비자 코드가 바뀌지 �
 
   it('observedHead..HEAD 에서 제품 JS/JSX 변경 0', () => {
     const changed = git(`diff --name-only ${OBSERVED_HEAD} HEAD`).split('\n').filter(Boolean);
+    // __fixtures__는 S4 인프라(동결 산출물·discovery 증거)다 — 제품 소비자 코드가 아니다.
     const product = changed.filter((f) => /^frontend\/(components|pages|hooks)\//.test(f)
-      || (/^frontend\/library\//.test(f) && !/^frontend\/library\/s4/.test(f) && !/themeTokens/.test(f))
+      || (/^frontend\/library\//.test(f) && !/^frontend\/library\/s4/.test(f)
+        && !/^frontend\/library\/__fixtures__\//.test(f) && !/themeTokens/.test(f))
       || /^backend\//.test(f));
     expect(product).toEqual([]);
     // 변경은 S4 검증 인프라와 승인된 SCSS 범위뿐이어야 한다.
