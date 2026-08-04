@@ -301,3 +301,8 @@
     }
   }
 }
+
+// === 다크 오버라이드 (S4) ===
+html[data-theme='dark'] {
+  .CreateTrack { box-shadow: 0 0 0 1px var(--color-input-border), 0 24px 60px -16px rgba(0, 0, 0, 0.75), 0 4px 12px rgba(0, 0, 0, 0.5); }
+}

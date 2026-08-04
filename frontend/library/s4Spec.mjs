@@ -4,7 +4,9 @@ export const FILES = { T: { rel: 'styles/components/track/track.scss', blob: 'dd
   X: { rel: 'styles/components/track/tracksIndex.scss', blob: 'bc54e5417c1f8afab658f963cfa9711414445509' } };
 // ManageBranches(죽은 컴포넌트) 3건을 범위에서 제외한 결과. 예측 = 변환 -3 · changed -3 · residual +3
 // · processed -3 · allow -3 이고 실측이 정확히 일치했다(actual에 맞춘 사후 갱신이 아니라 예측 검증).
-// newDecls/newRules는 불변 — override 줄을 `.ManageBranches, .BulkAdd` → `.BulkAdd`로 좁혔을 뿐 규칙 수는 같다.
+// ManageBranches 범위 제외는 newDecls/newRules에 영향이 없었다 — override 줄을
+// `.ManageBranches, .BulkAdd` → `.BulkAdd`로 좁혔을 뿐 규칙 수는 같았다.
+// 이후 cascade 수정에서 `.TrackDetail__OriginLink:hover`가 추가돼 newDecls 28 / newRules 23이 됐다.
 // raster 계약 정본 — "PNG 크기 == context.viewport" 자기정합만 보면 둘을 함께 2880x1800으로
 // 바꿔도 통과한다. 고정 스모크 환경이므로 값을 여기에 못박고 parsed context·PNG IHDR·DPR·
 // screenshotScale을 각각 **이 상수와** 대조한다.
@@ -13,8 +15,8 @@ export const FILES = { T: { rel: 'styles/components/track/track.scss', blob: 'dd
 // 값은 s4-gen이 실제 소스에서 계산해 대조한다(여기에 하드코딩하지 않는다).
 export const PROBE_CONTRACT = { module: 'library/s4DomProbe.mjs', export: 'PROBE_SOURCE' };
 export const RASTER_CONTRACT = { width: 1440, height: 900, dpr: 1, screenshotScale: 'css' };
-export const COUNTS = { conversions: 106, changedDecls: 100, newDecls: 27, newRules: 22, residual: 65, rawLiterals: 157, processedLiterals: 92, allowIds: 15 };
-export const DARK_DECL_COUNTS = { T: 26, X: 1, S: 0 };   // 검수 §3
+export const COUNTS = { conversions: 106, changedDecls: 100, newDecls: 28, newRules: 23, residual: 65, rawLiterals: 157, processedLiterals: 92, allowIds: 15 };
+export const DARK_DECL_COUNTS = { T: 27, X: 1, S: 0 };   // 검수 §3
 export const GROUP_STAGE = { F:3,H:3,I:3,J:3,K:3,L:3,M:3,N:3,O:3,U:3, A:4,B:4,C:4,D:4,G:4,Q:4,R:4,S:4,T:4, E:5,P:5 };
 const L = (token) => ({ t: 'lit', token });
 const C = (f, l, k, from, to, ident, group) => ({ id: `${f}${l}`, f, l, k, from, to, group, stage: GROUP_STAGE[group],
@@ -635,7 +637,7 @@ html[data-theme='dark'] {
   .TrackTimeline__Link--rel { stroke: rgba(148, 157, 173, 0.62); color: rgba(148, 157, 173, 0.72); }
   .BulkAdd { box-shadow: 0 0 0 1px var(--color-input-border), 0 24px 60px -16px rgba(0, 0, 0, 0.75), 0 4px 12px rgba(0, 0, 0, 0.5); }
   .TrackHeader__ViewBtn--active { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 0 0 1px var(--color-input-border-hover); }
-  .SourcePicker__Task:hover { box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(255, 255, 255, 0.14); }
+  .SourcePicker__Task:not(.SourcePicker__Task--used):hover { box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(255, 255, 255, 0.14); }
   .TrackEdgeLabel__Badge--draft { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.22), 0 1px 2px rgba(0, 0, 0, 0.06); }
   .TrackEdgeLabel__Badge--rel { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.22), 0 1px 2px rgba(0, 0, 0, 0.06); }
   .TrackNode--restricted { background: repeating-linear-gradient(135deg, rgba(230, 232, 235, 0.07) 0, rgba(230, 232, 235, 0.07) 6px, transparent 6px, transparent 12px), color-mix(in srgb, var(--track-card) 40%, transparent); }
@@ -646,6 +648,7 @@ html[data-theme='dark'] {
   .SourcePicker__Group { border-left-color: rgba(255, 255, 255, 0.10); }
   .SourcePicker__GroupRow:hover { background: rgba(255, 255, 255, 0.04); }
   .TrackDetail__OriginLink { background: rgba(255, 255, 255, 0.04); }
+  .TrackDetail__OriginLink:hover { background: color-mix(in srgb, var(--color-primary) 10%, transparent); }
   .SourcePicker__AddBtn:hover { background: rgba(255, 255, 255, 0.05); }
   .TrackTimeline__LaneGroupCount { background: rgba(255, 255, 255, 0.05); }
   .TrackTimeline__LaneRow:hover { background: rgba(255, 255, 255, 0.03); }
