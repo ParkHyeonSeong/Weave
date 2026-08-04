@@ -2,5 +2,8 @@
 s4-smoke-context.*.candidate.json
 s4-expected.candidate.json
 s4-shots/candidate-*/
+# candidate 전용 root — 통째로 무시한다. 이름 규칙이 바뀌어도 추적 대상이 되지 않는다.
+# (실증: pointer와 bundle-*가 노출돼 light 캡처 직후 worktree가 dirty가 됐고 dark가 못 시작했다)
+s4-candidates/
 s4-capture/.staging-*/
 .s4-promote.lock

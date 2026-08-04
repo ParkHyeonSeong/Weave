@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync, readdirSync, mkdtempSync, writeFileSync, rmSync, symlinkSync, utimesSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, readdirSync, mkdtempSync, writeFileSync, rmSync, symlinkSync, utimesSync, existsSync, mkdirSync, chmodSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolve, join, sep } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -24,7 +24,9 @@ const REPO = resolve(__dirname, '../..');   // BASE 소스를 git에서 읽을 �
 const pngBytes = (w, h, tint = 0) => { const p = new PNG({ width: w, height: h });
   for (let i = 0; i < p.data.length; i += 4) { p.data[i] = tint; p.data[i + 1] = tint; p.data[i + 2] = tint; p.data[i + 3] = 255; }
   return PNG.sync.write(p); };   // createHash는 기존 import 재사용
-// SURFACE_NAMES: 24개 이름 exact manifest(순서 포함) — spec과 독립 정의라야 drift를 잡는다
+// SURFACE_NAMES: **현재 target 23개** 이름 exact manifest(순서 포함) — spec과 독립 정의라야
+// drift를 잡는다. 현재 계약은 surface 23 / coverage 54 / capture 23이고,
+// `s4-shots/base/`의 PNG 24개는 **promotion 전 legacy baseline**이다(현재 target 아님).
 // sourcepicker base surface는 canvas로 통합됐다(같은 화면·바이트 동일 PNG였다 — 실측).
 // hover/focus/add-menu SourcePicker surface 6개는 서로 다른 상태이므로 유지한다.
 const SURFACE_NAMES = ['canvas', 'canvas-toolbar-active', 'canvas-matpill-on',
@@ -3891,7 +3893,7 @@ describe('S4 action resolver', () => {
   const CTX = { trackId: 42, normalItemTitle: 'Synthetic Item A', branchName: 'SB', epicName: 'SE',
     addMenuEpicLabel: 'Epic', scrumBoardId: 7, scrumInactivePreset: '#DC2626',
     settingsPreset: { editBranchIndex: 0, inactivePresetValue: '#16A34A' } };
-  it('24 surface 전 액션이 미해결 0으로 치환', () => {
+  it('23 surface 전 액션이 미해결 0으로 치환', () => {
     const flat = EV.buildActionContext(CTX);
     const all = SPEC.REQUIRED_SMOKE_SURFACES.flatMap((s2) => EV.resolveActions(s2.actions, flat).errors);
     expect(all).toEqual([]);
@@ -4031,7 +4033,111 @@ const S4_MK = (x, y, bw, bh, scale, outset, paint = S4_PAINT.plain) => {
 // 프로덕션 SPEC/fixture에서 파생하지 않는다. 파생하면 spec 자체의 좌표·property 오류가
 // "정답"으로 함께 이동해 self-oracle이 된다(리뷰 지적). ID를 1,4로 비연속으로 둬서
 // 연속 번호 가정(1..N)이 다시 들어오면 즉시 드러나게 한다.
-const UNIT_SPEC = {
+// ── dataset 계약용 합성 world ───────────────────────────────────────────────
+// **production manifest를 복사하지 않는다.** 복사 후 surfaceCount만 바꾸는 방식은
+// (a) 계약 검사를 production 형태에 묶고 (b) 검사 대상 값으로 기대값을 만들어 자기증명이 된다.
+//
+// 손으로 적은 산술: n = surface 수
+//   branches 1/1 · epics 1/1 · chat n/(n+1) · unread-count n/n · tracks/{trackId} 1/1
+//   ambient notif-list 1/1 · dev pages-manifest n/n
+//   backendUniqueUrl = 5 + 1 = 6
+//   backendTuple     = 1+1+n+n+1 + 1 = 2n+4
+//   semanticTuple    = (2n+4) + n     = 3n+4
+// 각 category는 urlTemplate lexical order. branches/epics를 넣는 이유는 신원 대조 응답이
+// dataset endpoint 집합과 **같은 원천**에서 나와야 하기 때문이다(production도 그렇다).
+const dsManifest = (n) => ({
+  schemaVersion: 1,
+  evidence: {
+    observedHead: '1'.repeat(40), observedSpecFingerprint: '2'.repeat(64),
+    discoveryDigest: '3'.repeat(64),
+    files: Object.fromEntries(EV.DISCOVERY_EVIDENCE_FILES.map((n, i) => [n, String(i).repeat(64).slice(0, 64)])),
+    surfaceCount: n, semanticTupleCount: 3 * n + 4, backendTupleCount: 2 * n + 4, backendUniqueUrlCount: 6,
+  },
+  dataset: [
+    { method: 'GET', urlTemplate: '{apiOrigin}/branches', reason: '브랜치 이름·색', observedSurfaceCount: 1, observedRequestCount: 1 },
+    { method: 'GET', urlTemplate: '{apiOrigin}/branches/{bulkBranchId}/epics', reason: '에픽 목록', observedSurfaceCount: 1, observedRequestCount: 1 },
+    { method: 'GET', urlTemplate: '{apiOrigin}/chat', reason: '헤더 채팅 뱃지', observedSurfaceCount: n, observedRequestCount: n + 1 },
+    { method: 'GET', urlTemplate: '{apiOrigin}/notifications/unread-count', reason: '헤더 알림 뱃지', observedSurfaceCount: n, observedRequestCount: n },
+    { method: 'GET', urlTemplate: '{apiOrigin}/tracks/{trackId}', reason: '트랙 본문', observedSurfaceCount: 1, observedRequestCount: 1 },
+  ],
+  ambient: [
+    { method: 'GET', urlTemplate: '{apiOrigin}/notifications?limit=30', reason: '알림 목록은 픽셀에 없다', observedSurfaceCount: 1, observedRequestCount: 1 },
+  ],
+  dev: [
+    { method: 'GET', urlTemplate: '{appOrigin}/_next/static/development/_devPagesManifest.json', reason: 'Next dev 런타임', observedSurfaceCount: n, observedRequestCount: n },
+  ],
+});
+// 계약 테스트가 쓰는 고정 world(n=2). 생성기와 **손으로 적은 값**이 같은지는 별도 테스트가 본다.
+const SYN_MANIFEST = {
+  schemaVersion: 1,
+  evidence: {
+    observedHead: '1'.repeat(40), observedSpecFingerprint: '2'.repeat(64),
+    discoveryDigest: '3'.repeat(64),
+    files: Object.fromEntries(EV.DISCOVERY_EVIDENCE_FILES.map((n, i) => [n, String(i).repeat(64).slice(0, 64)])),
+    surfaceCount: 2, semanticTupleCount: 10, backendTupleCount: 8, backendUniqueUrlCount: 6,
+  },
+  dataset: [
+    { method: 'GET', urlTemplate: '{apiOrigin}/branches', reason: '브랜치 이름·색', observedSurfaceCount: 1, observedRequestCount: 1 },
+    { method: 'GET', urlTemplate: '{apiOrigin}/branches/{bulkBranchId}/epics', reason: '에픽 목록', observedSurfaceCount: 1, observedRequestCount: 1 },
+    { method: 'GET', urlTemplate: '{apiOrigin}/chat', reason: '헤더 채팅 뱃지', observedSurfaceCount: 2, observedRequestCount: 3 },
+    { method: 'GET', urlTemplate: '{apiOrigin}/notifications/unread-count', reason: '헤더 알림 뱃지', observedSurfaceCount: 2, observedRequestCount: 2 },
+    { method: 'GET', urlTemplate: '{apiOrigin}/tracks/{trackId}', reason: '트랙 본문', observedSurfaceCount: 1, observedRequestCount: 1 },
+  ],
+  ambient: [
+    { method: 'GET', urlTemplate: '{apiOrigin}/notifications?limit=30', reason: '알림 목록은 픽셀에 없다', observedSurfaceCount: 1, observedRequestCount: 1 },
+  ],
+  dev: [
+    { method: 'GET', urlTemplate: '{appOrigin}/_next/static/development/_devPagesManifest.json', reason: 'Next dev 런타임', observedSurfaceCount: 2, observedRequestCount: 2 },
+  ],
+};
+const SYN_SURFACES = [
+  { name: 'syn-a', captureName: 'syn-a.png', actions: [], requiredElements: [], coverageSelectors: [], darkReviewSelectors: [] },
+  { name: 'syn-b', captureName: 'syn-b.png', actions: [], requiredElements: [], coverageSelectors: [], darkReviewSelectors: [] },
+];
+const SYN_SPEC = () => ({
+  REQUIRED_SMOKE_SURFACES: SYN_SURFACES,
+  SCENARIO_CANON: SPEC.SCENARIO_CANON, SCENARIO_CANON_KEYS: SPEC.SCENARIO_CANON_KEYS,
+  EXPECTED_DATASET_MANIFEST: SYN_MANIFEST,
+  DATASET_ENDPOINTS: SYN_MANIFEST.dataset.map((e) => e.urlTemplate),
+  REVIEWED_CLASSIFICATION: reviewedOf(SYN_MANIFEST), PROVENANCE_BLOB_PATHS: SPEC.PROVENANCE_BLOB_PATHS,
+  DATASET_VOLATILE_FIELDS: {}, DATASET_UNORDERED_PATHS: [],
+});
+const SYN_SC = () => ({ ...SPEC.SCENARIO_CANON });
+
+// ── 무관 테스트(mask/raster/action/allow)를 위한 계약 충족 헬퍼 ──────────────
+// 이 테스트들은 dataset 계약을 시험하지 않는다. 계약 검사가 전 승인 경로에 무조건 들어가므로
+// **그 축을 계속 검사하려면** 계약을 만족시켜 놔야 한다. production 숫자를 흉내내지 않는다.
+const reviewedOf = (man) => { const r = {};
+  for (const cat of ['dataset', 'ambient', 'dev']) for (const e of man[cat]) r[e.urlTemplate] = cat;
+  return r; };
+const DS_SPEC = (s) => { const man = dsManifest((s.REQUIRED_SMOKE_SURFACES || []).length || 1);
+  return { ...s, SCENARIO_CANON: SPEC.SCENARIO_CANON, SCENARIO_CANON_KEYS: SPEC.SCENARIO_CANON_KEYS,
+    EXPECTED_DATASET_MANIFEST: man, DATASET_ENDPOINTS: man.dataset.map((e) => e.urlTemplate),
+    REVIEWED_CLASSIFICATION: reviewedOf(man), PROVENANCE_BLOB_PATHS: SPEC.PROVENANCE_BLOB_PATHS,
+    DATASET_VOLATILE_FIELDS: {}, DATASET_UNORDERED_PATHS: [] }; };
+const DS_SC = () => ({ ...SPEC.SCENARIO_CANON });
+// 실제 응답 형태를 따른다 — branches/epics는 신원 대조에 쓰이므로 진짜 필드명과 envelope를 쓴다.
+const DS_RESPONSES = (n = 1) => {
+  const sc = DS_SC();
+  return dsManifest(n).dataset.map((t) => {
+    const { url } = EV.resolveTemplate(t.urlTemplate, sc);
+    let body = '{"status":true}';
+    if (url === `${sc.apiOrigin}/branches`)
+      body = JSON.stringify({ status: true, branches: [{ branch_id: sc.bulkBranchId, branch_name: sc.branchName }] });
+    else if (url === `${sc.apiOrigin}/branches/${sc.bulkBranchId}/epics`)
+      body = JSON.stringify({ status: true, epics: [{ epic_id: sc.bulkEpicId, epic_name: sc.epicName }] });
+    return { url, status: 200, body };
+  });
+};
+const DS_CTX = (c, n = 1) => {
+  const responses = DS_RESPONSES(n);
+  const out = { ...DS_SC(), ...c, datasetResponses: responses };
+  if (out.provenance) out.provenance = { ...out.provenance,
+    datasetDigest: EV.datasetDigest(responses, { DATASET_VOLATILE_FIELDS: {}, DATASET_UNORDERED_PATHS: [] }, sha256).digest };
+  return out;
+};
+
+const UNIT_SPEC = DS_SPEC({
   BASE: 'unitbase',
   LIGHT_DIFF_MASKS: {
     1: { selector: '.UnitPlain', paintOutsetPx: 0 },
@@ -4066,7 +4172,7 @@ const UNIT_SPEC = {
   COUNTS: { conversions: 2, changedDecls: 2, newDecls: 0, newRules: 0, residual: 0, rawLiterals: 0, processedLiterals: 0, allowIds: 2 },
   CONVERSIONS: [{ ident: { t: 'allow', id: 1 } }, { ident: { t: 'allow', id: 4 } }],
   ANNOTATIONS: [], OVERRIDES: {}, CONTRAST_CASES: [], CONTRAST_REFERENCE: {},
-};
+});
 // ── UNIT 세계: 실제 declaration에 결속 ────────────────────────────────────
 // 이전 판은 file/property를 문자열로만 분리하고 actualDecls를 비워둬서, ring의 property를
 // box-shadow→background로 fixture·changed·actual map에서 함께 바꿰도 conformance가 clean이었다.
@@ -4116,7 +4222,7 @@ const unitFixture = () => ({
 const U_OWNER = (sel) => UNIT_SPEC.REQUIRED_SMOKE_SURFACES.find((x) => x.coverageSelectors.some((o) => o.selector === sel)).name;
 // full matrix: 2 surface × 2 live selector, 미발견은 []
 // unit-a: .UnitPlain / unit-b: .UnitPlain(비소유 — 모달 뒤 캔버스에 해당) + .UnitRing
-const unitCtx = () => ({
+const unitCtx = () => DS_CTX({
   viewport: { width: 200, height: 200 },                       // RASTER_CONTRACT와 일치해야 한다
   capture: { type: 'png', scale: 'css', dpr: 1 },              // 캡처 조건도 계약 대상이다
   baseLightMaskRects: {
@@ -4124,7 +4230,7 @@ const unitCtx = () => ({
     'unit-b': { '.UnitPlain': [S4_MK(150, 20, 20, 20, 1, 0, S4_PAINT.plain)],
       '.UnitRing': [S4_MK(100, 100, 20, 20, 1.08, 3, S4_PAINT.ring)] },
   },
-});
+}, 2);
 // 재측정 결과 = 동결값에서 paintRect만 뺀 것(paintRect는 관측물이 아니라 파생물이다)
 const unitObs = (ctx, surf) => Object.fromEntries(Object.values(UNIT_SPEC.LIGHT_DIFF_MASKS).map((m) => {
   const rects = (ctx.baseLightMaskRects[surf] || {})[m.selector] || [];
@@ -4587,11 +4693,11 @@ describe('S4 커밋된 캡처 실행기 — 세만틱은 러너가 소유하고 
       expect(r.context.viewport).toEqual({ width: 200, height: 200 });
       expect(Object.keys(r.context.actionLog)).toEqual(['r-a']);
       // **캡처는 아무것도 쓰지 않는다** — 쓰기는 postflight를 통과한 호출부의 몫이다.
-      expect(existsSync(join(dir, RUN.CANDIDATE_CONTEXT_NAME('light')))).toBe(false);
+      expect(existsSync(join(dir, 's4-shots', RUN.CANDIDATE_BUNDLE_DIR('light')))).toBe(false);
       expect(RUN.writeCandidate({ fixturesDir: dir, phase: 'light', contextRaw: r.contextRaw,
         pngByCaptureName: r.pngByCaptureName, expectedCaptureNames: r.expectedCaptureNames })).toEqual([]);
-      expect(readFileSync(join(dir, RUN.CANDIDATE_CONTEXT_NAME('light')), 'utf8')).toBe(r.contextRaw);
-      expect(EV.decodePngHeader(readFileSync(join(dir, 's4-shots', RUN.CANDIDATE_SHOTS_DIR('light'), 'r-a.png'))))
+      expect(RUN.readCandidateBundle(dir, 'light').contextRaw).toBe(r.contextRaw);
+      expect(EV.decodePngHeader(RUN.readCandidateBundle(dir, 'light').pngByName['r-a.png']))
         .toMatchObject({ ok: true, width: 200, height: 200 });
       expect(existsSync(join(dir, 's4-smoke-context.json'))).toBe(false);   // committed는 건드리지 않는다
       // 실패 경로에서도 복원된다
@@ -4725,8 +4831,7 @@ describe('S4 캡처 산출물 — phase 분리·exact set·atomic 교체', () =>
   const PNG_A = () => s4Png(4, 4, [1, 2, 3]);
   const PNG_B = () => s4Png(4, 4, [9, 9, 9]);
   it('phase마다 다른 context 파일·디렉터리를 쓴다(덮어쓰기 불가)', () => {
-    expect(RUN.CANDIDATE_CONTEXT_NAME('light')).not.toBe(RUN.CANDIDATE_CONTEXT_NAME('dark'));
-    expect(RUN.CANDIDATE_SHOTS_DIR('light')).not.toBe(RUN.CANDIDATE_SHOTS_DIR('dark'));
+    expect(RUN.CANDIDATE_BUNDLE_DIR('light')).not.toBe(RUN.CANDIDATE_BUNDLE_DIR('dark'));
     expect(RUN.COMMITTED_SHOTS_DIR('light')).toBe('base');
     expect(RUN.COMMITTED_SHOTS_DIR('dark')).toBe('dark-review');
   });
@@ -4736,10 +4841,10 @@ describe('S4 캡처 산출물 — phase 분리·exact set·atomic 교체', () =>
       for (const [phase, png] of [['light', PNG_A()], ['dark', PNG_B()]])
         expect(RUN.writeCandidate({ fixturesDir: dir, phase, contextRaw: `{"phase":"${phase}"}`,
           pngByCaptureName: { 'a.png': png }, expectedCaptureNames: ['a.png'] })).toEqual([]);
-      expect(JSON.parse(readFileSync(join(dir, RUN.CANDIDATE_CONTEXT_NAME('light')), 'utf8')).phase).toBe('light');
-      expect(JSON.parse(readFileSync(join(dir, RUN.CANDIDATE_CONTEXT_NAME('dark')), 'utf8')).phase).toBe('dark');
-      expect(readFileSync(join(dir, 's4-shots', RUN.CANDIDATE_SHOTS_DIR('light'), 'a.png')).equals(PNG_A())).toBe(true);
-      expect(readFileSync(join(dir, 's4-shots', RUN.CANDIDATE_SHOTS_DIR('dark'), 'a.png')).equals(PNG_B())).toBe(true);
+      expect(JSON.parse(RUN.readCandidateBundle(dir, 'light').contextRaw).phase).toBe('light');
+      expect(JSON.parse(RUN.readCandidateBundle(dir, 'dark').contextRaw).phase).toBe('dark');
+      expect(RUN.readCandidateBundle(dir, 'light').pngByName['a.png'].equals(PNG_A())).toBe(true);
+      expect(RUN.readCandidateBundle(dir, 'dark').pngByName['a.png'].equals(PNG_B())).toBe(true);
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });
   it('RED: 파일명 집합이 기대와 다르면 아무것도 쓰지 않는다', () => {
@@ -4748,7 +4853,7 @@ describe('S4 캡처 산출물 — phase 분리·exact set·atomic 교체', () =>
       const e = RUN.writeCandidate({ fixturesDir: dir, phase: 'light', contextRaw: '{}',
         pngByCaptureName: { 'a.png': PNG_A() }, expectedCaptureNames: ['a.png', 'b.png'] });
       expect(e.join()).toMatch(/WRITE_CAPTURE_SET_MISMATCH .*missing=\[b\.png\]/);
-      expect(existsSync(join(dir, RUN.CANDIDATE_CONTEXT_NAME('light')))).toBe(false);
+      expect(existsSync(join(dir, 's4-shots', RUN.CANDIDATE_BUNDLE_DIR('light')))).toBe(false);
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });
   it('잔존 파일이 살아남지 않는다 — 디렉터리를 통째로 교체한다', () => {
@@ -4758,10 +4863,12 @@ describe('S4 캡처 산출물 — phase 분리·exact set·atomic 교체', () =>
         pngByCaptureName: { 'a.png': PNG_A(), 'stale.png': PNG_A() }, expectedCaptureNames: ['a.png', 'stale.png'] });
       RUN.writeCandidate({ fixturesDir: dir, phase: 'light', contextRaw: '{}',
         pngByCaptureName: { 'a.png': PNG_A() }, expectedCaptureNames: ['a.png'] });
-      const shots = join(dir, 's4-shots', RUN.CANDIDATE_SHOTS_DIR('light'));
-      expect(readdirSync(shots)).toEqual(['a.png']);                 // stale.png가 사라졌다
-      expect(RUN.exactCaptureSet(shots, ['a.png'])).toEqual([]);
-      expect(RUN.exactCaptureSet(shots, ['a.png', 'b.png']).join()).toMatch(/CAPTURE_SET_MISMATCH/);
+      expect(Object.keys(RUN.readCandidateBundle(dir, 'light').pngByName)).toEqual(['a.png']);   // stale.png가 사라졌다
+      // bundle에는 context.json이 함께 들어 있다 — PNG 집합만 본다.
+      // bundle 디렉터리에는 content.json이 함께 들어 있다 — pointer를 따라 읽어 PNG만 본다.
+      const rb = RUN.readCandidateBundle(dir, 'light');
+      expect(rb.errors).toEqual([]);
+      expect(Object.keys(rb.pngByName).sort()).toEqual(['a.png']);
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });
   it('RED: 승인 경로는 BASE context가 light phase임을 요구한다', () => {
@@ -4808,10 +4915,2158 @@ describe('S4 승격 하드 비활성 — discovery-only 체크포인트', () => 
   });
 });
 
+// ── dataset 계약 ────────────────────────────────────────────────────────────
+describe('S4 dataset 계약 — manifest가 단일 원천이고 파생이 유지된다', () => {
+  // **합성 world를 쓴다.** production manifest를 복제해 시험하면 계약 검사가 production
+  // 형태에 묶이고, 검사 대상 값으로 기대값을 만들게 된다.
+  const SC = () => SYN_SC();
+  const cloneMan = () => JSON.parse(JSON.stringify(SYN_MANIFEST));
+  // manifest를 바꾸면 DATASET_ENDPOINTS도 **같이** 파생돼야 한다 — 실제 파생식을 그대로 쓴다.
+  const specOf = (man) => ({ ...SYN_SPEC(), EXPECTED_DATASET_MANIFEST: man,
+    DATASET_ENDPOINTS: (man && man.dataset ? man.dataset : []).map((e) => e.urlTemplate) });
+  const run = (man, sc) => EV.validateDatasetContract(specOf(man), sc || SC());
+
+  it('positive control — 합성 world와 production 둘 다 errors === []', () => {
+    expect(EV.validateDatasetContract(SYN_SPEC(), SYN_SC())).toEqual([]);
+    expect(EV.validateDatasetContract(SPEC, EV.buildActionContext(CAP.CAPTURE_SCENARIO))).toEqual([]);
+    expect(SPEC.EXPECTED_DATASET_MANIFEST).not.toBe(null);
+  });
+  it('생성기 dsManifest(2)가 손으로 적은 SYN_MANIFEST와 같다', () => {
+    // 산술을 두 번 적었으니 둘이 갈리면 어느 쪽이든 틀린 것이다.
+    expect(dsManifest(2)).toEqual(SYN_MANIFEST);
+  });
+  it('production manifest의 category 크기는 커밋된 증거가 판정한다', () => {
+    // 여기서는 사람이 검수한 숫자만 고정하고, 그것이 맞는지는 verifyDiscoveryEvidence가 본다.
+    expect(SPEC.EXPECTED_DATASET_MANIFEST.dataset).toHaveLength(17);
+    expect(SPEC.EXPECTED_DATASET_MANIFEST.ambient).toHaveLength(1);
+    expect(SPEC.EXPECTED_DATASET_MANIFEST.dev).toHaveLength(2);
+  });
+
+  it('DATASET_ENDPOINTS는 manifest.dataset에서 파생된다', () => {
+    expect(SPEC.DATASET_ENDPOINTS)
+      .toEqual(SPEC.EXPECTED_DATASET_MANIFEST.dataset.map((e) => e.urlTemplate));
+    // 소스에 두 번째 수기 배열이 없다 — 파생식 한 줄뿐이어야 한다.
+    const src = readFileSync(new URL('./s4Spec.mjs', import.meta.url), 'utf8');
+    expect(src).toContain('EXPECTED_DATASET_MANIFEST.dataset.map((entry) => entry.urlTemplate)');
+    expect(src.match(/export const DATASET_ENDPOINTS/g)).toHaveLength(1);
+  });
+
+  it('RED: manifest가 null이면 계약이 성립하지 않는다', () => {
+    expect(run(null)).toEqual(['DATASET_MANIFEST_NULL']);
+    expect(EV.validateDatasetContract({}, SC())).toEqual(['DATASET_MANIFEST_NULL']);
+  });
+
+  it('RED: dataset entry 삭제 — evidence 파생 대조에서 죽는다', () => {
+    const m = cloneMan(); m.dataset.splice(2, 1);
+    const e = run(m).join(' ');
+    expect(e).toMatch(/DATASET_EVIDENCE_COUNT backendUniqueUrlCount 6 != 5/);
+    expect(e).toMatch(/DATASET_EVIDENCE_COUNT backendTupleCount/);
+  });
+
+  it('RED: ambient entry를 dataset으로 옮김', () => {
+    const m = cloneMan();
+    m.dataset.push(m.ambient.pop());
+    m.dataset.sort((a, b) => (a.urlTemplate < b.urlTemplate ? -1 : 1));
+    const e = run(m).join(' ');
+    expect(e).toMatch(/DATASET_AMBIENT_IN_DATASET \{apiOrigin\}\/notifications\?limit=30/);
+    expect(e).toMatch(/DATASET_AMBIENT_MISSING/);
+  });
+
+  it('RED: dev endpoint를 dataset으로 옮김', () => {
+    const m = cloneMan();
+    m.dataset.push(m.dev.pop());
+    m.dataset.sort((a, b) => (a.urlTemplate < b.urlTemplate ? -1 : 1));
+    const e = run(m).join(' ');
+    // dev는 appOrigin이므로 dataset에 들어오면 origin 계약에서 죽는다.
+    expect(e).toMatch(/DATASET_ORIGIN_MISMATCH dataset\[\d+\].*want \{apiOrigin\}/);
+  });
+
+  it('RED: category 간 교집합', () => {
+    const m = cloneMan();
+    m.ambient.push(JSON.parse(JSON.stringify(m.dataset[0])));
+    expect(run(m).join(' ')).toMatch(/DATASET_TEMPLATE_DUPLICATE \{apiOrigin\}\/branches \(dataset, ambient\)/);
+  });
+
+  it('RED: category 내 중복 URL', () => {
+    const m = cloneMan();
+    m.dataset[1] = JSON.parse(JSON.stringify(m.dataset[0]));
+    expect(run(m).join(' ')).toMatch(/DATASET_TEMPLATE_DUPLICATE \{apiOrigin\}\/branches \(dataset, dataset\)/);
+  });
+
+  it('RED: 헤더 뱃지 endpoint 삭제 — chat / unread-count', () => {
+    for (const t of ['{apiOrigin}/chat', '{apiOrigin}/notifications/unread-count']) {
+      const m = cloneMan();
+      m.dataset = m.dataset.filter((e) => e.urlTemplate !== t);
+      expect(run(m).join(' ')).toMatch(new RegExp(`DATASET_BADGE_ENDPOINT_MISSING ${t.replace(/[{}?/]/g, '\\$&')}`));
+    }
+  });
+
+  it('RED: notification-list를 두 category에 중복', () => {
+    const m = cloneMan();
+    m.dataset.push(JSON.parse(JSON.stringify(m.ambient[0])));
+    m.dataset.sort((a, b) => (a.urlTemplate < b.urlTemplate ? -1 : 1));
+    const e = run(m).join(' ');
+    expect(e).toMatch(/DATASET_TEMPLATE_DUPLICATE/);
+    expect(e).toMatch(/DATASET_AMBIENT_IN_DATASET/);
+  });
+
+  it('RED: 상대 URL', () => {
+    const m = cloneMan();
+    m.dataset[0] = { ...m.dataset[0], urlTemplate: '/api/branches' };
+    expect(run(m).join(' ')).toMatch(/DATASET_RELATIVE_URL dataset\[0\] \/api\/branches/);
+  });
+
+  it('RED: 잘못된 origin', () => {
+    const m = cloneMan();
+    m.dataset[0] = { ...m.dataset[0], urlTemplate: '{appOrigin}/branches' };
+    expect(run(m).join(' ')).toMatch(/DATASET_ORIGIN_MISMATCH dataset\[0\].*want \{apiOrigin\}/);
+    const m2 = cloneMan();
+    m2.dev[0] = { ...m2.dev[0], urlTemplate: '{apiOrigin}/_next/static/development/_devMiddlewareManifest.json' };
+    expect(run(m2).join(' ')).toMatch(/DATASET_ORIGIN_MISMATCH dev\[0\].*want \{appOrigin\}/);
+  });
+
+  it('RED: unresolved {bulkBranchId} — 시나리오에 값이 없으면 해석 실패', () => {
+    const sc = { ...SC() }; delete sc.bulkBranchId;
+    const e = EV.validateDatasetContract(SYN_SPEC(), sc).join(' ');
+    expect(e).toMatch(/DATASET_SCENARIO_BULKBRANCHID_MISSING/);
+    expect(e).toMatch(/DATASET_UNRESOLVED_PLACEHOLDER dataset\[\d+\] \{bulkBranchId\}/);
+  });
+
+  it('RED: bulkBranchId/bulkEpicId 누락은 각각 fail-closed', () => {
+    for (const k of ['bulkBranchId', 'bulkEpicId']) {
+      const sc = { ...SC() }; delete sc[k];
+      expect(EV.validateDatasetContract(SYN_SPEC(), sc).join(' '))
+        .toMatch(new RegExp(`DATASET_SCENARIO_${k.toUpperCase()}_MISSING`));
+    }
+    // 정수가 아니면 거부한다 — 문자열 '13'은 URL은 만들어지지만 계약상 ID가 아니다.
+    expect(EV.validateDatasetContract(SYN_SPEC(), { ...SC(), bulkBranchId: '13' }).join(' '))
+      .toMatch(/DATASET_SCENARIO_BULKBRANCHID_MISSING/);
+  });
+
+  it('RED: category 정렬이 깨지면 거부', () => {
+    const m = cloneMan(); m.dataset.reverse();
+    expect(run(m).join(' ')).toMatch(/DATASET_CATEGORY_UNSORTED dataset/);
+  });
+
+  it('RED: evidence SHA 형식 오류', () => {
+    for (const k of ['observedSpecFingerprint', 'discoveryDigest']) {
+      const m = cloneMan(); m.evidence[k] = 'deadbeef';
+      expect(run(m).join(' ')).toMatch(new RegExp(`DATASET_EVIDENCE_SHA ${k}`));
+    }
+    // observedHead는 git commit(40 hex)이다 — 64 hex를 넣으면 거부해야 한다.
+    const m2 = cloneMan(); m2.evidence.observedHead = 'a'.repeat(64);
+    expect(run(m2).join(' ')).toMatch(/DATASET_EVIDENCE_COMMIT observedHead/);
+  });
+
+  it('RED: evidence count 변조 — 파생 대조라 사본이 틀리면 죽는다', () => {
+    for (const k of ['surfaceCount', 'semanticTupleCount', 'backendTupleCount', 'backendUniqueUrlCount']) {
+      const m = cloneMan(); m.evidence[k] = m.evidence[k] + 1;
+      expect(run(m).join(' ')).toMatch(new RegExp(`DATASET_EVIDENCE_COUNT ${k}`));
+    }
+    // entry의 observed count를 바꾸면 evidence 합계와 어긋난다.
+    const m2 = cloneMan(); m2.dataset[0].observedSurfaceCount += 1;
+    const e = run(m2).join(' ');
+    expect(e).toMatch(/DATASET_EVIDENCE_COUNT backendTupleCount/);
+    expect(e).toMatch(/DATASET_EVIDENCE_COUNT semanticTupleCount/);
+  });
+
+  it('RED: unknown category / unknown field', () => {
+    const m = cloneMan(); m.extra = [];
+    expect(run(m).join(' ')).toMatch(/DATASET_MANIFEST_FIELDS/);
+    const m2 = cloneMan(); delete m2.ambient;
+    expect(run(m2).join(' ')).toMatch(/DATASET_MANIFEST_FIELDS|DATASET_CATEGORY_MISSING ambient/);
+    const m2b = cloneMan(); m2b.ambient = 'not-an-array';
+    expect(run(m2b).join(' ')).toMatch(/DATASET_CATEGORY_MISSING ambient/);   // throw하지 않는다
+    const m3 = cloneMan(); m3.dataset[0] = { ...m3.dataset[0], note: 'x' };
+    expect(run(m3).join(' ')).toMatch(/DATASET_ENTRY_FIELDS dataset\[0\]/);
+    const m4 = cloneMan(); m4.evidence.extra = 1;
+    expect(run(m4).join(' ')).toMatch(/DATASET_EVIDENCE_FIELDS/);
+    const m5 = cloneMan(); m5.schemaVersion = 2;
+    expect(run(m5).join(' ')).toMatch(/DATASET_MANIFEST_SCHEMA_VERSION 2/);
+    const m6 = cloneMan(); m6.dataset[0] = { ...m6.dataset[0], method: 'POST' };
+    expect(run(m6).join(' ')).toMatch(/DATASET_ENTRY_METHOD dataset\[0\] POST/);
+  });
+
+  it('RED: DATASET_ENDPOINTS를 manifest와 따로 변조하면 파생이 깨진 것으로 잡힌다', () => {
+    const base = SYN_SPEC();
+    const s = { ...base, DATASET_ENDPOINTS: [...base.DATASET_ENDPOINTS, '{apiOrigin}/extra'] };
+    expect(EV.validateDatasetContract(s, SC()).join(' ')).toMatch(/DATASET_ENDPOINTS_NOT_DERIVED/);
+    const s2 = { ...base, DATASET_ENDPOINTS: base.DATASET_ENDPOINTS.slice(0, 2) };
+    expect(EV.validateDatasetContract(s2, SC()).join(' ')).toMatch(/DATASET_ENDPOINTS_NOT_DERIVED/);
+    const s3 = { ...base, DATASET_ENDPOINTS: [...base.DATASET_ENDPOINTS].reverse() };
+    expect(EV.validateDatasetContract(s3, SC()).join(' ')).toMatch(/DATASET_ENDPOINTS_NOT_DERIVED/);
+  });
+
+  it('RED: dataset이 0개면 계약이 아니다', () => {
+    const m = cloneMan(); m.dataset = [];
+    expect(run(m).join(' ')).toMatch(/DATASET_ENDPOINTS_EMPTY/);
+  });
+
+  it('manifest entry를 바꾸면 specFingerprint가 바뀐다', () => {
+    const sha = (v) => createHash('sha256').update(v).digest('hex');
+    const base = EV.specFingerprint(EV.snapshotSpec(SPEC).spec, sha);
+    const pm = JSON.parse(JSON.stringify(SPEC.EXPECTED_DATASET_MANIFEST));
+    pm.dataset[0].reason = `${pm.dataset[0].reason} (변경)`;
+    const mutated = EV.specFingerprint(EV.snapshotSpec({ ...SPEC,
+      EXPECTED_DATASET_MANIFEST: pm, DATASET_ENDPOINTS: pm.dataset.map((e) => e.urlTemplate) }).spec, sha);
+    expect(mutated).not.toBe(base);
+    expect(EV.FINGERPRINT_PAYLOAD_KEYS).toContain('expectedDatasetManifest');
+  });
+});
+
+// ── 시나리오 ID/이름 결속 ────────────────────────────────────────────────────
+describe('S4 시나리오 신원 — ID와 이름이 같은 대상을 가리킨다', () => {
+  const SC = () => EV.buildActionContext(CAP.CAPTURE_SCENARIO);
+  // 필드명은 라이브 응답에서 확인한 것이다: branches[].branch_id/branch_name,
+  // epics[].epic_id/epic_name. 추측한 이름을 쓰면 계약이 아무것도 검사하지 않는다.
+  const RESP = (over = {}) => {
+    const sc = SC();
+    const branches = over.branches !== undefined ? over.branches
+      : [{ branch_id: 13, branch_name: '- Alpha', key: 'ALPHA' }];
+    const epics = over.epics !== undefined ? over.epics
+      : [{ epic_id: 7, epic_name: 'Alpha Epic', task_count: 1 }];
+    const out = [];
+    if (!over.dropBranches) out.push({ url: `${sc.apiOrigin}/branches`,
+      status: over.branchStatus === undefined ? 200 : over.branchStatus, body: JSON.stringify({ status: true, branches }) });
+    if (!over.dropEpics) out.push({ url: `${sc.apiOrigin}/branches/13/epics`,
+      status: 200, body: JSON.stringify({ status: true, epics }) });
+    return out;
+  };
+
+  it('positive control — 정본 시나리오와 실제 형태의 응답이면 errors === []', () => {
+    expect(EV.validateScenarioIdentity(SC(), RESP())).toEqual([]);
+  });
+
+  it('RED: branch 이름 불일치', () => {
+    const r = RESP({ branches: [{ branch_id: 13, branch_name: '- Beta' }] });
+    expect(EV.validateScenarioIdentity(SC(), r).join(' '))
+      .toMatch(/IDENTITY_NAME_MISMATCH branch branch_id=13 "- Beta" != "- Alpha"/);
+  });
+
+  it('RED: epic 이름 불일치', () => {
+    const r = RESP({ epics: [{ epic_id: 7, epic_name: 'Beta Epic' }] });
+    expect(EV.validateScenarioIdentity(SC(), r).join(' '))
+      .toMatch(/IDENTITY_NAME_MISMATCH epic epic_id=7 "Beta Epic" != "Alpha Epic"/);
+  });
+
+  it('RED: 해당 ID의 엔트리 부재', () => {
+    expect(EV.validateScenarioIdentity(SC(), RESP({ branches: [{ branch_id: 99, branch_name: '- Alpha' }] })).join(' '))
+      .toMatch(/IDENTITY_ENTRY_ABSENT branch branch_id=13/);
+    expect(EV.validateScenarioIdentity(SC(), RESP({ epics: [] })).join(' '))
+      .toMatch(/IDENTITY_ENTRY_ABSENT epic epic_id=7/);
+  });
+
+  it('RED: ID 누락', () => {
+    const sc = { ...SC() }; delete sc.bulkBranchId;
+    expect(EV.validateScenarioIdentity(sc, RESP()).join(' ')).toMatch(/IDENTITY_ID_MISSING branch/);
+    const sc2 = { ...SC() }; delete sc2.bulkEpicId;
+    expect(EV.validateScenarioIdentity(sc2, RESP()).join(' ')).toMatch(/IDENTITY_ID_MISSING epic/);
+  });
+
+  it('RED: 응답 자체가 없거나 200이 아니거나 목록 키가 없다', () => {
+    expect(EV.validateScenarioIdentity(SC(), RESP({ dropBranches: true })).join(' '))
+      .toMatch(/IDENTITY_RESPONSE_MISSING .*\/branches/);
+    expect(EV.validateScenarioIdentity(SC(), RESP({ branchStatus: 500 })).join(' '))
+      .toMatch(/IDENTITY_RESPONSE_STATUS .*\/branches 500/);
+    const sc = SC();
+    const bad = [{ url: `${sc.apiOrigin}/branches`, status: 200, body: JSON.stringify({ status: true }) },
+      { url: `${sc.apiOrigin}/branches/13/epics`, status: 200, body: 'not json' }];
+    const e = EV.validateScenarioIdentity(sc, bad).join(' ');
+    expect(e).toMatch(/IDENTITY_LIST_MISSING .*\/branches \.branches/);
+    expect(e).toMatch(/IDENTITY_UNPARSEABLE .*\/epics/);
+  });
+
+  it('RED: 다른 branch의 epics를 봐도 통과하지 않는다 — URL이 ID로 결속된다', () => {
+    const sc = SC();
+    // epic 응답을 branch 99의 것으로 두면 13의 epics는 관찰되지 않은 것이다.
+    const r = [...RESP({ dropEpics: true }),
+      { url: `${sc.apiOrigin}/branches/99/epics`, status: 200,
+        body: JSON.stringify({ status: true, epics: [{ epic_id: 7, epic_name: 'Alpha Epic' }] }) }];
+    expect(EV.validateScenarioIdentity(sc, r).join(' '))
+      .toMatch(/IDENTITY_RESPONSE_MISSING .*\/branches\/13\/epics/);
+  });
+});
+
+// ── body/digest 계약 ────────────────────────────────────────────────────────
+describe('S4 dataset digest — raw body가 identity를 결정한다', () => {
+  const sha = (v) => createHash('sha256').update(v).digest('hex');
+  const U = 'http://localhost:10001/api/tracks/5/items';
+  const V = 'http://localhost:10001/api/branches';
+  const R = (body, url = U, status = 200) => ({ url, status, body });
+  const d = (rs) => EV.datasetDigest(rs, SPEC, sha);
+
+  it('같은 raw responses → 같은 digest', () => {
+    const a = d([R('{"items":[{"id":1,"t":"a"},{"id":2,"t":"b"}]}')]);
+    const b = d([R('{"items":[{"id":1,"t":"a"},{"id":2,"t":"b"}]}')]);
+    expect(a.errors).toEqual([]);
+    expect(a.digest).toBe(b.digest);
+    // 키 순서만 다른 동일 객체는 canonicalize되어 같은 digest여야 한다.
+    expect(d([R('{"items":[{"t":"a","id":1},{"id":2,"t":"b"}]}')]).digest).toBe(a.digest);
+  });
+
+  it('body 한 글자 변경 → 다른 digest', () => {
+    const a = d([R('{"items":[{"id":1,"t":"a"}]}')]);
+    const b = d([R('{"items":[{"id":1,"t":"b"}]}')]);
+    expect(a.digest).not.toBe(b.digest);
+  });
+
+  it('response array 순서 변경 → 기본적으로 다른 digest', () => {
+    const a = d([R('{"items":[{"id":1},{"id":2}]}')]);
+    const b = d([R('{"items":[{"id":2},{"id":1}]}')]);
+    expect(a.digest).not.toBe(b.digest);
+    // 이 성질은 예외 목록이 비어 있기 때문에 성립한다.
+    expect(SPEC.DATASET_UNORDERED_PATHS).toEqual([]);
+    expect(SPEC.DATASET_VOLATILE_FIELDS).toEqual({});
+  });
+
+  it('status != 200 → RED', () => {
+    const r = d([R('{"items":[]}', U, 500)]);
+    expect(r.digest).toBe(null);
+    expect(r.errors.join(' ')).toMatch(/DATASET_STATUS .*items 500/);
+    expect(d([R('{"items":[]}', U, 204)]).digest).toBe(null);
+  });
+
+  it('endpoint 누락/추가 → 다른 digest', () => {
+    const both = d([R('{"a":1}', U), R('{"b":2}', V)]);
+    expect(both.digest).not.toBe(d([R('{"a":1}', U)]).digest);
+    expect(both.digest).not.toBe(d([R('{"a":1}', U), R('{"b":2}', V), R('{"c":3}', `${V}/x`)]).digest);
+    // endpoint 간 순서는 정규화된다 — 같은 집합이면 같은 digest.
+    expect(d([R('{"b":2}', V), R('{"a":1}', U)]).digest).toBe(both.digest);
+  });
+
+  it('manifest가 null/empty여도 empty digest로 통과하지 못한다', () => {
+    // 빈 응답 배열은 digest가 나오지만, 계약 검증이 그것을 승인 경로에서 막는다.
+    const empty = d([]);
+    expect(empty.errors).toEqual([]);
+    expect(empty.digest).toBe(sha(''));
+    // 그 empty digest를 들고 와도 계약이 없으면 candidate/bundle/promotion이 거부한다.
+    const nullSpec = { ...SPEC, EXPECTED_DATASET_MANIFEST: null, DATASET_ENDPOINTS: [] };
+    expect(EV.validateDatasetContract(nullSpec, EV.buildActionContext(CAP.CAPTURE_SCENARIO)))
+      .toEqual(['DATASET_MANIFEST_NULL']);
+  });
+});
+
+// ── 관찰 canonicalization ───────────────────────────────────────────────────
+describe('S4 관찰 canonicalization — 순서는 무시하고 내용은 본다', () => {
+  const SC = () => EV.buildActionContext(CAP.CAPTURE_SCENARIO);
+  // manifest가 신고한 대로의 관찰을 합성한다(실제 discovery 산출 형태: "METHOD url status" -> count).
+  const build = () => {
+    const sc = SC(), man = SPEC.EXPECTED_DATASET_MANIFEST;
+    const all = [...man.dataset, ...man.ambient, ...man.dev];
+    const names = SPEC.REQUIRED_SMOKE_SURFACES.map((x) => x.name);
+    const out = {};
+    for (const n of names) out[n] = {};
+    for (const e of all) {
+      const { url } = EV.resolveTemplate(e.urlTemplate, sc);
+      // 정수로 분배한다. /api/tracks는 22 surface에 24요청이라 균등 분배가 불가능하다 —
+      // 앞쪽 (요청-화면)개 화면에 2건, 나머지에 1건. 실제 관찰의 형태와 같다.
+      const extra = e.observedRequestCount - e.observedSurfaceCount;
+      names.slice(0, e.observedSurfaceCount).forEach((n, i) => {
+        out[n][`${e.method} ${url} 200`] = i < extra ? 2 : 1;
+      });
+    }
+    return out;
+  };
+  const reverseAll = (o) => {
+    const out = {};
+    for (const k of Object.keys(o).reverse()) out[k] = Object.fromEntries(Object.entries(o[k]).reverse());
+    return out;
+  };
+
+  it('positive control — 합성 관찰이 manifest와 일치하면 errors === []', () => {
+    expect(EV.validateDiscoveryObservation(build(), SPEC, SC())).toEqual([]);
+  });
+
+  it('순서를 역으로 주입해도 canonical 비교는 GREEN', () => {
+    const fwd = build(), rev = reverseAll(fwd);
+    expect(Object.keys(rev)).not.toEqual(Object.keys(fwd));      // 실제로 순서가 다르다
+    expect(EV.validateDiscoveryObservation(rev, SPEC, SC())).toEqual([]);
+    expect(EV.canonicalObservation(rev, SPEC.REQUIRED_SMOKE_SURFACES.map((x) => x.name)))
+      .toEqual(EV.canonicalObservation(fwd, SPEC.REQUIRED_SMOKE_SURFACES.map((x) => x.name)));
+  });
+
+  it('RED: endpoint 누락 / 추가 / count 변경', () => {
+    const sc = SC();
+    const miss = build(); delete miss.canvas[`GET ${sc.apiOrigin}/tracks/5/items 200`];
+    expect(EV.validateDiscoveryObservation(miss, SPEC, sc).join(' ')).toMatch(/OBSERVATION_SURFACE_COUNT .*\/items/);
+    const extra = build(); extra.canvas[`GET ${sc.apiOrigin}/unknown 200`] = 1;
+    expect(EV.validateDiscoveryObservation(extra, SPEC, sc).join(' ')).toMatch(/OBSERVATION_ENDPOINT_EXTRA GET .*\/unknown/);
+    const cnt = build(); cnt.canvas[`GET ${sc.apiOrigin}/chat 200`] = 5;
+    expect(EV.validateDiscoveryObservation(cnt, SPEC, sc).join(' ')).toMatch(/OBSERVATION_REQUEST_COUNT .*\/chat/);
+    const gone = build();
+    for (const n of Object.keys(gone)) delete gone[n][`GET ${sc.apiOrigin}/chat 200`];
+    expect(EV.validateDiscoveryObservation(gone, SPEC, sc).join(' ')).toMatch(/OBSERVATION_ENDPOINT_MISSING GET .*\/chat/);
+  });
+
+  it('bySurface producer는 정렬하지 않는다 — 원문은 감사 증거다', () => {
+    const src = readFileSync(new URL('../scripts/s4-capture.mjs', import.meta.url), 'utf8');
+    const fn = src.slice(src.indexOf('export function surfaceEndpointMap'));
+    expect(fn.slice(0, fn.indexOf('\n}\n'))).not.toMatch(/\.sort\(/);
+  });
+});
+
+// ── 배선: 계약 부재는 각 승인 경로에서 fail-closed ──────────────────────────
+describe('S4 dataset 계약 배선 — source에서 sink까지 실제로 막는다', () => {
+  const nullSpec = () => ({ ...SPEC, EXPECTED_DATASET_MANIFEST: null, DATASET_ENDPOINTS: [] });
+  const CTX = () => ({ ...CAP.CAPTURE_SCENARIO, phase: 'light',
+    viewport: { width: 1440, height: 900 }, datasetResponses: [] });
+
+  it('validateCandidate — manifest가 null이면 거부', () => {
+    // 실제 committed fixture를 쓴다. 빈 객체는 계약 검사 뒤의 다른 검증기가 먼저 터져
+    // "무엇이 막았는지"가 흐려진다.
+    const fx = JSON.parse(readFileSync(new URL('./__fixtures__/s4-expected.json', import.meta.url), 'utf8'));
+    const e = EV.validateCandidate({ fixture: fx, spec: nullSpec(), context: CTX(), contrastResults: [] });
+    expect(e.join(' ')).toMatch(/DATASET_MANIFEST_NULL/);
+    // 정본 spec에서는 이 오류가 없다 — 계약 검사가 무조건 RED를 내는 게 아님을 함께 고정한다.
+    const e2 = EV.validateCandidate({ fixture: fx, spec: SPEC, context: CTX(), contrastResults: [] });
+    expect(e2.join(' ')).not.toMatch(/DATASET_MANIFEST_NULL/);
+  });
+
+  it('validateCaptureEvidence — 빈 DATASET_ENDPOINTS가 더 이상 조용히 통과하지 않는다', () => {
+    // 이전 판은 `if (DATASET_ENDPOINTS.length)`로 감싸서 목록이 비면 dataset 증거가
+    // 통째로 생략됐다. 계약 부재 자체가 실패여야 한다.
+    // provenanceRefs를 빼도 계약 검사는 사라지지 않아야 한다 — 어떤 분기보다 앞이다.
+    const e = EV.validateCaptureEvidence(nullSpec(), CTX(), null);
+    expect(e.join(' ')).toMatch(/EVIDENCE_DATASET_MANIFEST_NULL/);
+    expect(e).toContain('EVIDENCE_PROVENANCE_REFS_REQUIRED');
+    const refs = { headCommit: 'a'.repeat(40), headBlobs: {}, specFingerprintNow: 'b'.repeat(64) };
+    expect(EV.validateCaptureEvidence(nullSpec(), CTX(), refs).join(' ')).toMatch(/EVIDENCE_DATASET_MANIFEST_NULL/);
+  });
+
+  it('validateCaptureBundle — manifest가 null이면 거부', () => {
+    const png = {};
+    for (const s of SPEC.REQUIRED_SMOKE_SURFACES) png[s.captureName] = Buffer.from('');
+    const e = EV.validateCaptureBundle({ spec: nullSpec(), phase: 'light',
+      contextRaw: JSON.stringify(CTX()), pngByName: png, provenanceRefs: null });
+    expect(e.join(' ')).toMatch(/DATASET_MANIFEST_NULL/);
+  });
+
+  it('phase capture는 브리지를 열기 전에 계약을 본다', () => {
+    // discovery/canary는 계약 없이 endpoint를 찾는 용도이므로 이 게이트 뒤에 있으면 안 된다.
+    const src = readFileSync(new URL('../scripts/s4-capture.mjs', import.meta.url), 'utf8');
+    const gate = src.indexOf('DATASET_CONTRACT_FAILED');
+    const bridge = src.indexOf('export async function capturePhaseCore');
+    const discoveryReturn = src.indexOf('if (cli.discover || cli.canary) {');
+    expect(gate).toBeGreaterThan(0);
+    expect(gate).toBeLessThan(bridge);              // 브리지보다 앞
+    expect(gate).toBeGreaterThan(discoveryReturn);  // discovery return보다 뒤
+  });
+
+  it('promotion 경로도 계약을 본다 — 지금은 disabled지만 배선은 존재한다', () => {
+    expect(PROM.PROMOTION_ENABLED).toBe(false);
+    const src = readFileSync(new URL('./s4Promote.mjs', import.meta.url), 'utf8');
+    const fn = src.slice(src.indexOf('export function promoteRelease'));
+    const body = fn.slice(0, fn.indexOf('\n}\n'));
+    expect(body).toContain('validateDatasetContract');
+    expect(body).toContain('validateScenarioIdentity');
+    // bundle 검증보다 **앞**에 있다 — 호출 순서를 바꿔도 계약이 먼저다.
+    expect(body.indexOf('validateDatasetContract')).toBeLessThan(body.indexOf('validateCaptureBundle'));
+  });
+
+  it('discovery/canary는 계약 없이도 동작한다 — endpoint를 찾는 용도다', () => {
+    // parseCaptureArgs가 두 모드를 여전히 받아들이고, 계약 게이트가 그 앞을 막지 않는다.
+    expect(CAP.parseCaptureArgs(['--discover'], SPEC).error).toBeUndefined();
+    expect(CAP.parseCaptureArgs(['--canary', 'canvas', '--repeat', '2'], SPEC).error).toBeUndefined();
+  });
+});
+
+// ── phase 수명주기 ──────────────────────────────────────────────────────────
+describe('S4 phase 브리지 수명주기 — discovery와 같은 primitive를 쓴다', () => {
+  const PORT = 10411;
+  const HEAD = { headCommit: 'x'.repeat(40), blobs: {} };
+  // 커밋된 어댑터의 dispatch 규칙을 그대로 모사한다: beginAttempt 전에는 page가 없다.
+  // 이전 판은 phase가 lifecycle을 하나도 내보내지 않아 첫 RPC가 곧바로 NO_ACTIVE_ATTEMPT였다.
+  const fakeAdapter = async ({ port, failAt, ackShutdown = true }) => {
+    const seen = { methods: [], hasPage: false, shutdown: false, clean: false, noActive: [] };
+    for (let i = 0; i < 4000; i += 1) {
+      let cmd;
+      try { cmd = await (await fetch(`http://127.0.0.1:${port}/next`)).json(); } catch (e) { break; }
+      if (cmd.done) break;
+      seen.methods.push(cmd.method);
+      if (cmd.method === 'shutdown') {
+        seen.shutdown = true;
+        if (!ackShutdown) break;
+      }
+      let value = null; let error = null;
+      const [a] = cmd.args;
+      if (cmd.method === 'hello') value = { protocol: 's4-bridge/2', echo: a };
+      else if (cmd.method === 'beginAttempt') { seen.hasPage = true; value = { ok: true, attempt: a }; }
+      else if (cmd.method === 'endAttempt') { seen.hasPage = false; value = { ok: true, attempt: a }; }
+      else if (cmd.method === 'shutdown') { seen.hasPage = false; value = { ok: true }; }
+      else if (!seen.hasPage) { seen.noActive.push(cmd.method); error = 'NO_ACTIVE_ATTEMPT'; }
+      else if (failAt && cmd.method === failAt) error = `FAKE_${failAt}_FAILED`;
+      else if (cmd.method === 'evaluate') value = {};
+      try {
+        await fetch(`http://127.0.0.1:${port}/`, { method: 'POST',
+          body: JSON.stringify({ id: cmd.id, value, error }), headers: { 'content-type': 'application/json' } });
+      } catch (e) { break; }
+      if (cmd.method === 'shutdown') { seen.clean = true; break; }
+    }
+    return seen;
+  };
+  const runPhase = async (opts = {}) => {
+    const port = opts.port || PORT;
+    const out = []; const errs = [];
+    const cli = CAP.parseCaptureArgs(['--phase', 'light', '--port', String(port), '--timeoutMs', '3000'], SPEC);
+    expect(cli.error).toBeUndefined();
+    const dir = mkdtempSync(join(tmpdir(), 's4phase-'));
+    const p = CAP.capturePhaseCore({ SPEC, cli, head: HEAD,
+      log: (m) => out.push(m), err: (m) => errs.push(m) });
+    await new Promise((r) => setTimeout(r, 200));
+    const seen = await fakeAdapter({ port, ...opts });
+    const core = await p;
+    const wrote = existsSync(join(dir, RUN.CANDIDATE_ROOT));
+    const files = existsSync(dir) ? readdirSync(dir) : [];
+    rmSync(dir, { recursive: true, force: true });
+    return { code: core.code, out, errs, seen, wrote, files };
+  };
+
+  it('첫 RPC가 NO_ACTIVE_ATTEMPT가 아니다 — hello → beginAttempt → … → endAttempt → shutdown', async () => {
+    const r = await runPhase();
+    const m = r.seen.methods;
+    expect(m[0]).toBe('hello');
+    expect(m[1]).toBe('beginAttempt');
+    expect(m[m.length - 1]).toBe('shutdown');
+    expect(m).toContain('endAttempt');
+    expect(m.indexOf('endAttempt')).toBeLessThan(m.indexOf('shutdown'));
+    // 핵심: page가 없는 상태에서 온 RPC가 **0건**이어야 한다.
+    expect(r.seen.noActive).toEqual([]);
+    expect(r.seen.clean).toBe(true);
+  }, 30000);
+
+  it('runner 실패 → controlled error, write 0회, TypeError 없음', async () => {
+    // fake가 evaluate를 실패시키면 runCapture가 errors를 담아 돌아온다.
+    const r = await runPhase({ port: PORT + 1, failAt: 'evaluate' });
+    expect(r.code).toBe(1);
+    const joined = r.errs.join(' ');
+    expect(joined).toMatch(/CAPTURE FAILED|CAPTURE_CONTEXT_MISSING|CAPTURE_DATASET_MISSING/);
+    // context=null인데 provenance를 만져 TypeError로 죽던 경로가 사라졌다(실증).
+    expect(joined).not.toMatch(/Cannot read properties of null/);
+    expect(joined).not.toMatch(/TypeError/);
+    expect(r.wrote).toBe(false);
+    expect(r.files).toEqual([]);
+    // 실패해도 attempt는 닫고 shutdown까지 간다 — 어댑터 child context가 남지 않는다.
+    expect(r.seen.methods).toContain('endAttempt');
+    expect(r.seen.shutdown).toBe(true);
+  }, 30000);
+
+  it('shutdown 오류가 기존 primary 오류를 덮지 않는다', async () => {
+    const r = await runPhase({ port: PORT + 2, failAt: 'evaluate', ackShutdown: false });
+    expect(r.code).toBe(1);
+    const joined = r.errs.join(' ');
+    expect(joined).toMatch(/CAPTURE FAILED|CAPTURE_CONTEXT_MISSING|CAPTURE_DATASET_MISSING/);
+    expect(joined).not.toMatch(/BRIDGE_SHUTDOWN_UNACKED/);
+    expect(r.wrote).toBe(false);
+  }, 30000);
+
+  it('discovery와 phase가 같은 primitive를 쓴다 — 복제 구현이 없다', () => {
+    const src = readFileSync(new URL('../scripts/s4-capture.mjs', import.meta.url), 'utf8');
+    expect(src.match(/createBridgeDriver\(/g)).toHaveLength(2);   // 정의 1 + withBridge 1
+    expect(src.match(/makeBridgeServer\(/g)).toHaveLength(2);
+    expect(src.match(/dd\.hello\(BRIDGE_PROTOCOL\)/g) || []).toHaveLength(1);
+    const phase = src.slice(src.indexOf('export async function capturePhaseCore'));
+    expect(phase).toContain('withBridge(');
+    expect(phase).toContain('withAttempt(');
+  });
+
+  it('errors를 dataset digest·provenance보다 먼저 본다', () => {
+    const src = readFileSync(new URL('../scripts/s4-capture.mjs', import.meta.url), 'utf8');
+    const fn = src.slice(src.indexOf('export async function capturePhaseCore'));
+    expect(fn.indexOf('CAPTURE FAILED')).toBeLessThan(fn.indexOf('datasetDigest('));
+    expect(fn.indexOf('CAPTURE_CONTEXT_MISSING')).toBeLessThan(fn.indexOf('result.context.provenance.datasetDigest'));
+  });
+});
+
+// ── 커밋된 discovery 증거 (독립 검증) ───────────────────────────────────────
+describe('S4 discovery 증거 — 커밋된 raw 바이트가 manifest를 검증한다', () => {
+  const DIR = new URL('./__fixtures__/s4-discovery-evidence/', import.meta.url);
+  const REPO = fileURLToPath(new URL('../..', import.meta.url));
+  const gitBlob = (ref, rel) => {
+    try { return execSync(`git -C ${REPO} rev-parse ${ref}:${rel}`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); }
+    catch (e) { return null; }
+  };
+  const load = () => Object.fromEntries(EV.DISCOVERY_EVIDENCE_FILES
+    .map((n) => [n, readFileSync(new URL(n, DIR), 'utf8')]));
+  const SC = () => EV.buildActionContext(CAP.CAPTURE_SCENARIO);
+  const verify = (files, spec) => EV.verifyDiscoveryEvidence({
+    files: files || load(), spec: spec || SPEC, scenario: SC(), sha256Hex: sha256, gitBlob });
+  // payload 안의 endpoints 한 줄을 바꿔 raw 바이트를 재작성한다(= 실제 증거 위조).
+  const mutate = (fn, which = 'runA.out') => {
+    const f = load(); const p = JSON.parse(f[which]); fn(p);
+    f[which] = JSON.stringify(p, null, 1);
+    // 위조에 맞춰 manifest의 SHA도 갱신한다 — SHA만 어긋나서 RED가 나는 걸 피하고
+    // **의미 축**이 잡히는지 본다.
+    const man = JSON.parse(JSON.stringify(SPEC.EXPECTED_DATASET_MANIFEST));
+    man.evidence.files = { ...man.evidence.files, [which]: sha256(f[which]) };
+    return { f, spec: { ...SPEC, EXPECTED_DATASET_MANIFEST: man } };
+  };
+
+  it('positive control — 커밋된 증거는 errors === []', () => {
+    expect(verify()).toEqual([]);
+  });
+
+  it('증거 파일이 실제로 커밋 경로에 있고 exit 0이며 8개 전부 결속된다', () => {
+    const f = load();
+    expect(Object.keys(f).sort()).toEqual([...EV.DISCOVERY_EVIDENCE_FILES].sort());
+    expect(f['runA.code'].trim()).toBe('0');
+    expect(f['runB.code'].trim()).toBe('0');
+    for (const n of EV.DISCOVERY_EVIDENCE_FILES)
+      expect(sha256(f[n]), n).toBe(SPEC.EXPECTED_DATASET_MANIFEST.evidence.files[n]);
+  });
+
+  it('RED: raw 바이트 drift — SHA가 어긋나면 잡힌다', () => {
+    const f = load(); f['runA.out'] = `${f['runA.out']} `;
+    expect(verify(f).join(' ')).toContain('EVIDENCE_FILE_SHA runA.out ');
+    const g = load(); g['runA.adapter.json'] = '[]';
+    expect(verify(g).join(' ')).toContain('EVIDENCE_FILE_SHA runA.adapter.json ');
+    const h = load(); h['runA.code'] = '1';
+    expect(verify(h).join(' ')).toContain('EVIDENCE_FILE_SHA runA.code ');
+  });
+
+  it('RED: ghost surface / unknown surface', () => {
+    const { f, spec } = mutate((p) => { p.endpoints[0] = p.endpoints[0].replace(/^\S+/, 'ghost-surface'); });
+    expect(verify(f, spec).join(' ')).toMatch(/EVIDENCE_UNKNOWN_SURFACE ghost-surface/);
+  });
+
+  it('RED: surface 간 endpoint 이동', () => {
+    const { f, spec } = mutate((p) => {
+      const i = p.endpoints.findIndex((x) => x.startsWith('canvas GET') && x.includes('/tracks/5/items'));
+      p.endpoints[i] = p.endpoints[i].replace(/^canvas/, 'detail');
+    });
+    // canonical tuple 비교가 이동을 본다. (bySurface 교차대조는 detail이 이미 그 endpoint를
+    // 가지고 있어 값이 같으므로 여기서는 발화하지 않는다 — count 변조 테스트가 그 축을 맡는다.)
+    expect(verify(f, spec).join(' ')).toMatch(/EVIDENCE_TUPLE_ONLY_A|EVIDENCE_TUPLE_ONLY_B/);
+    // 대상 surface에 없는 endpoint를 옮기면 교차대조도 함께 발화한다.
+    const m2 = mutate((p) => {
+      const i = p.endpoints.findIndex((x) => x.includes('/api/scrum ') || /\/api\/scrum \d/.test(x));
+      if (i >= 0) p.endpoints[i] = p.endpoints[i].replace(/^\S+/, 'canvas');
+    });
+    expect(verify(m2.f, m2.spec).join(' ')).toMatch(/EVIDENCE_COUNT_CROSSCHECK|EVIDENCE_TUPLE_ONLY/);
+  });
+
+  it('RED: 200 → 500 과 ok true → false', () => {
+    const a = mutate((p) => { p.endpoints[0] = p.endpoints[0].replace(' 200 ok ', ' 500 ok '); });
+    expect(verify(a.f, a.spec).join(' ')).toMatch(/EVIDENCE_NON_200/);
+    const b = mutate((p) => { p.endpoints[0] = p.endpoints[0].replace(' 200 ok ', ' 200 fail '); });
+    expect(verify(b.f, b.spec).join(' ')).toMatch(/EVIDENCE_NOT_OK/);
+  });
+
+  it('RED: endpoint 누락 / 추가 / 임의의 안정 endpoint로 교체', () => {
+    const a = mutate((p) => { p.endpoints = p.endpoints.filter((x) => !x.includes('/tracks/5/links')); });
+    expect(verify(a.f, a.spec).join(' ')).toMatch(/EVIDENCE_TUPLE_ONLY_B|EVIDENCE_ENDPOINT_UNOBSERVED/);
+    const b = mutate((p) => { p.endpoints.push('canvas GET http://localhost:10001/api/whatever 200 ok x1'); });
+    expect(verify(b.f, b.spec).join(' ')).toMatch(/EVIDENCE_ENDPOINT_UNDECLARED GET .*\/whatever/);
+    // 임의의 "안정적인" endpoint로 통째 교체해도 declared universe와 어긋난다.
+    const c = mutate((p) => {
+      p.endpoints = p.endpoints.map((x) => x.replace(/http:\/\/localhost:10001\/api\/\S+/, 'http://localhost:10001/api/stable'));
+    });
+    expect(verify(c.f, c.spec).join(' ')).toMatch(/EVIDENCE_ENDPOINT_UNDECLARED|EVIDENCE_ENDPOINT_UNOBSERVED/);
+  });
+
+  it('RED: count 변경 — bySurface 교차대조와 manifest 양쪽에서 잡힌다', () => {
+    const { f, spec } = mutate((p) => {
+      const i = p.endpoints.findIndex((x) => x.includes('/api/chat'));
+      p.endpoints[i] = p.endpoints[i].replace(/x\d+$/, 'x9');
+    });
+    const e = verify(f, spec).join(' ');
+    expect(e).toMatch(/EVIDENCE_COUNT_CROSSCHECK/);
+    expect(e).toMatch(/EVIDENCE_MANIFEST_REQUEST_COUNT|EVIDENCE_SEMANTIC_TUPLE_COUNT|EVIDENCE_BACKEND_TUPLE_COUNT/);
+  });
+
+  it('RED: 상쇄된 count drift도 잡힌다 — 한쪽을 줄이고 다른 쪽을 늘려도', () => {
+    const { f, spec } = mutate((p) => {
+      const i = p.endpoints.findIndex((x) => x.startsWith('canvas GET') && x.includes('/api/chat'));
+      const j = p.endpoints.findIndex((x) => x.startsWith('detail GET') && x.includes('/api/chat'));
+      p.endpoints[i] = p.endpoints[i].replace(/x\d+$/, 'x1');
+      p.endpoints[j] = p.endpoints[j].replace(/x\d+$/, 'x3');
+    });
+    // 총합은 그대로지만 surface별 값이 달라졌다 — canonical tuple 비교와 bySurface가 본다.
+    const e = verify(f, spec).join(' ');
+    expect(e).toMatch(/EVIDENCE_COUNT_CROSSCHECK|EVIDENCE_TUPLE_ONLY_A/);
+  });
+
+  it('RED: gitBlob 생략은 fail-closed다', () => {
+    expect(EV.verifyDiscoveryEvidence({ files: load(), spec: SPEC, scenario: SC(), sha256Hex: sha256 }).join(' '))
+      .toMatch(/EVIDENCE_GIT_RESOLVER_REQUIRED/);
+  });
+
+  it('RED: 임의의 실제 repo 파일 9개 + 올바른 OID도 거부된다', () => {
+    // 개수만 세면 통과했다(실증). 경로 집합이 정본과 exact여야 한다.
+    const other = execSync(`git -C ${REPO} ls-tree -r --name-only HEAD frontend/components/Layout`,
+      { encoding: 'utf8' }).trim().split('\n').slice(0, 9);
+    const { f, spec } = mutate((p) => {
+      p.provenance.blobs = Object.fromEntries(other.map((r) => [r, gitBlob('HEAD', r) || 'a'.repeat(40)]));
+    });
+    const e = verify(f, spec).join(' ');
+    expect(e).toMatch(/EVIDENCE_BLOB_PATH_EXTRA_A/);
+    expect(e).toMatch(/EVIDENCE_BLOB_PATH_MISSING_A/);
+  });
+
+  it('RED: shell metacharacter 경로는 Git 호출 0회', () => {
+    const { f, spec } = mutate((p) => { p.provenance.blobs = { 'a; touch /tmp/S4_PWNED': 'a'.repeat(40) }; });
+    let calls = 0;
+    const e = EV.verifyDiscoveryEvidence({ files: f, spec, scenario: SC(), sha256Hex: sha256,
+      gitBlob: () => { calls += 1; return null; } });
+    expect(calls).toBe(0);
+    expect(e.join(' ')).toMatch(/EVIDENCE_BLOB_PATH_EXTRA_A a; touch/);
+  });
+
+  it('RED: wrong OID', () => {
+    const { f, spec } = mutate((p) => {
+      p.provenance.blobs = Object.fromEntries(Object.keys(p.provenance.blobs).map((k) => [k, 'b'.repeat(40)]));
+    });
+    expect(verify(f, spec).join(' ')).toMatch(/EVIDENCE_BLOB_OID/);
+  });
+
+  it('RED: Run A/B provenance·hash 불일치', () => {
+    const a = mutate((p) => { p.provenance.headCommit = 'f'.repeat(40); }, 'runB.out');
+    expect(verify(a.f, a.spec).join(' ')).toMatch(/EVIDENCE_HEAD_B|EVIDENCE_PROVENANCE_A_NE_B/);
+    const b = mutate((p) => { p.digest = '0'.repeat(64); }, 'runB.out');
+    expect(verify(b.f, b.spec).join(' ')).toMatch(/EVIDENCE_DIGEST_B/);
+    const c = mutate((p) => { p.provenance.blobs = { only: 'a'.repeat(40) }; }, 'runA.out');
+    expect(verify(c.f, c.spec).join(' ')).toMatch(/EVIDENCE_BLOB_PATH_EXTRA_A only/);
+  });
+
+  it('RED: mode / eligibleForManifest / surface 집합', () => {
+    const a = mutate((p) => { p.mode = 'canary'; });
+    expect(verify(a.f, a.spec).join(' ')).toMatch(/EVIDENCE_MODE_A canary/);
+    const b = mutate((p) => { p.eligibleForManifest = false; });
+    expect(verify(b.f, b.spec).join(' ')).toMatch(/EVIDENCE_ELIGIBLE_A false/);
+    const c = mutate((p) => { p.surfaces = p.surfaces.slice(1); });
+    expect(verify(c.f, c.spec).join(' ')).toMatch(/EVIDENCE_SURFACE_SET_A|EVIDENCE_SURFACES_COMPLETED_A/);
+  });
+
+  it('검증 경계는 canonicalize한다 — 순서만 다른 증거는 GREEN', () => {
+    const f = load();
+    const p = JSON.parse(f['runB.out']);
+    p.endpoints = [...p.endpoints].reverse();
+    p.bySurface = Object.fromEntries(Object.entries(p.bySurface).reverse()
+      .map(([k, v]) => [k, Object.fromEntries(Object.entries(v).reverse())]));
+    f['runB.out'] = JSON.stringify(p, null, 1);
+    const man = JSON.parse(JSON.stringify(SPEC.EXPECTED_DATASET_MANIFEST));
+    man.evidence.files = { ...man.evidence.files, 'runB.out': sha256(f['runB.out']) };
+    expect(EV.verifyDiscoveryEvidence({ files: f, spec: { ...SPEC, EXPECTED_DATASET_MANIFEST: man },
+      scenario: SC(), sha256Hex: sha256, gitBlob })).toEqual([]);
+  });
+
+  it('manifest 값으로 기대 관찰을 만들지 않는다 — 방향은 증거→manifest다', () => {
+    const src = readFileSync(new URL('./s4Evaluator.mjs', import.meta.url), 'utf8');
+    const fn = src.slice(src.indexOf('export function verifyDiscoveryEvidence'));
+    const body = fn.slice(0, fn.indexOf('\n}\n'));
+    // 관찰 tuple은 raw payload에서만 나온다.
+    expect(body).toContain('discoveryTuples(A)');
+    expect(body).not.toMatch(/observedRequestCount\s*\)\s*=>\s*\{[^}]*push/);
+  });
+});
+
+// ── 이번 슬라이스의 명시적 경계 ─────────────────────────────────────────────
+describe('S4 경계 — discovery 이후 제품 소비자 코드가 바뀌지 않았다', () => {
+  // phase의 datasetResponses는 UI가 받은 stream이 아니라 정본 endpoint를 start/end에
+  // 재조회한 값이다. 그 대체가 정당하려면 **관찰 시점부터 지금까지 제품 코드가 그대로**여야
+  // 한다. 이 조건이 깨지면 새 discovery가 필요하다 — 그때 이 테스트가 RED가 된다.
+  const REPO = fileURLToPath(new URL('../..', import.meta.url));
+  const OBSERVED_HEAD = SPEC.EXPECTED_DATASET_MANIFEST.evidence.observedHead;
+  const git = (c) => execSync(`git -C ${REPO} ${c}`, { encoding: 'utf8' });
+
+  it('observedHead가 실제 조상 커밋이다', () => {
+    expect(git(`cat-file -t ${OBSERVED_HEAD}`).trim()).toBe('commit');
+    expect(() => git(`merge-base --is-ancestor ${OBSERVED_HEAD} HEAD`)).not.toThrow();
+  });
+
+  it('observedHead..HEAD 에서 제품 JS/JSX 변경 0', () => {
+    const changed = git(`diff --name-only ${OBSERVED_HEAD} HEAD`).split('\n').filter(Boolean);
+    const product = changed.filter((f) => /^frontend\/(components|pages|hooks)\//.test(f)
+      || (/^frontend\/library\//.test(f) && !/^frontend\/library\/s4/.test(f) && !/themeTokens/.test(f))
+      || /^backend\//.test(f));
+    expect(product).toEqual([]);
+    // 변경은 S4 검증 인프라와 승인된 SCSS 범위뿐이어야 한다.
+    const unexpected = changed.filter((f) => !/^frontend\/(library\/s4|library\/themeTokens|scripts\/s4)/.test(f)
+      && !/^frontend\/styles\//.test(f) && !/^frontend\/library\/__fixtures__\//.test(f));
+    expect(unexpected).toEqual([]);
+  });
+
+  it('워킹트리의 미커밋 변경도 제품 소비자를 건드리지 않는다', () => {
+    const dirty = git('status --porcelain').split('\n').filter(Boolean)
+      .map((l) => l.slice(3)).filter(Boolean);
+    const product = dirty.filter((f) => /^frontend\/(components|pages|hooks)\//.test(f) || /^backend\//.test(f));
+    expect(product).toEqual([]);
+  });
+});
+
+// ── 계약 숫자 정본 ──────────────────────────────────────────────────────────
+describe('S4 계약 숫자 — 주석·문구가 실행 값과 일치한다', () => {
+  const S = SPEC.REQUIRED_SMOKE_SURFACES;
+  const sum = (f) => S.reduce((a, x) => a + (f(x) || []).length, 0);
+  it('기계 확인값 6종', () => {
+    expect(S).toHaveLength(23);                                        // surfaces
+    expect(sum((x) => x.coverageSelectors)).toBe(54);                  // coverage entries
+    expect(sum((x) => x.requiredElements)).toBe(4);                    // required elements
+    expect(sum((x) => x.actions)).toBe(94);                            // actions
+    expect(new Set(S.map((x) => x.captureName)).size).toBe(23);        // target capture names
+    expect(Object.keys(SPEC.LIGHT_DIFF_MASKS)).toHaveLength(15);       // allow IDs
+  });
+  it('legacy committed BASE PNG 24개는 현재 target 23과 구분된다', () => {
+    const dir = new URL('./__fixtures__/s4-shots/base/', import.meta.url);
+    const legacy = readdirSync(dir).filter((n) => n.endsWith('.png'));
+    expect(legacy).toHaveLength(24);                                   // legacy, promotion pending
+    expect(legacy.length).not.toBe(S.length);
+    // 24 - 23 = 1: legacy에만 있고 현재 target에 없는 캡처가 정확히 1개다.
+    const target = new Set(S.map((x) => x.captureName));
+    expect(legacy.filter((n) => !target.has(n))).toEqual(['sourcepicker.png']);
+  });
+  it('활성 소스에 24를 target 숫자로 쓰는 문구가 남아 있지 않다', () => {
+    for (const rel of ['./s4Spec.mjs', './s4Evaluator.mjs', './s4CaptureRunner.mjs', '../scripts/s4-capture.mjs']) {
+      const src = readFileSync(new URL(rel, import.meta.url), 'utf8');
+      for (const m of src.match(/^.*24 ?(?:surface|개 surface|개 캡처).*$/gm) || [])
+        expect(m, `${rel}: ${m.trim()}`).toMatch(/legacy|promotion pending/);
+    }
+  });
+});
+
+// ── scenario 정본 + origin 파서 ─────────────────────────────────────────────
+describe('S4 scenario 정본 — context가 단일 원천과 exact 일치한다', () => {
+  const CTX = (over = {}) => ({ ...SPEC.SCENARIO_CANON, ...over });
+
+  it('positive control — 정본 그대로면 errors === []', () => {
+    expect(EV.validateScenarioCanon(SPEC, CTX())).toEqual([]);
+    // capture script는 정본을 소비한다(별도로 적지 않는다).
+    for (const k of SPEC.SCENARIO_CANON_KEYS)
+      expect(CAP.CAPTURE_SCENARIO[k]).toBe(SPEC.SCENARIO_CANON[k]);
+    const src = readFileSync(new URL('../scripts/s4-capture.mjs', import.meta.url), 'utf8');
+    expect(src).toContain('...RAW_SPEC.SCENARIO_CANON');
+  });
+
+  it('RED: 8개 필드 각각의 불일치와 누락', () => {
+    for (const k of SPEC.SCENARIO_CANON_KEYS) {
+      const bad = typeof SPEC.SCENARIO_CANON[k] === 'number' ? 99 : 'zzz';
+      expect(EV.validateScenarioCanon(SPEC, CTX({ [k]: bad })).join(' '))
+        .toMatch(new RegExp(`SCENARIO_FIELD_MISMATCH ${k}`));
+      const c = CTX(); delete c[k];
+      expect(EV.validateScenarioCanon(SPEC, c).join(' '))
+        .toMatch(new RegExp(`SCENARIO_FIELD_MISSING ${k}`));
+    }
+  });
+
+  it('RED: ID는 양의 safe integer여야 한다', () => {
+    for (const k of ['trackId', 'bulkBranchId', 'bulkEpicId', 'scrumBoardId']) {
+      for (const v of ['5', 0, -1, 1.5, Number.MAX_SAFE_INTEGER + 2, null])
+        expect(EV.validateScenarioCanon(SPEC, CTX({ [k]: v })).join(' '), `${k}=${v}`)
+          .toMatch(new RegExp(`SCENARIO_(ID_INVALID ${k}|FIELD_MISMATCH ${k})`));
+    }
+  });
+
+  it('RED: origin 값 자체의 축 — scheme·userinfo·query·hash·경로·정규형', () => {
+    const cases = [
+      ['ftp://localhost:10001/api', /ORIGIN_SCHEME/],
+      ['http://u:p@localhost:10001/api', /ORIGIN_USERINFO/],
+      ['http://localhost:10001/api?x=1', /ORIGIN_SEARCH/],
+      ['http://localhost:10001/api#f', /ORIGIN_HASH/],
+      ['http://localhost:10001/api/../api', /ORIGIN_DOT_SEGMENT|ORIGIN_NOT_CANONICAL/],
+      ['not a url', /ORIGIN_UNPARSEABLE/],
+      ['', /ORIGIN_MISSING/],
+    ];
+    for (const [v, rx] of cases)
+      expect(EV.validateOriginValue('apiOrigin', v, { allowBasePath: true }).join(' '), v).toMatch(rx);
+    // appOrigin은 base path를 허용하지 않는다.
+    expect(EV.validateOriginValue('appOrigin', 'http://localhost:10000/sub', { allowBasePath: false }).join(' '))
+      .toMatch(/ORIGIN_UNEXPECTED_PATH/);
+    expect(EV.validateOriginValue('appOrigin', 'http://localhost:10000', { allowBasePath: false })).toEqual([]);
+  });
+
+  it('RED: 해석된 URL의 origin·base path·경로 탈출', () => {
+    const api = SPEC.SCENARIO_CANON.apiOrigin;
+    expect(EV.validateResolvedUrl('t', 'http://evil.test/api/x', api).join(' ')).toMatch(/URL_ORIGIN/);
+    expect(EV.validateResolvedUrl('t', 'http://localhost:10001/other/x', api).join(' ')).toMatch(/URL_BASE_PATH/);
+    expect(EV.validateResolvedUrl('t', 'http://u:p@localhost:10001/api/x', api).join(' ')).toMatch(/URL_USERINFO/);
+    expect(EV.validateResolvedUrl('t', `${api}/x`, api)).toEqual([]);
+  });
+
+  it('RED: scenario와 response를 **동시에** 위조해도 통과하지 못한다', () => {
+    // ID와 이름을 함께 바꾸고 응답도 거기 맞추면 신원 검사만으로는 통과한다.
+    const forged = { ...SPEC.SCENARIO_CANON, bulkBranchId: 77, branchName: '- Forged' };
+    const resp = [
+      { url: `${forged.apiOrigin}/branches`, status: 200,
+        body: JSON.stringify({ status: true, branches: [{ branch_id: 77, branch_name: '- Forged' }] }) },
+      { url: `${forged.apiOrigin}/branches/77/epics`, status: 200,
+        body: JSON.stringify({ status: true, epics: [{ epic_id: 7, epic_name: 'Alpha Epic' }] }) }];
+    expect(EV.validateScenarioIdentity(forged, resp)).toEqual([]);          // 신원만으로는 통과
+    // 정본 대조가 그것을 막는다.
+    const e = EV.validateScenarioCanon(SPEC, forged).join(' ');
+    expect(e).toMatch(/SCENARIO_FIELD_MISMATCH bulkBranchId 77 != 13/);
+    expect(e).toMatch(/SCENARIO_FIELD_MISMATCH branchName/);
+  });
+
+  it('RED: body envelope status:false는 신원 근거가 아니다', () => {
+    // 이 API는 200으로도 실패를 돌려준다(실측: {status:false, code:"NEED_LOGIN"}).
+    const sc = SPEC.SCENARIO_CANON;
+    const resp = [
+      { url: `${sc.apiOrigin}/branches`, status: 200,
+        body: JSON.stringify({ status: false, message: 'NEED_LOGIN', branches: [{ branch_id: 13, branch_name: '- Alpha' }] }) },
+      { url: `${sc.apiOrigin}/branches/13/epics`, status: 200,
+        body: JSON.stringify({ status: true, epics: [{ epic_id: 7, epic_name: 'Alpha Epic' }] }) }];
+    expect(EV.validateScenarioIdentity(sc, resp).join(' ')).toMatch(/IDENTITY_ENVELOPE .*\/branches status=false/);
+  });
+
+  it('RED: 서로 다른 템플릿이 같은 절대 URL로 해석되면 거부', () => {
+    const man = JSON.parse(JSON.stringify(SYN_MANIFEST));
+    man.dataset[4] = { ...man.dataset[4], urlTemplate: '{apiOrigin}/chat' };   // tracks/{trackId} → chat
+    man.dataset.sort((a, b) => (a.urlTemplate < b.urlTemplate ? -1 : 1));
+    const spec = { ...SYN_SPEC(), EXPECTED_DATASET_MANIFEST: man,
+      DATASET_ENDPOINTS: man.dataset.map((e) => e.urlTemplate) };
+    expect(EV.validateDatasetContract(spec, SYN_SC()).join(' '))
+      .toMatch(/DATASET_TEMPLATE_DUPLICATE|DATASET_RESOLVED_DUPLICATE/);
+  });
+});
+
+// ── candidate 원자성 ────────────────────────────────────────────────────────
+describe('S4 candidate 원자성 — context와 PNG가 한 덩어리로 공개된다', () => {
+  const PNG_X = () => Buffer.from('PNG-X');
+  const PNG_Y = () => Buffer.from('PNG-Y');
+  const mk = () => mkdtempSync(join(tmpdir(), 's4bundle-'));
+  const snapshot = (d) => {
+    const r = RUN.readCandidateBundle(d, 'light');
+    if (r.errors.length) return null;
+    return { ctx: sha256(r.contextRaw),
+      pngs: Object.fromEntries(Object.keys(r.pngByName).sort().map((n) => [n, sha256(r.pngByName[n])])) };
+  };
+  const seed = (d) => {
+    const e = RUN.writeCandidate({ fixturesDir: d, phase: 'light', contextRaw: 'OLD-CONTEXT',
+      pngByCaptureName: { 'a.png': PNG_X() }, expectedCaptureNames: ['a.png'] });
+    expect(e).toEqual([]);
+    return snapshot(d);
+  };
+  const tempLeftovers = (d) => (existsSync(join(d, RUN.CANDIDATE_ROOT))
+    ? readdirSync(join(d, RUN.CANDIDATE_ROOT)).filter((n) => n.startsWith('.')) : []);
+
+
+  it('GREEN: context와 PNG가 같은 bundle에 함께 공개된다', () => {
+    const d = mk();
+    expect(RUN.writeCandidate({ fixturesDir: d, phase: 'light', contextRaw: 'CTX',
+      pngByCaptureName: { 'a.png': PNG_X() }, expectedCaptureNames: ['a.png'] })).toEqual([]);
+    const r = RUN.readCandidateBundle(d, 'light');
+    expect(r.errors).toEqual([]);
+    expect(r.contextRaw).toBe('CTX');
+    expect(Object.keys(r.pngByName)).toEqual(['a.png']);
+    expect(tempLeftovers(d)).toEqual([]);
+    rmSync(d, { recursive: true, force: true });
+  });
+
+  it('RED: context write 실패(EISDIR) → 이전 bundle 전체가 byte-identical', () => {
+    // 이전 판은 shots를 먼저 교체하고 context를 나중에 썼다 — 실패 시 새 PNG + 옛 context가
+    // 남았다(실증). 이제는 temp에서 실패하므로 dest에 손대지 않는다.
+    const d = mk(); const before = seed(d);
+    // temp 안의 context 경로를 디렉터리로 만들 수는 없으므로, s4-shots를 읽기 전용으로 만들어
+    // temp 생성 자체를 실패시킨다 — 어느 지점에서 실패해도 결과는 같아야 한다.
+    const shotsRoot = join(d, RUN.CANDIDATE_ROOT);
+    chmodSync(shotsRoot, 0o500);
+    const e = RUN.writeCandidate({ fixturesDir: d, phase: 'light', contextRaw: 'NEW-CONTEXT',
+      pngByCaptureName: { 'b.png': PNG_Y() }, expectedCaptureNames: ['b.png'] });
+    chmodSync(shotsRoot, 0o700);
+    expect(e.length).toBeGreaterThan(0);
+    // 읽기전용 root에서는 lock 생성 자체가 막힌다 — 어느 쪽이든 publish 전 실패다.
+    expect(e.join(' ')).toMatch(/WRITE_FAILED|WRITE_PUBLISH_FAILED|WRITE_LOCK_BUSY/);
+    expect(snapshot(d)).toEqual(before);
+    rmSync(d, { recursive: true, force: true });
+  });
+
+  it('RED: PNG 이름이 예약어/경로면 아무것도 쓰지 않는다', () => {
+    const d = mk(); const before = seed(d);
+    for (const bad of [{ [RUN.BUNDLE_CONTEXT_NAME]: PNG_Y() }, { 'a/b.png': PNG_Y() }, { '../x.png': PNG_Y() }]) {
+      const e = RUN.writeCandidate({ fixturesDir: d, phase: 'light', contextRaw: 'N',
+        pngByCaptureName: bad, expectedCaptureNames: Object.keys(bad) });
+      expect(e.length).toBeGreaterThan(0);
+    }
+    expect(snapshot(d)).toEqual(before);
+    expect(tempLeftovers(d)).toEqual([]);
+    rmSync(d, { recursive: true, force: true });
+  });
+
+  it('RED: 캡처 집합 불일치면 이전 bundle 유지', () => {
+    const d = mk(); const before = seed(d);
+    const e = RUN.writeCandidate({ fixturesDir: d, phase: 'light', contextRaw: 'N',
+      pngByCaptureName: { 'a.png': PNG_Y() }, expectedCaptureNames: ['a.png', 'b.png'] });
+    expect(e.join(' ')).toMatch(/WRITE_CAPTURE_SET_MISMATCH/);
+    expect(snapshot(d)).toEqual(before);
+    rmSync(d, { recursive: true, force: true });
+  });
+
+  it('기존 bundle이 있어도 교체는 원자적이고 잔존 temp가 없다', () => {
+    const d = mk(); seed(d);
+    expect(RUN.writeCandidate({ fixturesDir: d, phase: 'light', contextRaw: 'CTX2',
+      pngByCaptureName: { 'b.png': PNG_Y() }, expectedCaptureNames: ['b.png'] })).toEqual([]);
+    const r = RUN.readCandidateBundle(d, 'light');
+    expect(r.contextRaw).toBe('CTX2');
+    expect(Object.keys(r.pngByName)).toEqual(['b.png']);       // 옛 a.png는 남지 않는다
+    expect(tempLeftovers(d)).toEqual([]);
+    rmSync(d, { recursive: true, force: true });
+  });
+
+  it('phase는 서로 다른 bundle이다', () => {
+    const d = mk();
+    RUN.writeCandidate({ fixturesDir: d, phase: 'light', contextRaw: 'L', pngByCaptureName: { 'a.png': PNG_X() }, expectedCaptureNames: ['a.png'] });
+    RUN.writeCandidate({ fixturesDir: d, phase: 'dark', contextRaw: 'D', pngByCaptureName: { 'a.png': PNG_Y() }, expectedCaptureNames: ['a.png'] });
+    expect(RUN.readCandidateBundle(d, 'light').contextRaw).toBe('L');
+    expect(RUN.readCandidateBundle(d, 'dark').contextRaw).toBe('D');
+    rmSync(d, { recursive: true, force: true });
+  });
+
+  it('bundle이 없거나 context가 빠지면 읽기가 실패한다', () => {
+    const d = mk();
+    expect(RUN.readCandidateBundle(d, 'light').errors.join(' ')).toMatch(/BUNDLE_MISSING/);
+    seed(d);
+    // pointer가 가리키는 디렉터리를 지우면 target missing이다.
+    const name = readFileSync(join(d, RUN.CANDIDATE_ROOT, RUN.CANDIDATE_POINTER('light')), 'utf8').trim();
+    rmSync(join(d, RUN.CANDIDATE_ROOT, name), { recursive: true, force: true });
+    expect(RUN.readCandidateBundle(d, 'light').errors.join(' ')).toMatch(/BUNDLE_TARGET_MISSING/);
+    rmSync(d, { recursive: true, force: true });
+  });
+});
+
+// ── evidence가 승인 경로를 실제로 막는다 ────────────────────────────────────
+describe('S4 evidence 배선 — 변조 시 public 승인에서 serialize/write 0회', () => {
+  const DIR = new URL('./__fixtures__/s4-discovery-evidence/', import.meta.url);
+  const REPO = fileURLToPath(new URL('../..', import.meta.url));
+  const gitBlob = (ref, rel) => {
+    try { return execSync(`git -C ${REPO} rev-parse ${ref}:${rel}`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); }
+    catch (e) { return null; }
+  };
+  const load = () => Object.fromEntries(EV.DISCOVERY_EVIDENCE_FILES
+    .map((n) => [n, readFileSync(new URL(n, DIR), 'utf8')]));
+  // AW 세계에 **production evidence + production manifest**를 결합한다.
+  // (AW의 합성 world는 계약 축을 시험하고, 여기서는 evidence 축만 본다.)
+  const EV_SPEC = () => ({ ...AW_SPEC,
+    EXPECTED_DATASET_MANIFEST: SPEC.EXPECTED_DATASET_MANIFEST,
+    DATASET_ENDPOINTS: SPEC.DATASET_ENDPOINTS,
+    REVIEWED_CLASSIFICATION: SPEC.REVIEWED_CLASSIFICATION,
+    PROVENANCE_BLOB_PATHS: SPEC.PROVENANCE_BLOB_PATHS,
+    REQUIRED_SMOKE_SURFACES: SPEC.REQUIRED_SMOKE_SURFACES });
+  const call = (evidence, specOver) => {
+    const c = { serialize: 0, write: 0 };
+    const r = EV.approveAndWrite({
+      fixture: AW_FIXTURE(), spec: specOver || AW_SPEC, contrastResults: [],
+      actualDecls: UNIT_DECLS, actualRaw: '', preAnnSources: {},
+      actualAllowIdToKey: UNIT_ACTUAL_ALLOW_MAP, baseDecls: UNIT_BASE_DECLS,
+      provenanceRefs: { headCommit: 'unit', headBlobs: {}, specFingerprintNow: 'unit' },
+      contextRaw: AW_CTX_RAW(), sha256, readPng: AW_READ_PNG,
+      discoveryEvidence: evidence,
+      serialize: () => { c.serialize += 1; return 'BYTES'; }, write: () => { c.write += 1; } });
+    return { r, c };
+  };
+  // production manifest + production evidence로 부르면 evidence 단계는 통과해야 한다.
+  const good = () => ({ files: load(), gitBlob });
+  const mutated = (fn, which = 'runA.out') => {
+    const f = load(); const p = JSON.parse(f[which]); fn(p);
+    f[which] = JSON.stringify(p, null, 1);
+    return { files: f, gitBlob };
+  };
+
+  it('evidence 단계가 다른 모든 단계보다 먼저다', () => {
+    const { r, c } = call(null);
+    expect(r.errors).toEqual(['APPROVE_EVIDENCE_REQUIRED']);
+    expect(r.calls).toEqual({ candidate: 0, conformance: 0, artifacts: 0, evidence: 1 });
+    expect(c).toEqual({ serialize: 0, write: 0 });
+    expect(r.wrote).toBe(false);
+  });
+
+  it('production evidence + production manifest는 evidence 단계를 통과한다', () => {
+    const { r } = call(good(), EV_SPEC());
+    expect(r.calls.evidence).toBe(1);
+    expect(r.errors.join(' ')).not.toMatch(/^EVIDENCE /);
+    expect(r.calls.candidate).toBe(1);          // 다음 단계로 넘어갔다
+  });
+
+  const MUTATIONS = [
+    ['B.bySurface={}', () => ({ files: { ...load(), 'runB.out': JSON.stringify({ ...JSON.parse(load()['runB.out']), bySurface: {} }, null, 1) }, gitBlob })],
+    ['A.bySurface extra endpoint', () => mutated((p) => { p.bySurface.canvas['GET http://localhost:10001/api/ghost 200'] = 1; })],
+    ['A/B endpoint + manifest 동시 변조, digest 유지', () => mutated((p) => {
+      const i = p.endpoints.findIndex((x) => x.includes('/tracks/5/items'));
+      p.endpoints[i] = p.endpoints[i].replace('/tracks/5/items', '/tracks/5/swapped');
+    })],
+    ['fake provenance blob 9개', () => mutated((p) => {
+      p.provenance.blobs = Object.fromEntries(Object.keys(p.provenance.blobs).map((k) => [k, 'a'.repeat(40)]));
+    })],
+    ['stderr FATAL', () => ({ files: { ...load(), 'runA.err': 'FATAL: something broke\n' }, gitBlob })],
+    ['adapter []', () => ({ files: { ...load(), 'runA.adapter.json': '[]' }, gitBlob })],
+    ['evidence 파일 누락', () => { const f = load(); delete f['runB.out']; return { files: f, gitBlob }; }],
+  ];
+  it.each(MUTATIONS)('RED: %s → serialize/write 0회', (_name, build) => {
+    const { r, c } = call(build(), EV_SPEC());
+    expect(r.errors.length).toBeGreaterThan(0);
+    expect(r.errors.join(' ')).toMatch(/^EVIDENCE |APPROVE_EVIDENCE/);
+    expect(r.calls).toEqual({ candidate: 0, conformance: 0, artifacts: 0, evidence: 1 });
+    expect(c).toEqual({ serialize: 0, write: 0 });
+    expect(r.wrote).toBe(false);
+  });
+
+  it('RED: /items를 dataset→ambient로 옮기면 검수 동결본과 어긋난다', () => {
+    const man = JSON.parse(JSON.stringify(SPEC.EXPECTED_DATASET_MANIFEST));
+    const i = man.dataset.findIndex((e) => e.urlTemplate.endsWith('/items'));
+    man.ambient.push(man.dataset.splice(i, 1)[0]);
+    man.ambient.sort((a, b) => (a.urlTemplate < b.urlTemplate ? -1 : 1));
+    const spec = { ...EV_SPEC(), EXPECTED_DATASET_MANIFEST: man,
+      DATASET_ENDPOINTS: man.dataset.map((e) => e.urlTemplate) };
+    const { r, c } = call(good(), spec);
+    expect(r.errors.join(' ')).toMatch(/EVIDENCE_REVIEWED_CATEGORY .*\/items.* manifest=ambient reviewed=dataset/);
+    expect(c).toEqual({ serialize: 0, write: 0 });
+    expect(r.calls.candidate).toBe(0);
+  });
+
+  it('s4-gen과 promotion 둘 다 evidence를 요구한다', () => {
+    const gen = readFileSync(new URL('../scripts/s4-gen.mjs', import.meta.url), 'utf8');
+    expect(gen).toContain('DISCOVERY_EVIDENCE_FAILED');
+    expect(gen).toContain('discoveryEvidence: DISCOVERY_EVIDENCE');
+    // projection보다 먼저다.
+    expect(gen.indexOf('DISCOVERY_EVIDENCE_FAILED')).toBeLessThan(gen.indexOf('EV.evaluateProjection'));
+    // promotion은 인자로 강제한다(행동 확인).
+    const r = PROM.promoteRelease({ fixturesDir: '/tmp', spec: SPEC, provenanceRefs: {},
+      fromRelease: null, fixture: {}, expectedBytes: '' });
+    expect(r.promoted).toBe(false);
+    expect(r.errors).toEqual(['PROMOTION_DISABLED']);      // 지금은 하드 비활성이 먼저 막는다
+    expect(readFileSync(new URL('./s4Promote.mjs', import.meta.url), 'utf8'))
+      .toContain('PROMOTE_EVIDENCE_REQUIRED');
+  });
+});
+
+// ── phase 성공 통합 ─────────────────────────────────────────────────────────
+describe('S4 phase positive — capturePhaseCore가 code=0에 도달한다', () => {
+  const PORT = 10431;
+  // **pure core를 시험한다.** 실제 writer는 REPO_DIR만 쓰므로 caller가 provenance 루트를
+  // 바꿀 방법이 없다(그게 finding 4의 계약이다). 여기서는 core가 돌려준 메모리 결과를
+  // 직접 writeCandidate에 넣어 write 축까지 확인한다.
+  // committed runner 의미론을 충족하는 **최소 독립 world**. surface 1개, 액션 goto 1개.
+  const SURF = { name: 'p1', captureName: 'p1.png', actions: [{ op: 'goto', url: '/x' }],
+    requiredElements: ['.Req'], coverageSelectors: [{ selector: '.Cov' }], darkReviewSelectors: [] };
+  // specFingerprint가 payload 키 전부를 읽으므로 정본 spec을 바탕으로 두고 **이 축에 쓰이는
+  // 것만** 갈아끼운다. 빠진 키가 있으면 fingerprint 단계에서 죽는다(실증).
+  const P_SPEC = () => ({ ...SPEC, ...DS_SPEC({ REQUIRED_SMOKE_SURFACES: [SURF] }),
+    RASTER_CONTRACT: { width: 40, height: 30, dpr: 1, screenshotScale: 'css' },
+    LIGHT_DIFF_MASKS: {}, ELEMENT_SCALES: {} });
+  const PNG40 = () => pngBytes(40, 30, 7);
+  // fake adapter: runner가 요구하는 원시 동작에만 응답한다(판정은 전부 커밋된 러너가 한다).
+  const adapter = async ({ port, evalFor, W }) => {
+    const seen = { methods: [], noActive: [], shutdown: false, clean: false };
+    for (let i = 0; i < 3000; i += 1) {
+      let cmd;
+      try { cmd = await (await fetch(`http://127.0.0.1:${port}/next`)).json(); } catch (e) { break; }
+      if (cmd.done) break;
+      seen.methods.push(cmd.method);
+      let value = null; let error = null;
+      const [a, b] = cmd.args;
+      if (cmd.method === 'hello') value = { protocol: 's4-bridge/2', echo: a };
+      else if (cmd.method === 'beginAttempt') { seen.page = true; value = { ok: true, attempt: a }; }
+      else if (cmd.method === 'endAttempt') { seen.page = false; value = { ok: true, attempt: a }; }
+      else if (cmd.method === 'shutdown') { seen.shutdown = true; value = { ok: true }; }
+      else if (!seen.page) { seen.noActive.push(cmd.method); error = 'NO_ACTIVE_ATTEMPT'; }
+      else if (cmd.method === 'screenshot') value = PNG40().toString('base64');
+      else if (cmd.method === 'setStorage') { W.store[a] = b; }
+      else if (cmd.method === 'reload') { W.dataTheme = W.store.theme ?? null; }
+      else if (cmd.method === 'evaluate') value = evalFor(a, b);
+      try {
+        await fetch(`http://127.0.0.1:${port}/`, { method: 'POST',
+          body: JSON.stringify({ id: cmd.id, value, error }), headers: { 'content-type': 'application/json' } });
+      } catch (e) { break; }
+      if (cmd.method === 'shutdown') { seen.clean = true; break; }
+    }
+    return seen;
+  };
+  // 브라우저 상태를 흉내내는 최소 저장소 — 러너는 이전 상태를 읽고 되돌리는 것까지 요구한다.
+  const world = () => ({ store: { theme: 'light', [`track:${DS_SC().trackId}:lastView`]: 'flow' }, dataTheme: 'light' });
+  const makeEval = (W) => (src, arg) => {
+    if (src === PROBE.ASSERT_SOURCE) return Object.fromEntries((arg || []).map((s2) => [s2, { count: 1, visible: 1 }]));
+    if (src === PROBE.THEME_PROBE_SOURCE) return { dataTheme: W.dataTheme, stored: W.store.theme };
+    if (src === PROBE.RASTER_PROBE_SOURCE) return { dpr: 1, innerWidth: 40, innerHeight: 30, scrollX: 0, scrollY: 0, docScrollWidth: 40 };
+    if (src === PROBE.PSEUDO_PROBE_SOURCE) return {};
+    if (src === RUN.READ_STORAGE_SOURCE)
+      return Object.fromEntries((arg || []).map((k) => [k, { present: Object.prototype.hasOwnProperty.call(W.store, k), value: W.store[k] ?? null }]));
+    if (src === RUN.RESTORE_STORAGE_SOURCE) {
+      for (const [k, v] of (arg || [])) { if (v && v.present) W.store[k] = v.value; else delete W.store[k]; }
+      W.dataTheme = W.store.theme ?? null;
+      return { ok: true };
+    }
+    if (src === PROBE.DATASET_PROBE_SOURCE) return (arg || []).map((url) => {
+      const sc = DS_SC();
+      let body = '{"status":true}';
+      if (url === `${sc.apiOrigin}/branches`) body = JSON.stringify({ status: true, branches: [{ branch_id: sc.bulkBranchId, branch_name: sc.branchName }] });
+      else if (url === `${sc.apiOrigin}/branches/${sc.bulkBranchId}/epics`) body = JSON.stringify({ status: true, epics: [{ epic_id: sc.bulkEpicId, epic_name: sc.epicName }] });
+      return { url, status: 200, body };
+    });
+    if (src === PROBE.PROBE_SOURCE) return Object.fromEntries((arg || []).map((s2) => [s2, []]));
+    return {};
+  };
+  const run = async (over = {}) => {
+    const port = over.port || PORT;
+    const out = []; const errs = [];
+    const cli = CAP.parseCaptureArgs(['--phase', 'light', '--port', String(port), '--timeoutMs', '4000'], SPEC);
+    const dir = mkdtempSync(join(tmpdir(), 's4pos-'));
+    const spec = over.spec || P_SPEC();
+    const p = CAP.capturePhaseCore({ SPEC: spec, cli,
+      head: { headCommit: 'a'.repeat(40), blobs: {} },
+      log: (m) => out.push(m), err: (m) => errs.push(m) });
+    await new Promise((r) => setTimeout(r, 200));
+    const W = world();
+    const seen = await adapter({ port, W, evalFor: over.makeEval ? over.makeEval(W) : makeEval(W) });
+    const core = await p;
+    let bundle = null;
+    if (core.code === 0 && !over.skipWrite) {
+      const w = RUN.writeCandidate({ fixturesDir: dir, phase: 'light',
+        contextRaw: core.result.contextRaw, pngByCaptureName: core.result.pngByCaptureName,
+        expectedCaptureNames: core.result.expectedCaptureNames });
+      expect(w).toEqual([]);
+      const rb = RUN.readCandidateBundle(dir, 'light');
+      bundle = rb.errors.length ? null : rb;
+    }
+    const res = { code: core.code, out, errs, seen, bundle };
+    rmSync(dir, { recursive: true, force: true });
+    return res;
+  };
+
+  it('GREEN: code=0, candidate context와 PNG가 모두 완성된다', async () => {
+    const r = await run();
+    expect(r.errs.join(' ')).not.toMatch(/CAPTURE FAILED|WRITE FAILED|DATASET_|HEAD_BINDING/);
+    expect(r.code).toBe(0);
+    expect(r.seen.noActive).toEqual([]);
+    expect(r.seen.clean).toBe(true);
+    expect(r.bundle).not.toBe(null);
+    expect(Object.keys(r.bundle.pngByName)).toEqual(['p1.png']);
+    expect(EV.decodePngHeader(r.bundle.pngByName['p1.png']).ok).toBe(true);
+    const ctx = JSON.parse(r.bundle.contextRaw);
+    expect(ctx.phase).toBe('light');
+    expect(ctx.provenance.datasetDigest).toMatch(/^[0-9a-f]{64}$/);
+    expect(Array.isArray(ctx.datasetResponses)).toBe(true);
+  }, 40000);
+
+  it('RED: 항상 실패하는 runner mutant → code=1, bundle 없음', async () => {
+    const r = await run({ port: PORT + 1,
+      makeEval: (W) => { const base = makeEval(W);
+        return (src, arg) => (src === PROBE.ASSERT_SOURCE
+          ? Object.fromEntries((arg || []).map((s2) => [s2, { count: 0, visible: 0 }])) : base(src, arg)); } });
+    expect(r.code).toBe(1);
+    expect(r.errs.join(' ')).toMatch(/CAPTURE FAILED/);
+    expect(r.bundle).toBe(null);
+  }, 40000);
+
+  it('RED: write를 생략하면 code=0이어도 bundle이 없다', async () => {
+    const r = await run({ port: PORT + 2, skipWrite: true });
+    expect(r.code).toBe(0);
+    expect(r.bundle).toBe(null);          // GREEN 테스트가 요구하는 축이 실제로 살아 있다
+  }, 40000);
+
+  it('실제 writer는 REPO_DIR만 쓴다 — caller가 provenance 루트를 못 바꾼다', () => {
+    const src = readFileSync(new URL('../scripts/s4-capture.mjs', import.meta.url), 'utf8');
+    const fn = src.slice(src.indexOf('async function runPhaseCaptureImpl'));
+    const body = fn.slice(0, fn.indexOf('\nif (process.argv'));
+    expect(body).toContain('const repoDir = REPO_DIR;');
+    expect(fn.slice(0, fn.indexOf('{'))).not.toContain('repoDir');   // 시그니처에 없다
+    expect(body).toContain('writeCandidate({');
+    // pure core는 아무것도 쓰지 않는다.
+    const core = src.slice(src.indexOf('export async function capturePhaseCore'),
+      src.indexOf('async function runPhaseCaptureImpl'));
+    expect(core).not.toContain('writeCandidate');
+  });
+});
+
+// ── candidate publish 실패 행렬 ─────────────────────────────────────────────
+describe('S4 candidate publish — pointer 하나만 바뀌고 public 경로가 끊기지 않는다', () => {
+  const mk = () => mkdtempSync(join(tmpdir(), 's4pub-'));
+  const root = (d) => join(d, RUN.CANDIDATE_ROOT);
+  const ptr = (d) => join(root(d), RUN.CANDIDATE_POINTER('light'));
+  const put = (d, ctx, pngs) => RUN.writeCandidate({ fixturesDir: d, phase: 'light',
+    contextRaw: ctx, pngByCaptureName: pngs, expectedCaptureNames: Object.keys(pngs) });
+  const readable = (d) => { const r = RUN.readCandidateBundle(d, 'light'); return r.errors.length ? null : r; };
+
+  it('교체는 pointer 한 번만 바꾼다 — 이전 bundle 디렉터리는 남는다', () => {
+    const d = mk();
+    expect(put(d, 'A', { 'a.png': Buffer.from('1') })).toEqual([]);
+    const first = readFileSync(ptr(d), 'utf8').trim();
+    expect(put(d, 'B', { 'b.png': Buffer.from('2') })).toEqual([]);
+    const second = readFileSync(ptr(d), 'utf8').trim();
+    expect(second).not.toBe(first);
+    expect(existsSync(join(root(d), first))).toBe(true);      // 이전 것이 살아 있다
+    expect(readable(d).contextRaw).toBe('B');
+    rmSync(d, { recursive: true, force: true });
+  });
+
+  it('같은 내용은 같은 bundle을 가리킨다(content-addressed, immutable)', () => {
+    const d = mk();
+    put(d, 'A', { 'a.png': Buffer.from('1') });
+    const n1 = readFileSync(ptr(d), 'utf8').trim();
+    put(d, 'A', { 'a.png': Buffer.from('1') });
+    expect(readFileSync(ptr(d), 'utf8').trim()).toBe(n1);
+    rmSync(d, { recursive: true, force: true });
+  });
+
+  it('pointer rename 실패 → 이전 candidate가 계속 readable', () => {
+    const d = mk();
+    put(d, 'A', { 'a.png': Buffer.from('1') });
+    const before = readable(d);
+    // pointer 경로를 디렉터리로 만들어 rename을 실패시킨다.
+    rmSync(ptr(d)); mkdirSync(ptr(d));
+    const e = put(d, 'B', { 'b.png': Buffer.from('2') });
+    expect(e.join(' ')).toMatch(/WRITE_POINTER_FAILED|WRITE_NODE_NOT_FILE/);
+    rmSync(ptr(d), { recursive: true, force: true });
+    writeFileSync(ptr(d), `${before.bundleName}\n`);
+    expect(readable(d).contextRaw).toBe('A');                 // 내용은 그대로였다
+    rmSync(d, { recursive: true, force: true });
+  });
+
+  it('publish 실패(권한) → pointer 불변, 이전 candidate readable', () => {
+    const d = mk();
+    put(d, 'A', { 'a.png': Buffer.from('1') });
+    const before = readFileSync(ptr(d), 'utf8');
+    chmodSync(root(d), 0o500);
+    const e = put(d, 'B', { 'b.png': Buffer.from('2') });
+    chmodSync(root(d), 0o700);
+    expect(e.length).toBeGreaterThan(0);
+    expect(e.join(' ')).not.toMatch(/COMMITTED_BUT/);
+    expect(readFileSync(ptr(d), 'utf8')).toBe(before);
+    expect(readable(d).contextRaw).toBe('A');
+    rmSync(d, { recursive: true, force: true });
+  });
+
+  it('프로세스 중단 모사 — bundle만 있고 pointer가 안 바뀐 상태는 이전 것을 읽는다', () => {
+    const d = mk();
+    put(d, 'A', { 'a.png': Buffer.from('1') });
+    const before = readFileSync(ptr(d), 'utf8').trim();
+    // 새 bundle 디렉터리만 만들어 두고 pointer는 건드리지 않는다.
+    const orphan = join(root(d), `bundle-light-${'f'.repeat(64)}`);
+    mkdirSync(orphan, { recursive: true }); writeFileSync(join(orphan, RUN.BUNDLE_CONTEXT_NAME), 'B');
+    expect(readFileSync(ptr(d), 'utf8').trim()).toBe(before);
+    expect(readable(d).contextRaw).toBe('A');
+    rmSync(d, { recursive: true, force: true });
+  });
+
+  it('pointer가 이상하거나 대상이 없으면 읽기 실패(조용히 통과하지 않는다)', () => {
+    const d = mk();
+    put(d, 'A', { 'a.png': Buffer.from('1') });
+    writeFileSync(ptr(d), '../escape\n');
+    expect(RUN.readCandidateBundle(d, 'light').errors.join(' ')).toMatch(/BUNDLE_POINTER_INVALID/);
+    writeFileSync(ptr(d), 'bundle-light-deadbeef\n');
+    expect(RUN.readCandidateBundle(d, 'light').errors.join(' ')).toMatch(/BUNDLE_TARGET_MISSING/);
+    rmSync(d, { recursive: true, force: true });
+  });
+
+  it('bundle 내용이 변조되면 이름과 어긋난다', () => {
+    const d = mk();
+    put(d, 'A', { 'a.png': Buffer.from('1') });
+    const name = readFileSync(ptr(d), 'utf8').trim();
+    writeFileSync(join(root(d), name, RUN.BUNDLE_CONTEXT_NAME), 'TAMPERED');
+    expect(RUN.readCandidateBundle(d, 'light').errors.join(' ')).toMatch(/BUNDLE_CONTENT_DRIFT/);
+    rmSync(d, { recursive: true, force: true });
+  });
+
+  it('rollback 코드가 없다 — 되돌릴 것이 없는 설계다', () => {
+    const src = readFileSync(new URL('./s4CaptureRunner.mjs', import.meta.url), 'utf8');
+    const fn = src.slice(src.indexOf('export function writeCandidate'));
+    const body = fn.slice(0, fn.indexOf('\n}\n'));
+    expect(body).not.toContain('parked');
+    expect(body.match(/renameSync\(/g) || []).toHaveLength(2);   // bundle 공개 1 + pointer 1
+  });
+});
+
+// ── spec 단일 스냅샷 ────────────────────────────────────────────────────────
+describe('S4 spec 단일 스냅샷 — 루트 getter는 한 번만 조회된다', () => {
+  it('getter가 조회마다 다른 manifest를 줘도 evidence와 downstream이 갈리지 않는다', () => {
+    const se = synEvidence(AW_SPEC);
+    let reads = 0;
+    const tampered = JSON.parse(JSON.stringify(se.spec.EXPECTED_DATASET_MANIFEST));
+    tampered.dataset[0].reason = 'TAMPERED';
+    const proxy = {};
+    for (const k of Object.keys(se.spec)) {
+      if (k === 'EXPECTED_DATASET_MANIFEST') {
+        Object.defineProperty(proxy, k, { enumerable: true, configurable: true,
+          get() { reads += 1; return reads === 1 ? se.spec[k] : tampered; } });
+      } else Object.defineProperty(proxy, k, { enumerable: true, configurable: true, value: se.spec[k] });
+    }
+    const c = { serialize: 0, write: 0 };
+    EV.approveAndWrite({ fixture: AW_FIXTURE(), spec: proxy, contrastResults: [],
+      discoveryEvidence: { files: se.files, gitBlob: se.gitBlob },
+      actualDecls: UNIT_DECLS, actualRaw: '', preAnnSources: {},
+      actualAllowIdToKey: UNIT_ACTUAL_ALLOW_MAP, baseDecls: UNIT_BASE_DECLS,
+      provenanceRefs: { headCommit: 'unit', headBlobs: {}, specFingerprintNow: 'unit' },
+      contextRaw: AW_CTX_RAW(), sha256, readPng: AW_READ_PNG,
+      serialize: () => { c.serialize += 1; return 'B'; }, write: () => { c.write += 1; } });
+    expect(reads).toBe(1);                       // 정확히 한 번만 조회된다
+  });
+
+  it('snapshotSpec은 진입 직후 한 번이고 evidence보다 앞이다', () => {
+    const src = readFileSync(new URL('./s4Evaluator.mjs', import.meta.url), 'utf8');
+    const fn = src.slice(src.indexOf('export function approveAndWrite'));
+    const body = fn.slice(0, fn.indexOf('\n}\n'));
+    expect(body.match(/snapshotSpec\(spec\)/g) || []).toHaveLength(1);
+    expect(body.indexOf('snapshotSpec(spec)')).toBeLessThan(body.indexOf('verifyDiscoveryEvidence('));
+  });
+});
+
+// ── phase mid-run dirty ─────────────────────────────────────────────────────
+describe('S4 phase mid-run dirty — worktree가 더러워지면 write 0회', () => {
+  const exec = (out) => () => out;
+  it('tracked 수정·staged·untracked·rename·status 실패를 각각 잡는다', () => {
+    const cases = [
+      [' M frontend/styles/components/track/track.scss\0', /M frontend\/styles/],
+      ['M  frontend/library/s4Spec.mjs\0', /M  frontend\/library/],
+      ['?? frontend/newfile.js\0', /\?\? frontend\/newfile/],
+      ['R  new/path.js\0old/path.js\0', /R {2}old\/path.js -> new\/path.js/],
+    ];
+    for (const [porcelain, rx] of cases) {
+      const e = CAP.worktreeDirtyEntries('/repo', exec(porcelain));
+      expect(e.length, porcelain).toBeGreaterThan(0);
+      expect(e.join(' ')).toMatch(rx);
+    }
+    // git status 자체가 실패해도 fail-closed다.
+    expect(CAP.worktreeDirtyEntries('/repo', () => { throw new Error('git gone'); }).join(' '))
+      .toMatch(/WORKTREE_STATUS_FAILED/);
+    // clean이면 빈 배열
+    expect(CAP.worktreeDirtyEntries('/repo', exec(''))).toEqual([]);
+  });
+
+  it('writer는 캡처 후 postflight에서 worktree를 다시 본다', () => {
+    const src = readFileSync(new URL('../scripts/s4-capture.mjs', import.meta.url), 'utf8');
+    const fn = src.slice(src.indexOf('async function runPhaseCaptureImpl'));
+    const body = fn.slice(0, fn.indexOf('\nif (process.argv'));
+    // 게이트 문구는 phaseGateDecision이 만든다 — writer는 start/end 두 번 호출한다.
+    // dirty 조기종료 1 + start 1 + end 1
+    expect((body.match(/phaseGateDecision\(\{/g) || [])).toHaveLength(3);
+    expect(body).toContain("stage: 'start'");
+    expect(body).toContain("stage: 'end'");
+    expect(body.indexOf("stage: 'end'")).toBeLessThan(body.indexOf('writeCandidate({'));
+    expect(src).toContain('WORKTREE_DIRTIED_DURING_CAPTURE');
+    // main은 phase 경로에서 worktree를 중복 검사하지 않는다(orchestrator 단독 소유).
+    const mainFn = src.slice(src.indexOf('export async function main('), src.indexOf('export function phaseGateDecision'));
+    expect(mainFn.indexOf('worktreeDirtyEntries(')).toBeGreaterThan(mainFn.indexOf('if (cli.discover || cli.canary)'));
+  });
+
+  it('public CLI 포트는 커밋된 어댑터와 일치한다', () => {
+    expect(CAP.ADAPTER_PORT).toBe(10098);
+    const adapter = readFileSync(new URL('../scripts/s4-adapter.playwright.js', import.meta.url), 'utf8');
+    expect(adapter).toContain(`http://127.0.0.1:${CAP.ADAPTER_PORT}`);
+    const src = readFileSync(new URL('../scripts/s4-capture.mjs', import.meta.url), 'utf8');
+    expect(src).toContain('PORT_FIXED');
+  });
+});
+
+// ── s4-gen Git 호출 경계 ────────────────────────────────────────────────────
+describe('S4 generator Git 경계 — 문자열 보간이 없다', () => {
+  it('execFileSync + argv 배열이고 ref/rel을 먼저 검증한다', () => {
+    const src = readFileSync(new URL('../scripts/s4-gen.mjs', import.meta.url), 'utf8');
+    const fn = src.slice(src.indexOf('const gitBlobOid'), src.indexOf('const DISCOVERY_EVIDENCE'));
+    expect(fn).toContain('execFileSync(');
+    expect(fn).not.toMatch(/execSync\(`git/);
+    expect(fn).toContain('GIT_REF_RX.test');
+    expect(fn).toContain('CANON_PATHS.has');
+    // 검증이 호출보다 앞이다.
+    expect(fn.indexOf('CANON_PATHS.has')).toBeLessThan(fn.indexOf('execFileSync('));
+  });
+  it('evidence preflight가 projection보다 앞이고 실패 시 die한다', () => {
+    const src = readFileSync(new URL('../scripts/s4-gen.mjs', import.meta.url), 'utf8');
+    expect(src.indexOf('DISCOVERY_EVIDENCE_FAILED')).toBeLessThan(src.indexOf('EV.evaluateProjection'));
+    expect(src).toContain('DISCOVERY_EVIDENCE_UNREADABLE');
+  });
+});
+
+// ── candidate storage 강화 ──────────────────────────────────────────────────
+describe('S4 candidate storage — 전용 ignored root, race 재검증, symlink 거부', () => {
+  const mk = () => mkdtempSync(join(tmpdir(), 's4cs-'));
+  const root = (d) => join(d, RUN.CANDIDATE_ROOT);
+  const ptr = (d, ph = 'light') => join(root(d), RUN.CANDIDATE_POINTER(ph));
+  const put = (d, ctx, pngs, ph = 'light') => RUN.writeCandidate({ fixturesDir: d, phase: ph,
+    contextRaw: ctx, pngByCaptureName: pngs, expectedCaptureNames: Object.keys(pngs) });
+  const P1 = () => ({ 'a.png': Buffer.from('1') });
+
+  it('candidate root는 통째로 gitignore된다 — 이름 규칙이 바뀌어도', () => {
+    const gi = readFileSync(new URL('./__fixtures__/.gitignore', import.meta.url), 'utf8');
+    expect(gi).toContain(`${RUN.CANDIDATE_ROOT}/`);
+    const repo = fileURLToPath(new URL('../..', import.meta.url));
+    for (const rel of [`frontend/library/__fixtures__/${RUN.CANDIDATE_ROOT}/light.pointer`,
+      `frontend/library/__fixtures__/${RUN.CANDIDATE_ROOT}/bundle-light-x/content.json`]) {
+      const ignored = (() => {
+        try { execSync(`git -C ${repo} check-ignore -q "${rel}"`, { stdio: 'ignore' }); return true; }
+        catch (e) { return false; }
+      })();
+      expect(ignored, rel).toBe(true);
+    }
+  });
+
+  it('writer-success ⇒ immediate-reader-success (상설 불변식)', () => {
+    const d = mk();
+    for (const [ctx, pngs] of [['A', P1()], ['B', { 'b.png': Buffer.from('2') }], ['A', P1()]]) {
+      expect(put(d, ctx, pngs)).toEqual([]);
+      const r = RUN.readCandidateBundle(d, 'light');
+      expect(r.errors).toEqual([]);
+      expect(r.contextRaw).toBe(ctx);
+      expect(Object.keys(r.pngByName).sort()).toEqual(Object.keys(pngs).sort());
+    }
+    rmSync(d, { recursive: true, force: true });
+  });
+
+  it('light write 후 git status가 clean이고 dark가 시작 가능하다 (임시 repo)', () => {
+    // **실제 repo에는 쓰지 않는다.** nested .gitignore를 복사한 임시 Git repo에서 같은 조건을
+    // 만든다. 이전 판은 여기서 실제 fixtures에 LIGHT/DARK를 쓰고 root를 rmSync했다 —
+    // 사용자의 기존 candidate가 있었다면 지워졌다.
+    const d = mkdtempSync(join(tmpdir(), 's4gitrepo-'));
+    const fx = join(d, 'frontend', 'library', '__fixtures__');
+    mkdirSync(fx, { recursive: true });
+    writeFileSync(join(fx, '.gitignore'),
+      readFileSync(new URL('./__fixtures__/.gitignore', import.meta.url), 'utf8'));
+    writeFileSync(join(fx, 'keep.txt'), 'x');
+    execSync(`git -C ${d} init -q && git -C ${d} add -A && ` +
+      `git -C ${d} -c user.email=t@t -c user.name=t commit -q -m init`, { stdio: 'ignore' });
+    const status = () => execSync(`git -C ${d} status --porcelain -z --untracked-files=all`, { encoding: 'utf8' });
+    expect(status()).toBe('');
+    expect(put(fx, 'LIGHT', P1(), 'light')).toEqual([]);
+    expect(status()).toBe('');                       // candidate가 worktree를 더럽히지 않는다
+    expect(CAP.worktreeDirtyEntries(d, (c) => execSync(c, { encoding: 'utf8' }))).toEqual([]);
+    expect(put(fx, 'DARK', P1(), 'dark')).toEqual([]);
+    expect(status()).toBe('');
+    expect(RUN.readCandidateBundle(fx, 'light').contextRaw).toBe('LIGHT');
+    expect(RUN.readCandidateBundle(fx, 'dark').contextRaw).toBe('DARK');
+    rmSync(d, { recursive: true, force: true });
+  });
+
+  it('RED: preseed된 wrong/incomplete bundle은 pointer 전환 전에 잡힌다', () => {
+    const d = mk();
+    const hash = RUN.bundleContentHash('A', P1());
+    const name = `bundle-light-${hash}`;
+    mkdirSync(join(root(d), name), { recursive: true });
+    writeFileSync(join(root(d), name, RUN.BUNDLE_CONTEXT_NAME), 'WRONG');   // 이름과 내용이 다르다
+    writeFileSync(join(root(d), name, 'a.png'), '1');
+    expect(put(d, 'A', P1()).join(' ')).toMatch(/WRITE_BUNDLE_HASH_MISMATCH/);
+    expect(existsSync(ptr(d))).toBe(false);                                  // pointer는 안 생겼다
+    // 불완전(파일 누락)
+    rmSync(join(root(d), name, 'a.png'));
+    expect(put(d, 'A', P1()).join(' ')).toMatch(/WRITE_BUNDLE_FILE_SET/);
+    expect(existsSync(ptr(d))).toBe(false);
+    rmSync(d, { recursive: true, force: true });
+  });
+
+  it('RED: symlink root / bundle / pointer / target-file / dotfile', () => {
+    const d = mk(); const outside = mkdtempSync(join(tmpdir(), 's4out-'));
+    // root가 symlink
+    symlinkSync(outside, root(d));
+    expect(put(d, 'A', P1()).join(' ')).toMatch(/WRITE_NODE_SYMLINK|WRITE_NODE_ESCAPES/);
+    rmSync(root(d));
+    // bundle이 symlink
+    mkdirSync(root(d), { recursive: true });
+    symlinkSync(outside, join(root(d), `bundle-light-${RUN.bundleContentHash('A', P1())}`));
+    expect(put(d, 'A', P1()).join(' ')).toMatch(/WRITE_NODE_SYMLINK|WRITE_NODE_ESCAPES/);
+    rmSync(join(root(d), `bundle-light-${RUN.bundleContentHash('A', P1())}`));
+    // pointer가 디렉터리
+    mkdirSync(ptr(d));
+    expect(put(d, 'A', P1()).join(' ')).toMatch(/WRITE_NODE_NOT_FILE/);
+    rmSync(ptr(d), { recursive: true, force: true });
+    // 정상 기록 후 target을 파일로 바꾸면 읽기가 거부
+    expect(put(d, 'A', P1())).toEqual([]);
+    const nm = readFileSync(ptr(d), 'utf8').trim();
+    rmSync(join(root(d), nm), { recursive: true, force: true });
+    writeFileSync(join(root(d), nm), 'not a dir');
+    expect(RUN.readCandidateBundle(d, 'light').errors.join(' ')).toMatch(/BUNDLE_NODE_NOT_DIR/);
+    rmSync(join(root(d), nm)); mkdirSync(join(root(d), nm));
+    writeFileSync(join(root(d), nm, RUN.BUNDLE_CONTEXT_NAME), 'A');
+    writeFileSync(join(root(d), nm, 'a.png'), '1');
+    writeFileSync(join(root(d), nm, '.hidden'), 'x');
+    expect(RUN.readCandidateBundle(d, 'light').errors.join(' ')).toMatch(/BUNDLE_DOTFILE/);
+    rmSync(d, { recursive: true, force: true }); rmSync(outside, { recursive: true, force: true });
+  });
+
+  it('RED: malformed 입력은 throw하지 않고 controlled error를 낸다', () => {
+    const d = mk();
+    for (const args of [
+      { phase: 'nope', contextRaw: 'x', pngByCaptureName: P1(), expectedCaptureNames: ['a.png'] },
+      { phase: 'light', contextRaw: 1, pngByCaptureName: P1(), expectedCaptureNames: ['a.png'] },
+      { phase: 'light', contextRaw: 'x', pngByCaptureName: null, expectedCaptureNames: [] },
+      { phase: 'light', contextRaw: 'x', pngByCaptureName: { '.dot.png': Buffer.from('1') }, expectedCaptureNames: ['.dot.png'] },
+    ]) {
+      let out = null;
+      expect(() => { out = RUN.writeCandidate({ fixturesDir: d, ...args }); }).not.toThrow();
+      expect(Array.isArray(out)).toBe(true);
+      expect(out.length).toBeGreaterThan(0);
+    }
+    expect(RUN.readCandidateBundle(d, 'nope').errors.join(' ')).toMatch(/BUNDLE_PHASE_INVALID/);
+    rmSync(d, { recursive: true, force: true });
+  });
+});
+
+// ── provenance 정본 검증 ────────────────────────────────────────────────────
+describe('S4 provenance 경로 정본 — 목록 자체를 먼저 검증한다', () => {
+  const DIR = new URL('./__fixtures__/s4-discovery-evidence/', import.meta.url);
+  const load = () => Object.fromEntries(EV.DISCOVERY_EVIDENCE_FILES.map((n) => [n, readFileSync(new URL(n, DIR), 'utf8')]));
+  const run = (paths) => { let calls = 0;
+    const e = EV.verifyDiscoveryEvidence({ files: load(), spec: { ...SPEC, PROVENANCE_BLOB_PATHS: paths },
+      scenario: EV.buildActionContext(SPEC.SCENARIO_CANON), sha256Hex: sha256,
+      gitBlob: () => { calls += 1; return null; } });
+    return { e: e.join(' '), calls }; };
+  const P = () => [...SPEC.PROVENANCE_BLOB_PATHS];
+
+  it('RED: duplicate append / duplicate-replaces-one — Git 호출 0회', () => {
+    const a = run([...P(), P()[0]]);
+    expect(a.e).toMatch(/EVIDENCE_PROVENANCE_PATH_DUPLICATE/);
+    expect(a.calls).toBe(0);
+    const rep = P(); rep[1] = rep[0];
+    const b = run(rep);
+    expect(b.e).toMatch(/EVIDENCE_PROVENANCE_PATH_DUPLICATE/);
+    expect(b.e).toMatch(/EVIDENCE_PROVENANCE_PATH_CARDINALITY 8 != 9/);
+    expect(b.calls).toBe(0);
+  });
+
+  it('RED: 배열 아님 / 비문자열 / 비정규형 — Git 호출 0회', () => {
+    for (const bad of ['x', null, [], [1, 2], ['/abs/path'], ['a/'], ['a//b'], ['a/../b'], ['a\\\\b'], ['  sp  ']]) {
+      const r = run(bad);
+      expect(r.e.length, JSON.stringify(bad)).toBeGreaterThan(0);
+      expect(r.calls, JSON.stringify(bad)).toBe(0);
+    }
+  });
+
+  it('RED: A/B 경로 집합에 오류가 있으면 Git 호출 0회', () => {
+    const f = load();
+    for (const which of ['runA.out', 'runB.out']) {
+      const p = JSON.parse(f[which]);
+      const blobs = { ...p.provenance.blobs }; delete blobs[Object.keys(blobs)[0]];
+      p.provenance.blobs = blobs;
+      const g = { ...f, [which]: JSON.stringify(p, null, 1) };
+      const man = JSON.parse(JSON.stringify(SPEC.EXPECTED_DATASET_MANIFEST));
+      man.evidence.files = { ...man.evidence.files, [which]: sha256(g[which]) };
+      let calls = 0;
+      const e = EV.verifyDiscoveryEvidence({ files: g, spec: { ...SPEC, EXPECTED_DATASET_MANIFEST: man },
+        scenario: EV.buildActionContext(SPEC.SCENARIO_CANON), sha256Hex: sha256,
+        gitBlob: () => { calls += 1; return null; } });
+      expect(e.join(' '), which).toMatch(/EVIDENCE_BLOB_PATH_SET_INVALID/);
+      expect(calls, which).toBe(0);
+    }
+  });
+
+  it('정상 목록에서는 Git이 정확히 경로 수만큼 호출된다', () => {
+    let calls = 0;
+    EV.verifyDiscoveryEvidence({ files: load(), spec: SPEC,
+      scenario: EV.buildActionContext(SPEC.SCENARIO_CANON), sha256Hex: sha256,
+      gitBlob: (ref, rel) => { calls += 1; return null; } });
+    expect(calls).toBe(SPEC.PROVENANCE_BLOB_PATHS.length);
+  });
+});
+
+// (구 phase authority describe는 제거했다 — production sink가 non-exported가 되면서
+//  exec 주입으로 시험할 수 없다. 그 축은 'S4 phase gate' describe의 순수 결정 함수와
+//  실제 Git checkout 테스트가 대신 덮는다.)
+
+// ── lifecycle 출력 순서 ─────────────────────────────────────────────────────
+describe('S4 lifecycle 진단 — primary 다음에 나온다', () => {
+  it('thrown primary + endAttempt 실패의 stderr 순서', async () => {
+    const PORT = 10461;
+    const errs = [];
+    const cliX = CAP.parseCaptureArgs(['--canary', 'canvas', '--repeat', '2', '--port', String(PORT), '--timeoutMs', '1500'], SPEC);
+    const p = CAP.withBridge({ cli: cliX, err: (m) => errs.push(m), label: 'unit' },
+      async () => CAP.withAttempt(
+        { beginAttempt: async () => ({ ok: true }), endAttempt: async () => { throw new Error('END_BOOM'); } },
+        1, async () => { throw new Error('PRIMARY_THROWN'); }));
+    // hello와 shutdown만 답하는 최소 어댑터.
+    for (let i = 0; i < 40; i += 1) {
+      let cmd = null;
+      try { cmd = await (await fetch(`http://127.0.0.1:${PORT}/next`)).json(); } catch (e) { break; }
+      if (cmd.done) break;
+      const value = cmd.method === 'hello' ? { protocol: 's4-bridge/2' } : { ok: true };
+      try {
+        await fetch(`http://127.0.0.1:${PORT}/`, { method: 'POST',
+          body: JSON.stringify({ id: cmd.id, value }), headers: { 'content-type': 'application/json' } });
+      } catch (e) { break; }
+      if (cmd.method === 'shutdown') break;
+    }
+    const r = await p;
+    expect(r.code).toBe(1);
+    const iPrimary = errs.findIndex((m) => m.includes('PRIMARY_THROWN'));
+    const iLife = errs.findIndex((m) => m.includes('[lifecycle]') && m.includes('END_ATTEMPT_FAILED'));
+    expect(iPrimary, errs.join(' | ')).toBeGreaterThanOrEqual(0);
+    expect(iLife, errs.join(' | ')).toBeGreaterThan(iPrimary);   // primary가 먼저, lifecycle이 뒤
+  }, 20000);
+});
+
+// ── candidate commit semantics ──────────────────────────────────────────────
+describe('S4 candidate commit — lock · commit point · 입력 검증', () => {
+  const mk = () => mkdtempSync(join(tmpdir(), 's4cc-'));
+  const root = (d) => join(d, RUN.CANDIDATE_ROOT);
+  const put = (d, ctx, pngs, ph = 'light') => RUN.writeCandidate({ fixturesDir: d, phase: ph,
+    contextRaw: ctx, pngByCaptureName: pngs, expectedCaptureNames: Object.keys(pngs) });
+  const P1 = () => ({ 'a.png': Buffer.from('1') });
+
+  it('cooperative lock — 잡혀 있으면 쓰지 않는다', () => {
+    const d = mk();
+    mkdirSync(root(d), { recursive: true });
+    writeFileSync(join(root(d), '.lock-light'), '');
+    expect(put(d, 'A', P1()).join(' ')).toMatch(/WRITE_LOCK_BUSY/);
+    expect(existsSync(join(root(d), RUN.CANDIDATE_POINTER('light')))).toBe(false);
+    rmSync(join(root(d), '.lock-light'));
+    expect(put(d, 'A', P1())).toEqual([]);                 // 해제되면 진행
+    expect(existsSync(join(root(d), '.lock-light'))).toBe(false);   // 쓰고 나면 반납
+    rmSync(d, { recursive: true, force: true });
+  });
+
+  it('bundle 검증은 pointer rename **전에** 끝난다', () => {
+    const d = mk();
+    const hash = RUN.bundleContentHash('A', P1());
+    mkdirSync(join(root(d), `bundle-light-${hash}`), { recursive: true });
+    writeFileSync(join(root(d), `bundle-light-${hash}`, RUN.BUNDLE_CONTEXT_NAME), 'WRONG');
+    writeFileSync(join(root(d), `bundle-light-${hash}`, 'a.png'), '1');
+    expect(put(d, 'A', P1()).join(' ')).toMatch(/WRITE_BUNDLE_HASH_MISMATCH/);
+    expect(existsSync(join(root(d), RUN.CANDIDATE_POINTER('light')))).toBe(false);  // commit 전에 멈춤
+    rmSync(d, { recursive: true, force: true });
+  });
+
+  it('commit point는 pointer rename이다 — 그 전 실패는 이전 pointer를 보존', () => {
+    const d = mk();
+    expect(put(d, 'A', P1())).toEqual([]);
+    const before = readFileSync(join(root(d), RUN.CANDIDATE_POINTER('light')), 'utf8');
+    chmodSync(root(d), 0o500);
+    const e = put(d, 'B', { 'b.png': Buffer.from('2') });
+    chmodSync(root(d), 0o700);
+    expect(e.length).toBeGreaterThan(0);
+    expect(e.join(' ')).not.toMatch(/COMMITTED_BUT/);      // publish되지 않은 실패다
+    expect(readFileSync(join(root(d), RUN.CANDIDATE_POINTER('light')), 'utf8')).toBe(before);
+    expect(RUN.readCandidateBundle(d, 'light').contextRaw).toBe('A');
+    rmSync(d, { recursive: true, force: true });
+    expect(RUN.COMMIT_POINT).toBe('pointer-rename');
+  });
+
+  it('commit 뒤 손상은 "publish되지 않음"이 아니라 별도 코드로 보고한다', () => {
+    const src = readFileSync(new URL('./s4CaptureRunner.mjs', import.meta.url), 'utf8');
+    const fn = src.slice(src.indexOf('export function writeCandidate'));
+    const body = fn.slice(0, fn.indexOf('\nexport function readCandidateBundle'));
+    expect(body).toContain('WRITE_COMMITTED_BUT_UNREADABLE');
+    expect(body).toContain('WRITE_COMMITTED_BUT_CONTEXT_MISMATCH');
+    expect(body).not.toContain('WRITE_READBACK_');         // 옛 이름은 사라졌다
+  });
+
+  it('순차 writer는 last-writer-wins이고 이전 bundle은 남는다', () => {
+    const d = mk();
+    put(d, 'A', P1());
+    const n1 = readFileSync(join(root(d), RUN.CANDIDATE_POINTER('light')), 'utf8').trim();
+    put(d, 'B', { 'b.png': Buffer.from('2') });
+    const n2 = readFileSync(join(root(d), RUN.CANDIDATE_POINTER('light')), 'utf8').trim();
+    expect(n2).not.toBe(n1);
+    expect(existsSync(join(root(d), n1))).toBe(true);       // 이전 bundle 존속
+    expect(RUN.readCandidateBundle(d, 'light').contextRaw).toBe('B');   // last-writer-wins
+    rmSync(d, { recursive: true, force: true });
+  });
+
+  it('RED: 입력 형태를 해시 전에 검증한다', () => {
+    const d = mk();
+    const bad = [
+      [{ expectedCaptureNames: 'a.png' }, /WRITE_EXPECTED_NAMES_NOT_ARRAY/],
+      [{ expectedCaptureNames: ['a.png', 'a.png'] }, /WRITE_EXPECTED_NAMES_DUPLICATE/],
+      [{ expectedCaptureNames: [1] }, /WRITE_EXPECTED_NAMES_NOT_STRINGS/],
+      [{ pngByCaptureName: [] }, /WRITE_PNGS_REQUIRED/],
+      [{ pngByCaptureName: Object.assign(Object.create({ x: 1 }), { 'a.png': Buffer.from('1') }) }, /WRITE_PNGS_NOT_PLAIN/],
+      [{ pngByCaptureName: { 'a.png': 'not bytes' } }, /WRITE_PNG_NOT_BYTES/],
+    ];
+    for (const [over, rx] of bad) {
+      const args = { fixturesDir: d, phase: 'light', contextRaw: 'A',
+        pngByCaptureName: P1(), expectedCaptureNames: ['a.png'], ...over };
+      let out = null;
+      expect(() => { out = RUN.writeCandidate(args); }).not.toThrow();
+      expect(out.join(' '), JSON.stringify(Object.keys(over))).toMatch(rx);
+    }
+    expect(existsSync(root(d))).toBe(false);   // 아무것도 만들지 않았다
+    rmSync(d, { recursive: true, force: true });
+  });
+});
+
+// ── evidence 8파일 결속 ─────────────────────────────────────────────────────
+describe('S4 evidence 파일 결속 — 8개 전부 바이트 해시로 묶인다', () => {
+  const DIR = new URL('./__fixtures__/s4-discovery-evidence/', import.meta.url);
+  const REPO = fileURLToPath(new URL('../..', import.meta.url));
+  const gitBlob = (ref, rel) => {
+    try { return execSync(`git -C ${REPO} rev-parse ${ref}:${rel}`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); }
+    catch (e) { return null; }
+  };
+  const load = () => Object.fromEntries(EV.DISCOVERY_EVIDENCE_FILES.map((n) => [n, readFileSync(new URL(n, DIR), 'utf8')]));
+  const verify = (files) => EV.verifyDiscoveryEvidence({ files, spec: SPEC,
+    scenario: EV.buildActionContext(SPEC.SCENARIO_CANON), sha256Hex: sha256, gitBlob });
+
+  it('manifest가 8파일 exact map을 갖고 fingerprint에 반영된다', () => {
+    const ev = SPEC.EXPECTED_DATASET_MANIFEST.evidence;
+    expect(Object.keys(ev.files).sort()).toEqual([...EV.DISCOVERY_EVIDENCE_FILES].sort());
+    expect(Object.keys(ev.files)).toHaveLength(8);
+    for (const v of Object.values(ev.files)) expect(v).toMatch(/^[0-9a-f]{64}$/);
+    // manifest는 fingerprint payload에 들어 있으므로 map을 바꾸면 지문이 바뀐다.
+    const man = JSON.parse(JSON.stringify(SPEC.EXPECTED_DATASET_MANIFEST));
+    man.evidence.files['runA.err'] = 'f'.repeat(64);
+    expect(EV.specFingerprint(EV.snapshotSpec({ ...SPEC, EXPECTED_DATASET_MANIFEST: man,
+      DATASET_ENDPOINTS: man.dataset.map((e) => e.urlTemplate) }).spec, sha256))
+      .not.toBe(EV.specFingerprint(EV.snapshotSpec(SPEC).spec, sha256));
+  });
+
+  it.each(EV.DISCOVERY_EVIDENCE_FILES)('RED: %s 1바이트 변이', (name) => {
+    const f = load(); f[name] = `${f[name]} `;
+    expect(verify(f).join(' ')).toContain(`EVIDENCE_FILE_SHA ${name} `);
+  });
+
+  it('RED: 파일 집합이 8이 아니면 거부(expected/actual 양쪽)', () => {
+    const f = load(); delete f['runB.code'];
+    expect(verify(f).join(' ')).toMatch(/EVIDENCE_FILE_MISSING runB.code/);
+    const g = { ...load(), extra: 'x' };
+    expect(verify(g).join(' ')).toMatch(/EVIDENCE_ACTUAL_FILE_SET/);
+    const man = JSON.parse(JSON.stringify(SPEC.EXPECTED_DATASET_MANIFEST));
+    delete man.evidence.files['runA.err'];
+    expect(EV.verifyDiscoveryEvidence({ files: load(), spec: { ...SPEC, EXPECTED_DATASET_MANIFEST: man },
+      scenario: EV.buildActionContext(SPEC.SCENARIO_CANON), sha256Hex: sha256, gitBlob }).join(' '))
+      .toMatch(/EVIDENCE_EXPECTED_FILE_SET/);
+  });
+
+  it.each(EV.DISCOVERY_EVIDENCE_FILES)('RED: %s 변이 → 승인에서 serialize/write 0회', (name) => {
+    const se = synEvidence(AW_SPEC);
+    const files = { ...se.files }; files[name] = `${files[name]} `;
+    const c = { serialize: 0, write: 0 };
+    const r = EV.approveAndWrite({ fixture: AW_FIXTURE(), spec: se.spec, contrastResults: [],
+      discoveryEvidence: { files, gitBlob: se.gitBlob },
+      actualDecls: UNIT_DECLS, actualRaw: '', preAnnSources: {},
+      actualAllowIdToKey: UNIT_ACTUAL_ALLOW_MAP, baseDecls: UNIT_BASE_DECLS,
+      provenanceRefs: { headCommit: 'unit', headBlobs: {}, specFingerprintNow: 'unit' },
+      contextRaw: AW_CTX_RAW(), sha256, readPng: AW_READ_PNG,
+      serialize: () => { c.serialize += 1; return 'B'; }, write: () => { c.write += 1; } });
+    expect(r.errors.join(' ')).toMatch(/EVIDENCE/);
+    expect(c).toEqual({ serialize: 0, write: 0 });
+    expect(r.wrote).toBe(false);
+  });
+});
+
+// ── phase gate 순수 결정 ────────────────────────────────────────────────────
+describe('S4 phase gate — 순수 결정 함수 + 실제 Git checkout', () => {
+  const CANON = CAP.HASHED_MODULES;
+  const C40 = 'c'.repeat(40);
+  const OK_HEAD = { errors: [], headCommit: C40,
+    blobs: Object.fromEntries(CANON.map((p, i) => [p, String(i).padStart(40, 'a')])) };
+  const CASES = [
+    ['tracked 수정', [' M frontend/styles/x.scss']],
+    ['staged', ['M  frontend/library/s4Spec.mjs']],
+    ['untracked', ['?? frontend/new.js']],
+    ['rename', ['R  old.js -> new.js']],
+    ['status 실패', ['WORKTREE_STATUS_FAILED git gone']],
+  ];
+  it.each(CASES)('start %s → 차단', (_n, dirty) => {
+    const r = CAP.phaseGateDecision({ stage: 'start', dirtyEntries: dirty, head: OK_HEAD, canonPaths: CANON });
+    expect(r.ok).toBe(false);
+    expect(r.errors[0]).toMatch(/WORKTREE_DIRTY/);
+  });
+  it.each(CASES)('end %s → 차단', (_n, dirty) => {
+    const r = CAP.phaseGateDecision({ stage: 'end', dirtyEntries: dirty, head: OK_HEAD,
+      pinnedBlobs: OK_HEAD.blobs, canonPaths: CANON, startCommit: C40, currentCommit: C40 });
+    expect(r.ok).toBe(false);
+    expect(r.errors[0]).toMatch(/WORKTREE_DIRTIED_DURING_CAPTURE/);
+  });
+  it('HEAD drift는 start/end 각각 다른 코드로 차단', () => {
+    expect(CAP.phaseGateDecision({ stage: 'start', dirtyEntries: [], canonPaths: CANON,
+      head: { errors: ['WORKING_DIFFERS_FROM_HEAD x'], blobs: null } }).errors[0]).toMatch(/HEAD_BINDING_FAILED/);
+    const drifted = { ...OK_HEAD, blobs: Object.fromEntries(CANON.map((p, i) => [p, String(i + 1).padStart(40, 'e')])) };
+    expect(CAP.phaseGateDecision({ stage: 'end', dirtyEntries: [], head: drifted,
+      pinnedBlobs: OK_HEAD.blobs, canonPaths: CANON, startCommit: C40, currentCommit: C40 }).errors[0])
+      .toMatch(/HEAD_BINDING_DRIFTED_DURING_CAPTURE/);
+  });
+  it('clean + 결속 통과면 ok', () => {
+    expect(CAP.phaseGateDecision({ stage: 'start', dirtyEntries: [], head: OK_HEAD, canonPaths: CANON }))
+      .toEqual({ ok: true, errors: [] });
+    expect(CAP.phaseGateDecision({ stage: 'end', dirtyEntries: [], head: OK_HEAD, pinnedBlobs: OK_HEAD.blobs,
+      canonPaths: CANON, startCommit: C40, currentCommit: C40 })).toEqual({ ok: true, errors: [] });
+  });
+  it('malformed 입력도 controlled error', () => {
+    expect(CAP.phaseGateDecision({ stage: 'start', dirtyEntries: null, head: OK_HEAD, canonPaths: CANON }).ok).toBe(false);
+    expect(CAP.phaseGateDecision({ stage: 'start', dirtyEntries: [], head: null, canonPaths: CANON }).ok).toBe(false);
+  });
+
+  it('실제 Git checkout에서 5종이 모두 dirty로 잡힌다', () => {
+    const d = mkdtempSync(join(tmpdir(), 's4gate-'));
+    writeFileSync(join(d, 'a.txt'), 'x'); mkdirSync(join(d, 'sub'));
+    writeFileSync(join(d, 'sub', 'b.txt'), 'y');
+    execSync(`git -C ${d} init -q && git -C ${d} add -A && git -C ${d} -c user.email=t@t -c user.name=t commit -q -m i`, { stdio: 'ignore' });
+    const dirty = () => CAP.worktreeDirtyEntries(d, (c) => execSync(c, { encoding: 'utf8' }));
+    expect(dirty()).toEqual([]);
+    writeFileSync(join(d, 'a.txt'), 'changed');
+    expect(dirty().join(' ')).toMatch(/ M a\.txt/);
+    execSync(`git -C ${d} add a.txt`, { stdio: 'ignore' });
+    expect(dirty().join(' ')).toMatch(/M {2}a\.txt/);
+    execSync(`git -C ${d} checkout -q -- . && git -C ${d} reset -q`, { stdio: 'ignore' });
+    writeFileSync(join(d, 'new.txt'), 'n');
+    expect(dirty().join(' ')).toMatch(/\?\? new\.txt/);
+    rmSync(join(d, 'new.txt'));
+    execSync(`git -C ${d} mv sub/b.txt sub/c.txt`, { stdio: 'ignore' });
+    expect(dirty().join(' ')).toMatch(/R {2}sub\/b\.txt -> sub\/c\.txt/);
+    rmSync(d, { recursive: true, force: true });
+  });
+
+  it('production sink는 export되지 않는다 — main만 부른다', () => {
+    expect(CAP.runPhaseCapture).toBeUndefined();
+    const src = readFileSync(new URL('../scripts/s4-capture.mjs', import.meta.url), 'utf8');
+    expect(src).toContain('async function runPhaseCaptureImpl(');
+    expect(src).not.toContain('export async function runPhaseCaptureImpl');
+    expect((src.match(/runPhaseCaptureImpl\(/g) || [])).toHaveLength(2);   // 정의 1 + main 호출 1
+    // exec 주입 지점이 없다.
+    const fn = src.slice(src.indexOf('async function runPhaseCaptureImpl'));
+    expect(fn.slice(0, fn.indexOf('{'))).not.toContain('exec');
+  });
+});
+
+// ── phase 시작 authority: 단일 관측 ────────────────────────────────────────
+describe('S4 phase 시작 authority — worktree를 한 번만 읽는다', () => {
+  it('dirty면 headBlobBinding을 부르지 않는다 (소스 구조 + 결정 함수)', () => {
+    const src = readFileSync(new URL('../scripts/s4-capture.mjs', import.meta.url), 'utf8');
+    const fn = src.slice(src.indexOf('async function runPhaseCaptureImpl'));
+    const body = fn.slice(0, fn.indexOf('\nif (process.argv'));
+    const start = body.slice(0, body.indexOf('capturePhaseCore('));
+    // 시작 구간에서 worktreeDirtyEntries는 정확히 1회, dirty면 return이 먼저다.
+    expect((start.match(/worktreeDirtyEntries\(/g) || [])).toHaveLength(1);
+    expect(start.indexOf('return 1;')).toBeLessThan(start.indexOf('headBlobBinding('));
+  });
+
+  it('RED: head={errors:[],blobs:null,headCommit:null}은 통과하지 못한다', () => {
+    const r = CAP.phaseGateDecision({ stage: 'start', dirtyEntries: [],
+      head: { errors: [], blobs: null, headCommit: null }, canonPaths: CAP.HASHED_MODULES });
+    expect(r.ok).toBe(false);
+    expect(r.errors[0]).toMatch(/GATE_HEAD_COMMIT_INVALID/);
+  });
+
+  it('RED: head 형태·commit·blobs 집합·OID를 fail-closed로 본다', () => {
+    const P = CAP.HASHED_MODULES;
+    const ok = { errors: [], headCommit: 'c'.repeat(40),
+      blobs: Object.fromEntries(P.map((p, i) => [p, String(i).padStart(40, 'a')])) };
+    const bad = [
+      [{ head: null }, /GATE_HEAD_SHAPE/],
+      [{ head: { errors: 'x' } }, /GATE_HEAD_SHAPE/],
+      [{ head: { ...ok, headCommit: 'short' } }, /GATE_HEAD_COMMIT_INVALID/],
+      [{ head: { ...ok, blobs: null } }, /GATE_HEAD_BLOBS_SHAPE/],
+      [{ head: { ...ok, blobs: [] } }, /GATE_HEAD_BLOBS_SHAPE/],
+      [{ head: { ...ok, blobs: { x: 'a'.repeat(40) } } }, /GATE_HEAD_BLOB_PATHS/],
+      [{ head: { ...ok, blobs: Object.fromEntries(P.map((p) => [p, 'nothex'])) } }, /GATE_HEAD_BLOB_OID/],
+      [{ canonPaths: [] }, /GATE_CANON_PATHS_MISSING/],
+      [{ stage: 'begin' }, /GATE_STAGE_INVALID/],
+      [{ dirtyEntries: null }, /GATE_DIRTY_SHAPE/],
+    ];
+    for (const [over, rx] of bad) {
+      const r = CAP.phaseGateDecision({ stage: 'start', dirtyEntries: [], head: ok, canonPaths: P, ...over });
+      expect(r.ok, JSON.stringify(Object.keys(over))).toBe(false);
+      expect(r.errors.join(' '), JSON.stringify(Object.keys(over))).toMatch(rx);
+    }
+    expect(CAP.phaseGateDecision({ stage: 'start', dirtyEntries: [], head: ok, canonPaths: P }))
+      .toEqual({ ok: true, errors: [] });
+  });
+});
+
+// ── 캡처 중 HEAD 이동 ───────────────────────────────────────────────────────
+describe('S4 HEAD 이동 — pinned blob만으로는 못 잡는다', () => {
+  const P = () => CAP.HASHED_MODULES;
+  const okHead = () => ({ errors: [], headCommit: 'a'.repeat(40),
+    blobs: Object.fromEntries(P().map((p, i) => [p, String(i).padStart(40, 'b')])) });
+
+  it('RED: 인프라 blob이 동일해도 HEAD가 움직였으면 차단', () => {
+    const r = CAP.phaseGateDecision({ stage: 'end', dirtyEntries: [], head: okHead(),
+      canonPaths: P(), pinnedBlobs: okHead().blobs,
+      startCommit: 'a'.repeat(40), currentCommit: 'f'.repeat(40) });
+    expect(r.ok).toBe(false);
+    expect(r.errors[0]).toMatch(/HEAD_MOVED_DURING_CAPTURE/);
+  });
+  it('GREEN 대조군: HEAD 동일이면 통과', () => {
+    expect(CAP.phaseGateDecision({ stage: 'end', dirtyEntries: [], head: okHead(),
+      canonPaths: P(), pinnedBlobs: okHead().blobs,
+      startCommit: 'a'.repeat(40), currentCommit: 'a'.repeat(40) })).toEqual({ ok: true, errors: [] });
+  });
+  it('currentCommit 누락/형식 오류는 fail-closed', () => {
+    for (const cc of [undefined, null, 'short', 123]) {
+      const r = CAP.phaseGateDecision({ stage: 'end', dirtyEntries: [], head: okHead(),
+        canonPaths: P(), pinnedBlobs: okHead().blobs, startCommit: 'a'.repeat(40), currentCommit: cc });
+      expect(r.ok, String(cc)).toBe(false);
+    }
+  });
+
+  it('실제 Git repo: 제품 파일만 바뀐 clean commit B로 옮겨도 HEAD_MOVED', () => {
+    const d = mkdtempSync(join(tmpdir(), 's4head-'));
+    for (const rel of CAP.HASHED_MODULES) {
+      mkdirSync(join(d, rel.split('/').slice(0, -1).join('/')), { recursive: true });
+      writeFileSync(join(d, rel), `// ${rel}\n`);
+    }
+    mkdirSync(join(d, 'frontend', 'styles'), { recursive: true });
+    writeFileSync(join(d, 'frontend', 'styles', 'x.scss'), '.a{color:red}\n');
+    const g = (c) => execSync(`git -C ${d} ${c}`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    execSync(`git -C ${d} init -q && git -C ${d} add -A && git -C ${d} -c user.email=t@t -c user.name=t commit -q -m A`, { stdio: 'ignore' });
+    const A = g('rev-parse HEAD').trim();
+    const exec = (c) => execSync(c, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const head0 = PROM.headBlobBinding(d, CAP.HASHED_MODULES, exec);
+    expect(head0.errors).toEqual([]);
+    // 캡처 중 제품 SCSS만 바꾼 clean commit B
+    writeFileSync(join(d, 'frontend', 'styles', 'x.scss'), '.a{color:blue}\n');
+    execSync(`git -C ${d} add -A && git -C ${d} -c user.email=t@t -c user.name=t commit -q -m B`, { stdio: 'ignore' });
+    const B = g('rev-parse HEAD').trim();
+    expect(B).not.toBe(A);
+    expect(CAP.worktreeDirtyEntries(d, exec)).toEqual([]);            // clean이다
+    const head1 = PROM.headBlobBinding(d, CAP.HASHED_MODULES, exec, A);
+    expect(head1.errors).toEqual([]);                                  // 인프라 blob은 동일
+    expect(JSON.stringify(head1.blobs)).toBe(JSON.stringify(head0.blobs));
+    // pinned blob만 보면 통과한다 — 현재 HEAD를 독립적으로 봐야 잡힌다.
+    const r = CAP.phaseGateDecision({ stage: 'end', dirtyEntries: [], head: head1,
+      canonPaths: CAP.HASHED_MODULES, pinnedBlobs: head0.blobs, startCommit: A, currentCommit: B });
+    expect(r.ok).toBe(false);
+    expect(r.errors[0]).toMatch(/HEAD_MOVED_DURING_CAPTURE/);
+    // A 유지 대조군
+    execSync(`git -C ${d} checkout -q ${A}`, { stdio: 'ignore' });
+    expect(CAP.phaseGateDecision({ stage: 'end', dirtyEntries: [], head: head1,
+      canonPaths: CAP.HASHED_MODULES, pinnedBlobs: head0.blobs, startCommit: A,
+      currentCommit: g('rev-parse HEAD').trim() })).toEqual({ ok: true, errors: [] });
+    rmSync(d, { recursive: true, force: true });
+  }, 30000);
+});
+
+// ── generator authority ─────────────────────────────────────────────────────
+describe('S4 generator authority — 자기 자신을 포함한 closure + clean 게이트', () => {
+  it('GENERATOR_HASHED_MODULES는 s4-gen 진입점의 정적 closure이고 자신을 포함한다', () => {
+    const repo = fileURLToPath(new URL('../..', import.meta.url));
+    const cl = PROM.staticImportClosure([CAP.GENERATOR_ENTRY],
+      (p) => { try { return readFileSync(join(repo, p), 'utf8'); } catch (e) { return null; } }, 'frontend');
+    const got = [...(cl.paths || cl)].sort();
+    expect(got).toEqual([...CAP.GENERATOR_HASHED_MODULES].sort());
+    expect(CAP.GENERATOR_HASHED_MODULES).toContain(CAP.GENERATOR_ENTRY);
+    // discovery provenance와 **다른 목록**이다.
+    expect([...CAP.GENERATOR_HASHED_MODULES].sort())
+      .not.toEqual([...SPEC.PROVENANCE_BLOB_PATHS].sort());
+  });
+
+  it('generator는 시작과 write 직전에 repo clean을 본다', () => {
+    const src = readFileSync(new URL('../scripts/s4-gen.mjs', import.meta.url), 'utf8');
+    expect(src).toContain("requireCleanRepo('AT_START')");
+    expect(src).toContain("requireCleanRepo('BEFORE_WRITE')");
+    expect(src).toContain('GENERATOR_HASHED_MODULES');
+    expect(src.indexOf("requireCleanRepo('AT_START')")).toBeLessThan(src.indexOf('EV.evaluateProjection'));
+    expect(src.indexOf("requireCleanRepo('BEFORE_WRITE')")).toBeLessThan(src.indexOf('EV.approveAndWrite({'));
+  });
+
+  it.each([
+    ['dirty s4-gen', [' M frontend/scripts/s4-gen.mjs']],
+    ['dirty evidence', [' M frontend/library/__fixtures__/s4-discovery-evidence/runA.out']],
+    ['staged 변경', ['M  frontend/library/s4Spec.mjs']],
+    ['untracked 변경', ['?? frontend/library/new.mjs']],
+  ])('RED: %s → serialize/write 0회 (결정 함수)', (_n, dirty) => {
+    // generator의 게이트는 worktreeDirtyEntries 결과가 비어야만 통과한다.
+    expect(dirty.length).toBeGreaterThan(0);
+    const r = CAP.phaseGateDecision({ stage: 'start', dirtyEntries: dirty,
+      head: null, canonPaths: CAP.GENERATOR_HASHED_MODULES });
+    expect(r.ok).toBe(false);
+    expect(r.errors[0]).toMatch(/WORKTREE_DIRTY/);
+  });
+
+  it('evidence 디렉터리 주장 범위 — 바이트 계약이다', () => {
+    // "물리적으로 정확히 8개 파일"을 주장하지 않는다. 계약은 **주어진 8개 바이트**다.
+    const src = readFileSync(new URL('./s4Evaluator.mjs', import.meta.url), 'utf8');
+    const fn = src.slice(src.indexOf('export function verifyDiscoveryEvidence'));
+    expect(fn).toContain('EVIDENCE_ACTUAL_FILE_SET');
+    expect(fn).not.toContain('readdirSync');        // 디렉터리를 열지 않는다 = 물리 주장 없음
+  });
+});
+
+// ── lock ownership ──────────────────────────────────────────────────────────
+describe('S4 candidate lock — ownership과 foreign lock', () => {
+  const mk = () => mkdtempSync(join(tmpdir(), 's4lk-'));
+  const root = (d) => join(d, RUN.CANDIDATE_ROOT);
+  const lockOf = (d) => join(root(d), '.lock-light');
+  const put = (d, ctx) => RUN.writeCandidate({ fixturesDir: d, phase: 'light', contextRaw: ctx,
+    pngByCaptureName: { 'a.png': Buffer.from('1') }, expectedCaptureNames: ['a.png'] });
+
+  it('RED: root가 outside symlink면 밖에 lock을 만들지 않는다', () => {
+    const d = mk(); const outside = mkdtempSync(join(tmpdir(), 's4out-'));
+    symlinkSync(outside, root(d));
+    const e = put(d, 'A');
+    expect(e.join(' ')).toMatch(/WRITE_NODE_SYMLINK|WRITE_NODE_ESCAPES/);
+    expect(readdirSync(outside)).toEqual([]);          // 밖에 아무것도 안 생겼다
+    rmSync(root(d)); rmSync(d, { recursive: true, force: true }); rmSync(outside, { recursive: true, force: true });
+  });
+
+  it('RED: foreign lock으로 교체되면 pointer를 쓰지 않고 그 lock을 지우지 않는다', () => {
+    const d = mk();
+    mkdirSync(root(d), { recursive: true });
+    // writeCandidate 내부에서 lock을 잡은 뒤 교체되는 상황을 모사한다:
+    // 먼저 정상 기록해 pointer를 만들고, 그 뒤 lock 파일을 다른 inode로 바꾼 상태에서 재기록.
+    expect(put(d, 'A')).toEqual([]);
+    const before = readFileSync(join(root(d), RUN.CANDIDATE_POINTER('light')), 'utf8');
+    // foreign lock 선점 → WRITE_LOCK_BUSY, 그리고 그 lock은 살아남는다.
+    writeFileSync(lockOf(d), 'FOREIGN');
+    const e = put(d, 'B');
+    expect(e.join(' ')).toMatch(/WRITE_LOCK_BUSY/);
+    expect(existsSync(lockOf(d))).toBe(true);
+    expect(readFileSync(lockOf(d), 'utf8')).toBe('FOREIGN');   // 남의 lock을 지우지 않았다
+    expect(readFileSync(join(root(d), RUN.CANDIDATE_POINTER('light')), 'utf8')).toBe(before);
+    rmSync(d, { recursive: true, force: true });
+  });
+
+  it('ownership 검사와 복구 절차가 코드에 있다', () => {
+    const src = readFileSync(new URL('./s4CaptureRunner.mjs', import.meta.url), 'utf8');
+    expect(src).toContain('WRITE_LOCK_OWNERSHIP_LOST');
+    expect(src).toContain('fstatSync(lockFd)');
+    expect(src).toContain('lockStillOurs()');
+    expect(RUN.LOCK_RECOVERY).toEqual(['WRITE_LOCK_BUSY', 'WRITE_LOCK_OWNERSHIP_LOST', 'WRITE_COMMITTED_BUT']);
+    // 자동 stale 회수가 없다 — mtime 기반 판단이 없어야 한다.
+    const fn = src.slice(src.indexOf('export function writeCandidate'));
+    expect(fn.slice(0, fn.indexOf('\nexport function readCandidateBundle'))).not.toContain('mtime');
+    // commit 직전에 소유권을 본다.
+    const body = fn.slice(0, fn.indexOf('\nexport function readCandidateBundle'));
+    expect(body.indexOf('WRITE_LOCK_OWNERSHIP_LOST')).toBeLessThan(body.indexOf('commit point'));
+  });
+
+  it('containment 검증이 lock open보다 앞이다', () => {
+    const src = readFileSync(new URL('./s4CaptureRunner.mjs', import.meta.url), 'utf8');
+    const fn = src.slice(src.indexOf('export function writeCandidate'));
+    const body = fn.slice(0, fn.indexOf('\nexport function readCandidateBundle'));
+    expect(body.indexOf('safeNode(fixturesDir, p2, k)')).toBeLessThan(body.indexOf("openSync(lockPath, 'wx')"));
+  });
+});
+
+// ── main → sink 행동 결속 ───────────────────────────────────────────────────
+describe('S4 main→sink 호출 결속 — 우회 mutant는 RED', () => {
+  // **범위: main이 production sink를 실제로 부르는가**뿐이다.
+  // 복사본을 임시 위치에서 돌리므로 import.meta.url 기반 REPO_DIR도 임시 위치를 가리킨다 —
+  // 이것은 실제 Weave clean-HEAD phase E2E 증거가 **아니다**. 그 증거는 checkpoint 뒤
+  // clean-HEAD canary에서만 나온다.
+  // 워킹트리가 더러운 개발 중이므로 code=1이 정상이고,
+  // **어느 게이트가 받았는지**로 sink 도달 여부를 판정한다.
+  // `if (false) runPhaseCaptureImpl(...)` mutant는 게이트 문구가 사라져 RED가 된다.
+  const runMain = async (srcOverride) => {
+    const real = fileURLToPath(new URL('../scripts/s4-capture.mjs', import.meta.url));
+    const tmp = mkdtempSync(join(tmpdir(), 's4main-'));
+    const copy = join(tmp, 's4-capture.mjs');
+    let src = readFileSync(real, 'utf8');
+    if (srcOverride) src = srcOverride(src);
+    // 상대 import를 원본 위치 기준 절대경로로 바꿔 복사본이 그대로 돈다.
+    const base = fileURLToPath(new URL('../scripts/', import.meta.url));
+    src = src.replace(/from '(\.\.?\/[^']+)'/g, (m, rel) => `from '${pathToFileURL(resolve(base, rel)).href}'`);
+    writeFileSync(copy, src);
+    const M = await import(pathToFileURL(copy).href);
+    const errs = [];
+    const code = await M.main(['--phase', 'light'], { log: () => {}, err: (m) => errs.push(m) });
+    rmSync(tmp, { recursive: true, force: true });
+    return { code, errs: errs.join(' ') };
+  };
+
+  it('정상 main은 production 게이트를 통과해 첫 게이트에서 판정한다', async () => {
+    const r = await runMain();
+    expect(r.code).toBe(1);
+    // 개발 중 워킹트리가 더럽다 — production 시작 게이트가 받았다는 증거.
+    expect(r.errs).toMatch(/WORKTREE_DIRTY|HEAD_BINDING_FAILED/);
+  }, 30000);
+
+  it('RED: `if (false) runPhaseCaptureImpl(...)` mutant는 게이트에 도달하지 못한다', async () => {
+    const r = await runMain((src) => src.replace(
+      'return runPhaseCaptureImpl({ SPEC, cli, fixturesDir, log, err });',
+      'if (false) { return runPhaseCaptureImpl({ SPEC, cli, fixturesDir, log, err }); } return 0;'));
+    // 우회하면 게이트 문구가 하나도 안 나오고 code도 0이 된다 — 정상 경로와 명확히 다르다.
+    expect(r.errs).not.toMatch(/WORKTREE_DIRTY|HEAD_BINDING_FAILED/);
+    expect(r.code).toBe(0);
+  }, 30000);
+
+  it('RED: 시작 게이트를 삭제한 mutant는 다른 지점에서 죽는다', async () => {
+    const r = await runMain((src) => src.replace(
+      "  const dirty0 = worktreeDirtyEntries(repoDir, gitExec);",
+      '  const dirty0 = [];'));
+    expect(r.errs).not.toMatch(/WORKTREE_DIRTY/);      // 시작 게이트가 사라졌다
+    expect(r.code).toBe(1);                            // 그래도 HEAD 게이트가 받는다
+    expect(r.errs).toMatch(/HEAD_BINDING_FAILED/);
+  }, 30000);
+});
+
 describe('S4 브리지 통합 — 단일 브리지로 반복 attempt를 완주한다', () => {
   // **범위: 브리지 수명주기**다. main()이 아니라 runObservation()을 직접 호출한다.
-  // HEAD pre/postflight는 여기서 검증하지 않는다 — main()을 실행하는 테스트는 없고,
-  // 실제 clean-HEAD 카나리가 그 통합 경로의 증거다.
+  // HEAD pre/postflight는 여기서 검증하지 않는다. main()을 호출하는 테스트는
+  // 'S4 main→sink 호출 결속' describe에 있지만 그것은 sink 호출 여부만 본다 —
+  // 실제 clean-HEAD 카나리가 통합 경로의 증거다.
   // 이전 판은 반복마다 서버를 새로 만들어 두 번째 hello가 무기한 대기했다(실증).
   const PORT = 10197;
   const api = 'http://localhost:10001/api';
@@ -5259,8 +7514,8 @@ describe('S4 캡처 증거 계약 — 기록만으로는 통과하지 못한다'
   const SURF = { name: 's1', captureName: 's1.png', actions: [], requiredElements: ['.Req'],
     coverageSelectors: [{ selector: '.Cov' }, { selector: '.Track::before', locator: { selector: '.Track', pseudo: '::before' } }],
     darkReviewSelectors: ['.Dark1'] };
-  const SPEC_E = { REQUIRED_SMOKE_SURFACES: [SURF] };
-  const lightCtx = () => ({ phase: 'light',
+  const SPEC_E = DS_SPEC({ REQUIRED_SMOKE_SURFACES: [SURF] });
+  const lightCtx = () => DS_CTX({ phase: 'light',
     coverageEvidence: { s1: { '.Cov': { count: 1, visible: 1 }, '.Track::before': { count: 1, present: 1 }, '.Req': { count: 2, visible: 2 } } },
     provenance: { headCommit: 'abc', blobs: { 'x.mjs': 'b1' }, specFingerprint: 'fp' } });
   const REFS_E = { headCommit: 'abc', headBlobs: { 'x.mjs': 'b1' }, specFingerprintNow: 'fp' };
@@ -5270,6 +7525,7 @@ describe('S4 캡처 증거 계약 — 기록만으로는 통과하지 못한다'
   it('RED: 대조 기준(HEAD·fingerprint·blobs)을 생략하면 fail-closed', () => {
     // 생략을 허용하면 provenance의 **존재만** 보는 것이라 아무 의미가 없다.
     expect(EV.validateCaptureEvidence(SPEC_E, lightCtx())).toEqual(['EVIDENCE_PROVENANCE_REFS_REQUIRED']);
+    // 계약 검사는 refs 유무와 무관하게 먼저 돈다 — 정본 계약이면 여기서 오류가 없다.
     expect(EV.validateCaptureEvidence(SPEC_E, lightCtx(), { ...REFS_E, headCommit: undefined }).join())
       .toMatch(/EVIDENCE_PROVENANCE_REF_MISSING headCommit/);
   });
@@ -5401,7 +7657,7 @@ describe('S4 action log 계약 — 손으로 만든 context는 승인되지 않�
     ],
     coverageSelectors: [{ selector: '.Pill--on', state: 'selected', provenBy: 1, produces: '.Pill--on' }],
   };
-  const SPEC_A = { REQUIRED_SMOKE_SURFACES: [SURF] };
+  const SPEC_A = DS_SPEC({ REQUIRED_SMOKE_SURFACES: [SURF] });
   const honest = () => ({
     trackId: 7,
     actionLog: { 'r-a': [
@@ -5919,13 +8175,15 @@ describe('S4 allow ID 네 집합 exact equality — 비연속 집합과 단독 �
   const U_CTX_RAW = () => JSON.stringify({ ...unitCtx(), capture: { type: 'png', scale: 'css', dpr: 1 },
     privacyAudit: { scope: 'dedicated-synthetic-account-workspace', contextPass: true, contextSubjectSha256: 'x', captures: [] } });
   const AW = (over = {}) => { const io = IOSPY();
+    const se = synEvidence(over.spec || UNIT_SPEC);
     const r = EV.approveAndWrite({
-      fixture: unitFixture(), spec: UNIT_SPEC, contrastResults: [],
+      fixture: unitFixture(), contrastResults: [],
+      discoveryEvidence: { files: se.files, gitBlob: se.gitBlob },
       actualDecls: UNIT_DECLS, actualRaw: '', preAnnSources: {},
       actualAllowIdToKey: UNIT_ACTUAL_ALLOW_MAP, baseDecls: UNIT_BASE_DECLS,
       provenanceRefs: { headCommit: 'unit', headBlobs: {}, specFingerprintNow: 'unit' },
       contextRaw: U_CTX_RAW(), sha256, readPng: () => ({ bytes: Buffer.from('p'), width: 1440, height: 900 }),
-      serialize: io.serialize, write: io.write, ...over });
+      serialize: io.serialize, write: io.write, ...over, spec: se.spec });
     return { r, c: io.c }; };
   it('validator 주입은 무시된다(정적 결속) — conformance/frozen 인자를 넘겨도 실제 validator가 돈다', () => {
     const { r, c } = AW({ conformance: () => [], frozen: () => [], validateCandidate: () => [] });
@@ -5937,30 +8195,34 @@ describe('S4 allow ID 네 집합 exact equality — 비연속 집합과 단독 �
     const spec = { ...UNIT_SPEC, CONVERSIONS: [{ ident: { t: 'allow', id: 1 } }, { ident: { t: 'allow', id: 9 } }] };
     const { r, c } = AW({ spec });
     expect(r.errors.join('|')).toMatch(/ALLOW_SET_CHANGED_VS_CONVERSIONS/);
-    expect(r.calls).toEqual({ candidate: 1, conformance: 0, artifacts: 0 });
+    expect(r.calls).toEqual({ candidate: 1, conformance: 0, artifacts: 0, evidence: 1 });
     expect(c).toEqual({ serialize: 0, write: 0, bytes: [] });
   });
   it('conformance-only 오류 → artifacts 0회, write 0회 (쓰기가 conformance보다 앞서지 않는다)', () => {
     const { r, c } = AW({ baseDecls: undefined });
     expect(r.errors.join('|')).toMatch(/BASE_DECLS_REQUIRED/);
-    expect(r.calls).toEqual({ candidate: 1, conformance: 1, artifacts: 0 });
+    expect(r.calls).toEqual({ candidate: 1, conformance: 1, artifacts: 0, evidence: 1 });
     expect(c).toEqual({ serialize: 0, write: 0, bytes: [] });
   });
   it('artifacts-only 오류 → write 0회 (candidate·conformance는 통과)', () => {
     const { r, c } = AW({ readPng: () => ({ bytes: Buffer.from('p'), width: 2880, height: 1800 }) });
-    expect(r.calls).toEqual({ candidate: 1, conformance: 1, artifacts: 1 });
+    expect(r.calls).toEqual({ candidate: 1, conformance: 1, artifacts: 1, evidence: 1 });
     expect(c).toEqual({ serialize: 0, write: 0, bytes: [] });
   });
   it('contextRaw가 파싱 불가면 candidate 단계에서 막힌다', () => {
     const { r, c } = AW({ contextRaw: '{ not json' });
     expect(r.errors.join('|')).toMatch(/CANDIDATE_CONTEXT_REQUIRED/);
-    expect(r.calls).toEqual({ candidate: 1, conformance: 0, artifacts: 0 });
+    expect(r.calls).toEqual({ candidate: 1, conformance: 0, artifacts: 0, evidence: 1 });
     expect(c.write).toBe(0);
   });
   it('내부 validator 예외/비배열도 fail-closed (write 0회)', () => {
+    // 빈 spec은 이제 evidence 게이트가 **먼저** 막는다(계약이 없다는 사실 자체가 실패다).
+    // 어느 단계가 막든 write는 0회여야 한다 — 그게 이 테스트의 불변식이다.
     const { r, c } = AW({ spec: {} });
-    expect(r.errors.join('|')).toMatch(/APPROVE_VALIDATOR_THREW|APPROVE_VALIDATOR_NONARRAY/);
+    expect(r.errors.join('|')).toMatch(/APPROVE_VALIDATOR_THREW|APPROVE_VALIDATOR_NONARRAY|EVIDENCE/);
     expect(c.write).toBe(0);
+    expect(c.serialize).toBe(0);
+    expect(r.wrote).toBe(false);
   });
   it('serialize/write 미주입은 APPROVE_IO_REQUIRED', () => {
     const r = EV.approveAndWrite({ fixture: unitFixture(), spec: UNIT_SPEC, contrastResults: [] });
@@ -6319,6 +8581,54 @@ describe('S4 커밋 산출물 게이트 — 실제 fixture 원문·context 원�
 // ⚠️ fingerprint/해시는 UNIT_SPEC에서 계산해 넣는다 — 여기서 검증하려는 것은 "경로가 끝까지
 //    도는가"이지 프로덕션 값의 정답성이 아니다(그건 committed 게이트가 실 산출물로 본다).
 // ─────────────────────────────────────────────────────────────────────────────
+// 합성 world에 맞는 **합성 discovery 증거**. approveAndWrite는 evidence preflight를 무조건
+// 돌리므로, 계약과 무관한 축(allow 집합·raster·mask)을 시험하려면 그 spec에 정합한 증거가
+// 필요하다. production 증거를 끌어다 쓰면 합성 manifest와 어긋나 축이 가려진다.
+// digest는 producer와 **같은 식**으로 계산한다: `surface method url status ok xN` 정렬 후 sha256.
+const synEvidence = (spec) => {
+  // manifest가 없는 spec(고의로 망가뜨린 입력)에는 합성할 것이 없다 — 빈 증거를 준다.
+  // 그러면 evidence 게이트가 먼저 fail-closed로 막고, 그것도 정당한 결과다.
+  if (!spec || !spec.EXPECTED_DATASET_MANIFEST) return { files: {}, gitBlob: () => null, spec };
+  const man = JSON.parse(JSON.stringify(spec.EXPECTED_DATASET_MANIFEST));
+  const sc = DS_SC();
+  const names = spec.REQUIRED_SMOKE_SURFACES.map((x) => x.name);
+  const tuples = [];
+  for (const cat of ['dataset', 'ambient', 'dev']) {
+    for (const e of man[cat]) {
+      const { url } = EV.resolveTemplate(e.urlTemplate, sc);
+      const extra = e.observedRequestCount - e.observedSurfaceCount;
+      names.slice(0, e.observedSurfaceCount).forEach((n, i) => {
+        tuples.push({ surface: n, method: e.method, url, count: i < extra ? 2 : 1 });
+      });
+    }
+  }
+  const lines = tuples.map((t) => `${t.surface} ${t.method} ${t.url} 200 ok x${t.count}`).sort();
+  const digest = sha256(lines.join('\n'));
+  const bySurface = Object.fromEntries(names.map((n) => [n, {}]));
+  for (const t of tuples) bySurface[t.surface][`${t.method} ${t.url} 200`] = t.count;
+  const paths = spec.PROVENANCE_BLOB_PATHS || SPEC.PROVENANCE_BLOB_PATHS;
+  const blobs = Object.fromEntries(paths.map((r, i) => [r, String(i).padStart(40, 'a')]));
+  const payload = { mode: 'discovery', eligibleForManifest: true,
+    provenance: { headCommit: man.evidence.observedHead, blobs,
+      specFingerprint: man.evidence.observedSpecFingerprint, hookVersion: 2, bridgeProtocol: 's4-bridge/2' },
+    surfaces: names, surfacesCompleted: names.length, repeats: 1,
+    digest, endpoints: lines, bySurface };
+  const out = JSON.stringify(payload, null, 1);
+  const adapterLog = JSON.stringify(['hello', 'beginAttempt', 'endAttempt', 'shutdown', 'clean-exit']);
+  const errText = 'bridge on 10098 — discovery\ndiscovery 완료 — 아무것도 쓰지 않았다.\n';
+  const files = { 'runA.out': out, 'runB.out': out, 'runA.err': errText, 'runB.err': errText,
+    'runA.code': '0\n', 'runB.code': '0\n', 'runA.adapter.json': adapterLog, 'runB.adapter.json': adapterLog };
+  man.evidence = { ...man.evidence, discoveryDigest: digest,
+    files: Object.fromEntries(Object.keys(files).map((n) => [n, sha256(files[n])])) };
+  // 검수 동결본과 exact 대조되므로 합성 world의 분류도 함께 제공한다.
+  const reviewed = {};
+  for (const cat of ['dataset', 'ambient', 'dev']) for (const e of man[cat]) reviewed[e.urlTemplate] = cat;
+  return { files, gitBlob: (ref, rel) => blobs[rel] ?? null,
+    spec: { ...spec, EXPECTED_DATASET_MANIFEST: man, REVIEWED_CLASSIFICATION: reviewed,
+      PROVENANCE_BLOB_PATHS: paths,
+      DATASET_ENDPOINTS: man.dataset.map((e) => e.urlTemplate) } };
+};
+
 const AW_SPEC = {
   ...UNIT_SPEC,
   BASE: 'unitbase',
@@ -6331,7 +8641,9 @@ const AW_SPEC = {
 const AW_PNG = { 'unit-a.png': pngBytes(1440, 900, 1), 'unit-b.png': pngBytes(1440, 900, 2) };
 const AW_READ_PNG = (n) => { if (!AW_PNG[n]) throw new Error(`no png ${n}`); return AW_PNG[n]; };
 const AW_CTX_RAW = () => {
-  const subject = {
+  // DS_CTX로 시나리오·dataset 응답·일치하는 provenance digest를 얹는다.
+  // **subject를 해싱하기 전에** 얹어야 privacyAudit의 contextSubjectSha256이 맞는다.
+  const subject = DS_CTX({
     viewport: { width: 1440, height: 900 },
     capture: { type: 'png', scale: 'css', dpr: 1 },
     // 실행기가 남기는 실행 기록. AW 세계의 surface는 actions가 비어 있으므로 로그도 빈 배열이다.
@@ -6341,7 +8653,7 @@ const AW_CTX_RAW = () => {
     provenance: { headCommit: 'unit', blobs: {}, specFingerprint: 'unit' },
     actionLog: { 'unit-a': [], 'unit-b': [] },
     baseLightMaskRects: unitCtx().baseLightMaskRects,
-  };
+  });
   const privacyAudit = {
     scope: 'dedicated-synthetic-account-workspace', contextPass: true,
     contextSubjectSha256: sha256(JSON.stringify(CANON.canonicalize(subject))),
@@ -6349,12 +8661,16 @@ const AW_CTX_RAW = () => {
   };
   return JSON.stringify({ ...subject, privacyAudit });
 };
+// evidence preflight가 manifest.evidence의 SHA를 채우므로 spec의 fingerprint가 달라진다.
+// fixture와 승인 경로가 **같은 spec**을 봐야 FROZEN_FINGERPRINT_DRIFT가 안 난다.
+let __awSe = null;
+const AW_SE = () => { if (!__awSe) __awSe = synEvidence(AW_SPEC); return __awSe; };
 const AW_FIXTURE = () => {
   const raw = AW_CTX_RAW();
   return { ...unitFixture(),
     base: AW_SPEC.BASE,
     blobs: { P: { rel: 'unit.scss', blob: 'blobP' }, R: { rel: 'unit-settings.scss', blob: 'blobR' } },
-    fingerprint: EV.specFingerprint(AW_SPEC, sha256),
+    fingerprint: EV.specFingerprint(AW_SE().spec, sha256),
     smoke: { contextSha256: sha256(raw),
       captures: Object.keys(AW_PNG).sort().map((n) => ({ captureName: n, sha256: sha256(AW_PNG[n]) })) } };
 };
@@ -6363,20 +8679,22 @@ describe('S4 승인 경로 정상 GREEN — write까지 실제로 도달한다',
   const io = () => { const c = { serialize: 0, write: 0, bytes: [] };
     return { c, serialize: (fx) => { c.serialize++; return EV.serializeFixture(fx); }, write: (b) => { c.write++; c.bytes.push(b); } }; };
   const call = (over = {}) => { const spy = io();
+    const se = over.spec ? synEvidence(over.spec) : AW_SE();
     const r = EV.approveAndWrite({
-      fixture: AW_FIXTURE(), spec: AW_SPEC, contrastResults: [],
+      fixture: AW_FIXTURE(), contrastResults: [],
+      discoveryEvidence: { files: se.files, gitBlob: se.gitBlob },
       actualDecls: UNIT_DECLS, actualRaw: '', preAnnSources: {},
       actualAllowIdToKey: UNIT_ACTUAL_ALLOW_MAP, baseDecls: UNIT_BASE_DECLS,
       provenanceRefs: { headCommit: 'unit', headBlobs: {}, specFingerprintNow: 'unit' },
       contextRaw: AW_CTX_RAW(), sha256, readPng: AW_READ_PNG,
-      serialize: spy.serialize, write: spy.write, ...over });
+      serialize: spy.serialize, write: spy.write, ...over, spec: se.spec });
     return { r, c: spy.c }; };
 
   it('errors === [] · calls 3단계 모두 1 · serialize/write 정확히 1회 · 바이트 동일', () => {
     const { r, c } = call();
     expect(r.errors).toEqual([]);
     expect(r.wrote).toBe(true);
-    expect(r.calls).toEqual({ candidate: 1, conformance: 1, artifacts: 1 });
+    expect(r.calls).toEqual({ candidate: 1, conformance: 1, artifacts: 1, evidence: 1 });
     expect(c.serialize).toBe(1); expect(c.write).toBe(1);
     expect(c.bytes).toHaveLength(1);
     expect(c.bytes[0]).toBe(r.bytes);                       // 검증한 bytes가 그대로 write로 간다
@@ -6384,7 +8702,7 @@ describe('S4 승인 경로 정상 GREEN — write까지 실제로 도달한다',
   });
   it('같은 입력으로 validateCommittedArtifacts도 [] (정상 대조군)', () =>
     expect(EV.validateCommittedArtifacts({ committedFixtureRaw: JSON.stringify(AW_FIXTURE()),
-      spec: AW_SPEC, contextRaw: AW_CTX_RAW(), sha256, readPng: AW_READ_PNG, baseDecls: UNIT_BASE_DECLS , provenanceRefs: { headCommit: 'unit', headBlobs: {}, specFingerprintNow: 'unit' } })).toEqual([]));
+      spec: AW_SE().spec, contextRaw: AW_CTX_RAW(), sha256, readPng: AW_READ_PNG, baseDecls: UNIT_BASE_DECLS , provenanceRefs: { headCommit: 'unit', headBlobs: {}, specFingerprintNow: 'unit' } })).toEqual([]));
   // 정상 대조군 위에서 한 축씩 변이 → RED, 그리고 write 0회
   it('RED: fingerprint 변조 → artifacts 단계, write 0회', () => {
     const fx = AW_FIXTURE(); fx.fingerprint = 'z'.repeat(64);
@@ -6566,20 +8884,20 @@ describe('S4 PNG corruption을 public 경로에 고정', () => {
 
   const world = (pngFor) => {
     const pngs = { 'unit-a.png': pngFor('unit-a.png'), 'unit-b.png': pngFor('unit-b.png') };
-    const subject = { viewport: { width: 1440, height: 900 }, capture: { type: 'png', scale: 'css', dpr: 1 },
+    const subject = DS_CTX({ viewport: { width: 1440, height: 900 }, capture: { type: 'png', scale: 'css', dpr: 1 },
       phase: 'light',                                    // BASE는 라이트 캡처만 허용된다
     coverageEvidence: { 'unit-a': { '.UnitPlain': { count: 1, visible: 1 } },
       'unit-b': { '.UnitRing': { count: 1, visible: 1 } } },
     provenance: { headCommit: 'unit', blobs: {}, specFingerprint: 'unit' },
     actionLog: { 'unit-a': [], 'unit-b': [] },          // 실행기 기록(이 세계의 surface는 actions가 없다)
-      baseLightMaskRects: unitCtx().baseLightMaskRects };
+      baseLightMaskRects: unitCtx().baseLightMaskRects }, 2);
     const privacyAudit = { scope: 'dedicated-synthetic-account-workspace', contextPass: true,
       contextSubjectSha256: sha256(JSON.stringify(CANON.canonicalize(subject))),
       captures: Object.keys(pngs).sort().map((n) => ({ captureName: n, sha256: sha256(pngs[n]), pass: true, findings: [] })) };
     const contextRaw = JSON.stringify({ ...subject, privacyAudit });
     const fixture = { ...unitFixture(), base: AW_SPEC.BASE,
       blobs: { P: { rel: 'unit.scss', blob: 'blobP' }, R: { rel: 'unit-settings.scss', blob: 'blobR' } },
-      fingerprint: EV.specFingerprint(AW_SPEC, sha256),
+      fingerprint: EV.specFingerprint(AW_SE().spec, sha256),
       smoke: { contextSha256: sha256(contextRaw),
         captures: Object.keys(pngs).sort().map((n) => ({ captureName: n, sha256: sha256(pngs[n]) })) } };
     return { pngs, contextRaw, fixture, readPng: (n) => pngs[n] };
@@ -6587,12 +8905,12 @@ describe('S4 PNG corruption을 public 경로에 고정', () => {
 
   it('정상 PNG 세계는 committed 경로가 []', () => {
     const w = world(() => pngBytes(1440, 900, 3));
-    expect(EV.validateCommittedArtifacts({ committedFixtureRaw: JSON.stringify(w.fixture), spec: AW_SPEC,
+    expect(EV.validateCommittedArtifacts({ committedFixtureRaw: JSON.stringify(w.fixture), spec: AW_SE().spec,
       contextRaw: w.contextRaw, sha256, readPng: w.readPng, baseDecls: UNIT_BASE_DECLS , provenanceRefs: { headCommit: 'unit', headBlobs: {}, specFingerprintNow: 'unit' } })).toEqual([]);
   });
   it('corrupt PNG + 해시 재결속 → RASTER_PNG_DECODE 이고 SHA drift는 0', () => {
     const w = world(() => CORRUPT);
-    const errs = EV.validateCommittedArtifacts({ committedFixtureRaw: JSON.stringify(w.fixture), spec: AW_SPEC,
+    const errs = EV.validateCommittedArtifacts({ committedFixtureRaw: JSON.stringify(w.fixture), spec: AW_SE().spec,
       contextRaw: w.contextRaw, sha256, readPng: w.readPng, baseDecls: UNIT_BASE_DECLS , provenanceRefs: { headCommit: 'unit', headBlobs: {}, specFingerprintNow: 'unit' } });
     expect(errs.filter((e) => /RASTER_PNG_DECODE/.test(e)).length).toBe(2);      // 두 capture 모두
     expect(errs.filter((e) => /FROZEN_PNG_SHA_DRIFT/.test(e)).length).toBe(0);   // 해시는 맞춰놨다
@@ -6601,7 +8919,8 @@ describe('S4 PNG corruption을 public 경로에 고정', () => {
     const w = world(() => CORRUPT);
     const c = { serialize: 0, write: 0 };
     const r = EV.approveAndWrite({
-      fixture: w.fixture, spec: AW_SPEC, contrastResults: [],
+      fixture: w.fixture, spec: AW_SE().spec, contrastResults: [],
+      discoveryEvidence: { files: AW_SE().files, gitBlob: AW_SE().gitBlob },
       actualDecls: UNIT_DECLS, actualRaw: '', preAnnSources: {},
       actualAllowIdToKey: UNIT_ACTUAL_ALLOW_MAP, baseDecls: UNIT_BASE_DECLS,
       provenanceRefs: { headCommit: 'unit', headBlobs: {}, specFingerprintNow: 'unit' },

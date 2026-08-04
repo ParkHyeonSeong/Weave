@@ -21,7 +21,11 @@ import { join, dirname, basename, sep } from 'node:path';
 import { readdirSync, mkdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 // 구체 검증기를 정적으로 결속한다(주입 금지).
-import { validateCaptureBundle, datasetDigest, validateMaskContract } from './s4Evaluator.mjs';
+import { readCandidateBundle, CANDIDATE_BUNDLE_DIR } from './s4CaptureRunner.mjs';
+import { verifyDiscoveryEvidence } from './s4Evaluator.mjs';
+import { validateCaptureBundle, datasetDigest, validateMaskContract,
+  validateDatasetContract, validateScenarioIdentity, validateScenarioCanon,
+  buildActionContext } from './s4Evaluator.mjs';
 
 const sha = (b) => createHash('sha256').update(b).digest('hex');
 
@@ -176,6 +180,13 @@ export function promoteStaged({ fixturesDir, expectedSha, fromSha, canonicalByte
 // discovery-only 커밋의 목적은 endpoint 관찰뿐이고, 그 사이에 누구도(실수로도) 산출물을
 // committed로 만들 수 없어야 한다. 승격 경로를 열려면 이 상수를 바꾸는 **명시적 커밋**이 필요하고,
 // 그때 projector 배선·immutable expected artifact·legacy reader 전환이 함께 와야 한다.
+// ⚠️ **활성화 전 별도 blocker (미해결).**
+//  (1) promoteRelease는 raw spec을 받아 쓴다 — approveAndWrite처럼 진입 직후 snapshotSpec을
+//      한 번 돌려 evidence·bundle·geometry가 같은 frozen spec을 보게 해야 한다.
+//  (2) discoveryEvidence.gitBlob을 **caller가 준다**. 승격은 정본을 만드는 지점이므로
+//      resolver를 caller가 갈아끼울 수 있으면 Git 진위가 caller 손에 넘어간다.
+//      활성화 시 모듈 안에서 execFileSync argv로 직접 해석해야 한다.
+// 이 두 가지가 닫히기 전에는 PROMOTION_ENABLED를 true로 바꾸지 말 것.
 export const PROMOTION_ENABLED = false;
 // 이 플래그는 **모든 승격 경로**를 막는다: promoteRelease, promoteStaged,
 // 그리고 이들을 부르는 CLI(s4-gen --promote / s4-promote-capture).
@@ -226,17 +237,15 @@ export function readCaptureBundle(fixturesDir, phase) {
   return { errors: [], contextRaw, pngByName, digest };
 }
 
+// candidate는 **단일 bundle 디렉터리**다(context + PNG). 이전 판은 context 파일과 shots
+// 디렉터리를 따로 읽었는데, 그 둘이 서로 다른 캡처에서 온 조합일 수 있었다 —
+// writeCandidate가 shots를 먼저 교체하고 context write가 실패하면 정확히 그 상태가 됐다(실증).
 function readCandidate(fixturesDir, phase) {
-  const ctxPath = join(fixturesDir, candidateContextName(phase));
-  const shots = candidateShotsDir(fixturesDir, phase);
-  if (!existsSync(ctxPath)) return { errors: [`PROMOTE_NO_CANDIDATE_CONTEXT ${phase}`] };
-  if (!existsSync(shots)) return { errors: [`PROMOTE_NO_CANDIDATE_SHOTS ${phase}`] };
-  const pngByName = {};
-  for (const n of readdirSync(shots).filter((x) => !x.startsWith('.'))) {
+  const r = readCandidateBundle(fixturesDir, phase);
+  if (r.errors.length) return { errors: r.errors.map((e) => `PROMOTE_${e}`) };
+  for (const n of Object.keys(r.pngByName))
     if (n.includes('/') || n.includes('..')) return { errors: [`PROMOTE_BAD_NAME ${n}`] };
-    pngByName[n] = readFileSync(join(shots, n));
-  }
-  return { errors: [], contextRaw: readFileSync(ctxPath, 'utf8'), pngByName };
+  return { errors: [], contextRaw: r.contextRaw, pngByName: r.pngByName };
 }
 
 // **캡처 쌍 + expected fixture를 한 트랜잭션으로** 승격한다.
@@ -247,15 +256,30 @@ function readCandidate(fixturesDir, phase) {
 //
 // geometry는 **실제 fixture의 allowIdToKey/changed**가 있어야 판정되므로 여기서 본다 —
 // bundle 검증(validateCaptureBundle)은 일부러 생략하고, 그 전까지는 candidate로만 존재한다.
-export function promoteRelease({ fixturesDir, spec, provenanceRefs, fromRelease, fixture, expectedBytes }) {
+export function promoteRelease({ fixturesDir, spec, provenanceRefs, fromRelease, fixture, expectedBytes,
+  discoveryEvidence }) {
   // 하드 비활성 — 인자가 무엇이든 아무것도 쓰지 않는다.
   if (!PROMOTION_ENABLED) return { errors: ['PROMOTION_DISABLED'], promoted: false };
+  // **승격도 evidence preflight 없이는 열리지 않는다.** 지금은 disabled지만, 켜는 순간
+  // 이 계약이 없으면 검증되지 않은 증거 위에서 정본이 만들어진다.
+  if (!discoveryEvidence || typeof discoveryEvidence !== 'object')
+    return { errors: ['PROMOTE_EVIDENCE_REQUIRED'], promoted: false };
+  {
+    let evErrs = null;
+    try {
+      evErrs = verifyDiscoveryEvidence({ files: discoveryEvidence.files, spec,
+        scenario: buildActionContext(spec.SCENARIO_CANON || {}), sha256Hex: sha,
+        gitBlob: discoveryEvidence.gitBlob });
+    } catch (e) { return { errors: [`PROMOTE_EVIDENCE_THREW ${(e && e.message) || e}`], promoted: false }; }
+    if (!Array.isArray(evErrs)) return { errors: ['PROMOTE_EVIDENCE_NONARRAY'], promoted: false };
+    if (evErrs.length) return { errors: evErrs.map((e) => `EVIDENCE ${e}`).slice(0, 40), promoted: false };
+  }
   if (!spec || typeof spec !== 'object') return { errors: ['PROMOTE_SPEC_REQUIRED'], promoted: false };
   if (!provenanceRefs || typeof provenanceRefs !== 'object') return { errors: ['PROMOTE_PROVENANCE_REFS_REQUIRED'], promoted: false };
   if (!fixture || typeof fixture !== 'object') return { errors: ['PROMOTE_FIXTURE_REQUIRED'], promoted: false };
   if (typeof expectedBytes !== 'string') return { errors: ['PROMOTE_EXPECTED_BYTES_REQUIRED'], promoted: false };
   const cErr = containedDirs(fixturesDir, [BUNDLE_ROOT, join(BUNDLE_ROOT, VERSIONS_DIR), 's4-shots',
-    ...CAPTURE_PHASES.map((p) => join('s4-shots', `candidate-${p}`))]);
+    ...CAPTURE_PHASES.map((p) => join('s4-shots', CANDIDATE_BUNDLE_DIR(p)))]);
   if (cErr.length) return { errors: cErr, promoted: false };
 
   const cands = {};
@@ -265,6 +289,21 @@ export function promoteRelease({ fixturesDir, spec, provenanceRefs, fromRelease,
     cands[phase] = c;
   }
   const errors = [];
+  // 0) dataset 계약 — bundle 검증에도 들어 있지만 **여기서도 명시적으로** 본다.
+  // 승격은 정본을 만드는 유일한 지점이다. 계약 검사가 다른 함수 안에만 있으면 그 함수의
+  // 호출 순서를 바꾸는 것만으로 계약이 승격 경로에서 조용히 빠질 수 있다.
+  // 두 phase의 context를 각각 쓴다 — 한쪽만 계약을 만족하는 쌍을 통과시키지 않는다.
+  for (const phase of CAPTURE_PHASES) {
+    let c = null;
+    try { c = JSON.parse(cands[phase].contextRaw); }
+    catch (e) { return { errors: [`[${phase}] PROMOTE_CONTEXT_UNPARSEABLE`], promoted: false }; }
+    const flat = buildActionContext(c);
+    errors.push(...validateDatasetContract(spec, flat).map((e) => `[${phase}] ${e}`));
+    errors.push(...validateScenarioCanon(spec, flat).map((e) => `[${phase}] ${e}`));
+    errors.push(...validateScenarioIdentity(flat, c.datasetResponses).map((e) => `[${phase}] ${e}`));
+  }
+  if (errors.length) return { errors: errors.slice(0, 40), promoted: false };
+
   // 1) 두 bundle 각각 전체 검증(privacy audit 포함)
   for (const phase of CAPTURE_PHASES)
     errors.push(...validateCaptureBundle({ spec, phase, contextRaw: cands[phase].contextRaw,

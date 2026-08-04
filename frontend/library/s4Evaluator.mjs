@@ -438,10 +438,10 @@ export function validateMaskContract(fixture, spec, ctx) {
   const specSels = new Set(Object.values(masks).map((m) => m && m.selector));
   const surfaceNames = (spec.REQUIRED_SMOKE_SURFACES || []).map((x) => x.name);
   const surfaceSet = new Set(surfaceNames);
-  // **full matrix 계약**: 조사 우주 자체의 완전성을 잠근다.
+  // **full matrix 계약(현재 23 surface × 15 live selector)**: 조사 우주 자체의 완전성을 잠근다.
   //   이전 판은 context에 "존재하는 키만" 순회하고 빈 배열을 거부했다. 그래서 "조사했지만 0건"과
   //   "아예 조사하지 않음"이 구조적으로 같은 모양이 되어, 한 화면을 통째로 빠뜨려도 조용히 통과했다.
-  //   이제 surface 키 집합은 manifest 24개와 exact 일치해야 하고, 각 surface는 live selector 15개
+  //   이제 surface 키 집합은 manifest 23개와 exact 일치해야 하고, 각 surface는 live selector 15개
   //   키를 **전부** 가져야 하며, 미발견은 생략이 아니라 `[]`로 표기한다.
   const ctxSurfaces = Object.keys(ctx.baseLightMaskRects || {});
   for (const s of ctxSurfaces) if (!surfaceSet.has(s)) errors.push(`MASK_UNKNOWN_SURFACE ${s}`);
@@ -691,6 +691,9 @@ export function validateCandidate({ fixture, spec, context, contrastResults }) {
   // candidate 승인 경로에서 그대로 두면 좌표 계약 전체가 조용히 빠진다(리뷰 실증).
   if (!context || typeof context !== 'object' || Array.isArray(context)) { errors.push('CANDIDATE_CONTEXT_REQUIRED'); return errors; }
   if (!Array.isArray(contrastResults)) { errors.push('CANDIDATE_CONTRAST_RESULTS_REQUIRED'); return errors; }
+  // dataset 계약이 없으면 candidate 승인 자체가 성립하지 않는다 — fail-closed.
+  errors.push(...validateDatasetContract(spec, buildActionContext(context)));
+  errors.push(...validateScenarioCanon(spec, buildActionContext(context)));
   errors.push(...validateCounts(fixture, spec.COUNTS, spec));
   errors.push(...validateSmokeCoverage(fixture, spec.REQUIRED_SMOKE_SURFACES, spec));
   errors.push(...validateMaskContract(fixture, spec, context));
@@ -735,7 +738,8 @@ export function validateRasterContext(ctx, spec) {
 }
 
 // PNG 바이트가 정본 raster 규격과 정확히 같은지. 치수는 **바이트에서 파생**한다(신고 금지).
-// 색심도·컬러타입도 잠근다: 커밋된 24개 BASE가 전부 depth 8 / colorType 2(RGB) / 비인터레이스다.
+// 색심도·컬러타입도 잠근다: legacy committed BASE 24개가 전부 depth 8 / colorType 2(RGB) / 비인터레이스다.
+// (현재 target은 23이고 legacy 24는 promotion pending이다 — 두 숫자는 다른 것을 가리킨다.)
 // 이게 없으면 팔레트 PNG나 16비트 PNG로 바꿔 pixelmatch의 픽셀 해석을 바꿀 수 있다.
 export function validatePngRaster(bytes, spec, label) {
   const RC = spec && spec.RASTER_CONTRACT;
@@ -818,8 +822,19 @@ export function validateCaptureEvidence(spec, ctx, provenanceRefs) {
   const surfaces = spec.REQUIRED_SMOKE_SURFACES || [];
   const phase = ctx.phase;
   if (!['light', 'dark'].includes(phase)) return [`EVIDENCE_PHASE_INVALID ${String(phase)}`];
+  // dataset 계약은 **무조건, 가장 먼저** 본다.
+  // 이전 판은 `if (DATASET_ENDPOINTS.length)`로 감싸서 목록이 비면 dataset 증거가 통째로
+  // 조용히 생략됐다. 게다가 provenanceRefs 조기 return 뒤에 두면 refs를 빼는 것만으로도
+  // 계약 검사가 사라진다 — 계약 부재 자체가 실패여야 하므로 어떤 분기보다 앞이다.
+  {
+    const flatEarly = buildActionContext(ctx);
+    errors.push(...validateDatasetContract(spec, flatEarly).map((e) => `EVIDENCE_${e}`));
+    errors.push(...validateScenarioCanon(spec, flatEarly).map((e) => `EVIDENCE_${e}`));
+    // 시나리오의 ID와 이름이 같은 대상을 가리키는지 원본 응답으로 대조한다.
+    errors.push(...validateScenarioIdentity(flatEarly, ctx.datasetResponses).map((e) => `EVIDENCE_${e}`));
+  }
   // provenance 대조 입력은 **필수**다. 생략하면 provenance의 존재만 보는 것이라 아무 의미가 없다.
-  if (!provenanceRefs || typeof provenanceRefs !== 'object') return ['EVIDENCE_PROVENANCE_REFS_REQUIRED'];
+  if (!provenanceRefs || typeof provenanceRefs !== 'object') return [...errors, 'EVIDENCE_PROVENANCE_REFS_REQUIRED'];
   const { headCommit, headBlobs, specFingerprintNow } = provenanceRefs;
   for (const [k, v] of [['headCommit', headCommit], ['specFingerprintNow', specFingerprintNow]])
     if (typeof v !== 'string' || !v) errors.push(`EVIDENCE_PROVENANCE_REF_MISSING ${k}`);
@@ -909,18 +924,649 @@ export function validateCaptureEvidence(spec, ctx, provenanceRefs) {
     if (JSON.stringify(gk) !== JSON.stringify(wk)) errors.push(`EVIDENCE_PROVENANCE_BLOB_SET [${gk}] != [${wk}]`);
     for (const k of wk) if (got[k] !== headBlobs[k]) errors.push(`EVIDENCE_PROVENANCE_BLOB ${k}`);
     // dataset digest는 **원본 응답에서 재계산**한다 — 기록된 값을 그대로 믿으면 자기신고다.
-    if ((spec.DATASET_ENDPOINTS || []).length) {
-      const rec = datasetDigest(ctx.datasetResponses, spec, (v) => createHash('sha256').update(v).digest('hex'));
-      if (rec.errors.length) errors.push(...rec.errors.map((e) => `EVIDENCE_${e}`));
-      else if (pv.datasetDigest !== rec.digest)
-        errors.push(`EVIDENCE_PROVENANCE_DATASET ${pv.datasetDigest} != ${rec.digest}`);
-      const urls = (ctx.datasetResponses || []).map((r) => r && r.url).sort();
-      const flat2 = buildActionContext(ctx);
-      const want = (spec.DATASET_ENDPOINTS || [])
-        .map((u) => String(u).replace(/\{([A-Za-z0-9_]+)\}/g, (m, k) => (flat2[k] !== undefined ? String(flat2[k]) : m))).sort();
-      if (JSON.stringify(urls) !== JSON.stringify(want)) errors.push(`EVIDENCE_DATASET_ENDPOINT_SET [${urls}] != [${want}]`);
+    const rec = datasetDigest(ctx.datasetResponses, spec, (v) => createHash('sha256').update(v).digest('hex'));
+    if (rec.errors.length) errors.push(...rec.errors.map((e) => `EVIDENCE_${e}`));
+    else if (pv.datasetDigest !== rec.digest)
+      errors.push(`EVIDENCE_PROVENANCE_DATASET ${pv.datasetDigest} != ${rec.digest}`);
+    const urls = (ctx.datasetResponses || []).map((r) => r && r.url).sort();
+    const want = (spec.DATASET_ENDPOINTS || []).map((u) => resolveTemplate(u, flat).url).sort();
+    if (JSON.stringify(urls) !== JSON.stringify(want)) errors.push(`EVIDENCE_DATASET_ENDPOINT_SET [${urls}] != [${want}]`);
+  }
+  return errors;
+}
+
+// ── dataset 계약 ──────────────────────────────────────────────────────────────
+// **EXPECTED_DATASET_MANIFEST가 단일 원천이다.** DATASET_ENDPOINTS는 거기서 파생되고,
+// 이 검증기가 "파생이 실제로 유지되는가"까지 본다 — 두 번째 수기 배열이 생기면 여기서 죽는다.
+//
+// 왜 fail-closed인가: 이전 판은 `if ((spec.DATASET_ENDPOINTS||[]).length)`로 감쌌다.
+// 목록이 비면 dataset 증거가 통째로 **조용히 생략**되고, 캡처는 아무 데이터에서나 찍혀도
+// 통과했다. 계약이 없다는 사실 자체가 실패여야 한다.
+export const DATASET_MANIFEST_TOP_KEYS = ['schemaVersion', 'evidence', 'dataset', 'ambient', 'dev'];
+export const DATASET_MANIFEST_CATEGORIES = ['dataset', 'ambient', 'dev'];
+export const DATASET_EVIDENCE_KEYS = ['observedHead', 'observedSpecFingerprint', 'discoveryDigest',
+  'files', 'surfaceCount', 'semanticTupleCount', 'backendTupleCount', 'backendUniqueUrlCount'];
+// observedHead는 **git commit(SHA-1, 40 hex)**이고 나머지는 SHA-256(64 hex)이다.
+// 한 규칙으로 묶으면 둘 중 하나는 반드시 틀린 형식을 통과시키거나 정상값을 거부한다
+// (positive control이 실제로 잡았다).
+export const DATASET_EVIDENCE_COMMIT_KEYS = ['observedHead'];
+export const DATASET_EVIDENCE_SHA_KEYS = ['observedSpecFingerprint', 'discoveryDigest'];
+export const DATASET_ENTRY_KEYS = ['method', 'urlTemplate', 'reason',
+  'observedSurfaceCount', 'observedRequestCount'];
+// category 크기는 **상수로 박지 않는다.** 박으면 이 validator가 production 전용이 되어
+// 작은 합성 world를 시험할 수 없고, 그러면 합성 테스트가 production manifest를 복사해
+// 쓰게 된다(= 자기증명). 여기서는 **내부 정합성**만 본다:
+//   backendUniqueUrlCount === dataset.length + ambient.length  (아래 evidence 교차검사)
+// production의 17/1/2가 맞는지는 **커밋된 discovery 원문**을 읽는 verifyDiscoveryEvidence와
+// SPEC 전용 테스트가 판정한다 — 증거가 원천이고 manifest가 피검사물이다.
+// 헤더 뱃지 숫자는 픽셀에 직접 나온다 — dataset에서 빠지면 두 phase가 다른 숫자로 찍힐 수 있다.
+export const DATASET_REQUIRED_BADGE_TEMPLATES = ['{apiOrigin}/chat', '{apiOrigin}/notifications/unread-count'];
+// 알림 **목록**은 이번 S4 픽셀에 안 나온다(메뉴를 여는 surface가 없다). ambient 전용이다.
+export const DATASET_AMBIENT_ONLY_TEMPLATES = ['{apiOrigin}/notifications?limit=30'];
+// discovery는 GET만 관찰했다. 다른 method를 넣으려면 discovery를 다시 돌려 증거를 갱신해야 한다.
+export const DATASET_ALLOWED_METHODS = ['GET'];
+const SHA_RX = /^[0-9a-f]{64}$/;
+const COMMIT_RX = /^[0-9a-f]{40}$/;
+const PLACEHOLDER_RX = /\{([A-Za-z0-9_]+)\}/g;
+
+// 템플릿의 {키}를 시나리오 값으로 치환한다. 남은 placeholder는 **해석 실패**다.
+export function resolveTemplate(template, scenario) {
+  const flat = scenario || {};
+  const missing = [];
+  const url = String(template).replace(PLACEHOLDER_RX, (m, k) => {
+    if (flat[k] === undefined || flat[k] === null) { missing.push(k); return m; }
+    return String(flat[k]);
+  });
+  return { url, missing };
+}
+
+// origin 문자열이 **origin으로서** 정당한지. 문자열 startsWith만 보면 userinfo·query·
+// fragment가 섞인 값도 통과한다. URL 파서로 축을 하나씩 본다.
+export function validateOriginValue(label, value, { allowBasePath }) {
+  const errors = [];
+  if (typeof value !== 'string' || !value) return [`ORIGIN_MISSING ${label}`];
+  let u = null;
+  try { u = new URL(value); } catch (e) { return [`ORIGIN_UNPARSEABLE ${label} ${value}`]; }
+  if (!['http:', 'https:'].includes(u.protocol)) errors.push(`ORIGIN_SCHEME ${label} ${u.protocol}`);
+  if (u.username || u.password) errors.push(`ORIGIN_USERINFO ${label}`);
+  if (u.search) errors.push(`ORIGIN_SEARCH ${label}`);
+  if (u.hash) errors.push(`ORIGIN_HASH ${label}`);
+  const path = u.pathname.replace(/\/$/, '');
+  if (!allowBasePath && path) errors.push(`ORIGIN_UNEXPECTED_PATH ${label} ${u.pathname}`);
+  if (path.split('/').some((seg) => seg === '.' || seg === '..')) errors.push(`ORIGIN_DOT_SEGMENT ${label} ${u.pathname}`);
+  // 정규화 후 문자열이 달라지면 값 자체가 canonical origin이 아니다.
+  if (`${u.origin}${path}` !== value.replace(/\/$/, '')) errors.push(`ORIGIN_NOT_CANONICAL ${label} ${value}`);
+  return errors;
+}
+
+// 해석된 절대 URL이 그 origin/base 안에 실제로 있는지 — 경로 탈출·dot-segment를 본다.
+export function validateResolvedUrl(label, url, originValue) {
+  const errors = [];
+  const raw = String(url);
+  // **파싱 전에** raw 문자열을 본다. new URL()은 dot-segment를 정규화해 없애 버리고,
+  // percent-encoded 구분자(%2F·%2E)는 파싱 후 pathname에서 그대로 남아 눈에 안 띈다.
+  const rawPath = raw.replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, '').replace(/^[^/?#]*/, '');
+  const pathOnly = rawPath.split(/[?#]/)[0];
+  for (const seg of pathOnly.split('/')) {
+    if (seg === '.' || seg === '..') errors.push(`URL_RAW_DOT_SEGMENT ${label} ${seg}`);
+    const dec = (() => { try { return decodeURIComponent(seg); } catch (e) { return null; } })();
+    if (dec === null) errors.push(`URL_BAD_PERCENT ${label} ${seg}`);
+    else if (dec !== seg && (dec === '.' || dec === '..' || dec.includes('/') || dec.includes('\\')))
+      errors.push(`URL_ENCODED_SEPARATOR ${label} ${seg}`);
+  }
+  let u = null, o = null;
+  try { u = new URL(raw); } catch (e) { return [`URL_UNPARSEABLE ${label} ${raw}`]; }
+  // 정규화 결과가 원문과 다르면 원문이 canonical이 아니다 — 무엇을 관찰했는지가 흐려진다.
+  if (u.href !== raw) errors.push(`URL_NOT_CANONICAL ${label} ${raw} -> ${u.href}`);
+  try { o = new URL(originValue); } catch (e) { return [`URL_ORIGIN_UNPARSEABLE ${label}`]; }
+  if (u.origin !== o.origin) errors.push(`URL_ORIGIN ${label} ${u.origin} != ${o.origin}`);
+  if (u.username || u.password) errors.push(`URL_USERINFO ${label} ${raw}`);
+  // fragment는 서버로 가지 않는다 — dataset URL에 있으면 관찰과 재조회가 어긋난다.
+  // query는 정당하다(sources endpoint가 실제로 쓴다).
+  if (u.hash) errors.push(`URL_HASH ${label} ${raw}`);
+  const base = o.pathname.replace(/\/$/, '');
+  if (base && !(u.pathname === base || u.pathname.startsWith(`${base}/`)))
+    errors.push(`URL_BASE_PATH ${label} ${u.pathname} !⊂ ${base}`);
+  if (u.pathname.split('/').some((seg) => seg === '.' || seg === '..'))
+    errors.push(`URL_DOT_SEGMENT ${label} ${u.pathname}`);
+  return errors;
+}
+
+// candidate context의 identity 필드가 **정본과 정확히 같은지**. 여기서 갈리면 화면과
+// 데이터가 다른 대상을 가리킨다.
+export function validateScenarioCanon(spec, context) {
+  const errors = [];
+  const canon = spec && spec.SCENARIO_CANON;
+  const keys = (spec && spec.SCENARIO_CANON_KEYS) || [];
+  if (!canon || typeof canon !== 'object' || Array.isArray(canon)) return ['SCENARIO_CANON_MISSING'];
+  if (!Array.isArray(keys) || !keys.length) return ['SCENARIO_CANON_KEYS_MISSING'];
+  if (!context || typeof context !== 'object' || Array.isArray(context)) return ['SCENARIO_CONTEXT_SHAPE'];
+  for (const k of keys) {
+    if (!Object.prototype.hasOwnProperty.call(context, k)) { errors.push(`SCENARIO_FIELD_MISSING ${k}`); continue; }
+    if (context[k] !== canon[k])
+      errors.push(`SCENARIO_FIELD_MISMATCH ${k} ${JSON.stringify(context[k])} != ${JSON.stringify(canon[k])}`);
+  }
+  // ID는 양의 safe integer여야 한다 — 문자열 '13'은 URL은 만들어지지만 ID가 아니다.
+  for (const k of ['trackId', 'bulkBranchId', 'bulkEpicId', 'scrumBoardId']) {
+    const v = context[k];
+    if (!Number.isSafeInteger(v) || v <= 0) errors.push(`SCENARIO_ID_INVALID ${k} ${JSON.stringify(v)}`);
+  }
+  errors.push(...validateOriginValue('apiOrigin', context.apiOrigin, { allowBasePath: true }));
+  errors.push(...validateOriginValue('appOrigin', context.appOrigin, { allowBasePath: false }));
+  return errors;
+}
+
+export function validateDatasetContract(spec, scenario) {
+  // malformed 입력에서 **예외가 밖으로 새면 fail-closed가 아니다** — 호출부가 크래시하고
+  // "무엇이 막았는지"가 사라진다. 어떤 입력이 와도 오류 배열을 돌려준다.
+  try { return datasetContractErrors(spec, scenario); }
+  catch (e) { return [`DATASET_CONTRACT_THREW ${(e && e.message) || e}`]; }
+}
+
+function datasetContractErrors(spec, scenario) {
+  const errors = [];
+  const man = spec ? spec.EXPECTED_DATASET_MANIFEST : undefined;
+  if (man === null || man === undefined) return ['DATASET_MANIFEST_NULL'];
+  if (typeof man !== 'object' || Array.isArray(man)) return ['DATASET_MANIFEST_SHAPE'];
+  if (man.schemaVersion !== 1) errors.push(`DATASET_MANIFEST_SCHEMA_VERSION ${String(man.schemaVersion)}`);
+  const topGot = Object.keys(man).sort(), topWant = [...DATASET_MANIFEST_TOP_KEYS].sort();
+  if (JSON.stringify(topGot) !== JSON.stringify(topWant))
+    errors.push(`DATASET_MANIFEST_FIELDS [${topGot}] != [${topWant}]`);
+
+  const sc = scenario || {};
+  const apiOrigin = sc.apiOrigin, appOrigin = sc.appOrigin;
+  if (typeof apiOrigin !== 'string' || !apiOrigin) errors.push('DATASET_SCENARIO_API_ORIGIN_MISSING');
+  if (typeof appOrigin !== 'string' || !appOrigin) errors.push('DATASET_SCENARIO_APP_ORIGIN_MISSING');
+  // BulkAdd URL이 ID로 만들어진다 — 없으면 unresolved placeholder로 새어 나간다.
+  for (const k of ['bulkBranchId', 'bulkEpicId'])
+    if (!Number.isInteger(sc[k])) errors.push(`DATASET_SCENARIO_${k.toUpperCase()}_MISSING`);
+
+  // ── category별 구조 ────────────────────────────────────────────────────────
+  const seenTemplates = new Map();                 // urlTemplate -> category
+  const seenResolved = new Map();                  // 'METHOD absoluteUrl' -> 위치
+  for (const cat of DATASET_MANIFEST_CATEGORIES) {
+    const list = man[cat];
+    if (!Array.isArray(list)) { errors.push(`DATASET_CATEGORY_MISSING ${cat}`); continue; }
+    if (!list.length && cat === 'dataset') { /* 아래 DATASET_ENDPOINTS_EMPTY가 잡는다 */ }
+    const templates = [];
+    for (let i = 0; i < list.length; i += 1) {
+      const e = list[i], at = `${cat}[${i}]`;
+      if (!e || typeof e !== 'object' || Array.isArray(e)) { errors.push(`DATASET_ENTRY_SHAPE ${at}`); continue; }
+      const gk = Object.keys(e).sort(), wk = [...DATASET_ENTRY_KEYS].sort();
+      if (JSON.stringify(gk) !== JSON.stringify(wk)) errors.push(`DATASET_ENTRY_FIELDS ${at} [${gk}] != [${wk}]`);
+      if (!DATASET_ALLOWED_METHODS.includes(e.method)) errors.push(`DATASET_ENTRY_METHOD ${at} ${String(e.method)}`);
+      if (typeof e.reason !== 'string' || !e.reason.trim()) errors.push(`DATASET_ENTRY_REASON ${at}`);
+      for (const k of ['observedSurfaceCount', 'observedRequestCount'])
+        if (!Number.isInteger(e[k]) || e[k] < 1) errors.push(`DATASET_ENTRY_${k.toUpperCase()} ${at} ${String(e[k])}`);
+      // 관계식: 화면 수는 전체 화면 수를 넘을 수 없고, 요청 수는 화면 수보다 작을 수 없다.
+      const evSurf = man.evidence && man.evidence.surfaceCount;
+      if (Number.isInteger(e.observedSurfaceCount) && Number.isInteger(evSurf) && e.observedSurfaceCount > evSurf)
+        errors.push(`DATASET_ENTRY_SURFACE_OVERFLOW ${at} ${e.observedSurfaceCount} > ${evSurf}`);
+      if (Number.isInteger(e.observedSurfaceCount) && Number.isInteger(e.observedRequestCount)
+        && e.observedRequestCount < e.observedSurfaceCount)
+        errors.push(`DATASET_ENTRY_REQUEST_UNDERFLOW ${at} ${e.observedRequestCount} < ${e.observedSurfaceCount}`);
+      const t = e.urlTemplate;
+      if (typeof t !== 'string' || !t) { errors.push(`DATASET_ENTRY_URL_TEMPLATE ${at}`); continue; }
+      templates.push(t);
+      // category 간 교집합과 category 내 중복을 한 번에 본다.
+      if (seenTemplates.has(t)) errors.push(`DATASET_TEMPLATE_DUPLICATE ${t} (${seenTemplates.get(t)}, ${cat})`);
+      else seenTemplates.set(t, cat);
+      // **상대 URL 금지.** origin이 빠지면 어느 서버의 응답인지가 계약에서 사라진다.
+      if (t.startsWith('/')) { errors.push(`DATASET_RELATIVE_URL ${at} ${t}`); continue; }
+      const wantOrigin = cat === 'dev' ? '{appOrigin}' : '{apiOrigin}';
+      if (!t.startsWith(`${wantOrigin}/`)) { errors.push(`DATASET_ORIGIN_MISMATCH ${at} ${t} (want ${wantOrigin})`); continue; }
+      const { url, missing } = resolveTemplate(t, sc);
+      if (missing.length) { errors.push(`DATASET_UNRESOLVED_PLACEHOLDER ${at} {${missing.join('},{')}}`); continue; }
+      const resolvedWant = cat === 'dev' ? appOrigin : apiOrigin;
+      // 문자열 startsWith가 아니라 **URL 파서**로 본다 — userinfo·경로 탈출·dot-segment.
+      if (typeof resolvedWant === 'string' && resolvedWant)
+        errors.push(...validateResolvedUrl(at, url, resolvedWant).map((e) => `DATASET_${e}`));
+      // 서로 다른 템플릿이 같은 절대 URL로 해석되면 관찰 대조에서 둘을 구분할 수 없다.
+      const rk = `${e.method} ${url}`;
+      if (seenResolved.has(rk)) errors.push(`DATASET_RESOLVED_DUPLICATE ${rk} (${seenResolved.get(rk)}, ${at})`);
+      else seenResolved.set(rk, at);
+    }
+    const sorted = [...templates].sort();
+    if (JSON.stringify(templates) !== JSON.stringify(sorted))
+      errors.push(`DATASET_CATEGORY_UNSORTED ${cat}`);
+  }
+
+  // ── evidence ───────────────────────────────────────────────────────────────
+  const ev = man.evidence;
+  if (!ev || typeof ev !== 'object' || Array.isArray(ev)) errors.push('DATASET_EVIDENCE_SHAPE');
+  else {
+    const gk = Object.keys(ev).sort(), wk = [...DATASET_EVIDENCE_KEYS].sort();
+    if (JSON.stringify(gk) !== JSON.stringify(wk)) errors.push(`DATASET_EVIDENCE_FIELDS [${gk}] != [${wk}]`);
+    for (const k of DATASET_EVIDENCE_COMMIT_KEYS)
+      if (typeof ev[k] !== 'string' || !COMMIT_RX.test(ev[k])) errors.push(`DATASET_EVIDENCE_COMMIT ${k} ${String(ev[k])}`);
+    for (const k of DATASET_EVIDENCE_SHA_KEYS)
+      if (typeof ev[k] !== 'string' || !SHA_RX.test(ev[k])) errors.push(`DATASET_EVIDENCE_SHA ${k} ${String(ev[k])}`);
+    // evidence.files는 **정확히 8개**의 {filename: sha256} exact map이다.
+    if (!ev.files || typeof ev.files !== 'object' || Array.isArray(ev.files)) errors.push('DATASET_EVIDENCE_FILES_SHAPE');
+    else {
+      const gotF = Object.keys(ev.files).sort(), wantF = [...DISCOVERY_EVIDENCE_FILES].sort();
+      if (JSON.stringify(gotF) !== JSON.stringify(wantF))
+        errors.push(`DATASET_EVIDENCE_FILE_SET [${gotF}] != [${wantF}]`);
+      for (const [k, v] of Object.entries(ev.files))
+        if (typeof v !== 'string' || !SHA_RX.test(v)) errors.push(`DATASET_EVIDENCE_FILE_SHA ${k} ${String(v)}`);
+    }
+    // 개수는 **파생 대조**한다. 상수를 한 번 더 적으면 그 사본이 틀려도 아무도 모른다.
+    const ds = Array.isArray(man.dataset) ? man.dataset : [];
+    const am = Array.isArray(man.ambient) ? man.ambient : [];
+    const dv = Array.isArray(man.dev) ? man.dev : [];
+    const sum = (l) => l.reduce((a, e) => a + (Number.isInteger(e && e.observedSurfaceCount) ? e.observedSurfaceCount : 0), 0);
+    const want = {
+      surfaceCount: (spec.REQUIRED_SMOKE_SURFACES || []).length,
+      backendUniqueUrlCount: ds.length + am.length,
+      backendTupleCount: sum(ds) + sum(am),
+      semanticTupleCount: sum(ds) + sum(am) + sum(dv),
+    };
+    for (const k of Object.keys(want))
+      if (ev[k] !== want[k]) errors.push(`DATASET_EVIDENCE_COUNT ${k} ${String(ev[k])} != ${want[k]}`);
+  }
+
+  // ── 파생 무결성 + 필수 endpoint ────────────────────────────────────────────
+  const ds = Array.isArray(man.dataset) ? man.dataset : [];
+  if (!ds.length) errors.push('DATASET_ENDPOINTS_EMPTY');
+  const derived = ds.map((e) => e && e.urlTemplate);
+  const declared = spec.DATASET_ENDPOINTS;
+  if (!Array.isArray(declared)) errors.push('DATASET_ENDPOINTS_NOT_ARRAY');
+  else if (JSON.stringify(declared) !== JSON.stringify(derived))
+    errors.push(`DATASET_ENDPOINTS_NOT_DERIVED [${declared}] != [${derived}]`);
+  for (const t of DATASET_REQUIRED_BADGE_TEMPLATES)
+    if (!derived.includes(t)) errors.push(`DATASET_BADGE_ENDPOINT_MISSING ${t}`);
+  const ambient = Array.isArray(man.ambient) ? man.ambient : [];
+  for (const t of DATASET_AMBIENT_ONLY_TEMPLATES) {
+    if (derived.includes(t)) errors.push(`DATASET_AMBIENT_IN_DATASET ${t}`);
+    if (!ambient.some((e) => e && e.urlTemplate === t)) errors.push(`DATASET_AMBIENT_MISSING ${t}`);
+  }
+  return errors;
+}
+
+// 시나리오의 **ID와 이름이 같은 대상을 가리키는지**를 실제 응답으로 대조한다.
+// 필드명은 라이브 응답에서 확인한 것이다(추측 아님):
+//   GET {apiOrigin}/branches            -> { status, branches: [{ branch_id, branch_name, ... }] }
+//   GET {apiOrigin}/branches/{id}/epics -> { status, epics:    [{ epic_id,   epic_name,   ... }] }
+// BulkAdd는 이름으로 클릭하고 URL은 ID로 만든다 — 둘이 갈라지면 화면과 데이터가 다른 대상이 된다.
+export function validateScenarioIdentity(scenario, datasetResponses) {
+  const errors = [];
+  const sc = scenario || {};
+  if (typeof sc.apiOrigin !== 'string' || !sc.apiOrigin) return ['IDENTITY_API_ORIGIN_MISSING'];
+  if (!Array.isArray(datasetResponses)) return ['IDENTITY_RESPONSES_SHAPE'];
+  const byUrl = new Map();
+  for (const r of datasetResponses) if (r && typeof r === 'object') byUrl.set(String(r.url), r);
+  const readList = (url, listKey) => {
+    const r = byUrl.get(url);
+    if (!r) { errors.push(`IDENTITY_RESPONSE_MISSING ${url}`); return null; }
+    if (r.status !== 200) { errors.push(`IDENTITY_RESPONSE_STATUS ${url} ${String(r.status)}`); return null; }
+    let body = null;
+    try { body = JSON.parse(r.body); } catch (e) { errors.push(`IDENTITY_UNPARSEABLE ${url}`); return null; }
+    // 이 API는 200으로도 실패를 돌려준다(`{status:false, code:'NEED_LOGIN'}` — 실측).
+    // envelope을 안 보면 로그아웃 응답 위에서 신원 대조가 "목록 없음"으로만 보인다.
+    if (!body || body.status !== true) { errors.push(`IDENTITY_ENVELOPE ${url} status=${JSON.stringify(body && body.status)}`); return null; }
+    const list = body && body[listKey];
+    if (!Array.isArray(list)) { errors.push(`IDENTITY_LIST_MISSING ${url} .${listKey}`); return null; }
+    return list;
+  };
+  const check = (label, url, listKey, idKey, nameKey, wantId, wantName) => {
+    if (!Number.isInteger(wantId)) { errors.push(`IDENTITY_ID_MISSING ${label}`); return; }
+    if (typeof wantName !== 'string' || !wantName) { errors.push(`IDENTITY_NAME_MISSING ${label}`); return; }
+    const list = readList(url, listKey);
+    if (!list) return;
+    const hit = list.find((x) => x && x[idKey] === wantId);
+    if (!hit) { errors.push(`IDENTITY_ENTRY_ABSENT ${label} ${idKey}=${wantId}`); return; }
+    if (hit[nameKey] !== wantName)
+      errors.push(`IDENTITY_NAME_MISMATCH ${label} ${idKey}=${wantId} ${JSON.stringify(hit[nameKey])} != ${JSON.stringify(wantName)}`);
+  };
+  check('branch', `${sc.apiOrigin}/branches`, 'branches', 'branch_id', 'branch_name', sc.bulkBranchId, sc.branchName);
+  check('epic', `${sc.apiOrigin}/branches/${sc.bulkBranchId}/epics`, 'epics', 'epic_id', 'epic_name', sc.bulkEpicId, sc.epicName);
+  return errors;
+}
+
+// discovery 원문(bySurface)은 **동시 요청 완료 순서**를 보존한다 — producer는 건드리지 않는다.
+// 비교는 이 경계에서만 canonicalize한다: surface는 정본 순서, entry는 method+URL lexical.
+export function canonicalObservation(bySurface, surfaceOrder) {
+  if (!bySurface || typeof bySurface !== 'object' || Array.isArray(bySurface)) return null;
+  const known = Array.isArray(surfaceOrder) ? surfaceOrder : [];
+  const names = Object.keys(bySurface);
+  const rank = new Map(known.map((n, i) => [n, i]));
+  names.sort((x, y) => {
+    const rx = rank.has(x) ? rank.get(x) : known.length, ry = rank.has(y) ? rank.get(y) : known.length;
+    return rx !== ry ? rx - ry : (x < y ? -1 : 1);
+  });
+  return names.map((n) => {
+    const m = bySurface[n] || {};
+    return [n, Object.keys(m).sort().map((k) => [k, m[k]])];
+  });
+}
+
+// canonical 관찰이 manifest가 신고한 endpoint 집합·횟수와 맞는지.
+// 순서만 다른 주입은 GREEN, 누락·추가·count 변경은 RED여야 한다.
+export function validateDiscoveryObservation(bySurface, spec, scenario) {
+  const errors = [];
+  const canon = canonicalObservation(bySurface, (spec.REQUIRED_SMOKE_SURFACES || []).map((x) => x.name));
+  if (!canon) return ['OBSERVATION_SHAPE'];
+  const man = spec.EXPECTED_DATASET_MANIFEST;
+  if (!man) return ['OBSERVATION_MANIFEST_NULL'];
+  const all = [...(man.dataset || []), ...(man.ambient || []), ...(man.dev || [])];
+  const want = new Map();                          // resolved "METHOD url" -> {surfaces, requests}
+  for (const e of all) {
+    const { url, missing } = resolveTemplate(e.urlTemplate, scenario || {});
+    if (missing.length) { errors.push(`OBSERVATION_UNRESOLVED ${e.urlTemplate}`); continue; }
+    want.set(`${e.method} ${url}`, { surfaces: e.observedSurfaceCount, requests: e.observedRequestCount });
+  }
+  const gotSurfaces = new Map(), gotRequests = new Map();
+  for (const [, entries] of canon) {
+    for (const [k, n] of entries) {
+      // bySurface 키는 "METHOD url status" 형태다 — status를 떼어 manifest 키와 맞춘다.
+      const key = String(k).replace(/\s+\d+$/, '');
+      gotSurfaces.set(key, (gotSurfaces.get(key) || 0) + 1);
+      gotRequests.set(key, (gotRequests.get(key) || 0) + (Number(n) || 0));
     }
   }
+  for (const k of [...want.keys()].sort()) if (!gotSurfaces.has(k)) errors.push(`OBSERVATION_ENDPOINT_MISSING ${k}`);
+  for (const k of [...gotSurfaces.keys()].sort()) if (!want.has(k)) errors.push(`OBSERVATION_ENDPOINT_EXTRA ${k}`);
+  for (const k of [...want.keys()].sort()) {
+    if (!gotSurfaces.has(k)) continue;
+    const w = want.get(k);
+    if (gotSurfaces.get(k) !== w.surfaces) errors.push(`OBSERVATION_SURFACE_COUNT ${k} ${gotSurfaces.get(k)} != ${w.surfaces}`);
+    if (gotRequests.get(k) !== w.requests) errors.push(`OBSERVATION_REQUEST_COUNT ${k} ${gotRequests.get(k)} != ${w.requests}`);
+  }
+  return errors;
+}
+
+// ── discovery 증거 (독립 검증) ────────────────────────────────────────────────
+// **방향이 중요하다.** manifest 값으로 기대 관찰을 합성해 비교하면 manifest가 자기를 증명한다.
+// 여기서는 반대로 간다: 커밋된 Run A/B **raw 바이트**에서 tuple을 파생하고, manifest가 그
+// 관찰과 맞는지 본다. 증거가 원천이고 manifest가 피검사물이다.
+//
+// 동결 단위: { surface, method, absoluteUrl, status, ok, count }
+// producer의 삽입 순서는 감사용으로 보존하고, 비교 경계에서만 canonicalize한다
+// (surface = 정본 순서, tuple = lexical).
+export const DISCOVERY_EVIDENCE_FILES = ['runA.out', 'runB.out', 'runA.err', 'runB.err',
+  'runA.code', 'runB.code', 'runA.adapter.json', 'runB.adapter.json'];
+const ENDPOINT_RX = /^(\S+) ([A-Z]+) (\S+) (\d+) (ok|fail) x(\d+)$/;
+
+// payload의 endpoints 줄을 tuple로 판다. 형식이 어긋나면 오류로 남긴다(조용히 건너뛰지 않는다).
+export function discoveryTuples(payload) {
+  const errors = [], tuples = [];
+  const list = payload && payload.endpoints;
+  if (!Array.isArray(list)) return { tuples: null, errors: ['EVIDENCE_ENDPOINTS_SHAPE'] };
+  for (const line of list) {
+    const m = ENDPOINT_RX.exec(String(line));
+    if (!m) { errors.push(`EVIDENCE_ENDPOINT_UNPARSEABLE ${line}`); continue; }
+    tuples.push({ surface: m[1], method: m[2], absoluteUrl: m[3],
+      status: Number(m[4]), ok: m[5] === 'ok', count: Number(m[6]) });
+  }
+  return { tuples, errors };
+}
+
+// 비교 경계의 정규화. 알려진 surface는 정본 순서, 나머지는 뒤에 lexical.
+export function canonicalTuples(tuples, surfaceOrder) {
+  const rank = new Map((surfaceOrder || []).map((n, i) => [n, i]));
+  const key = (t) => `${t.method} ${t.absoluteUrl} ${t.status} ${t.ok ? 'ok' : 'fail'} x${t.count}`;
+  return [...tuples].sort((a, b) => {
+    const ra = rank.has(a.surface) ? rank.get(a.surface) : rank.size;
+    const rb = rank.has(b.surface) ? rank.get(b.surface) : rank.size;
+    if (ra !== rb) return ra - rb;
+    if (a.surface !== b.surface) return a.surface < b.surface ? -1 : 1;
+    return key(a) < key(b) ? -1 : 1;
+  }).map((t) => `${t.surface} ${key(t)}`);
+}
+
+// bySurface(감사 원문)에서 독립적으로 count를 재파생해 endpoints와 교차 대조한다.
+function countsFromBySurface(payload) {
+  const out = new Map();
+  const by = payload && payload.bySurface;
+  if (!by || typeof by !== 'object' || Array.isArray(by)) return null;
+  for (const surface of Object.keys(by)) {
+    const m = by[surface];
+    if (!m || typeof m !== 'object') return null;
+    for (const k of Object.keys(m)) out.set(`${surface} ${k}`, m[k]);
+  }
+  return out;
+}
+
+// raw 바이트 → 오류 배열. spec/scenario는 피검사물이다.
+export function verifyDiscoveryEvidence({ files, spec, scenario, sha256Hex, gitBlob }) {
+  const errors = [];
+  if (!files || typeof files !== 'object') return ['EVIDENCE_FILES_REQUIRED'];
+  for (const n of DISCOVERY_EVIDENCE_FILES)
+    if (typeof files[n] !== 'string') errors.push(`EVIDENCE_FILE_MISSING ${n}`);
+  if (errors.length) return errors;
+  const man = spec && spec.EXPECTED_DATASET_MANIFEST;
+  if (!man || typeof man !== 'object') return ['EVIDENCE_MANIFEST_NULL'];
+  const ev = man.evidence;
+  if (!ev || typeof ev !== 'object') return ['EVIDENCE_MANIFEST_EVIDENCE_SHAPE'];
+
+  // 1) raw SHA-256을 바이트에서 재계산해 manifest가 신고한 값과 대조한다.
+  // **8파일 전부** 바이트 해시를 대조한다. 파일 집합(actual)도 exact 8이어야 한다.
+  const gotFiles = Object.keys(files).sort(), wantFiles = [...DISCOVERY_EVIDENCE_FILES].sort();
+  if (JSON.stringify(gotFiles) !== JSON.stringify(wantFiles))
+    errors.push(`EVIDENCE_ACTUAL_FILE_SET [${gotFiles}] != [${wantFiles}]`);
+  const expectFiles = (ev.files && typeof ev.files === 'object' && !Array.isArray(ev.files)) ? ev.files : null;
+  if (!expectFiles) errors.push('EVIDENCE_EXPECTED_FILES_MISSING');
+  else {
+    const expKeys = Object.keys(expectFiles).sort();
+    if (JSON.stringify(expKeys) !== JSON.stringify(wantFiles))
+      errors.push(`EVIDENCE_EXPECTED_FILE_SET [${expKeys}] != [${wantFiles}]`);
+    for (const n of DISCOVERY_EVIDENCE_FILES) {
+      if (typeof files[n] !== 'string') continue;
+      const got = sha256Hex(files[n]);
+      if (got !== expectFiles[n]) errors.push(`EVIDENCE_FILE_SHA ${n} ${got} != ${expectFiles[n]}`);
+    }
+  }
+  for (const n of ['runA.code', 'runB.code'])
+    if (files[n].trim() !== '0') errors.push(`EVIDENCE_EXIT_CODE ${n} ${files[n].trim()}`);
+
+  // 2) 두 payload를 판다.
+  const parsed = {};
+  for (const n of ['runA.out', 'runB.out']) {
+    try { parsed[n] = JSON.parse(files[n]); }
+    catch (e) { errors.push(`EVIDENCE_UNPARSEABLE ${n}`); }
+  }
+  if (errors.length) return errors;
+  const A = parsed['runA.out'], B = parsed['runB.out'];
+
+  const names = (spec.REQUIRED_SMOKE_SURFACES || []).map((x) => x.name);
+  // 정본 목록 **자체**를 먼저 검증한다. 배열/문자열/정규형/중복/개수를 보지 않으면
+  // duplicate append가 Set으로 흡수돼 조용히 통과한다(실증: 9건 오류인데 git은 9회 호출).
+  const rawPaths = spec.PROVENANCE_BLOB_PATHS;
+  const canonErrors = [];
+  if (!Array.isArray(rawPaths) || !rawPaths.length) canonErrors.push('EVIDENCE_PROVENANCE_PATHS_MISSING');
+  else {
+    for (const p of rawPaths) {
+      if (typeof p !== 'string' || !p) { canonErrors.push(`EVIDENCE_PROVENANCE_PATH_TYPE ${String(p)}`); continue; }
+      if (p !== p.trim() || p.startsWith('/') || p.endsWith('/'))
+        canonErrors.push(`EVIDENCE_PROVENANCE_PATH_NOT_CANONICAL ${p}`);
+      if (p.split('/').some((seg) => !seg || seg === '.' || seg === '..'))
+        canonErrors.push(`EVIDENCE_PROVENANCE_PATH_SEGMENT ${p}`);
+      if (p.includes('\\')) canonErrors.push(`EVIDENCE_PROVENANCE_PATH_BACKSLASH ${p}`);
+    }
+    const seenP = new Set();
+    for (const p of rawPaths) {
+      if (seenP.has(p)) canonErrors.push(`EVIDENCE_PROVENANCE_PATH_DUPLICATE ${p}`);
+      seenP.add(p);
+    }
+    if (seenP.size !== rawPaths.length)
+      canonErrors.push(`EVIDENCE_PROVENANCE_PATH_CARDINALITY ${seenP.size} != ${rawPaths.length}`);
+  }
+  if (canonErrors.length) return [...errors, ...canonErrors];
+  const wantPaths = [...rawPaths].sort();
+  const wantSet = new Set(wantPaths);
+  let pathSetOk = true;
+  for (const [label, p] of [['A', A], ['B', B]]) {
+    if (p.mode !== 'discovery') errors.push(`EVIDENCE_MODE_${label} ${String(p.mode)}`);
+    if (p.eligibleForManifest !== true) errors.push(`EVIDENCE_ELIGIBLE_${label} ${String(p.eligibleForManifest)}`);
+    if (p.surfacesCompleted !== names.length) errors.push(`EVIDENCE_SURFACES_COMPLETED_${label} ${p.surfacesCompleted} != ${names.length}`);
+    const got = [...(p.surfaces || [])].sort(), want = [...names].sort();
+    if (JSON.stringify(got) !== JSON.stringify(want)) errors.push(`EVIDENCE_SURFACE_SET_${label}`);
+    const pv = p.provenance || {};
+    if (pv.headCommit !== ev.observedHead) errors.push(`EVIDENCE_HEAD_${label} ${pv.headCommit} != ${ev.observedHead}`);
+    if (pv.specFingerprint !== ev.observedSpecFingerprint) errors.push(`EVIDENCE_FINGERPRINT_${label}`);
+    // **경로 집합 exact.** 개수만 세면 임의의 실제 repo 파일 9개를 올바른 OID와 함께
+    // 넣어도 통과한다(실증). 정본 목록과 정확히 같아야 한다.
+    const blobs = pv.blobs || {};
+    const gotPaths = Object.keys(blobs).sort();
+    if (JSON.stringify(gotPaths) !== JSON.stringify(wantPaths)) {
+      pathSetOk = false;
+      for (const k of gotPaths) if (!wantSet.has(k)) errors.push(`EVIDENCE_BLOB_PATH_EXTRA_${label} ${k}`);
+      for (const k of wantPaths) if (!gotPaths.includes(k)) errors.push(`EVIDENCE_BLOB_PATH_MISSING_${label} ${k}`);
+    }
+    for (const [k, v] of Object.entries(blobs))
+      if (typeof v !== 'string' || !/^[0-9a-f]{40}$/.test(v)) errors.push(`EVIDENCE_BLOB_FORMAT_${label} ${k}`);
+    if (p.digest !== ev.discoveryDigest) errors.push(`EVIDENCE_DIGEST_${label} ${p.digest} != ${ev.discoveryDigest}`);
+  }
+  if (JSON.stringify(A.provenance) !== JSON.stringify(B.provenance)) errors.push('EVIDENCE_PROVENANCE_A_NE_B');
+
+  // 2b) 두 payload 모두 endpoints ↔ bySurface **양방향 exact**.
+  for (const [label, p] of [['A', A], ['B', B]]) {
+    const t = discoveryTuples(p);
+    if (!t.tuples) { errors.push(`EVIDENCE_ENDPOINTS_SHAPE_${label}`); continue; }
+    const by = countsFromBySurface(p);
+    if (!by) { errors.push(`EVIDENCE_BYSURFACE_SHAPE_${label}`); continue; }
+    const bySurfaceNames = Object.keys(p.bySurface || {});
+    const nameSet = new Set(names);
+    for (const n of bySurfaceNames) if (!nameSet.has(n)) errors.push(`EVIDENCE_BYSURFACE_UNKNOWN_SURFACE_${label} ${n}`);
+    for (const n of names) if (!bySurfaceNames.includes(n)) errors.push(`EVIDENCE_BYSURFACE_SURFACE_MISSING_${label} ${n}`);
+    const fromT = new Map();
+    for (const x of t.tuples) {
+      const k = `${x.surface} ${x.method} ${x.absoluteUrl} ${x.status}`;
+      if (fromT.has(k)) errors.push(`EVIDENCE_DUPLICATE_TUPLE_${label} ${k}`);
+      fromT.set(k, x.count);
+    }
+    for (const [k, n] of fromT) {
+      if (!by.has(k)) { errors.push(`EVIDENCE_BYSURFACE_KEY_MISSING_${label} ${k}`); continue; }
+      if (by.get(k) !== n) errors.push(`EVIDENCE_BYSURFACE_COUNT_${label} ${k} ${by.get(k)} != ${n}`);
+    }
+    for (const k of by.keys()) if (!fromT.has(k)) errors.push(`EVIDENCE_BYSURFACE_KEY_EXTRA_${label} ${k}`);
+    // producer 공식과 **같은 식**으로 digest를 재계산한다: `surface method url status ok xN`
+    // 을 정렬해 개행으로 잇고 sha256. payload가 신고한 digest와 exact 대조한다.
+    const lines = t.tuples
+      .map((x) => `${x.surface} ${x.method} ${x.absoluteUrl} ${x.status} ${x.ok ? 'ok' : 'fail'} x${x.count}`)
+      .sort();
+    const recomputed = sha256Hex(lines.join('\n'));
+    if (recomputed !== p.digest) errors.push(`EVIDENCE_DIGEST_RECOMPUTE_${label} ${recomputed} != ${p.digest}`);
+    if (recomputed !== ev.discoveryDigest) errors.push(`EVIDENCE_DIGEST_VS_MANIFEST_${label} ${recomputed} != ${ev.discoveryDigest}`);
+  }
+
+  // 2c) provenance blob을 observedHead의 Git tree와 exact 대조한다.
+  // **gitBlob 생략은 fail-closed다.** 이전 판은 함수가 없으면 이 검사를 통째로 건너뛰어,
+  // "그 커밋의 그 파일"이라는 주장을 아무도 확인하지 않았다(실증: 생략 시 errors === []).
+  if (typeof gitBlob !== 'function') errors.push('EVIDENCE_GIT_RESOLVER_REQUIRED');
+  else if (!COMMIT_RX.test(String(ev.observedHead))) errors.push(`EVIDENCE_GIT_REF_INVALID ${ev.observedHead}`);
+  else if (!pathSetOk) errors.push('EVIDENCE_BLOB_PATH_SET_INVALID (Git resolver 미호출)');
+  else {
+    const blobs = (A.provenance || {}).blobs || {};
+    for (const rel of Object.keys(blobs).sort()) {
+      // **Git을 부르기 전에** 정본 집합 멤버인지 본다. 그래야 경로에 shell metacharacter가
+      // 섞여도 호출 자체가 일어나지 않는다.
+      if (!wantSet.has(rel)) { errors.push(`EVIDENCE_BLOB_PATH_NOT_CANON ${rel}`); continue; }
+      const want = gitBlob(ev.observedHead, rel);
+      if (typeof want !== 'string' || !/^[0-9a-f]{40}$/.test(want)) errors.push(`EVIDENCE_BLOB_UNRESOLVED ${rel}`);
+      else if (want !== blobs[rel]) errors.push(`EVIDENCE_BLOB_OID ${rel} ${blobs[rel]} != ${want}`);
+    }
+  }
+
+  // 2d) stderr / adapter sidecar — **역할 구분**.
+  // .err는 프로세스 출력(authoritative): FATAL 부재와 정상 종료 문구를 요구한다.
+  // .adapter.json은 MCP 반환값의 **전사**다(어댑터는 파일을 쓰지 않는다). 승인 오라클로
+  // 쓰지 않고 형태만 본다 — 여기서 lifecycle을 "증명"했다고 주장하면 과장이다.
+  for (const n of ['runA.err', 'runB.err']) {
+    const t = files[n];
+    if (/FATAL|Error:|Traceback|BRIDGE_SHUTDOWN_UNACKED|OBSERVE_INCOMPLETE|HEAD_BINDING/.test(t))
+      errors.push(`EVIDENCE_STDERR_FATAL ${n}`);
+    if (!/discovery 완료/.test(t)) errors.push(`EVIDENCE_STDERR_NO_COMPLETION ${n}`);
+  }
+  for (const n of ['runA.adapter.json', 'runB.adapter.json']) {
+    let arr = null;
+    try { arr = JSON.parse(files[n]); } catch (e) { errors.push(`EVIDENCE_ADAPTER_UNPARSEABLE ${n}`); continue; }
+    if (!Array.isArray(arr) || !arr.length) { errors.push(`EVIDENCE_ADAPTER_EMPTY ${n}`); continue; }
+    if (arr.some((x) => typeof x === 'string' && x.includes('ERR:'))) errors.push(`EVIDENCE_ADAPTER_ERR ${n}`);
+    for (const m of ['hello', 'beginAttempt', 'endAttempt', 'shutdown', 'clean-exit'])
+      if (!arr.includes(m)) errors.push(`EVIDENCE_ADAPTER_NO_${m.toUpperCase().replace('-', '_')} ${n}`);
+  }
+
+  // 3) tuple 파생 + Run A/B canonical equality
+  const ta = discoveryTuples(A), tb = discoveryTuples(B);
+  errors.push(...ta.errors.map((e) => `${e} [A]`), ...tb.errors.map((e) => `${e} [B]`));
+  if (!ta.tuples || !tb.tuples) return errors;
+  const ca = canonicalTuples(ta.tuples, names), cb = canonicalTuples(tb.tuples, names);
+  if (JSON.stringify(ca) !== JSON.stringify(cb)) {
+    const sa = new Set(ca), sb = new Set(cb);
+    for (const x of ca) if (!sb.has(x)) errors.push(`EVIDENCE_TUPLE_ONLY_A ${x}`);
+    for (const x of cb) if (!sa.has(x)) errors.push(`EVIDENCE_TUPLE_ONLY_B ${x}`);
+  }
+  // surface가 정본 집합 밖이면 즉시 오류(ghost surface).
+  for (const t of ta.tuples) if (!names.includes(t.surface)) errors.push(`EVIDENCE_UNKNOWN_SURFACE ${t.surface}`);
+  for (const t of ta.tuples) {
+    if (t.status !== 200) errors.push(`EVIDENCE_NON_200 ${t.surface} ${t.absoluteUrl} ${t.status}`);
+    if (t.ok !== true) errors.push(`EVIDENCE_NOT_OK ${t.surface} ${t.absoluteUrl}`);
+    if (t.method !== 'GET') errors.push(`EVIDENCE_NON_GET ${t.surface} ${t.method} ${t.absoluteUrl}`);
+    if (!(t.count >= 1)) errors.push(`EVIDENCE_BAD_COUNT ${t.surface} ${t.absoluteUrl} ${t.count}`);
+  }
+  // 감사 원문(bySurface)에서 독립 재파생한 count와 교차 대조 — 두 표현이 갈리면 오류다.
+  const byA = countsFromBySurface(A);
+  if (!byA) errors.push('EVIDENCE_BYSURFACE_SHAPE');
+  else for (const t of ta.tuples) {
+    const k = `${t.surface} ${t.method} ${t.absoluteUrl} ${t.status}`;
+    if (byA.get(k) !== t.count) errors.push(`EVIDENCE_COUNT_CROSSCHECK ${k} ${byA.get(k)} != ${t.count}`);
+  }
+
+  // 4) 관찰된 endpoint universe와 manifest category union이 정확히 같은가.
+  const observedUrls = new Set(ta.tuples.map((t) => `${t.method} ${t.absoluteUrl}`));
+  const declared = new Map();
+  for (const cat of ['dataset', 'ambient', 'dev']) {
+    for (const e of (man[cat] || [])) {
+      const { url, missing } = resolveTemplate(e.urlTemplate, scenario || {});
+      if (missing.length) { errors.push(`EVIDENCE_UNRESOLVED ${e.urlTemplate}`); continue; }
+      declared.set(`${e.method} ${url}`, { cat, e });
+    }
+  }
+  for (const k of [...observedUrls].sort()) if (!declared.has(k)) errors.push(`EVIDENCE_ENDPOINT_UNDECLARED ${k}`);
+  for (const k of [...declared.keys()].sort()) if (!observedUrls.has(k)) errors.push(`EVIDENCE_ENDPOINT_UNOBSERVED ${k}`);
+
+  // 4b) manifest category ↔ **사람 검수 동결본** exact 대조.
+  // raw 증거는 픽셀 영향도를 판단할 수 없다 — 그 판단은 별도 artifact로 동결하고 여기서 맞춘다.
+  const declaredCat = new Map();
+  for (const cat of ['dataset', 'ambient', 'dev'])
+    for (const e of (man[cat] || [])) declaredCat.set(e.urlTemplate, cat);
+  // 검수 표는 **spec 데이터**다(주입 인자가 아니다). spec마다 단일 원천이고 fingerprint
+  // 입력이므로, 표를 바꾸면 산출물의 지문이 바뀐다.
+  const reviewed = spec.REVIEWED_CLASSIFICATION;
+  if (!reviewed || typeof reviewed !== 'object' || Array.isArray(reviewed)) {
+    errors.push('EVIDENCE_REVIEWED_MISSING');
+    return errors;
+  }
+  for (const t of Object.keys(reviewed).sort()) {
+    if (!declaredCat.has(t)) { errors.push(`EVIDENCE_REVIEWED_NOT_IN_MANIFEST ${t}`); continue; }
+    if (declaredCat.get(t) !== reviewed[t])
+      errors.push(`EVIDENCE_REVIEWED_CATEGORY ${t} manifest=${declaredCat.get(t)} reviewed=${reviewed[t]}`);
+  }
+  for (const t of [...declaredCat.keys()].sort())
+    if (!Object.prototype.hasOwnProperty.call(reviewed, t)) errors.push(`EVIDENCE_MANIFEST_NOT_REVIEWED ${t}`);
+
+  // 5) manifest가 신고한 관찰 횟수가 증거와 맞는가 (**증거 → manifest 방향**).
+  for (const [k, { e }] of [...declared.entries()].sort((x, y) => (x[0] < y[0] ? -1 : 1))) {
+    const hits = ta.tuples.filter((t) => `${t.method} ${t.absoluteUrl}` === k);
+    if (!hits.length) continue;
+    const surf = new Set(hits.map((t) => t.surface)).size;
+    const req = hits.reduce((a, t) => a + t.count, 0);
+    if (e.observedSurfaceCount !== surf) errors.push(`EVIDENCE_MANIFEST_SURFACE_COUNT ${k} ${e.observedSurfaceCount} != ${surf}`);
+    if (e.observedRequestCount !== req) errors.push(`EVIDENCE_MANIFEST_REQUEST_COUNT ${k} ${e.observedRequestCount} != ${req}`);
+  }
+  // evidence의 집계값도 증거에서 재계산한다.
+  const backend = ta.tuples.filter((t) => declared.get(`${t.method} ${t.absoluteUrl}`)
+    && declared.get(`${t.method} ${t.absoluteUrl}`).cat !== 'dev');
+  if (ev.semanticTupleCount !== ta.tuples.length)
+    errors.push(`EVIDENCE_SEMANTIC_TUPLE_COUNT ${ev.semanticTupleCount} != ${ta.tuples.length}`);
+  if (ev.backendTupleCount !== backend.length)
+    errors.push(`EVIDENCE_BACKEND_TUPLE_COUNT ${ev.backendTupleCount} != ${backend.length}`);
+  const uniqBackend = new Set(backend.map((t) => `${t.method} ${t.absoluteUrl}`)).size;
+  if (ev.backendUniqueUrlCount !== uniqBackend)
+    errors.push(`EVIDENCE_BACKEND_UNIQUE_URL ${ev.backendUniqueUrlCount} != ${uniqBackend}`);
+  if (ev.surfaceCount !== names.length)
+    errors.push(`EVIDENCE_SURFACE_COUNT ${ev.surfaceCount} != ${names.length}`);
   return errors;
 }
 
@@ -992,6 +1638,8 @@ export function validateCaptureBundle({ spec, phase, contextRaw, pngByName, prov
     errors.push(`BUNDLE_CAPTURE_SET missing=[${want.filter((n) => !got.includes(n))}] extra=[${got.filter((n) => !want.includes(n))}]`);
   for (const n of got.filter((x) => want.includes(x))) errors.push(...validatePngRaster(pngByName[n], spec, n));
 
+  errors.push(...validateDatasetContract(spec, buildActionContext(ctx)));
+  errors.push(...validateScenarioCanon(spec, buildActionContext(ctx)));
   errors.push(...validateRasterContext(ctx, spec));
   errors.push(...validateActionLog(spec, ctx));
   errors.push(...validateCaptureEvidence(spec, ctx, provenanceRefs));
@@ -1135,15 +1783,38 @@ export function approveAndWrite({
   fixture, spec, contrastResults,
   actualDecls, actualRaw, preAnnSources, actualAllowIdToKey, baseDecls,
   contextRaw, sha256, readPng, provenanceRefs,
-  serialize, write,
+  serialize, write, discoveryEvidence,
 }) {
-  const calls = { candidate: 0, conformance: 0, artifacts: 0 };
+  const calls = { candidate: 0, conformance: 0, artifacts: 0, evidence: 0 };
   if (typeof serialize !== 'function' || typeof write !== 'function')
     return { errors: ['APPROVE_IO_REQUIRED'], wrote: false, bytes: null, calls };
-  // 승인 경로 전체가 **하나의** spec 스냅샷을 소비한다(단계마다 다시 읽으면 값이 갈릴 수 있다).
+  // ── spec 단일 스냅샷 ──────────────────────────────────────────────────────
+  // **가장 먼저, 정확히 한 번.** 이전 판은 evidence preflight가 raw spec을 보고 그 뒤에야
+  // snapshotSpec을 돌려, 루트 getter가 조회마다 다른 값을 주면 evidence와 downstream이
+  // 서로 다른 manifest를 소비할 수 있었다. 아래 모든 단계가 이 frozen spec만 쓴다.
   const snapped = snapshotSpec(spec);
   if (snapped.errors.length) return { errors: snapped.errors, wrote: false, bytes: null, calls };
   spec = snapped.spec;
+  // ── discovery 증거 preflight ──────────────────────────────────────────────
+  // **projection·bundle 읽기·serialize·write보다 먼저.** 이 게이트가 없으면 커밋된 증거는
+  // 테스트에서만 읽히고 승인 경로는 그것을 한 번도 보지 않는다(실증: production 호출부 0곳).
+  // 증거가 없거나 검증이 실패하면 아래 어떤 단계도 실행되지 않고 write는 0회다.
+  calls.evidence = 1;
+  if (!discoveryEvidence || typeof discoveryEvidence !== 'object')
+    return { errors: ['APPROVE_EVIDENCE_REQUIRED'], wrote: false, bytes: null, calls };
+  let evErrors = null;
+  try {
+    // scenario는 **정본**에서 온다. context에서 뽑으면 context가 깨진 경우 evidence 단계가
+    // 먼저 죽어 "무엇이 막았는지"가 흐려지고, context를 고쳐 evidence 대조를 흔들 수도 있다.
+    evErrors = verifyDiscoveryEvidence({ files: discoveryEvidence.files, spec,
+      scenario: buildActionContext(spec.SCENARIO_CANON || {}),
+      sha256Hex: (v) => createHash('sha256').update(v).digest('hex'),
+      gitBlob: discoveryEvidence.gitBlob });
+  } catch (e) { return { errors: [`APPROVE_EVIDENCE_THREW ${(e && e.message) || e}`], wrote: false, bytes: null, calls }; }
+  if (!Array.isArray(evErrors))
+    return { errors: ['APPROVE_EVIDENCE_NONARRAY'], wrote: false, bytes: null, calls };
+  if (evErrors.length)
+    return { errors: evErrors.map((e) => `EVIDENCE ${e}`).slice(0, 40), wrote: false, bytes: null, calls };
   // 비배열 반환도, 예외도 내부 결함으로 보고 write하지 않는다(예외가 그대로 튀면 fail-closed가 아니다).
   const step = (name, fn) => { let r;
     try { r = fn(); } catch (e) { return [`APPROVE_VALIDATOR_THREW ${name} ${e && e.message}`]; }
@@ -1176,6 +1847,7 @@ export const FINGERPRINT_PAYLOAD_KEYS = [
   'probeContract', 'probeSourceSha', 'probeModuleSha', 'runnerModuleSha', 'adapterModuleSha',
   'overrideTargets', 'conversions', 'annotations',
   'datasetEndpoints', 'datasetVolatileFields', 'datasetUnorderedPaths', 'expectedDatasetManifest',
+  'provenanceBlobPaths', 'scenarioCanon', 'scenarioCanonKeys', 'reviewedClassification',
   'overrides', 'contrast',
 ];
 
@@ -1298,6 +1970,11 @@ export function specFingerprintPayload(spec, sha256Hex) {
     datasetEndpoints: spec.DATASET_ENDPOINTS,
     datasetVolatileFields: spec.DATASET_VOLATILE_FIELDS,
     datasetUnorderedPaths: spec.DATASET_UNORDERED_PATHS,
+    // 시나리오 정본도 fingerprint 입력이다 — ID/이름이 바뀌면 산출물의 의미가 바뀐다.
+    provenanceBlobPaths: spec.PROVENANCE_BLOB_PATHS,
+    scenarioCanon: spec.SCENARIO_CANON,
+    scenarioCanonKeys: spec.SCENARIO_CANON_KEYS,
+    reviewedClassification: spec.REVIEWED_CLASSIFICATION,
     // 검수된 기대 dataset. null이면 "아직 확정되지 않음"이고 그 사실 자체가 fingerprint에 남는다.
     expectedDatasetManifest: spec.EXPECTED_DATASET_MANIFEST,
     overrides: spec.OVERRIDES, contrast: spec.CONTRAST_CASES };

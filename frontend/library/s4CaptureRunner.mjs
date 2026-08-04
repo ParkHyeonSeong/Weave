@@ -44,10 +44,12 @@
 //   hover(selector, nth)
 //   evaluate(source, arg)                // 유일한 신뢰 채널
 //   screenshot()                         // PNG bytes
-import { readFileSync, mkdirSync, writeFileSync, mkdtempSync, renameSync, rmSync, existsSync, readdirSync } from 'node:fs';
+import { readFileSync, mkdirSync, writeFileSync, mkdtempSync, renameSync, rmSync, existsSync, readdirSync,
+  lstatSync, realpathSync, openSync, closeSync, unlinkSync, fstatSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { join, dirname } from 'node:path';
+import { join, dirname, sep } from 'node:path';
 import { buildActionContext, resolveActions } from './s4Evaluator.mjs';
 import { ASSERT_SOURCE, PROBE_SOURCE, RASTER_PROBE_SOURCE, THEME_PROBE_SOURCE, PSEUDO_PROBE_SOURCE,
   DATASET_PROBE_SOURCE, validateProbeResult, normalizeOccurrence } from './s4DomProbe.mjs';
@@ -371,33 +373,221 @@ export const COMMITTED_CONTEXT_NAME = (phase) => (phase === 'light' ? 's4-smoke-
 export const COMMITTED_SHOTS_DIR = (phase) => (phase === 'light' ? 'base' : `${phase}-review`);
 const COMMITTED_NAMES = new Set(['s4-smoke-context.json', 's4-expected.json']);
 
+// candidate는 **전용 ignored root 아래의 content-addressed immutable bundle + 단일 pointer**다.
+//
+// 왜 전용 root인가: 이전 판은 커밋 대상인 `s4-shots/` 안에 썼다. `.gitignore`는 옛 이름
+// (`candidate-*/`)만 덮어서 pointer와 `bundle-*` 디렉터리가 **추적되지 않은 파일로 노출**됐고,
+// light를 쓴 직후 worktree가 dirty가 되어 dark phase가 시작조차 못 했다(실증).
+// 전용 root 하나를 통째로 ignore하면 그 결합이 끊긴다.
+//
+// 왜 pointer 하나인가: dest→parked→tmp→dest 두 rename은 public 경로가 사라지는 순간을
+// 만들고 rollback을 필요로 한다. 여기서는 bundle을 먼저 완성해 두고 pointer만 atomic
+// rename하므로 되돌릴 것이 없다.
+export const CANDIDATE_ROOT = 's4-candidates';
+export const CANDIDATE_POINTER = (phase) => `${phase}.pointer`;
+export const CANDIDATE_BUNDLE_DIR = (phase) => `candidate-${phase}`;   // 승격 경로 호환 이름
+export const BUNDLE_CONTEXT_NAME = 'content.json';
+const BUNDLE_PREFIX = (phase) => `bundle-${phase}-`;
+
+export function bundleContentHash(contextRaw, pngByCaptureName) {
+  const h = createHash('sha256');
+  h.update(`ctx\n${contextRaw}\n`);
+  for (const name of Object.keys(pngByCaptureName).sort()) {
+    h.update(`png ${name} `);
+    h.update(createHash('sha256').update(pngByCaptureName[name]).digest('hex'));
+    h.update('\n');
+  }
+  return h.digest('hex');
+}
+
+// 경로가 **일반 파일/디렉터리**이고 fixturesDir 안에 있는지. symlink는 거부한다 —
+// 링크를 따라가면 산출물이 fixtures 밖에 생기거나 밖의 내용을 읽게 된다.
+function safeNode(fixturesDir, p, kind) {
+  let rootReal = null;
+  try { rootReal = realpathSync(fixturesDir); } catch (e) { return `NODE_ROOT_UNREADABLE ${fixturesDir}`; }
+  let st = null;
+  try { st = lstatSync(p); } catch (e) { return null; }        // 없으면 검사할 것이 없다
+  if (st.isSymbolicLink()) return `NODE_SYMLINK ${p}`;
+  if (kind === 'dir' && !st.isDirectory()) return `NODE_NOT_DIR ${p}`;
+  if (kind === 'file' && !st.isFile()) return `NODE_NOT_FILE ${p}`;
+  let real = null;
+  try { real = realpathSync(p); } catch (e) { return `NODE_UNRESOLVABLE ${p}`; }
+  if (real !== rootReal && !real.startsWith(rootReal + sep)) return `NODE_ESCAPES_FIXTURES ${p} -> ${real}`;
+  return null;
+}
+
+// bundle 디렉터리가 **정확히 기대한 내용**인지 재검증한다. rename race에서 다른 프로세스가
+// 먼저 올린 디렉터리를 그대로 믿으면, 같은 이름이어도 내용이 다를 수 있다(불완전 쓰기·수동 조작).
+function verifyBundleDir(fixturesDir, dir, want, hash) {
+  const bad = safeNode(fixturesDir, dir, 'dir');
+  if (bad) return [`BUNDLE_${bad}`];
+  let names = null;
+  try { names = readdirSync(dir); } catch (e) { return [`BUNDLE_UNREADABLE ${dir}`]; }
+  const expect = [...want, BUNDLE_CONTEXT_NAME].sort();
+  if (JSON.stringify([...names].sort()) !== JSON.stringify(expect))
+    return [`BUNDLE_FILE_SET got=[${[...names].sort()}] want=[${expect}]`];
+  for (const n of names) {
+    const e = safeNode(fixturesDir, join(dir, n), 'file');
+    if (e) return [`BUNDLE_${e}`];
+  }
+  let ctx = null; const pngs = {};
+  try {
+    ctx = readFileSync(join(dir, BUNDLE_CONTEXT_NAME), 'utf8');
+    for (const n of want) pngs[n] = readFileSync(join(dir, n));
+  } catch (e) { return [`BUNDLE_READ_FAILED ${(e && e.message) || e}`]; }
+  if (bundleContentHash(ctx, pngs) !== hash) return [`BUNDLE_HASH_MISMATCH ${dir}`];
+  return [];
+}
+
+// **commit point는 pointer rename이다.** 그 전에 실패하면 아무것도 공개되지 않았고,
+// 그 뒤에 실패하면(readback 등) 이미 공개된 것이다 — 두 경우를 다르게 보고한다.
+export const COMMIT_POINT = 'pointer-rename';
+
+// **lock 계약**: 정상 cooperative writer와 기존 foreign lock은 보호한다.
+// same-user out-of-band unlink/replace가 ownership 검사 직후 발생하는 경우는 범위 밖이다.
+// stale lock은 자동 회수하지 않고 아래 절차를 따른다.
+//
+// **수동 복구 절차** (자동 stale 회수는 의도적으로 없다):
+//  1) `WRITE_LOCK_BUSY` — 다른 writer가 살아 있는지 먼저 확인한다. 없다면(SIGKILL 잔존)
+//     `s4-candidates/.lock-<phase>`를 사람이 지운다. mtime만 보고 지우지 말 것.
+//  2) `WRITE_LOCK_OWNERSHIP_LOST` — 누군가 lock을 교체했다. pointer는 쓰이지 않았으므로
+//     이전 candidate가 유효하다. 남의 lock을 지우지 말고 그 writer가 끝나기를 기다린다.
+//  3) `WRITE_COMMITTED_BUT_*` — pointer는 이미 전환됐고 그 뒤 손상이 확인된 상태다.
+//     candidate를 신뢰하지 말고 해당 phase를 다시 캡처한다. pointer를 손으로 되돌리지 말 것.
+export const LOCK_RECOVERY = ['WRITE_LOCK_BUSY', 'WRITE_LOCK_OWNERSHIP_LOST', 'WRITE_COMMITTED_BUT'];
+
 export function writeCandidate({ fixturesDir, phase, contextRaw, pngByCaptureName, expectedCaptureNames }) {
   if (typeof contextRaw !== 'string') return ['WRITE_CONTEXT_RAW_REQUIRED'];
   if (!PHASES.includes(phase)) return [`WRITE_PHASE_INVALID ${phase}`];
-  const ctxName = CANDIDATE_CONTEXT_NAME(phase);
-  if (COMMITTED_NAMES.has(ctxName)) return ['WRITE_WOULD_CLOBBER_COMMITTED'];
-  // 파일명 집합 exact — 하나라도 모자라거나 남으면 그 캡처는 완결되지 않은 것이다.
+  // 해시 전에 입력 형태를 못박는다 — Array/plain object/byte 값이 아니면 해시가 의미를 잃는다.
+  if (!Array.isArray(expectedCaptureNames)) return ['WRITE_EXPECTED_NAMES_NOT_ARRAY'];
+  if (expectedCaptureNames.some((n) => typeof n !== 'string' || !n)) return ['WRITE_EXPECTED_NAMES_NOT_STRINGS'];
+  if (new Set(expectedCaptureNames).size !== expectedCaptureNames.length)
+    return [`WRITE_EXPECTED_NAMES_DUPLICATE [${expectedCaptureNames}]`];
+  if (!pngByCaptureName || typeof pngByCaptureName !== 'object' || Array.isArray(pngByCaptureName))
+    return ['WRITE_PNGS_REQUIRED'];
+  if (Object.getPrototypeOf(pngByCaptureName) !== Object.prototype
+    && Object.getPrototypeOf(pngByCaptureName) !== null) return ['WRITE_PNGS_NOT_PLAIN'];
+  for (const [k, v] of Object.entries(pngByCaptureName))
+    if (!Buffer.isBuffer(v) && !(v instanceof Uint8Array)) return [`WRITE_PNG_NOT_BYTES ${k}`];
   const got = Object.keys(pngByCaptureName).sort();
-  const want = [...(expectedCaptureNames || [])].sort();
+  const want = [...expectedCaptureNames].sort();
   if (JSON.stringify(got) !== JSON.stringify(want))
     return [`WRITE_CAPTURE_SET_MISMATCH got=${got.length} want=${want.length} ` +
       `missing=[${want.filter((n) => !got.includes(n))}] extra=[${got.filter((n) => !want.includes(n))}]`];
-  for (const name of got) if (name.includes('/') || name.includes('..')) return [`WRITE_BAD_NAME ${name}`];
+  for (const name of got) {
+    if (name.includes('/') || name.includes('..')) return [`WRITE_BAD_NAME ${name}`];
+    if (name.startsWith('.')) return [`WRITE_DOTFILE_NAME ${name}`];   // 읽기가 dotfile을 건너뛴다
+  }
+  if (got.includes(BUNDLE_CONTEXT_NAME)) return [`WRITE_NAME_RESERVED ${BUNDLE_CONTEXT_NAME}`];
 
-  const dest = join(fixturesDir, 's4-shots', CANDIDATE_SHOTS_DIR(phase));
+  const root = join(fixturesDir, CANDIDATE_ROOT);
+  const hash = bundleContentHash(contextRaw, pngByCaptureName);
+  const bundleName = `${BUNDLE_PREFIX(phase)}${hash}`;
+  const bundleDir = join(root, bundleName);
+  const pointer = join(root, CANDIDATE_POINTER(phase));
   let tmp = null;
+  let lockFd = null;
+  let lockId = null;
+  const lockPath = join(root, `.lock-${phase}`);
+  // 우리가 연 lock이 아직 우리 것인지 — dev/ino로 본다. 이름이 같아도 다른 파일일 수 있다.
+  const lockStillOurs = () => {
+    try { const st = lstatSync(lockPath); return `${st.dev}:${st.ino}` === lockId; }
+    catch (e) { return false; }
+  };
   try {
-    mkdirSync(join(fixturesDir, 's4-shots'), { recursive: true });
-    tmp = mkdtempSync(join(fixturesDir, 's4-shots', `.tmp-${phase}-`));
-    for (const [name, bytes] of Object.entries(pngByCaptureName)) writeFileSync(join(tmp, name), bytes);
-    // 목적지를 통째로 교체 — 잔존 파일이 살아남지 못한다.
-    if (existsSync(dest)) rmSync(dest, { recursive: true, force: true });
-    renameSync(tmp, dest); tmp = null;
-    writeFileSync(join(fixturesDir, ctxName), contextRaw);
+    mkdirSync(root, { recursive: true });
+    // **containment/symlink 검증을 먼저** 한다. root가 밖을 가리키면 lock조차 밖에 만들면 안 된다.
+    for (const [p2, k] of [[root, 'dir'], [bundleDir, 'dir'], [pointer, 'file']]) {
+      const e = safeNode(fixturesDir, p2, k);
+      if (e) return [`WRITE_${e}`];
+    }
+    // cooperative lock — O_EXCL. **자동 stale 회수는 없다**(소유자가 살아 있어도 탈취된다).
+    // 잔존 lock 복구는 아래 LOCK_RECOVERY 절차대로 사람이 한다.
+    try { lockFd = openSync(lockPath, 'wx'); }
+    catch (e) { return [`WRITE_LOCK_BUSY ${lockPath}`]; }
+    try { const st = fstatSync(lockFd); lockId = `${st.dev}:${st.ino}`; }
+    catch (e) { return [`WRITE_LOCK_STAT_FAILED ${(e && e.message) || e}`]; }
+    if (!existsSync(bundleDir)) {
+      tmp = mkdtempSync(join(root, `.tmp-${phase}-`));
+      for (const [name, bytes] of Object.entries(pngByCaptureName)) writeFileSync(join(tmp, name), bytes);
+      writeFileSync(join(tmp, BUNDLE_CONTEXT_NAME), contextRaw);
+      const stErr = verifyBundleDir(fixturesDir, tmp, want, hash);
+      if (stErr.length) return stErr.map((e) => `WRITE_STAGING_${e}`);
+      try { renameSync(tmp, bundleDir); tmp = null; }
+      catch (e) { if (!existsSync(bundleDir)) return [`WRITE_BUNDLE_PUBLISH_FAILED ${(e && e.message) || e}`]; }
+    }
+    // **race winner를 그대로 믿지 않는다.** 이미 있었든 방금 올렸든 동일 기준으로 재검증한다.
+    const vErr = verifyBundleDir(fixturesDir, bundleDir, want, hash);
+    if (vErr.length) return vErr.map((e) => `WRITE_${e}`);
+
+    // commit **직전**에 lock 소유권을 확인한다. 잃었으면 pointer를 쓰지 않는다.
+    if (!lockStillOurs()) return ['WRITE_LOCK_OWNERSHIP_LOST'];
+    // ── commit point ────────────────────────────────────────────────────────
+    // 여기까지의 실패는 **publish되지 않은 실패**다. pointer rename이 성공하는 순간
+    // 새 candidate가 공개된다.
+    const ptmpDir = mkdtempSync(join(root, `.ptr-${phase}-`));
+    const ptmp = join(ptmpDir, 'pointer');
+    let committed = false;
+    try { writeFileSync(ptmp, `${bundleName}\n`); renameSync(ptmp, pointer); committed = true; }
+    catch (e) { return [`WRITE_POINTER_FAILED ${(e && e.message) || e}`]; }
+    finally { try { rmSync(ptmpDir, { recursive: true, force: true }); } catch (e) { /* best effort */ } }
+
+    // **writer-success ⇒ immediate-reader-success.** commit 뒤의 readback 실패는
+    // "publish되지 않았다"가 아니라 **publish된 뒤의 손상**이다 — 그렇게 보고한다.
+    const back = readCandidateBundle(fixturesDir, phase);
+    if (back.errors.length)
+      return back.errors.map((e) => `WRITE_COMMITTED_BUT_UNREADABLE ${e}`);
+    if (back.contextRaw !== contextRaw) return ['WRITE_COMMITTED_BUT_CONTEXT_MISMATCH'];
+    void committed;
   } catch (e) {
-    return [`WRITE_FAILED ${e && e.message}`];
-  } finally { if (tmp) try { rmSync(tmp, { recursive: true, force: true }); } catch (e) { /* best effort */ } }
+    return [`WRITE_FAILED ${(e && e.message) || e}`];
+  } finally {
+    if (tmp) try { rmSync(tmp, { recursive: true, force: true }); } catch (e) { /* best effort */ }
+    if (lockFd !== null) {
+      // 우리 것일 때만 반납한다. **범위 주의**: 정상 cooperative writer와 이미 존재하던
+      // foreign lock은 보호하지만, ownership 검사 **직후** 같은 사용자가 out-of-band로
+      // unlink/replace하는 창은 범위 밖이다(OS advisory lock을 도입하지 않는다).
+      const ours = lockStillOurs();
+      try { closeSync(lockFd); } catch (e) { /* noop */ }
+      if (ours) try { unlinkSync(lockPath); } catch (e) { /* noop */ }
+    }
+  }
   return [];
+}
+
+export function readCandidateBundle(fixturesDir, phase) {
+  const fail = (e) => ({ errors: Array.isArray(e) ? e : [e], contextRaw: null, pngByName: null });
+  if (!PHASES.includes(phase)) return fail(`BUNDLE_PHASE_INVALID ${String(phase)}`);
+  const root = join(fixturesDir, CANDIDATE_ROOT);
+  const pointer = join(root, CANDIDATE_POINTER(phase));
+  for (const [p2, k] of [[root, 'dir'], [pointer, 'file']]) {
+    const e = safeNode(fixturesDir, p2, k);
+    if (e) return fail(`BUNDLE_${e}`);
+  }
+  if (!existsSync(pointer)) return fail(`BUNDLE_MISSING ${phase}`);
+  let name = null;
+  try { name = readFileSync(pointer, 'utf8').trim(); } catch (e) { return fail(`BUNDLE_POINTER_UNREADABLE ${(e && e.message) || e}`); }
+  if (!name.startsWith(BUNDLE_PREFIX(phase)) || name.includes('/') || name.includes('..'))
+    return fail(`BUNDLE_POINTER_INVALID ${name}`);
+  const dir = join(root, name);
+  if (!existsSync(dir)) return fail(`BUNDLE_TARGET_MISSING ${name}`);
+  const bad = safeNode(fixturesDir, dir, 'dir');
+  if (bad) return fail(`BUNDLE_${bad}`);
+  let names = null;
+  try { names = readdirSync(dir); } catch (e) { return fail(`BUNDLE_UNREADABLE ${name}`); }
+  // dotfile을 조용히 건너뛰지 않는다 — 있으면 그 자체가 오류다.
+  if (names.some((n) => n.startsWith('.'))) return fail(`BUNDLE_DOTFILE ${names.filter((n) => n.startsWith('.'))}`);
+  if (!names.includes(BUNDLE_CONTEXT_NAME)) return fail(`BUNDLE_NO_CONTEXT ${phase}`);
+  for (const n of names) { const e = safeNode(fixturesDir, join(dir, n), 'file'); if (e) return fail(`BUNDLE_${e}`); }
+  let contextRaw = null; const pngByName = {};
+  try {
+    contextRaw = readFileSync(join(dir, BUNDLE_CONTEXT_NAME), 'utf8');
+    for (const n of names) if (n !== BUNDLE_CONTEXT_NAME) pngByName[n] = readFileSync(join(dir, n));
+  } catch (e) { return fail(`BUNDLE_READ_FAILED ${(e && e.message) || e}`); }
+  const wantName = `${BUNDLE_PREFIX(phase)}${bundleContentHash(contextRaw, pngByName)}`;
+  if (wantName !== name) return fail(`BUNDLE_CONTENT_DRIFT ${name} != ${wantName}`);
+  return { errors: [], contextRaw, pngByName, bundleName: name };
 }
 
 // 디렉터리의 파일명 집합이 정확히 기대와 같은지. BASE·candidate 양쪽에 쓴다.

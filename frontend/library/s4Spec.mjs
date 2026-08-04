@@ -75,7 +75,11 @@ export const ANNOTATIONS = [   // 검수 §1: 고유 marker + BASE 원문 줄 ex
 ];
 // 검수 §4: 정적 smoke manifest — Task 0가 관측값을 채우기 전에 이름·필수 selector·액션·허용 영역이 먼저 고정된다.
 // bundle 엔드포인트는 추정하지 않고 Task 0가 실제 관측한 요청 집합을 context에 동결(검수 §5).
-// coverage 정본: **24 surface가 커버 대상 54 selector**(= NEW branch ∪ smoke-light/allow CHANGED).
+// coverage 정본 — 두 숫자를 **혼동하지 말 것**:
+//   현재 target : 23 surfaces / coverage 54 / capture 23 (+ required elements 4 · actions 94 · allow IDs 15)
+//   legacy      : `__fixtures__/s4-shots/base/`의 PNG 24개 = **promotion 전 legacy baseline**.
+//                 현재 target이 아니고, 차이는 sourcepicker.png 1개다(canvas와 같은 화면이라 통합됨).
+// 위 6개는 기계 확인값이며 themeTokens.test.js의 '계약 숫자' describe가 실행 값과 대조한다.
 // ⚠️ token-identity 변환은 문자열 동일성으로 증명되므로 시각 증거 대상이 아니다 → coverage에 넣지 않는다.
 // 런타임 전제(존재만 확인)는 requiredElements로 분리한다(오버라이드 branch + smoke-light/allow 변경 선언)를
 // 빠짐없이 덮는다. 상태 의존 19종은 각각 그 상태를 만드는 action(provenBy)을 갖는다.
@@ -110,6 +114,8 @@ export const LIGHT_DIFF_MASKS = {
 // 같은 selector가 화면에 따라 다른 좌표계에 놓인다(캔버스 노드 0.5 vs 트리 행 1).
 //
 // 왜 이 표가 필요한가: 이전 판은 LIGHT_DIFF_MASKS에 selector당 하나의 `expectedScale`을 뒀고
+// (그 필드는 지금 존재하지 않는다 — 현행 정본은 아래 ELEMENT_SCALES의 (surface, selector) 셀이고,
+//  잔존 여부는 validateMaskContract의 MASK_EXPECTED_SCALE_OBSOLETE가 잡는다)
 // 캔버스 4개 selector를 전부 `1`로 선언했다. 실측은 **0.5**다(committed probe로 24화면 측정).
 // paintRect = borderRect ⊕ (outset × scale) 이므로 배율이 틀리면 outset>0인 마스크가 실제와
 // 다른 크기로 확장된다. 게다가 selector 전역 선언은 "한 화면에서만 맞으면 통과"라 구조적으로
@@ -210,14 +216,185 @@ export const MASK_PIXEL_BUDGET = {
 };
 
 
+// ── provenance 경로 정본 ──────────────────────────────────────────────────────
+// discovery/캡처 provenance가 신고하는 blob 경로의 **정본 집합**. 개수만 세면 임의의 실제
+// repo 파일 9개를 올바른 OID와 함께 넣어도 통과한다(실증). 경로 집합을 exact로 잠근다.
+// Git을 부르기 **전에** 이 집합의 멤버인지 확인하므로, 경로에 shell metacharacter가 섞여도
+// Git 호출 자체가 일어나지 않는다.
+export const PROVENANCE_BLOB_PATHS = [
+  'frontend/library/cssColorLiterals.mjs',
+  'frontend/library/s4Canonicalize.mjs',
+  'frontend/library/s4CaptureRunner.mjs',
+  'frontend/library/s4DomProbe.mjs',
+  'frontend/library/s4Evaluator.mjs',
+  'frontend/library/s4Promote.mjs',
+  'frontend/library/s4Spec.mjs',
+  'frontend/scripts/s4-capture.mjs',
+  'frontend/scripts/s4-adapter.playwright.js',
+];
+
+// ── 시나리오 정본 ─────────────────────────────────────────────────────────────
+// **dataset identity에 필요한 값의 단일 원천.** 캡처 스크립트는 이것을 소비하고,
+// candidate context의 같은 필드는 여기와 exact 대조된다.
+// 두 곳에 적으면 URL이 가리키는 대상과 화면이 클릭하는 대상이 갈릴 수 있다.
+// plain JSON만 담는다 — specFingerprint 입력이므로 함수·getter가 들어가면 안 된다.
+export const SCENARIO_CANON = {
+  apiOrigin: 'http://localhost:10001/api',
+  appOrigin: 'http://localhost:10000',
+  trackId: 5,
+  bulkBranchId: 13,
+  branchName: '- Alpha',
+  bulkEpicId: 7,
+  epicName: 'Alpha Epic',
+  scrumBoardId: 10,
+};
+// context와 exact 대조할 필드. 늘리면 계약이 강해지고, 줄이면 약해진다.
+export const SCENARIO_CANON_KEYS = Object.keys(SCENARIO_CANON);
+
+// **사람이 승인하는 명시적 trust root다. 기계적으로 독립 증명되는 오라클이 아니다.**
+// "이 응답이 픽셀에 영향을 주는가"는 코드를 읽고 내린 사람의 판단이고, raw 증거로는
+// 도출되지 않는다. 이 표가 하는 일은 그 판단을 한곳에 못박아 manifest category와 exact
+// 대조하는 것뿐이다 — 둘 중 하나만 바꾸면 RED가 되므로 **조용한 재분류**를 막는다.
+// 이 표 자체의 정당성은 사람의 재검수로만 갱신된다. 이를 보완한다며 또 다른 자기파생
+// 오라클을 만들면 그 순간 근거가 순환한다.
+// 키는 urlTemplate, 값은 category. 2026-08-03 검수 기준.
+export const REVIEWED_CLASSIFICATION = {
+  '{apiOrigin}/branches': 'dataset',
+  '{apiOrigin}/branches/{bulkBranchId}/epics': 'dataset',
+  '{apiOrigin}/chat': 'dataset',
+  '{apiOrigin}/notifications/unread-count': 'dataset',
+  '{apiOrigin}/notifications?limit=30': 'ambient',
+  '{apiOrigin}/profile/ui-prefs': 'dataset',
+  '{apiOrigin}/scrum': 'dataset',
+  '{apiOrigin}/scrum/{scrumBoardId}': 'dataset',
+  '{apiOrigin}/setup/status': 'dataset',
+  '{apiOrigin}/tracks': 'dataset',
+  '{apiOrigin}/tracks/home-stats': 'dataset',
+  '{apiOrigin}/tracks/{trackId}': 'dataset',
+  '{apiOrigin}/tracks/{trackId}/branches': 'dataset',
+  '{apiOrigin}/tracks/{trackId}/items': 'dataset',
+  '{apiOrigin}/tracks/{trackId}/links': 'dataset',
+  '{apiOrigin}/tracks/{trackId}/members': 'dataset',
+  '{apiOrigin}/tracks/{trackId}/sidebar-tree': 'dataset',
+  '{apiOrigin}/tracks/{trackId}/sources?limit=200&include_non_participating=true&branch_id={bulkBranchId}&epic_id={bulkEpicId}&exclude_done=true': 'dataset',
+  '{appOrigin}/_next/static/development/_devMiddlewareManifest.json': 'dev',
+  '{appOrigin}/_next/static/development/_devPagesManifest.json': 'dev',
+};
+
+// ── dataset 정본 ──────────────────────────────────────────────────────────────
+// **단일 원천.** 2026-08-03 discovery 2회(Run A/B, 재현성 확인 완료)를 사람이 검수해 동결했다.
+// 관찰된 backend 고유 URL 18종 + Next dev 런타임 2종을 셋으로 분류한다.
+//
+//  dataset — 캡처 픽셀에 영향을 주는 응답. light/dark가 **같은 데이터**에서 찍혔음을
+//            증명하는 digest의 입력이다.
+//  ambient — 관찰은 됐지만 이번 S4 픽셀에 영향을 주지 않는 요청. raw discovery 원문에는
+//            남기되 dataset identity에서는 뺀다. **unknown과 구분하기 위해** 명시한다.
+//  dev     — Next.js 개발 런타임 산출물. backend 데이터가 아니다.
+//
+// urlTemplate은 반드시 {apiOrigin}/{appOrigin}으로 시작하는 **절대 URL**이다.
+// 상대 '/api/...'는 금지한다 — origin이 빠지면 어느 서버의 응답인지가 계약에서 사라진다.
+// 각 category 배열은 urlTemplate lexical order로 고정한다(검증기가 강제).
+//
+// observedSurfaceCount / observedRequestCount는 Run A(=Run B, drift 0)의 실측값이다.
+export const EXPECTED_DATASET_MANIFEST = {
+  schemaVersion: 1,
+  evidence: {
+    observedHead: '21920546e8e33567b7c13e8cbaf219e93d7d69a8',
+    observedSpecFingerprint: '5c8b9d0eabfd6ced5212eedde09ef2c911197ca6760228ccd25f223f1185d471',
+    discoveryDigest: 'a5db9acd13eaf03277c099a2fba9c7b79db1b1e2379978a540ad7bd626b550d2',
+    // **8파일 전부**를 결속한다. 이전 판은 out×2 + adapter 3개만 묶어서 err/code는
+    // 1바이트를 바꿔도 통과했다(실증). 파일 집합도 exact 8로 본다.
+    files: {
+      'runA.out': 'cee40bad53677c6a76d9ebf1c5cfaef36a1f718276841b3d86245d0b5259794d',
+      'runA.err': 'ad992b4de37c29e60575864d49d5253b8cf8bdeb3328d08db033d3053fc4a61b',
+      'runA.code': '9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa',
+      'runA.adapter.json': '6afbf76dde71598ff5af428d525fb8c021c8c63669e4cdf079e2f8fd711b6d38',
+      'runB.out': '35a462760411404459e736bb24b804a6ff7ffca0c33f4a145a395b3c4195342a',
+      'runB.err': 'ad992b4de37c29e60575864d49d5253b8cf8bdeb3328d08db033d3053fc4a61b',
+      'runB.code': '9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa',
+      'runB.adapter.json': '6afbf76dde71598ff5af428d525fb8c021c8c63669e4cdf079e2f8fd711b6d38',
+    },
+    surfaceCount: 23,
+    semanticTupleCount: 307,
+    backendTupleCount: 261,
+    backendUniqueUrlCount: 18,
+  },
+  dataset: [
+    { method: 'GET', urlTemplate: '{apiOrigin}/branches',
+      reason: '브랜치 키·색·이름 — TrackNode/SourcePicker/사이드바 렌더에 쓰인다',
+      observedSurfaceCount: 21, observedRequestCount: 21 },
+    { method: 'GET', urlTemplate: '{apiOrigin}/branches/{bulkBranchId}/epics',
+      reason: 'BulkAdd 에픽 드롭다운 항목',
+      observedSurfaceCount: 1, observedRequestCount: 1 },
+    { method: 'GET', urlTemplate: '{apiOrigin}/chat',
+      reason: '헤더 채팅 unread 뱃지 숫자 — 픽셀에 직접 나온다',
+      observedSurfaceCount: 23, observedRequestCount: 46 },
+    { method: 'GET', urlTemplate: '{apiOrigin}/notifications/unread-count',
+      reason: '헤더 알림 뱃지 숫자 — 픽셀에 직접 나온다',
+      observedSurfaceCount: 23, observedRequestCount: 46 },
+    { method: 'GET', urlTemplate: '{apiOrigin}/profile/ui-prefs',
+      reason: 'theme/sidebar/home view 상태 — 화면 구성을 바꾼다',
+      observedSurfaceCount: 23, observedRequestCount: 23 },
+    { method: 'GET', urlTemplate: '{apiOrigin}/scrum',
+      reason: '사이드바 스크럼 목록',
+      observedSurfaceCount: 1, observedRequestCount: 1 },
+    { method: 'GET', urlTemplate: '{apiOrigin}/scrum/{scrumBoardId}',
+      reason: '스크럼 설정 화면의 보드명·색 스와치 선택 상태',
+      observedSurfaceCount: 1, observedRequestCount: 1 },
+    { method: 'GET', urlTemplate: '{apiOrigin}/setup/status',
+      reason: 'Header workspace 이름과 setup gate 배너',
+      observedSurfaceCount: 23, observedRequestCount: 23 },
+    { method: 'GET', urlTemplate: '{apiOrigin}/tracks',
+      reason: '사이드바 트랙 목록·TrackHome 카드',
+      observedSurfaceCount: 22, observedRequestCount: 24 },
+    { method: 'GET', urlTemplate: '{apiOrigin}/tracks/home-stats',
+      reason: 'TrackHome 통계 카드 숫자',
+      observedSurfaceCount: 2, observedRequestCount: 2 },
+    { method: 'GET', urlTemplate: '{apiOrigin}/tracks/{trackId}',
+      reason: '트랙 이름·설정 — 헤더와 캔버스 전반',
+      observedSurfaceCount: 20, observedRequestCount: 20 },
+    { method: 'GET', urlTemplate: '{apiOrigin}/tracks/{trackId}/branches',
+      reason: '트랙 설정 Branches 탭의 행·스와치',
+      observedSurfaceCount: 1, observedRequestCount: 1 },
+    { method: 'GET', urlTemplate: '{apiOrigin}/tracks/{trackId}/items',
+      reason: '캔버스 노드 전부 — 가장 큰 픽셀 기여',
+      observedSurfaceCount: 19, observedRequestCount: 19 },
+    { method: 'GET', urlTemplate: '{apiOrigin}/tracks/{trackId}/links',
+      reason: '엣지와 엣지 라벨 배지',
+      observedSurfaceCount: 19, observedRequestCount: 19 },
+    { method: 'GET', urlTemplate: '{apiOrigin}/tracks/{trackId}/members',
+      reason: '멤버 아바타 이니셜·색',
+      observedSurfaceCount: 19, observedRequestCount: 19 },
+    { method: 'GET', urlTemplate: '{apiOrigin}/tracks/{trackId}/sidebar-tree',
+      reason: 'SourcePicker 트리 전체',
+      observedSurfaceCount: 19, observedRequestCount: 19 },
+    { method: 'GET', urlTemplate: '{apiOrigin}/tracks/{trackId}/sources?limit=200&include_non_participating=true&branch_id={bulkBranchId}&epic_id={bulkEpicId}&exclude_done=true',
+      reason: 'BulkAdd 소스 목록 — query가 화면 내용을 결정하므로 통째로 정본이다',
+      observedSurfaceCount: 1, observedRequestCount: 1 },
+  ],
+  ambient: [
+    { method: 'GET', urlTemplate: '{apiOrigin}/notifications?limit=30',
+      reason: '알림 **목록**. 23 surface 중 알림 메뉴를 여는 화면이 없고, 뱃지 숫자는 별도 '
+        + 'unread-count가 결정한다. 따라서 이번 S4 픽셀 identity에서 제외한다.',
+      observedSurfaceCount: 23, observedRequestCount: 46 },
+  ],
+  dev: [
+    { method: 'GET', urlTemplate: '{appOrigin}/_next/static/development/_devMiddlewareManifest.json',
+      reason: 'Next.js 개발 런타임이 dev 서버에서 받는 정적 manifest. backend 데이터가 아니다.',
+      observedSurfaceCount: 23, observedRequestCount: 23 },
+    { method: 'GET', urlTemplate: '{appOrigin}/_next/static/development/_devPagesManifest.json',
+      reason: 'Next.js 개발 런타임이 dev 서버에서 받는 정적 manifest. backend 데이터가 아니다.',
+      observedSurfaceCount: 23, observedRequestCount: 23 },
+  ],
+};
+
 // 23개 surface가 실제로 소비하는 데이터 원천. light/dark가 **같은 데이터**에서 찍혔음을
 // 증명하기 위해 캡처 때 수집하고, 검증기가 원본 응답에서 digest를 재계산한다.
-// (URL의 {id} 등은 buildActionContext로 해석된다.)
-// ⚠️ **미확정.** 이 목록은 아직 사람이 검수한 정본이 아니다 —
-// discovery-only 실행으로 실제 XHR/fetch를 관찰해 확정해야 한다(리뷰 지정 (b) 변형안 3~5단계).
-// 지금은 비워 둔다: 추정 목록을 넣으면 "검증했다"는 착각만 만들고 누락을 못 찾는다.
-// URL은 apiOrigin을 붙인 **절대 URL**로 해석된다.
-export const DATASET_ENDPOINTS = [];
+// (URL의 {trackId} 등은 buildActionContext로 해석된다.)
+//
+// **manifest에서 기계 파생한다.** 두 번째 수기 배열을 두면 둘이 갈라지고, 그때 어느 쪽이
+// 정본인지가 사라진다 — 손으로 고칠 수 있는 경로 자체를 만들지 않는다.
+export const DATASET_ENDPOINTS = EXPECTED_DATASET_MANIFEST.dataset.map((entry) => entry.urlTemplate);
 
 // digest에서 제거할 **비시각·휘발** 필드. 화면을 바꾸지 않는 값만 넣는다 —
 // 넓히면 데이터 동일성 증명이 약해지므로 항목마다 이유를 적는다.
@@ -231,10 +408,6 @@ export const DATASET_VOLATILE_FIELDS = {};
 // UI 정렬은 화면을 바꾸므로 digest가 그 변화를 봐야 한다.
 // 지금은 비어 있다: 실제 응답을 관찰해 "순서 무관"임을 확인한 것만 추가한다.
 export const DATASET_UNORDERED_PATHS = [];
-
-// discovery로 관찰한 endpoint 집합을 사람이 검수해 여기 고정한다.
-// 비어 있으면 dataset 계약이 아직 성립하지 않았다는 뜻이고, 캡처 승격은 그 사실을 보고해야 한다.
-export const EXPECTED_DATASET_MANIFEST = null;
 
 // dead 예외는 삭제했다. `DEAD_ALLOW_IDS`/`DEAD_SELECTORS`는 자기신고 우회였다 —
 // mask에서 ID를 지우고 dead에 등록하고 surface를 빼면 allow #6 false-green을 그대로 재개통할 수 있었다.

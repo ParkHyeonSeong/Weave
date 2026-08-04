@@ -1,0 +1,2 @@
+bridge on 10098 — discovery
+discovery 완료 — 아무것도 쓰지 않았다. 사람이 검수해 EXPECTED_DATASET_MANIFEST를 별도 커밋할 것.
