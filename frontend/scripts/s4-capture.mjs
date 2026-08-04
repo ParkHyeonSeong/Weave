@@ -32,7 +32,7 @@ import { NETWORK_INSTALL_SOURCE, NETWORK_DRAIN_SOURCE, NETWORK_IDLE_SOURCE,
 import { snapshotSpec, specFingerprint, datasetDigest, validateDatasetContract,
   buildActionContext } from '../library/s4Evaluator.mjs';
 import { createHash } from 'node:crypto';
-import { headBlobBinding } from '../library/s4Promote.mjs';
+import { headBlobBinding, worktreeDirtyEntries } from '../library/s4Promote.mjs';
 import { execSync } from 'node:child_process';
 
 // 이 파일 전체 바이트도 신뢰 입력이다 — 우회 어댑터가 생기면 이 바이트가 그대로인지가 단서다.
@@ -57,23 +57,9 @@ export const ADAPTER_PORT = 10098;
 // 워킹트리 전체가 clean한지 **런타임에** 본다. HEAD blob 결속은 해시 대상 모듈만 보므로
 // 그 외 파일(제품 코드·스타일)이 더러워도 통과한다 — 그러면 산출물의 출처가 흐려진다.
 // porcelain -z로 읽어 공백·따옴표·rename이 섞인 경로도 놓치지 않는다.
-export function worktreeDirtyEntries(repoDir, exec) {
-  let out = '';
-  try { out = exec(`git -C ${repoDir} status --porcelain -z --untracked-files=all`); }
-  catch (e) { return [`WORKTREE_STATUS_FAILED ${(e && e.message) || e}`]; }
-  const parts = String(out).split('\0');
-  const entries = [];
-  for (let i = 0; i < parts.length; i += 1) {
-    const p = parts[i];
-    if (!p) continue;
-    const xy = p.slice(0, 2);
-    const path = p.slice(3);
-    // rename/copy는 원본 경로가 다음 NUL 필드에 온다 — 함께 소비한다.
-    if (xy[0] === 'R' || xy[0] === 'C') { const from = parts[i + 1]; i += 1; entries.push(`${xy} ${from} -> ${path}`); }
-    else entries.push(`${xy} ${path}`);
-  }
-  return entries;
-}
+// 워킹트리 authority는 **s4Promote가 소유한다**(승격이 자기 검사를 남에게 맡기지 않도록).
+// 여기서는 그것을 그대로 re-export해 캡처 경로가 같은 구현을 쓴다.
+export { worktreeDirtyEntries };
 
 export function parseCaptureArgs(argv, spec) {
   const out = { phase: null, port: 10098, discover: false, canary: null, repeat: 1, timeoutMs: RPC_TIMEOUT_MS };

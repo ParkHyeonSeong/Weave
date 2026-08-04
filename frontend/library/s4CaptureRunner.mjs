@@ -371,7 +371,6 @@ export const CANDIDATE_CONTEXT_NAME = (phase) => `s4-smoke-context.${phase}.cand
 export const CANDIDATE_SHOTS_DIR = (phase) => `candidate-${phase}`;
 export const COMMITTED_CONTEXT_NAME = (phase) => (phase === 'light' ? 's4-smoke-context.json' : `s4-smoke-context.${phase}.json`);
 export const COMMITTED_SHOTS_DIR = (phase) => (phase === 'light' ? 'base' : `${phase}-review`);
-const COMMITTED_NAMES = new Set(['s4-smoke-context.json', 's4-expected.json']);
 
 // candidate는 **전용 ignored root 아래의 content-addressed immutable bundle + 단일 pointer**다.
 //

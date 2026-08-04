@@ -21,7 +21,7 @@ import * as EV from '../library/s4Evaluator.mjs';
 import * as CANON from '../library/s4Canonicalize.mjs';
 import * as PROJ from '../library/s4Projection.mjs';
 import { readCandidateBundle } from '../library/s4CaptureRunner.mjs';
-import { promoteRelease, headBlobBinding, readRelease } from '../library/s4Promote.mjs';
+import { promoteRelease, approveForPromotion, headBlobBinding, readRelease } from '../library/s4Promote.mjs';
 import { HASHED_MODULES, REPO_DIR, worktreeDirtyEntries } from './s4-capture.mjs';
 
 // 인자가 없다. **두 phase를 함께** 승격하는 것이 유일한 동작이다 —
@@ -125,8 +125,9 @@ export async function main(argv, { log = console.log, err = console.error } = {}
   // **기존 공용 승인 경로**를 그대로 돈다 — candidate→conformance→artifacts→evidence를
   // 전부 통과한 bytes만 canonical expectedBytes가 된다. writer는 메모리에만 남긴다.
   let expectedBytes = null;
-  const approve = EV.approveAndWrite({
-    fixture, spec: RAW_SPEC, contrastResults: pr.contrast.results,
+  const approve = approveForPromotion({
+    approveAndWrite: EV.approveAndWrite, repoDir: REPO_DIR, evidenceFiles: files,
+    fixture, spec: SPEC, contrastResults: pr.contrast.results,
     actualDecls: pr.projDecls, actualRaw: pr.projSrc, preAnnSources: pr.preAnnSrc,
     actualAllowIdToKey: pr.attribution.allowIdToKey, baseDecls: pr.baseDecls,
     contextRaw: lightRaw, sha256, readPng: (n) => {
@@ -134,7 +135,6 @@ export async function main(argv, { log = console.log, err = console.error } = {}
       return b ? { bytes: b, width: b.readUInt32BE(16), height: b.readUInt32BE(20) } : { bytes: Buffer.alloc(0) };
     },
     provenanceRefs: { headCommit: head.headCommit, headBlobs: head.blobs, specFingerprintNow: fingerprint },
-    discoveryEvidence: { files },
     serialize: EV.serializeFixture, write: (bytes) => { expectedBytes = bytes; },
   });
   if (approve.errors.length) {
@@ -146,25 +146,14 @@ export async function main(argv, { log = console.log, err = console.error } = {}
 
   // CAS 기준: **검증 전에** 읽은 포인터. 검증 도중 누가 승격했으면 lock 안에서 어긋난다.
   const fromRelease = readRelease(fixturesDir);
-  // write 직전 authority postflight — 긴 projection 뒤에 워킹트리·HEAD가 그대로인지.
-  const postflight = () => {
-    const errors = [];
-    const d2 = worktreeDirtyEntries(REPO_DIR, gitExec);
-    if (d2.length) errors.push(`WORKTREE_DIRTIED ${d2.length}`);
-    let now = null;
-    try { now = gitExec(`git -C ${REPO_DIR} rev-parse HEAD`).trim(); } catch (e) { errors.push('HEAD_UNREADABLE'); }
-    if (now && now !== head.headCommit) errors.push(`HEAD_MOVED ${head.headCommit} -> ${now}`);
-    const h2 = headBlobBinding(REPO_DIR, HASHED_MODULES, gitExec, head.headCommit);
-    if (h2.errors.length) errors.push(...h2.errors);
-    else if (JSON.stringify(h2.blobs) !== JSON.stringify(head.blobs)) errors.push('BLOBS_DIFFER');
-    return { ok: errors.length === 0, errors };
-  };
+  // authority postflight는 **승격 모듈 내부**에 있다 — 콜백을 넘기지 않는다.
   const r = promoteRelease({
-    fixturesDir, spec: RAW_SPEC,
+    fixturesDir, spec: SPEC,                    // 최초 snapshot만 넘긴다(RAW_SPEC 재전달 0)
     provenanceRefs: { headCommit: head.headCommit, headBlobs: head.blobs, specFingerprintNow: fingerprint },
     fromRelease, expectedBytes,                 // fixture를 따로 넘기지 않는다 — bytes가 정본이다
     candidates: cands,                          // CLI가 읽어 고정한 snapshot
-    discoveryEvidence: { files }, repoDir: REPO_DIR, postflight,
+    discoveryEvidence: { files }, repoDir: REPO_DIR,
+    hashedModules: HASHED_MODULES, startHead: head.headCommit,
   });
   if (r.errors.length) {
     err(`PROMOTE FAILED — total=${r.errors.length}`);

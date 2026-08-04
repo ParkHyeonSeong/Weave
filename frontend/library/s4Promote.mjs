@@ -20,7 +20,7 @@ import { mkdtempSync, writeFileSync, readFileSync, renameSync, rmSync, openSync,
 import { join, dirname, basename, sep } from 'node:path';
 import { readdirSync, mkdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 // 구체 검증기를 정적으로 결속한다(주입 금지).
 import { readCandidateBundle, CANDIDATE_BUNDLE_DIR } from './s4CaptureRunner.mjs';
 import { verifyDiscoveryEvidence } from './s4Evaluator.mjs';
@@ -30,6 +30,55 @@ import { validateCaptureBundle, datasetDigest, validateMaskContract,
   buildActionContext } from './s4Evaluator.mjs';
 
 const sha = (b) => createHash('sha256').update(b).digest('hex');
+
+// 워킹트리 전체가 clean한지. **git/worktree authority는 이 모듈이 소유한다** —
+// 승격이 자기 검사를 caller에게 맡기면 그 검사를 갈아끼울 수 있다.
+export function worktreeDirtyEntries(repoDir, exec) {
+  let out = '';
+  try { out = exec(`git -C ${repoDir} status --porcelain -z --untracked-files=all`); }
+  catch (e) { return [`WORKTREE_STATUS_FAILED ${(e && e.message) || e}`]; }
+  const parts = String(out).split('\0');
+  const entries = [];
+  for (let i = 0; i < parts.length; i += 1) {
+    const p = parts[i];
+    if (!p) continue;
+    const xy = p.slice(0, 2);
+    const path = p.slice(3);
+    if (xy[0] === 'R' || xy[0] === 'C') { const from = parts[i + 1]; i += 1; entries.push(`${xy} ${from} -> ${path}`); }
+    else entries.push(`${xy} ${path}`);
+  }
+  return entries;
+}
+
+// 모듈 고정 git 실행기. 주입 지점이 없다.
+const gitRun = (c) => execSync(c, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+
+// 승격 authority: worktree clean + HEAD 동일 + pinned blob exact.
+// **내부 검사다** — 콜백으로 받지 않는다.
+export function promotionAuthority(repoDir, hashedModules, startHead) {
+  const errors = [];
+  const dirty = worktreeDirtyEntries(repoDir, gitRun);
+  if (dirty.length) errors.push(`WORKTREE_DIRTY ${dirty.length}: ${dirty.slice(0, 5).join(' | ')}`);
+  let now = null;
+  try { now = gitRun(`git -C ${repoDir} rev-parse HEAD`).trim(); } catch (e) { errors.push('HEAD_UNREADABLE'); }
+  if (now && startHead && now !== startHead) errors.push(`HEAD_MOVED ${startHead} -> ${now}`);
+  const h = headBlobBinding(repoDir, hashedModules, gitRun, startHead || undefined);
+  if (h.errors.length) errors.push(...h.errors);
+  else if (startHead && JSON.stringify(h.blobs) !== JSON.stringify(startHead && h.blobs)) errors.push('BLOBS_DIFFER');
+  return { ok: errors.length === 0, errors };
+}
+
+// **비주입 승인 entrypoint.** discovery evidence의 Git resolver를 모듈이 만들어 넣는다.
+// caller는 bytes와 repoDir만 준다 — resolver를 갈아끼울 자리가 없다.
+export function approveForPromotion({ approveAndWrite, spec, repoDir, evidenceFiles, ...rest }) {
+  if (typeof approveAndWrite !== 'function') return { errors: ['APPROVE_FN_REQUIRED'], wrote: false, bytes: null };
+  if (typeof repoDir !== 'string' || !repoDir) return { errors: ['APPROVE_REPO_DIR_REQUIRED'], wrote: false, bytes: null };
+  if (!evidenceFiles || typeof evidenceFiles !== 'object')
+    return { errors: ['APPROVE_EVIDENCE_FILES_REQUIRED'], wrote: false, bytes: null };
+  const canonPaths = new Set((spec && spec.PROVENANCE_BLOB_PATHS) || []);
+  return approveAndWrite({ ...rest, spec,
+    discoveryEvidence: { files: evidenceFiles, gitBlob: (ref, rel) => promoteGitBlob(repoDir, canonPaths, ref, rel) } });
+}
 
 // CLI 문법 정본 — 정확히 두 형태만 허용한다. includes/indexOf 방식은 unknown·중복·여분
 // 인자를 통과시키고, `--promote` 오타를 기본 staging 실행으로 떨어뜨려 검토된 candidate를
@@ -44,9 +93,9 @@ export function parseCliArgs(argv) {
 }
 
 export const STAGING_NAME = 's4-expected.candidate.json';   // s4-gen 진단 산출물(정본 아님)
-// ⚠️ 전역 s4-expected.json은 **정본 경로에서 제거됐다.** committed expected는
+// ⚠️ 전역 s4-expected.json은 **정본 경로에서 제거됐다.** 상수 자체도 남기지 않는다 —
+// 이름이 남아 있으면 나중에 다시 그 경로를 읽는 코드가 생긴다. committed expected는
 // release.expectedSha가 가리키는 content-addressed 불변 파일이다(아래 EXPECTED_DIR).
-export const LEGACY_COMMITTED_NAME = 's4-expected.json';
 export const EXPECTED_DIR = 'expected';
 const LOCK_NAME = '.s4-promote.lock';
 
@@ -225,10 +274,43 @@ export const expectedPath = (fixturesDir, sha256hex) =>
 
 // release가 가리키는 expected bytes를 읽고 **SHA exact**를 확인한다.
 // 이름을 믿지 않는다 — 정확한 이름으로 변조된 파일을 심어두면 그냥 통과한다.
+const HEX64 = /^[0-9a-f]{64}$/;
+// release manifest 스키마 — 키 exact, 값은 64자리 lowercase hex.
+export function validateReleaseShape(rel) {
+  if (!rel || typeof rel !== 'object' || Array.isArray(rel)) return ['RELEASE_SHAPE'];
+  const got = Object.keys(rel).sort();
+  const want = ['dark', 'expectedSha', 'light'];
+  const errors = [];
+  if (JSON.stringify(got) !== JSON.stringify(want)) errors.push(`RELEASE_KEYS [${got}] != [${want}]`);
+  for (const k of want) if (typeof rel[k] !== 'string' || !HEX64.test(rel[k])) errors.push(`RELEASE_VALUE ${k} ${String(rel[k])}`);
+  return errors;
+}
+
+// 경로가 **일반 파일/디렉터리**이고 fixturesDir 안인지. symlink는 거부한다.
+function safeLeaf(fixturesDir, p, kind) {
+  let rootReal = null;
+  try { rootReal = realpathSync(fixturesDir); } catch (e) { return `NODE_ROOT_UNREADABLE`; }
+  let st = null;
+  try { st = lstatSync(p); } catch (e) { return null; }
+  if (st.isSymbolicLink()) return `NODE_SYMLINK ${p}`;
+  if (kind === 'dir' && !st.isDirectory()) return `NODE_NOT_DIR ${p}`;
+  if (kind === 'file' && !st.isFile()) return `NODE_NOT_FILE ${p}`;
+  let real = null;
+  try { real = realpathSync(p); } catch (e) { return `NODE_UNRESOLVABLE ${p}`; }
+  if (real !== rootReal && !real.startsWith(rootReal + sep)) return `NODE_ESCAPES ${p} -> ${real}`;
+  return null;
+}
+
 export function readCommittedExpected(fixturesDir) {
   const rel = readRelease(fixturesDir);
-  if (!rel || typeof rel.expectedSha !== 'string') return { errors: ['EXPECTED_NO_RELEASE'], bytes: null };
+  if (!rel) return { errors: ['EXPECTED_NO_RELEASE'], bytes: null };
+  const shapeErr = validateReleaseShape(rel);
+  if (shapeErr.length) return { errors: shapeErr, bytes: null };
+  const dirErr = safeLeaf(fixturesDir, join(fixturesDir, BUNDLE_ROOT, EXPECTED_DIR), 'dir');
+  if (dirErr) return { errors: [`EXPECTED_${dirErr}`], bytes: null };
   const p = expectedPath(fixturesDir, rel.expectedSha);
+  const leafErr = safeLeaf(fixturesDir, p, 'file');
+  if (leafErr) return { errors: [`EXPECTED_${leafErr}`], bytes: null };
   if (!existsSync(p)) return { errors: [`EXPECTED_ARTIFACT_MISSING ${rel.expectedSha}`], bytes: null };
   let bytes = null;
   try { bytes = readFileSync(p, 'utf8'); } catch (e) { return { errors: [`EXPECTED_UNREADABLE ${rel.expectedSha}`], bytes: null }; }
@@ -242,7 +324,7 @@ export function readCommittedExpected(fixturesDir) {
 // 읽지 않는다 — 다시 읽으면 CLI가 검증한 것과 다른 candidate를 쓸 수 있다(TOCTOU).
 // 대신 commit 직전에 pointer/digest CAS로 교체 여부만 확인한다.
 export function promoteRelease({ fixturesDir, spec: rawSpec, provenanceRefs, fromRelease, expectedBytes,
-  discoveryEvidence, repoDir, candidates, postflight }) {
+  discoveryEvidence, repoDir, candidates, hashedModules, startHead }) {
   // 하드 비활성 — 인자가 무엇이든 아무것도 쓰지 않는다.
   if (!PROMOTION_ENABLED) return { errors: ['PROMOTION_DISABLED'], promoted: false };
   if (!rawSpec || typeof rawSpec !== 'object') return { errors: ['PROMOTE_SPEC_REQUIRED'], promoted: false };
@@ -276,8 +358,12 @@ export function promoteRelease({ fixturesDir, spec: rawSpec, provenanceRefs, fro
   catch (e) { return { errors: ['PROMOTE_EXPECTED_BYTES_UNPARSEABLE'], promoted: false }; }
   if (!fixture || typeof fixture !== 'object' || Array.isArray(fixture))
     return { errors: ['PROMOTE_EXPECTED_BYTES_SHAPE'], promoted: false };
-  if (typeof postflight !== 'function') return { errors: ['PROMOTE_POSTFLIGHT_REQUIRED'], promoted: false };
-  const cErr = containedDirs(fixturesDir, [BUNDLE_ROOT, join(BUNDLE_ROOT, VERSIONS_DIR), 's4-shots',
+  if (!Array.isArray(hashedModules) || !hashedModules.length)
+    return { errors: ['PROMOTE_HASHED_MODULES_REQUIRED'], promoted: false };
+  if (typeof startHead !== 'string' || !/^[0-9a-f]{40}$/.test(startHead))
+    return { errors: ['PROMOTE_START_HEAD_REQUIRED'], promoted: false };
+  const cErr = containedDirs(fixturesDir, [BUNDLE_ROOT, join(BUNDLE_ROOT, VERSIONS_DIR),
+    join(BUNDLE_ROOT, EXPECTED_DIR), 's4-shots',
     ...CAPTURE_PHASES.map((p) => join('s4-shots', CANDIDATE_BUNDLE_DIR(p)))]);
   if (cErr.length) return { errors: cErr, promoted: false };
 
@@ -331,14 +417,11 @@ export function promoteRelease({ fixturesDir, spec: rawSpec, provenanceRefs, fro
   const next = { expectedSha: sha(expectedBytes) };
   for (const phase of CAPTURE_PHASES) next[phase] = bundleDigest(cands[phase].contextRaw, cands[phase].pngByName);
 
-  // ── write 직전 authority postflight ──────────────────────────────────────
-  // 긴 projection·검증이 끝난 뒤다. 그 사이에 워킹트리가 더러워졌거나 HEAD가 움직였으면
-  // 이 산출물의 출처가 흔들린다. 여기서 실패하면 expected·release 둘 다 write 0이다.
+  // ── write 직전 authority ─────────────────────────────────────────────────
+  // 긴 projection·검증이 끝난 뒤다. **모듈 내부 검사다** — 콜백으로 받지 않는다.
   {
-    let pf = null;
-    try { pf = postflight(); } catch (e) { return { errors: [`PROMOTE_POSTFLIGHT_THREW ${(e && e.message) || e}`], promoted: false }; }
-    if (!pf || pf.ok !== true)
-      return { errors: [`PROMOTE_POSTFLIGHT_FAILED ${(pf && pf.errors ? pf.errors.join(' | ') : 'unknown')}`], promoted: false };
+    const a = promotionAuthority(repoDir, hashedModules, startHead);
+    if (!a.ok) return { errors: [`PROMOTE_AUTHORITY_FAILED ${a.errors.join(' | ')}`], promoted: false };
   }
 
   return withLock(fixturesDir, () => {
@@ -361,6 +444,8 @@ export function promoteRelease({ fixturesDir, spec: rawSpec, provenanceRefs, fro
       mkdirSync(join(fixturesDir, BUNDLE_ROOT, VERSIONS_DIR), { recursive: true });
       for (const phase of CAPTURE_PHASES) {
         const dest = versionDir(fixturesDir, next[phase]);
+        const vErr = safeLeaf(fixturesDir, dest, 'dir');
+        if (vErr) return { errors: [`PROMOTE_VERSION_${vErr}`], promoted: false };
         if (!existsSync(dest)) {
           const tmp = mkdtempSync(join(fixturesDir, BUNDLE_ROOT, VERSIONS_DIR, `.staging-${phase}-`));
           try {
@@ -380,7 +465,11 @@ export function promoteRelease({ fixturesDir, spec: rawSpec, provenanceRefs, fro
       // expected를 **content-addressed 불변 파일로 먼저** 만들고 읽어 확인한다.
       // 여기서 실패하면 release pointer는 손대지 않았으므로 이전 정본이 그대로 유효하다.
       mkdirSync(join(fixturesDir, BUNDLE_ROOT, EXPECTED_DIR), { recursive: true });
+      const eDirErr = safeLeaf(fixturesDir, join(fixturesDir, BUNDLE_ROOT, EXPECTED_DIR), 'dir');
+      if (eDirErr) return { errors: [`PROMOTE_EXPECTED_${eDirErr}`], promoted: false };
       const expPath = expectedPath(fixturesDir, next.expectedSha);
+      const eLeafErr = safeLeaf(fixturesDir, expPath, 'file');
+      if (eLeafErr) return { errors: [`PROMOTE_EXPECTED_${eLeafErr}`], promoted: false };
       if (!existsSync(expPath)) {
         const eErr = atomicWrite(expPath, expectedBytes);
         if (eErr) return { errors: [eErr], promoted: false };
@@ -389,6 +478,10 @@ export function promoteRelease({ fixturesDir, spec: rawSpec, provenanceRefs, fro
       if (sha(backExp) !== next.expectedSha)
         return { errors: [`PROMOTE_EXPECTED_TAMPERED ${sha(backExp)} != ${next.expectedSha}`], promoted: false };
 
+      // pointer를 쓰기 **직전에 한 번 더** 본다. lock을 잡고 버전 디렉터리를 만드는 동안에도
+      // 워킹트리·HEAD는 움직일 수 있다.
+      const a2 = promotionAuthority(repoDir, hashedModules, startHead);
+      if (!a2.ok) return { errors: [`PROMOTE_AUTHORITY_FAILED_LATE ${a2.errors.join(' | ')}`], promoted: false };
       // **마지막에 pointer 하나만** 원자적으로 교체한다. 실패하면 이전 release가 이전
       // expected를 계속 읽는다 — 새 expected는 orphan으로 남을 뿐 활성 정본이 아니다.
       const err = atomicWrite(releasePath(fixturesDir), JSON.stringify(next, null, 1));
