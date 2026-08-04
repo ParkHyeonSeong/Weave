@@ -275,6 +275,9 @@ export const DISCOVERY_HASHED_MODULES = [...RAW_SPEC.PROVENANCE_BLOB_PATHS];
 export const HASHED_MODULES = [
   ...DISCOVERY_HASHED_MODULES,
   'frontend/library/s4Projection.mjs',
+  // privacy audit 부착 도구도 capture authority에 든다 — 캡처는 이 도구가 커밋된
+  // 이후의 clean HEAD에서만 돈다.
+  'frontend/scripts/s4-audit-candidate.mjs',
   'frontend/scripts/s4-promote-capture.mjs',
 ];
 

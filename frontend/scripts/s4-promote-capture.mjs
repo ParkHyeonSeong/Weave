@@ -113,8 +113,6 @@ export async function main(argv, { log = console.log, err = console.error } = {}
     for (const e of fxErrors.slice(0, 20)) err(`  ${e}`);
     return 1;
   }
-  // canonical expectedBytes — committed fixture가 될 바로 그 바이트다.
-  const expectedBytes = EV.serializeFixture(fixture);
 
   // discovery evidence는 **바이트만** 넘긴다. resolver는 승격 모듈이 스스로 만든다.
   const evidenceDir = fileURLToPath(new URL('../library/__fixtures__/s4-discovery-evidence/', import.meta.url));
@@ -124,13 +122,49 @@ export async function main(argv, { log = console.log, err = console.error } = {}
     catch (e) { err(`DISCOVERY_EVIDENCE_UNREADABLE ${n}`); return 1; }
   }
 
+  // **기존 공용 승인 경로**를 그대로 돈다 — candidate→conformance→artifacts→evidence를
+  // 전부 통과한 bytes만 canonical expectedBytes가 된다. writer는 메모리에만 남긴다.
+  let expectedBytes = null;
+  const approve = EV.approveAndWrite({
+    fixture, spec: RAW_SPEC, contrastResults: pr.contrast.results,
+    actualDecls: pr.projDecls, actualRaw: pr.projSrc, preAnnSources: pr.preAnnSrc,
+    actualAllowIdToKey: pr.attribution.allowIdToKey, baseDecls: pr.baseDecls,
+    contextRaw: lightRaw, sha256, readPng: (n) => {
+      const b = cands.light.pngByName[n];
+      return b ? { bytes: b, width: b.readUInt32BE(16), height: b.readUInt32BE(20) } : { bytes: Buffer.alloc(0) };
+    },
+    provenanceRefs: { headCommit: head.headCommit, headBlobs: head.blobs, specFingerprintNow: fingerprint },
+    discoveryEvidence: { files },
+    serialize: EV.serializeFixture, write: (bytes) => { expectedBytes = bytes; },
+  });
+  if (approve.errors.length) {
+    err(`APPROVAL FAILED — total=${approve.errors.length}`);
+    for (const e of approve.errors.slice(0, 20)) err(`  ${e}`);
+    return 1;
+  }
+  if (typeof expectedBytes !== 'string') { err('APPROVAL_NO_BYTES'); return 1; }
+
   // CAS 기준: **검증 전에** 읽은 포인터. 검증 도중 누가 승격했으면 lock 안에서 어긋난다.
   const fromRelease = readRelease(fixturesDir);
+  // write 직전 authority postflight — 긴 projection 뒤에 워킹트리·HEAD가 그대로인지.
+  const postflight = () => {
+    const errors = [];
+    const d2 = worktreeDirtyEntries(REPO_DIR, gitExec);
+    if (d2.length) errors.push(`WORKTREE_DIRTIED ${d2.length}`);
+    let now = null;
+    try { now = gitExec(`git -C ${REPO_DIR} rev-parse HEAD`).trim(); } catch (e) { errors.push('HEAD_UNREADABLE'); }
+    if (now && now !== head.headCommit) errors.push(`HEAD_MOVED ${head.headCommit} -> ${now}`);
+    const h2 = headBlobBinding(REPO_DIR, HASHED_MODULES, gitExec, head.headCommit);
+    if (h2.errors.length) errors.push(...h2.errors);
+    else if (JSON.stringify(h2.blobs) !== JSON.stringify(head.blobs)) errors.push('BLOBS_DIFFER');
+    return { ok: errors.length === 0, errors };
+  };
   const r = promoteRelease({
     fixturesDir, spec: RAW_SPEC,
     provenanceRefs: { headCommit: head.headCommit, headBlobs: head.blobs, specFingerprintNow: fingerprint },
-    fromRelease, fixture, expectedBytes,
-    discoveryEvidence: { files }, repoDir: REPO_DIR,
+    fromRelease, expectedBytes,                 // fixture를 따로 넘기지 않는다 — bytes가 정본이다
+    candidates: cands,                          // CLI가 읽어 고정한 snapshot
+    discoveryEvidence: { files }, repoDir: REPO_DIR, postflight,
   });
   if (r.errors.length) {
     err(`PROMOTE FAILED — total=${r.errors.length}`);

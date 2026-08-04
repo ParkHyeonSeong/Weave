@@ -14,10 +14,6 @@ const CLI = PROMOTE_IO.parseCliArgs(process.argv.slice(2));
 if (CLI.error) { console.error(`${PROMOTE_IO.CLI_USAGE}\n  ${CLI.error}`); process.exit(2); }
 // 승격 하드 비활성은 **CLI 파싱 직후** 본다. 뒤에 두면 bundle 부재 같은 다른 오류가 먼저 나와
 // "CLI에서 즉시 막힌다"는 말이 사실이 아니게 된다(실증: CAPTURE_BUNDLE_MISSING이 먼저 났다).
-if (CLI.mode === 'promote' && !PROMOTE_IO.PROMOTION_ENABLED) {
-  console.error('PROMOTION_DISABLED — discovery-only 체크포인트에서는 승격할 수 없다.');
-  process.exit(1);
-}
 
 // spec은 **여기서 한 번** 스냅샷하고, 이후 raw 네임스페이스에는 접근하지 않는다.
 // 단계마다 다시 읽으면 조회할 때마다 값이 달라지는 루트에서 해시된 것과 소비되는 것이 갈린다.
@@ -139,12 +135,8 @@ if (fxErrors.length) die('BUILD_FIXTURE', fxErrors);
 // 넘기고 순서(candidate → conformance → artifacts → serialize → write)는 함수 안에서 고정된다.
 const pngOf = (name) => { const b = bundlePng(name);
   return { bytes: b, width: b.readUInt32BE(16), height: b.readUInt32BE(20) }; };
-// 생성과 승격은 분리된 두 경로이고, **둘 다 전체 승인 경로를 통과해야 한다**.
-//  기본 실행                       : 승인 bytes를 staging에 기록하고 candidateSha·baseCommittedSha 출력
-//  --promote <candidateSha> --from <baseCommittedSha>
-//                                  : staging을 재생성하지 않고 읽어, 지금 재계산한 canonical bytes와
-//                                    exact 대조하고 lock 안에서 CAS 후 atomic rename
-const PROMOTING = CLI.mode === 'promote';
+// **s4-gen에는 승격이 없다.** projection 진단과 candidate expected 산출까지만 한다 —
+// committed를 바꾸는 유일한 sink는 s4-promote-capture → promoteRelease 하나다.
 const contextRawStr = ctxRaw.toString('utf8');
 
 // 승인 경로는 한 번만 정의한다. writer만 바꿔 끼운다 — 승격도 같은 검증을 통과한 bytes만 쓴다.
@@ -163,30 +155,18 @@ const runApproval = (write) => {
   });
 };
 
-if (PROMOTING) {
-  // 승격 전에도 전체 승인 경로를 다시 돌려 canonical bytes를 만든다.
-  // (여기서 만들어지지 않으면 expectedAfter·residual·counts·conformance 어딘가가 깨진 것이다.)
-  const dry = runApproval((bytes) => { canonicalBytes = bytes; });
-  if (dry.errors.length) die('PROMOTE_APPROVAL', dry.errors);
-  const res = PROMOTE_IO.promoteStaged({ fixturesDir: FIXDIR,
-    expectedSha: CLI.candidateSha, fromSha: CLI.fromSha, canonicalBytes });
-  if (res.errors.length) die('PROMOTE', res.errors);
-  console.log(`promoted → ${FIXDIR}/s4-expected.json (sha ${res.stagedSha})`);
-  process.exit(0);
-}
 
-let staged = null;
+// **committed를 쓰지 않는다.** 승인 bytes를 진단용 candidate 파일로만 남긴다.
+let candidatePath = null;
 const approve = runApproval((bytes) => {
   mkdirSync(FIXDIR, { recursive: true });
-  staged = PROMOTE_IO.stageBytes({ fixturesDir: FIXDIR, bytes });
-  if (staged.errors.length) throw new Error(staged.errors.join('; '));
+  candidatePath = `${FIXDIR}/${PROMOTE_IO.STAGING_NAME}`;
+  writeFileSync(candidatePath, bytes);
 });
 if (approve.errors.length) die('APPROVE', approve.errors);
-console.log(`staged → ${staged.path}`);
-console.log(`candidateSha     = ${staged.candidateSha}`);
-console.log(`baseCommittedSha = ${staged.baseCommittedSha}`);
-console.log(`승격: node scripts/s4-gen.mjs --promote ${staged.candidateSha} --from ${staged.baseCommittedSha ?? 'none'}`);
 const json = approve.bytes;
+console.log(`candidate expected → ${candidatePath}`);
+console.log('승격: node scripts/s4-promote-capture.mjs  (공식 sink는 이것 하나다)');
 console.log(`conversions=${SPEC.CONVERSIONS.length} changed=${fixture.counts.changed} new=${fixture.counts.new}/${fixture.counts.newRules}rules ` +
   `residual=${fixture.counts.residual} raw=${fixture.counts.raw} processed=${fixture.counts.processed} allowBearing=${fixture.counts.allowBearing} errors=0`);
 console.log('contrast=' + fixture.contrast.map((c) => `${c.ratio}`).join('/'));

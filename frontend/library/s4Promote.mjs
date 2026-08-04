@@ -34,21 +34,20 @@ const sha = (b) => createHash('sha256').update(b).digest('hex');
 // CLI 문법 정본 — 정확히 두 형태만 허용한다. includes/indexOf 방식은 unknown·중복·여분
 // 인자를 통과시키고, `--promote` 오타를 기본 staging 실행으로 떨어뜨려 검토된 candidate를
 // 새 candidate로 덮어쓴다(리뷰 실증). 순수 함수로 두고 CLI는 가장 먼저 이걸 부른다.
-export const CLI_USAGE = 'usage: node scripts/s4-gen.mjs | node scripts/s4-gen.mjs --promote <sha256> --from <sha256|none>';
-const HEX64 = /^[0-9a-f]{64}$/;
+export const CLI_USAGE = 'usage: node scripts/s4-gen.mjs   (승격 인자는 없다 — 공식 sink는 s4-promote-capture 하나다)';
+// **s4-gen에는 승격 모드가 없다.** 독립 sink가 있으면 committed를 바꾸는 경로가 둘이 되고,
+// 그때 어느 쪽이 정본인지가 사라진다. 인자를 받으면 그대로 거부한다.
 export function parseCliArgs(argv) {
   if (!Array.isArray(argv)) return { error: 'ARGV_REQUIRED' };
-  if (argv.length === 0) return { mode: 'stage' };
-  if (argv.length !== 4) return { error: `BAD_ARITY ${argv.length}` };
-  if (argv[0] !== '--promote') return { error: `EXPECTED_PROMOTE_FLAG ${argv[0]}` };
-  if (argv[2] !== '--from') return { error: `EXPECTED_FROM_FLAG ${argv[2]}` };
-  if (!HEX64.test(argv[1])) return { error: `BAD_CANDIDATE_SHA ${argv[1]}` };
-  if (!(argv[3] === 'none' || HEX64.test(argv[3]))) return { error: `BAD_FROM_SHA ${argv[3]}` };
-  return { mode: 'promote', candidateSha: argv[1], fromSha: argv[3] === 'none' ? null : argv[3] };
+  if (argv.length !== 0) return { error: `PROMOTE_MODE_REMOVED ${argv.join(' ')} — s4-promote-capture를 쓸 것` };
+  return { mode: 'stage' };
 }
 
-export const STAGING_NAME = 's4-expected.candidate.json';
-export const COMMITTED_NAME = 's4-expected.json';
+export const STAGING_NAME = 's4-expected.candidate.json';   // s4-gen 진단 산출물(정본 아님)
+// ⚠️ 전역 s4-expected.json은 **정본 경로에서 제거됐다.** committed expected는
+// release.expectedSha가 가리키는 content-addressed 불변 파일이다(아래 EXPECTED_DIR).
+export const LEGACY_COMMITTED_NAME = 's4-expected.json';
+export const EXPECTED_DIR = 'expected';
 const LOCK_NAME = '.s4-promote.lock';
 
 // 디렉터리들이 fixturesDir 안에 실제로 있는지(조상 symlink 포함) 확인한다.
@@ -100,16 +99,6 @@ function atomicWrite(dest, bytes) {
 
 const readIfExists = (p) => (existsSync(p) ? readFileSync(p, 'utf8') : null);
 
-export function stageBytes({ fixturesDir, bytes }) {
-  if (typeof bytes !== 'string') return { errors: ['STAGE_BYTES_MUST_BE_STRING'], candidateSha: null, baseCommittedSha: null, path: null };
-  const sErr = symlinkCheck(fixturesDir, STAGING_NAME);
-  if (sErr) return { errors: [sErr], candidateSha: null, baseCommittedSha: null, path: null };
-  const dest = join(fixturesDir, STAGING_NAME);
-  const committed = readIfExists(join(fixturesDir, COMMITTED_NAME));
-  const err = atomicWrite(dest, bytes);
-  if (err) return { errors: [err], candidateSha: null, baseCommittedSha: null, path: dest };
-  return { errors: [], candidateSha: sha(bytes), baseCommittedSha: committed === null ? null : sha(committed), path: dest };
-}
 
 // lock: O_EXCL 파일. 잡지 못하면 즉시 실패(다른 승격이 진행 중).
 // lock: O_EXCL 파일. **자동 회수는 하지 않는다.**
@@ -125,45 +114,6 @@ function withLock(fixturesDir, fn) {
   finally { try { closeSync(fd); } catch (e) { /* noop */ } try { unlinkSync(lock); } catch (e) { /* noop */ } }
 }
 
-export function promoteStaged({ fixturesDir, expectedSha, fromSha, canonicalBytes }) {
-  // 하드 비활성 — promoteRelease만 막고 이건 열어 두면 "비활성"이 사실이 아니다.
-  // 실증: PROMOTION_ENABLED=false인데 stageBytes → promoteStaged로 s4-expected.json이 기록됐다.
-  if (!PROMOTION_ENABLED) return { errors: ['PROMOTION_DISABLED'], promoted: false };
-  const HEX = /^[0-9a-f]{64}$/;
-  if (typeof expectedSha !== 'string' || !HEX.test(expectedSha))
-    return { errors: ['PROMOTE_EXPECTED_SHA_REQUIRED'], promoted: false };
-  // fromSha 필수 — 생성 시점의 committed SHA. null이면 "그때 committed가 없었음"을 뜻한다.
-  if (!(fromSha === null || (typeof fromSha === 'string' && HEX.test(fromSha))))
-    return { errors: ['PROMOTE_FROM_SHA_REQUIRED'], promoted: false };
-  if (typeof canonicalBytes !== 'string')
-    return { errors: ['PROMOTE_CANONICAL_BYTES_REQUIRED'], promoted: false };
-  for (const leaf of [STAGING_NAME, COMMITTED_NAME]) {
-    const e = symlinkCheck(fixturesDir, leaf);
-    if (e) return { errors: [e], promoted: false };
-  }
-  const stagingPath = join(fixturesDir, STAGING_NAME);
-  const committedPath = join(fixturesDir, COMMITTED_NAME);
-  if (!existsSync(stagingPath)) return { errors: ['PROMOTE_NO_STAGING'], promoted: false };
-
-  return withLock(fixturesDir, () => {
-    const staged = readFileSync(stagingPath, 'utf8');
-    const stagedSha = sha(staged);
-    if (stagedSha !== expectedSha)
-      return { errors: [`PROMOTE_STAGING_SHA_MISMATCH ${stagedSha} != ${expectedSha}`], promoted: false, stagedSha };
-    // 전체 승인 경로가 방금 만들어낸 bytes와 exact 일치해야 한다.
-    // (validator를 주입받지 않으므로 "무엇이든 통과시키는 검사기"를 넘길 방법이 없다.)
-    if (staged !== canonicalBytes)
-      return { errors: ['PROMOTE_CANONICAL_MISMATCH'], promoted: false, stagedSha };
-    // CAS — lock 안에서 committed를 읽는다. staging 시점 SHA와 다르면 그 사이 누가 바꾼 것.
-    const cur = readIfExists(committedPath);
-    const curSha = cur === null ? null : sha(cur);
-    if (curSha !== fromSha)
-      return { errors: [`PROMOTE_CAS_CONFLICT ${curSha} != ${fromSha}`], promoted: false, stagedSha };
-    const err = atomicWrite(committedPath, staged);
-    if (err) return { errors: [err], promoted: false, stagedSha };
-    return { errors: [], promoted: true, stagedSha };
-  });
-}
 
 
 // ── 캡처 산출물 승격 (candidate → 불변 버전 + 단일 원자 포인터) ───────────────
@@ -245,7 +195,7 @@ function readCandidate(fixturesDir, phase) {
   if (r.errors.length) return { errors: r.errors.map((e) => `PROMOTE_${e}`) };
   for (const n of Object.keys(r.pngByName))
     if (n.includes('/') || n.includes('..')) return { errors: [`PROMOTE_BAD_NAME ${n}`] };
-  return { errors: [], contextRaw: r.contextRaw, pngByName: r.pngByName };
+  return { errors: [], contextRaw: r.contextRaw, pngByName: r.pngByName, bundleName: r.bundleName };
 }
 
 // **캡처 쌍 + expected fixture를 한 트랜잭션으로** 승격한다.
@@ -269,8 +219,30 @@ function promoteGitBlob(repoDir, canonPaths, ref, rel) {
   } catch (e) { return null; }
 }
 
-export function promoteRelease({ fixturesDir, spec: rawSpec, provenanceRefs, fromRelease, fixture, expectedBytes,
-  discoveryEvidence, repoDir }) {
+// expected는 **content-addressed 불변 파일**이다. release.expectedSha가 그것을 고른다.
+export const expectedPath = (fixturesDir, sha256hex) =>
+  join(fixturesDir, BUNDLE_ROOT, EXPECTED_DIR, `${sha256hex}.json`);
+
+// release가 가리키는 expected bytes를 읽고 **SHA exact**를 확인한다.
+// 이름을 믿지 않는다 — 정확한 이름으로 변조된 파일을 심어두면 그냥 통과한다.
+export function readCommittedExpected(fixturesDir) {
+  const rel = readRelease(fixturesDir);
+  if (!rel || typeof rel.expectedSha !== 'string') return { errors: ['EXPECTED_NO_RELEASE'], bytes: null };
+  const p = expectedPath(fixturesDir, rel.expectedSha);
+  if (!existsSync(p)) return { errors: [`EXPECTED_ARTIFACT_MISSING ${rel.expectedSha}`], bytes: null };
+  let bytes = null;
+  try { bytes = readFileSync(p, 'utf8'); } catch (e) { return { errors: [`EXPECTED_UNREADABLE ${rel.expectedSha}`], bytes: null }; }
+  const actual = sha(bytes);
+  if (actual !== rel.expectedSha)
+    return { errors: [`EXPECTED_SHA_MISMATCH ${actual} != ${rel.expectedSha}`], bytes: null };
+  return { errors: [], bytes, expectedSha: rel.expectedSha };
+}
+
+// candidates는 **CLI가 이미 읽어 고정한 snapshot**이다. promoteRelease는 그것을 다시
+// 읽지 않는다 — 다시 읽으면 CLI가 검증한 것과 다른 candidate를 쓸 수 있다(TOCTOU).
+// 대신 commit 직전에 pointer/digest CAS로 교체 여부만 확인한다.
+export function promoteRelease({ fixturesDir, spec: rawSpec, provenanceRefs, fromRelease, expectedBytes,
+  discoveryEvidence, repoDir, candidates, postflight }) {
   // 하드 비활성 — 인자가 무엇이든 아무것도 쓰지 않는다.
   if (!PROMOTION_ENABLED) return { errors: ['PROMOTION_DISABLED'], promoted: false };
   if (!rawSpec || typeof rawSpec !== 'object') return { errors: ['PROMOTE_SPEC_REQUIRED'], promoted: false };
@@ -296,16 +268,26 @@ export function promoteRelease({ fixturesDir, spec: rawSpec, provenanceRefs, fro
     if (evErrs.length) return { errors: evErrs.map((e) => `EVIDENCE ${e}`).slice(0, 40), promoted: false };
   }
   if (!provenanceRefs || typeof provenanceRefs !== 'object') return { errors: ['PROMOTE_PROVENANCE_REFS_REQUIRED'], promoted: false };
-  if (!fixture || typeof fixture !== 'object') return { errors: ['PROMOTE_FIXTURE_REQUIRED'], promoted: false };
   if (typeof expectedBytes !== 'string') return { errors: ['PROMOTE_EXPECTED_BYTES_REQUIRED'], promoted: false };
+  // **fixture를 따로 받지 않는다.** canonical bytes를 파싱한 바로 그 객체로 geometry를 본다 —
+  // 둘이 어긋난 입력 자체가 존재할 수 없다.
+  let fixture = null;
+  try { fixture = JSON.parse(expectedBytes); }
+  catch (e) { return { errors: ['PROMOTE_EXPECTED_BYTES_UNPARSEABLE'], promoted: false }; }
+  if (!fixture || typeof fixture !== 'object' || Array.isArray(fixture))
+    return { errors: ['PROMOTE_EXPECTED_BYTES_SHAPE'], promoted: false };
+  if (typeof postflight !== 'function') return { errors: ['PROMOTE_POSTFLIGHT_REQUIRED'], promoted: false };
   const cErr = containedDirs(fixturesDir, [BUNDLE_ROOT, join(BUNDLE_ROOT, VERSIONS_DIR), 's4-shots',
     ...CAPTURE_PHASES.map((p) => join('s4-shots', CANDIDATE_BUNDLE_DIR(p)))]);
   if (cErr.length) return { errors: cErr, promoted: false };
 
+  // CLI가 읽어 고정한 snapshot만 쓴다. 여기서 다시 읽지 않는다.
+  if (!candidates || typeof candidates !== 'object') return { errors: ['PROMOTE_CANDIDATES_REQUIRED'], promoted: false };
   const cands = {};
   for (const phase of CAPTURE_PHASES) {
-    const c = readCandidate(fixturesDir, phase);
-    if (c.errors.length) return { errors: c.errors, promoted: false };
+    const c = candidates[phase];
+    if (!c || typeof c.contextRaw !== 'string' || !c.pngByName || typeof c.bundleName !== 'string')
+      return { errors: [`PROMOTE_CANDIDATE_SNAPSHOT_INVALID ${phase}`], promoted: false };
     cands[phase] = c;
   }
   const errors = [];
@@ -349,7 +331,26 @@ export function promoteRelease({ fixturesDir, spec: rawSpec, provenanceRefs, fro
   const next = { expectedSha: sha(expectedBytes) };
   for (const phase of CAPTURE_PHASES) next[phase] = bundleDigest(cands[phase].contextRaw, cands[phase].pngByName);
 
+  // ── write 직전 authority postflight ──────────────────────────────────────
+  // 긴 projection·검증이 끝난 뒤다. 그 사이에 워킹트리가 더러워졌거나 HEAD가 움직였으면
+  // 이 산출물의 출처가 흔들린다. 여기서 실패하면 expected·release 둘 다 write 0이다.
+  {
+    let pf = null;
+    try { pf = postflight(); } catch (e) { return { errors: [`PROMOTE_POSTFLIGHT_THREW ${(e && e.message) || e}`], promoted: false }; }
+    if (!pf || pf.ok !== true)
+      return { errors: [`PROMOTE_POSTFLIGHT_FAILED ${(pf && pf.errors ? pf.errors.join(' | ') : 'unknown')}`], promoted: false };
+  }
+
   return withLock(fixturesDir, () => {
+    // candidate CAS — CLI가 읽은 뒤 누가 candidate를 교체했으면 우리가 검증한 것이 아니다.
+    for (const phase of CAPTURE_PHASES) {
+      const now = readCandidate(fixturesDir, phase);
+      if (now.errors.length) return { errors: now.errors, promoted: false };
+      if (now.bundleName !== cands[phase].bundleName)
+        return { errors: [`PROMOTE_CANDIDATE_CAS ${phase} ${cands[phase].bundleName} -> ${now.bundleName}`], promoted: false };
+      if (bundleDigest(now.contextRaw, now.pngByName) !== next[phase])
+        return { errors: [`PROMOTE_CANDIDATE_DIGEST_CAS ${phase}`], promoted: false };
+    }
     const cur = readRelease(fixturesDir);
     if (JSON.stringify(cur) !== JSON.stringify(fromRelease ?? null))
       return { errors: [`PROMOTE_CAS ${JSON.stringify(cur)} != ${JSON.stringify(fromRelease ?? null)}`], promoted: false };
@@ -376,10 +377,20 @@ export function promoteRelease({ fixturesDir, spec: rawSpec, provenanceRefs, fro
         if (back.digest !== next[phase])
           return { errors: [`PROMOTE_VERSION_TAMPERED ${phase} ${back.digest} != ${next[phase]}`], promoted: false };
       }
-      // expected fixture도 같은 트랜잭션 안에서 쓴다.
-      const eErr = atomicWrite(join(fixturesDir, COMMITTED_NAME), expectedBytes);
-      if (eErr) return { errors: [eErr], promoted: false };
-      // 마지막으로 release manifest 하나를 원자적으로 교체 — capture 쌍과 expected가 함께 바뀐다.
+      // expected를 **content-addressed 불변 파일로 먼저** 만들고 읽어 확인한다.
+      // 여기서 실패하면 release pointer는 손대지 않았으므로 이전 정본이 그대로 유효하다.
+      mkdirSync(join(fixturesDir, BUNDLE_ROOT, EXPECTED_DIR), { recursive: true });
+      const expPath = expectedPath(fixturesDir, next.expectedSha);
+      if (!existsSync(expPath)) {
+        const eErr = atomicWrite(expPath, expectedBytes);
+        if (eErr) return { errors: [eErr], promoted: false };
+      }
+      const backExp = readFileSync(expPath, 'utf8');
+      if (sha(backExp) !== next.expectedSha)
+        return { errors: [`PROMOTE_EXPECTED_TAMPERED ${sha(backExp)} != ${next.expectedSha}`], promoted: false };
+
+      // **마지막에 pointer 하나만** 원자적으로 교체한다. 실패하면 이전 release가 이전
+      // expected를 계속 읽는다 — 새 expected는 orphan으로 남을 뿐 활성 정본이 아니다.
       const err = atomicWrite(releasePath(fixturesDir), JSON.stringify(next, null, 1));
       if (err) return { errors: [err], promoted: false };
     } catch (e) {
