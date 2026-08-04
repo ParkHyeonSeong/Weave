@@ -1,22 +1,28 @@
 // frontend/scripts/s4-promote-capture.mjs
-// **커밋된 승격 명령.** candidate → committed bundle 로 가는 유일한 실행 경로.
+// **커밋된 승격 명령.** candidate → committed release 로 가는 유일한 실행 경로.
 //
-// 이 파일이 없으면 promoteCapture는 테스트에서만 불리는 함수이고, 실제 산출물은
+// 이 파일이 없으면 promoteRelease는 테스트에서만 불리는 함수이고, 실제 산출물은
 // 여전히 수동 복사로 committed가 된다 — 승격 계약이 무의미해진다.
 //
 //   node scripts/s4-promote-capture.mjs      (light+dark를 한 트랜잭션으로)
 //
 // 계약:
-//  - 검증기를 주입하지 않는다. promoteCapture가 내부에서 구체 검증기를 부른다.
-//  - 산출물 경로는 phase에서 내부 파생된다.
-//  - HEAD 결속·spec fingerprint·dataset digest를 **지금 값으로** 재계산해 provenance와 대조한다.
+//  - 검증기를 주입하지 않는다. promoteRelease가 내부에서 구체 검증기를 부른다.
+//  - projection은 **s4Projection 공유 모듈**을 쓴다(생성기와 같은 구현, 복제 없음).
+//  - expected fixture의 smoke는 **candidate bundle의 실제 바이트**에서 만든다.
+//  - Git blob resolver를 넘기지 않는다 — 승격 모듈이 스스로 해석한다.
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
 import { execSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import * as RAW_SPEC from '../library/s4Spec.mjs';
-import { snapshotSpec, specFingerprint } from '../library/s4Evaluator.mjs';
+import * as EV from '../library/s4Evaluator.mjs';
+import * as CANON from '../library/s4Canonicalize.mjs';
+import * as PROJ from '../library/s4Projection.mjs';
+import { readCandidateBundle } from '../library/s4CaptureRunner.mjs';
 import { promoteRelease, headBlobBinding, readRelease } from '../library/s4Promote.mjs';
-import { HASHED_MODULES, REPO_DIR } from './s4-capture.mjs';
+import { HASHED_MODULES, REPO_DIR, worktreeDirtyEntries } from './s4-capture.mjs';
 
 // 인자가 없다. **두 phase를 함께** 승격하는 것이 유일한 동작이다 —
 // 한쪽만 승격하면 dataset 쌍 검증이 이미 committed된 산출물을 뒤늦게 보게 된다.
@@ -28,35 +34,111 @@ export function parsePromoteArgs(argv) {
 export async function main(argv, { log = console.log, err = console.error } = {}) {
   const cli = parsePromoteArgs(argv);
   if (cli.error) { err(`usage: node scripts/s4-promote-capture.mjs\n  ${cli.error}`); return 2; }
-  const snap = snapshotSpec(RAW_SPEC);
-  if (snap.errors.length) { err(`SPEC_NOT_PLAIN — total=${snap.errors.length}`); return 1; }
+
+  const snap = EV.snapshotSpec(RAW_SPEC);
+  if (snap.errors.length) {
+    err(`SPEC_NOT_PLAIN — total=${snap.errors.length}`);
+    for (const e of snap.errors.slice(0, 10)) err(`  ${e}`);
+    return 1;
+  }
   const SPEC = snap.spec;
   const sha256 = (v) => createHash('sha256').update(v).digest('hex');
+  const gitExec = (c) => execSync(c, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
 
-  const head = headBlobBinding(REPO_DIR, HASHED_MODULES,
-    (c) => execSync(c, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }));
-  if (head.errors.length) { err(`HEAD_BINDING_FAILED — total=${head.errors.length}`);
-    for (const e of head.errors) err(`  ${e}`); return 1; }
+  // 승격은 정본을 만든다 — 워킹트리 전체가 clean일 때만 시작한다.
+  const dirty = worktreeDirtyEntries(REPO_DIR, gitExec);
+  if (dirty.length) {
+    err(`REPO_DIRTY — total=${dirty.length}`);
+    for (const e of dirty.slice(0, 20)) err(`  ${e}`);
+    return 1;
+  }
+  const head = headBlobBinding(REPO_DIR, HASHED_MODULES, gitExec);
+  if (head.errors.length) {
+    err(`HEAD_BINDING_FAILED — total=${head.errors.length}`);
+    for (const e of head.errors) err(`  ${e}`);
+    return 1;
+  }
 
   const fixturesDir = fileURLToPath(new URL('../library/__fixtures__/', import.meta.url));
+  const FRONT = fileURLToPath(new URL('../', import.meta.url)).replace(/\/$/, '');
+  const REPO = fileURLToPath(new URL('../../', import.meta.url));
+
+  // candidate 두 phase를 먼저 읽는다. 없으면 승격할 것이 없다.
+  const cands = {};
+  for (const phase of ['light', 'dark']) {
+    const c = readCandidateBundle(fixturesDir, phase);
+    if (c.errors.length) {
+      err(`CANDIDATE_UNREADABLE ${phase}`);
+      for (const e of c.errors) err(`  ${e}`);
+      return 1;
+    }
+    cands[phase] = c;
+  }
+
+  // ── projector 경로(생성기와 동일 구현) ────────────────────────────────────
+  const require = createRequire(`${FRONT}/package.json`);
+  const sass = require('sass'); const postcss = require('postcss');
+  const gitShow = (ref, rel) => gitExec(`git -C ${REPO} show ${ref}:frontend/${rel}`);
+  const compileScss = (src, rel) => sass.compileString(src,
+    { loadPaths: [`${FRONT}/styles`, FRONT], url: new URL(`file://${FRONT}/${rel}`) }).css;
+  const { pr } = PROJ.buildProjection({ spec: SPEC, gitShow, compileScss, frontDir: FRONT, sass, postcss });
+  if (pr.errors.length) {
+    err(`PROJECTION_FAILED — total=${pr.errors.length}`);
+    for (const e of pr.errors.slice(0, 20)) err(`  ${e}`);
+    return 1;
+  }
+
+  // smoke는 **candidate bundle의 실제 바이트**에서 만든다 — committed 산출물이 아니라
+  // 지금 승격하려는 것이 근거여야 한다. privacy audit도 그 context에서 나온다.
+  const lightRaw = cands.light.contextRaw;
+  const captures = SPEC.REQUIRED_SMOKE_SURFACES.map((x) => ({
+    captureName: x.captureName,
+    sha256: sha256(cands.light.pngByName[x.captureName] || Buffer.alloc(0)) }));
+  let lightCtx = null;
+  try { lightCtx = JSON.parse(lightRaw); } catch (e) { err('CANDIDATE_CONTEXT_UNPARSEABLE light'); return 1; }
+  const { privacyAudit, ...ctxSubject } = lightCtx;
+  const auditErrors = EV.validatePrivacyAudit(privacyAudit,
+    { captures, contextSubjectSha256: sha256(JSON.stringify(CANON.canonicalize(ctxSubject))) });
+  if (auditErrors.length) {
+    err(`PRIVACY_AUDIT — total=${auditErrors.length}`);
+    for (const e of auditErrors.slice(0, 20)) err(`  ${e}`);
+    return 1;
+  }
+  const smoke = { contextSha256: sha256(lightRaw), captures };
+
+  const fingerprint = EV.specFingerprint(SPEC, sha256);
+  const { fixture, errors: fxErrors } = PROJ.buildProjectedFixture({ spec: SPEC, pr, fingerprint, smoke });
+  if (fxErrors.length) {
+    err(`BUILD_FIXTURE — total=${fxErrors.length}`);
+    for (const e of fxErrors.slice(0, 20)) err(`  ${e}`);
+    return 1;
+  }
+  // canonical expectedBytes — committed fixture가 될 바로 그 바이트다.
+  const expectedBytes = EV.serializeFixture(fixture);
+
+  // discovery evidence는 **바이트만** 넘긴다. resolver는 승격 모듈이 스스로 만든다.
+  const evidenceDir = fileURLToPath(new URL('../library/__fixtures__/s4-discovery-evidence/', import.meta.url));
+  const files = {};
+  for (const n of EV.DISCOVERY_EVIDENCE_FILES) {
+    try { files[n] = readFileSync(`${evidenceDir}${n}`, 'utf8'); }
+    catch (e) { err(`DISCOVERY_EVIDENCE_UNREADABLE ${n}`); return 1; }
+  }
+
   // CAS 기준: **검증 전에** 읽은 포인터. 검증 도중 누가 승격했으면 lock 안에서 어긋난다.
   const fromRelease = readRelease(fixturesDir);
-  // ⚠️ 최종 release는 **expected fixture까지 함께** 승격한다. 그 fixture는 projector가 만들어야
-  // 하고(SCSS 컴파일 → 선언 투영 → attribution), 그 배선은 아직 이 CLI에 없다.
-  // 지금은 fail-closed로 멈춘다 — geometry 승인 없는 승격을 허용하느니 실행 불가가 낫다.
-  err('PROMOTE_NOT_WIRED — expected fixture(projector) 배선 전에는 승격할 수 없다.');
-  err('  필요한 순서: capture(light+dark) → projector fixture → promoteRelease({fixture, expectedBytes})');
-  void promoteRelease; void fromRelease; void fixturesDir; void sha256;
-  return 1;
-  /* eslint-disable no-unreachable */
-  const r = { errors: ['unreachable'], release: null, datasetDigest: null };
+  const r = promoteRelease({
+    fixturesDir, spec: RAW_SPEC,
+    provenanceRefs: { headCommit: head.headCommit, headBlobs: head.blobs, specFingerprintNow: fingerprint },
+    fromRelease, fixture, expectedBytes,
+    discoveryEvidence: { files }, repoDir: REPO_DIR,
+  });
   if (r.errors.length) {
     err(`PROMOTE FAILED — total=${r.errors.length}`);
     for (const e of r.errors.slice(0, 20)) err(`  ${e}`);
     return 1;                                       // 어느 phase도 committed가 되지 않는다
   }
-  log(`promoted pair light=${r.pointer.light.slice(0, 12)} dark=${r.pointer.dark.slice(0, 12)}`);
-  log(`dataset=${String(r.datasetDigest).slice(0, 16)} (light == dark 확인됨)`);
+  log(`promoted pair light=${String(r.release.light).slice(0, 12)} dark=${String(r.release.dark).slice(0, 12)}`);
+  log(`expected=${String(r.release.expectedSha).slice(0, 16)} dataset=${String(r.datasetDigest).slice(0, 16)}`);
   return 0;
 }
 

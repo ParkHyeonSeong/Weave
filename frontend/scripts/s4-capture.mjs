@@ -274,6 +274,7 @@ export const DISCOVERY_HASHED_MODULES = [...RAW_SPEC.PROVENANCE_BLOB_PATHS];
 // 캡처는 산출물을 만든다 — 승격까지의 전 경로가 clean이어야 한다.
 export const HASHED_MODULES = [
   ...DISCOVERY_HASHED_MODULES,
+  'frontend/library/s4Projection.mjs',
   'frontend/scripts/s4-promote-capture.mjs',
 ];
 
@@ -284,6 +285,7 @@ export const GENERATOR_ENTRY = 'frontend/scripts/s4-gen.mjs';
 export const GENERATOR_HASHED_MODULES = [
   GENERATOR_ENTRY,
   'frontend/library/cssColorLiterals.mjs',
+  'frontend/library/s4Projection.mjs',
   'frontend/library/s4Canonicalize.mjs',
   'frontend/library/s4CaptureRunner.mjs',
   'frontend/library/s4DomProbe.mjs',

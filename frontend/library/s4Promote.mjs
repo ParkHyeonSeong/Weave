@@ -20,9 +20,11 @@ import { mkdtempSync, writeFileSync, readFileSync, renameSync, rmSync, openSync,
 import { join, dirname, basename, sep } from 'node:path';
 import { readdirSync, mkdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 // 구체 검증기를 정적으로 결속한다(주입 금지).
 import { readCandidateBundle, CANDIDATE_BUNDLE_DIR } from './s4CaptureRunner.mjs';
 import { verifyDiscoveryEvidence } from './s4Evaluator.mjs';
+import { snapshotSpec } from './s4Evaluator.mjs';
 import { validateCaptureBundle, datasetDigest, validateMaskContract,
   validateDatasetContract, validateScenarioIdentity, validateScenarioCanon,
   buildActionContext } from './s4Evaluator.mjs';
@@ -180,14 +182,12 @@ export function promoteStaged({ fixturesDir, expectedSha, fromSha, canonicalByte
 // discovery-only 커밋의 목적은 endpoint 관찰뿐이고, 그 사이에 누구도(실수로도) 산출물을
 // committed로 만들 수 없어야 한다. 승격 경로를 열려면 이 상수를 바꾸는 **명시적 커밋**이 필요하고,
 // 그때 projector 배선·immutable expected artifact·legacy reader 전환이 함께 와야 한다.
-// ⚠️ **활성화 전 별도 blocker (미해결).**
-//  (1) promoteRelease는 raw spec을 받아 쓴다 — approveAndWrite처럼 진입 직후 snapshotSpec을
-//      한 번 돌려 evidence·bundle·geometry가 같은 frozen spec을 보게 해야 한다.
-//  (2) discoveryEvidence.gitBlob을 **caller가 준다**. 승격은 정본을 만드는 지점이므로
-//      resolver를 caller가 갈아끼울 수 있으면 Git 진위가 caller 손에 넘어간다.
-//      활성화 시 모듈 안에서 execFileSync argv로 직접 해석해야 한다.
-// 이 두 가지가 닫히기 전에는 PROMOTION_ENABLED를 true로 바꾸지 말 것.
-export const PROMOTION_ENABLED = false;
+// 승격 활성. 두 blocker는 닫혔다:
+//  (1) promoteRelease가 진입 직후 snapshotSpec을 한 번 돌려 evidence·bundle·geometry가
+//      같은 frozen spec만 소비한다.
+//  (2) discovery evidence의 Git blob을 **모듈 안에서** execFileSync argv로 해석한다.
+//      caller는 resolver를 주지 못한다.
+export const PROMOTION_ENABLED = true;
 // 이 플래그는 **모든 승격 경로**를 막는다: promoteRelease, promoteStaged,
 // 그리고 이들을 부르는 CLI(s4-gen --promote / s4-promote-capture).
 
@@ -256,25 +256,45 @@ function readCandidate(fixturesDir, phase) {
 //
 // geometry는 **실제 fixture의 allowIdToKey/changed**가 있어야 판정되므로 여기서 본다 —
 // bundle 검증(validateCaptureBundle)은 일부러 생략하고, 그 전까지는 candidate로만 존재한다.
-export function promoteRelease({ fixturesDir, spec, provenanceRefs, fromRelease, fixture, expectedBytes,
-  discoveryEvidence }) {
+// discovery evidence의 Git blob을 **모듈 안에서** 해석한다.
+// caller가 resolver를 주면 승격의 Git 진위가 caller 손에 넘어간다 — 승격은 정본을 만드는
+// 유일한 지점이므로 그 권한을 밖에 두지 않는다.
+// 부르기 전에 ref(40 hex)와 rel(정본 경로 집합 멤버)을 검증하므로 문자열 보간도 없다.
+function promoteGitBlob(repoDir, canonPaths, ref, rel) {
+  if (!/^[0-9a-f]{40}$/.test(String(ref))) return null;
+  if (!canonPaths.has(String(rel))) return null;
+  try {
+    return execFileSync('git', ['-C', repoDir, 'rev-parse', `${ref}:${rel}`],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+  } catch (e) { return null; }
+}
+
+export function promoteRelease({ fixturesDir, spec: rawSpec, provenanceRefs, fromRelease, fixture, expectedBytes,
+  discoveryEvidence, repoDir }) {
   // 하드 비활성 — 인자가 무엇이든 아무것도 쓰지 않는다.
   if (!PROMOTION_ENABLED) return { errors: ['PROMOTION_DISABLED'], promoted: false };
-  // **승격도 evidence preflight 없이는 열리지 않는다.** 지금은 disabled지만, 켜는 순간
-  // 이 계약이 없으면 검증되지 않은 증거 위에서 정본이 만들어진다.
+  if (!rawSpec || typeof rawSpec !== 'object') return { errors: ['PROMOTE_SPEC_REQUIRED'], promoted: false };
+  // **spec은 진입 직후 정확히 한 번 동결한다.** 이후 evidence·bundle·geometry가 전부
+  // 이 snapshot만 소비한다. 단계마다 raw를 다시 읽으면 루트 getter가 조회마다 다른 값을
+  // 줄 때 evidence와 downstream이 서로 다른 spec을 보게 된다.
+  const snapped = snapshotSpec(rawSpec);
+  if (snapped.errors.length) return { errors: snapped.errors.slice(0, 40), promoted: false };
+  const spec = snapped.spec;
+  if (typeof repoDir !== 'string' || !repoDir) return { errors: ['PROMOTE_REPO_DIR_REQUIRED'], promoted: false };
+  // **승격도 evidence preflight 없이는 열리지 않는다.**
   if (!discoveryEvidence || typeof discoveryEvidence !== 'object')
     return { errors: ['PROMOTE_EVIDENCE_REQUIRED'], promoted: false };
   {
+    const canonPaths = new Set(spec.PROVENANCE_BLOB_PATHS || []);
     let evErrs = null;
     try {
       evErrs = verifyDiscoveryEvidence({ files: discoveryEvidence.files, spec,
         scenario: buildActionContext(spec.SCENARIO_CANON || {}), sha256Hex: sha,
-        gitBlob: discoveryEvidence.gitBlob });
+        gitBlob: (ref, rel) => promoteGitBlob(repoDir, canonPaths, ref, rel) });
     } catch (e) { return { errors: [`PROMOTE_EVIDENCE_THREW ${(e && e.message) || e}`], promoted: false }; }
     if (!Array.isArray(evErrs)) return { errors: ['PROMOTE_EVIDENCE_NONARRAY'], promoted: false };
     if (evErrs.length) return { errors: evErrs.map((e) => `EVIDENCE ${e}`).slice(0, 40), promoted: false };
   }
-  if (!spec || typeof spec !== 'object') return { errors: ['PROMOTE_SPEC_REQUIRED'], promoted: false };
   if (!provenanceRefs || typeof provenanceRefs !== 'object') return { errors: ['PROMOTE_PROVENANCE_REFS_REQUIRED'], promoted: false };
   if (!fixture || typeof fixture !== 'object') return { errors: ['PROMOTE_FIXTURE_REQUIRED'], promoted: false };
   if (typeof expectedBytes !== 'string') return { errors: ['PROMOTE_EXPECTED_BYTES_REQUIRED'], promoted: false };

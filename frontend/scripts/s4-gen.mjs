@@ -8,6 +8,7 @@ import { pathToFileURL, fileURLToPath } from 'node:url';
 import * as RAW_SPEC from '../library/s4Spec.mjs';
 import * as EV from '../library/s4Evaluator.mjs';
 import * as CANON from '../library/s4Canonicalize.mjs';
+import * as PROJ from '../library/s4Projection.mjs';
 // 무거운 작업(Sass 컴파일·fixture 읽기) **전에** 인자 문법을 강제한다.
 const CLI = PROMOTE_IO.parseCliArgs(process.argv.slice(2));
 if (CLI.error) { console.error(`${PROMOTE_IO.CLI_USAGE}\n  ${CLI.error}`); process.exit(2); }
@@ -40,7 +41,6 @@ const gitShow = (ref, rel) => execSync(`git -C ${REPO} show ${ref}:frontend/${re
 // 오류 위치도 실제 파일 기준으로 보존된다.
 const compileScss = (src, rel) => sass.compileString(src,
   { syntax: 'scss', url: pathToFileURL(`${FRONT}/${rel}`), loadPaths: [`${FRONT}/styles`] }).css;
-const declsOf = (src, rel) => EV.collectDeclarations(postcss.parse(compileScss(src, rel)), rel);
 const die = (msg, arr) => {   // 총수를 함께 찍는다 — 잘린 20건을 총수로 오독한 전례가 있다
   const n = Array.isArray(arr) ? arr.length : 0;
   console.error(`${msg} — total=${n} shown=${Math.min(n, 20)}`, arr && arr.slice(0, 20));
@@ -50,15 +50,8 @@ const die = (msg, arr) => {   // 총수를 함께 찍는다 — 잘린 20건을 
 for (const k of Object.keys(SPEC.FILES)) { const { rel, blob } = SPEC.FILES[k];
   const h = execSync(`git -C ${REPO} rev-parse ${SPEC.BASE}:frontend/${rel}`, { encoding: 'utf8' }).trim();
   if (h !== blob) die(`BLOB_MISMATCH ${rel} ${h}`); }
-// 2) 테마 값 맵(라이트/다크)
-const themeRoot = postcss.parse(sass.compile(`${FRONT}/styles/_themes.scss`).css);
-const rootVals = {}, darkBlock = {};
-themeRoot.walkRules((r) => { if (r.selector === ':root') r.walkDecls(/^--/, (d) => { if (!(d.prop in rootVals)) rootVals[d.prop] = d.value; });
-  if (EV.isDarkSelector(r.selector)) r.walkDecls(/^--/, (d) => { darkBlock[d.prop] = d.value; }); });
-const lightVals = rootVals; const darkVals = { ...rootVals, ...darkBlock };
+// 2) 테마 값 맵(라이트/다크) — **공유 projector 모듈**이 만든다(승격 경로와 같은 구현).
 // 3) 단일 evaluator 경로(검수 §4) — projection·solo attribution·identity·annotation·dark·selector·contrast 일괄
-const baseSources = Object.fromEntries(Object.keys(SPEC.FILES).map((k) => [k, gitShow(SPEC.BASE, SPEC.FILES[k].rel)]));
-const io = { compileDecls: (src, rel) => declsOf(src, rel), lightVals, darkVals };
 // ── generator authority ────────────────────────────────────────────────────
 // **discovery provenance 9파일과 다른 것이다.** 저기는 "그때 관찰한 코드", 여기는
 // "지금 fixture를 만드는 코드"다. s4-gen.mjs 자신을 포함한 정적 import closure를 잠근다.
@@ -105,7 +98,7 @@ const DISCOVERY_EVIDENCE = (() => {
   if (errs.length) die('DISCOVERY_EVIDENCE_FAILED', errs);
 }
 
-const pr = EV.evaluateProjection(SPEC, baseSources, io);
+const { pr } = PROJ.buildProjection({ spec: SPEC, gitShow, compileScss, frontDir: FRONT, sass, postcss });
 if (pr.errors.length) die('EVALUATE_PROJECTION', pr.errors);
 // 4) 참고치 드리프트 게이트
 
@@ -139,8 +132,7 @@ if (auditErrors.length) die('PRIVACY_AUDIT', auditErrors);
 const smoke = { contextSha256: sha(ctxRaw), captures };
 
 // 7) fixture
-const { fixture, errors: fxErrors } = EV.buildFixture({ base: SPEC.BASE, blobs: SPEC.FILES, baseDecls: pr.baseDecls,
-  projectedDecls: pr.projDecls, conversions: SPEC.CONVERSIONS, attribution: pr.attribution, contrast: pr.contrast, fingerprint, smoke });
+const { fixture, errors: fxErrors } = PROJ.buildProjectedFixture({ spec: SPEC, pr, fingerprint, smoke });
 if (fxErrors.length) die('BUILD_FIXTURE', fxErrors);
 // 단일 승인 경로 — 개별 validator를 여기서 따로 부르지 않는다(배선 누락·부분 배선 차단).
 // 승인·직렬화·쓰기는 단일 orchestration만 쓴다. validator는 주입하지 않는다 — 데이터와 순수 IO만

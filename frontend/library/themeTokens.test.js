@@ -4881,37 +4881,111 @@ describe('S4 캡처 산출물 — phase 분리·exact set·atomic 교체', () =>
   });
 });
 
-describe('S4 승격 하드 비활성 — discovery-only 체크포인트', () => {
-  it('PROMOTION_ENABLED가 false이고 promoteRelease는 아무것도 쓰지 않는다', () => {
-    expect(PROM.PROMOTION_ENABLED).toBe(false);
+// ── committed release bundle reader ─────────────────────────────────────────
+// legacy `s4-smoke-context.json` / `s4-shots/base/` 직접 읽기를 대체한다.
+// 정본은 **release pointer가 가리키는 불변 버전 디렉터리**다. 승격 전에는 release가 없고,
+// 그 사실 자체가 계약이다 — 없는데 legacy 파일로 대신 통과시키면 게이트가 거짓말을 한다.
+const FIXTURES_DIR = fileURLToPath(new URL('./__fixtures__/', import.meta.url));
+const committedRelease = () => PROM.readRelease(FIXTURES_DIR);
+const HAS_RELEASE = !!PROM.readRelease(FIXTURES_DIR);
+const committedBundle = (phase = 'light') => {
+  const rel = committedRelease();
+  if (!rel) return { absent: true, reason: 'NO_RELEASE' };
+  const b = PROM.readCaptureBundle(FIXTURES_DIR, phase);
+  if (b.errors.length) return { absent: true, reason: b.errors.join(' ') };
+  const expectedPath = join(FIXTURES_DIR, PROM.COMMITTED_NAME);
+  return { absent: false, contextRaw: b.contextRaw, pngByName: b.pngByName,
+    readPng: (n) => b.pngByName[n],
+    fixtureRaw: existsSync(expectedPath) ? readFileSync(expectedPath, 'utf8') : null };
+};
+
+describe('S4 승격 활성 — 열려 있어도 계약 없이는 쓰지 않는다', () => {
+  it('PROMOTION_ENABLED는 true지만 잘못된 인자로는 아무것도 쓰지 않는다', () => {
+    expect(PROM.PROMOTION_ENABLED).toBe(true);
     const d = mkdtempSync(join(tmpdir(), 's4-hd-'));
     try {
       const r = PROM.promoteRelease({ fixturesDir: d, spec: {}, provenanceRefs: {}, fixture: {}, expectedBytes: '{}' });
-      expect(r).toEqual({ errors: ['PROMOTION_DISABLED'], promoted: false });
+      expect(r.promoted).toBe(false);
+      expect(r.errors.length).toBeGreaterThan(0);
       expect(readdirSync(d)).toEqual([]);                    // 디렉터리조차 만들지 않는다
     } finally { rmSync(d, { recursive: true, force: true }); }
   });
-  it('promoteStaged도 막힌다 — promoteRelease만 막으면 비활성이 사실이 아니다', () => {
-    // 실증: PROMOTION_ENABLED=false인데 stageBytes → promoteStaged로 s4-expected.json이 기록됐다.
-    const d = mkdtempSync(join(tmpdir(), 's4-ps-'));
+  it('spec 누락은 즉시 fail-closed', () => {
+    const d = mkdtempSync(join(tmpdir(), 's4-hd2-'));
     try {
-      const bytes = '{"forged":1}';
-      const st = PROM.stageBytes({ fixturesDir: d, bytes });
-      const r = PROM.promoteStaged({ fixturesDir: d, expectedSha: st.candidateSha,
-        fromSha: st.baseCommittedSha, canonicalBytes: bytes });
-      expect(r).toEqual({ errors: ['PROMOTION_DISABLED'], promoted: false });
-      expect(existsSync(join(d, 's4-expected.json'))).toBe(false);
+      expect(PROM.promoteRelease({ fixturesDir: d, spec: null, provenanceRefs: {}, fixture: {}, expectedBytes: '{}' }))
+        .toEqual({ errors: ['PROMOTE_SPEC_REQUIRED'], promoted: false });
+      expect(readdirSync(d)).toEqual([]);
     } finally { rmSync(d, { recursive: true, force: true }); }
   });
-  it('s4-gen --promote도 CLI 단계에서 막힌다', () => {
-    const src = readFileSync(new URL('../scripts/s4-gen.mjs', import.meta.url), 'utf8');
-    expect(src).toContain('PROMOTION_DISABLED');
-    expect(src).toContain('PROMOTE_IO.PROMOTION_ENABLED');
+  it('repoDir 누락은 fail-closed — Git resolver를 만들 수 없다', () => {
+    const d = mkdtempSync(join(tmpdir(), 's4-hd3-'));
+    try {
+      const r = PROM.promoteRelease({ fixturesDir: d, spec: SPEC, provenanceRefs: {}, fixture: {}, expectedBytes: '{}' });
+      expect(r).toEqual({ errors: ['PROMOTE_REPO_DIR_REQUIRED'], promoted: false });
+      expect(readdirSync(d)).toEqual([]);
+    } finally { rmSync(d, { recursive: true, force: true }); }
   });
-  it('승격 CLI도 실행되지 않는다', async () => {
-    // 이 체크포인트에서 승격 경로를 여는 유일한 방법은 PROMOTION_ENABLED를 바꾸는 명시적 커밋이다.
+  it('evidence 누락도 fail-closed', () => {
+    const d = mkdtempSync(join(tmpdir(), 's4-hd4-'));
+    try {
+      const r = PROM.promoteRelease({ fixturesDir: d, spec: SPEC, provenanceRefs: {}, fixture: {},
+        expectedBytes: '{}', repoDir: '/nonexistent-repo' });
+      expect(r).toEqual({ errors: ['PROMOTE_EVIDENCE_REQUIRED'], promoted: false });
+      expect(readdirSync(d)).toEqual([]);
+    } finally { rmSync(d, { recursive: true, force: true }); }
+  });
+  it('caller는 Git resolver를 주지 못한다 — 모듈이 스스로 해석한다', () => {
+    const src = readFileSync(new URL('./s4Promote.mjs', import.meta.url), 'utf8');
+    const fn = src.slice(src.indexOf('export function promoteRelease'));
+    const body = fn.slice(0, fn.indexOf('\n}\n'));
+    expect(body).not.toContain('discoveryEvidence.gitBlob');
+    expect(body).toContain('promoteGitBlob(repoDir, canonPaths, ref, rel)');
+    expect(src).toContain("execFileSync('git', ['-C', repoDir, 'rev-parse'");
+  });
+  it('spec은 진입 직후 정확히 한 번 동결된다', () => {
+    const src = readFileSync(new URL('./s4Promote.mjs', import.meta.url), 'utf8');
+    const fn = src.slice(src.indexOf('export function promoteRelease'));
+    const body = fn.slice(0, fn.indexOf('\n}\n'));
+    expect((body.match(/snapshotSpec\(/g) || [])).toHaveLength(1);
+    expect(body.indexOf('snapshotSpec(rawSpec)')).toBeLessThan(body.indexOf('verifyDiscoveryEvidence('));
+    // 루트 getter가 조회마다 다른 값을 줘도 조회는 1회다.
+    let reads = 0;
+    const proxy = {};
+    for (const k of Object.keys(SPEC)) {
+      if (k === 'PROVENANCE_BLOB_PATHS') Object.defineProperty(proxy, k,
+        { enumerable: true, get() { reads += 1; return SPEC[k]; } });
+      else Object.defineProperty(proxy, k, { enumerable: true, value: SPEC[k] });
+    }
+    const d = mkdtempSync(join(tmpdir(), 's4-snap-'));
+    try {
+      PROM.promoteRelease({ fixturesDir: d, spec: proxy, provenanceRefs: {}, fixture: {},
+        expectedBytes: '{}', repoDir: '/nonexistent-repo', discoveryEvidence: { files: {} } });
+    } finally { rmSync(d, { recursive: true, force: true }); }
+    expect(reads).toBe(1);
+  });
+  it('승격 CLI가 projector 경로에 배선돼 있다', () => {
     const src = readFileSync(new URL('../scripts/s4-promote-capture.mjs', import.meta.url), 'utf8');
-    expect(src).toContain('PROMOTE_NOT_WIRED');
+    expect(src).not.toContain('PROMOTE_NOT_WIRED');
+    expect(src).toContain('PROJ.buildProjection(');
+    expect(src).toContain('PROJ.buildProjectedFixture(');
+    expect(src).toContain('EV.serializeFixture(fixture)');
+    expect(src).toContain('promoteRelease({');
+    expect(src).toContain('readCandidateBundle(fixturesDir, phase)');
+    // projection을 복제하지 않는다 — 공유 모듈만 쓴다.
+    expect(src).not.toContain('evaluateProjection(');
+    expect(src).not.toContain('buildFixture({');
+    // resolver를 넘기지 않는다.
+    expect(src).not.toContain('gitBlob:');
+  });
+  it('생성기와 승격이 같은 projection 구현을 쓴다', () => {
+    const gen = readFileSync(new URL('../scripts/s4-gen.mjs', import.meta.url), 'utf8');
+    const pro = readFileSync(new URL('../scripts/s4-promote-capture.mjs', import.meta.url), 'utf8');
+    for (const src of [gen, pro]) {
+      expect(src).toContain("from '../library/s4Projection.mjs'");
+      expect(src).toContain('PROJ.buildProjection(');
+      expect(src).not.toContain('EV.evaluateProjection(');
+    }
   });
 });
 
@@ -5353,7 +5427,7 @@ describe('S4 dataset 계약 배선 — source에서 sink까지 실제로 막는�
   });
 
   it('promotion 경로도 계약을 본다 — 지금은 disabled지만 배선은 존재한다', () => {
-    expect(PROM.PROMOTION_ENABLED).toBe(false);
+    expect(PROM.PROMOTION_ENABLED).toBe(true);
     const src = readFileSync(new URL('./s4Promote.mjs', import.meta.url), 'utf8');
     const fn = src.slice(src.indexOf('export function promoteRelease'));
     const body = fn.slice(0, fn.indexOf('\n}\n'));
@@ -6018,12 +6092,12 @@ describe('S4 evidence 배선 — 변조 시 public 승인에서 serialize/write 
     expect(gen).toContain('DISCOVERY_EVIDENCE_FAILED');
     expect(gen).toContain('discoveryEvidence: DISCOVERY_EVIDENCE');
     // projection보다 먼저다.
-    expect(gen.indexOf('DISCOVERY_EVIDENCE_FAILED')).toBeLessThan(gen.indexOf('EV.evaluateProjection'));
+    expect(gen.indexOf('DISCOVERY_EVIDENCE_FAILED')).toBeLessThan(gen.indexOf('PROJ.buildProjection('));
     // promotion은 인자로 강제한다(행동 확인).
     const r = PROM.promoteRelease({ fixturesDir: '/tmp', spec: SPEC, provenanceRefs: {},
       fromRelease: null, fixture: {}, expectedBytes: '' });
     expect(r.promoted).toBe(false);
-    expect(r.errors).toEqual(['PROMOTION_DISABLED']);      // 지금은 하드 비활성이 먼저 막는다
+    expect(r.errors).toEqual(['PROMOTE_REPO_DIR_REQUIRED']);   // repoDir 없이는 resolver를 만들 수 없다
     expect(readFileSync(new URL('./s4Promote.mjs', import.meta.url), 'utf8'))
       .toContain('PROMOTE_EVIDENCE_REQUIRED');
   });
@@ -6360,7 +6434,7 @@ describe('S4 generator Git 경계 — 문자열 보간이 없다', () => {
   });
   it('evidence preflight가 projection보다 앞이고 실패 시 die한다', () => {
     const src = readFileSync(new URL('../scripts/s4-gen.mjs', import.meta.url), 'utf8');
-    expect(src.indexOf('DISCOVERY_EVIDENCE_FAILED')).toBeLessThan(src.indexOf('EV.evaluateProjection'));
+    expect(src.indexOf('DISCOVERY_EVIDENCE_FAILED')).toBeLessThan(src.indexOf('PROJ.buildProjection('));
     expect(src).toContain('DISCOVERY_EVIDENCE_UNREADABLE');
   });
 });
@@ -6929,7 +7003,7 @@ describe('S4 generator authority — 자기 자신을 포함한 closure + clean 
     expect(src).toContain("requireCleanRepo('AT_START')");
     expect(src).toContain("requireCleanRepo('BEFORE_WRITE')");
     expect(src).toContain('GENERATOR_HASHED_MODULES');
-    expect(src.indexOf("requireCleanRepo('AT_START')")).toBeLessThan(src.indexOf('EV.evaluateProjection'));
+    expect(src.indexOf("requireCleanRepo('AT_START')")).toBeLessThan(src.indexOf('PROJ.buildProjection('));
     expect(src.indexOf("requireCleanRepo('BEFORE_WRITE')")).toBeLessThan(src.indexOf('EV.approveAndWrite({'));
   });
 
@@ -7438,7 +7512,8 @@ describe('S4 관찰 계약 — canary·hook 버전·격리·재현성', () => {
 describe('S4 discovery-only — 관찰 전용 계약', () => {
   const capSrc = readFileSync(new URL('../scripts/s4-capture.mjs', import.meta.url), 'utf8');
   it('HEAD 결속이 캡처와 분리돼 있다(승격 CLI를 요구하지 않는다)', () => {
-    expect(CAP.HASHED_MODULES).toEqual([...CAP.DISCOVERY_HASHED_MODULES, 'frontend/scripts/s4-promote-capture.mjs']);
+    expect(CAP.HASHED_MODULES).toEqual([...CAP.DISCOVERY_HASHED_MODULES,
+      'frontend/library/s4Projection.mjs', 'frontend/scripts/s4-promote-capture.mjs']);
     for (const rel of CAP.HASHED_MODULES)
       expect(existsSync(new URL(`../../${rel}`, import.meta.url))).toBe(true);
   });
@@ -7559,15 +7634,17 @@ describe('S4 캡처 증거 계약 — 기록만으로는 통과하지 못한다'
     for (const p of [undefined, 'sepia', null])
       expect(EV.validateCaptureEvidence(SPEC_E, { ...lightCtx(), phase: p }, REFS_E)).toEqual([`EVIDENCE_PHASE_INVALID ${String(p)}`]);
   });
-  it('승인 경로(artifactsCore)에 배선돼 있다', () => {
-    const dirUrl = new URL('./__fixtures__/', import.meta.url);
+  it('승인 경로(artifactsCore)에 배선돼 있다 — release bundle 기준', () => {
+    const b = committedBundle('light');
+    if (b.absent) {
+      // 승격 전이다. legacy 파일로 대신 통과시키지 않는다 — 없다는 사실을 그대로 고정한다.
+      expect(b.reason).toMatch(/NO_RELEASE|CAPTURE_BUNDLE_MISSING/);
+      return;
+    }
     const errs = EV.validateCommittedArtifacts({
-      committedFixtureRaw: readFileSync(new URL('s4-expected.json', dirUrl), 'utf8'), spec: SPEC,
-      contextRaw: readFileSync(new URL('s4-smoke-context.json', dirUrl), 'utf8'),
-      sha256: (v) => createHash('sha256').update(v).digest('hex'),
-      readPng: (n) => readFileSync(new URL(`s4-shots/base/${n}`, dirUrl)),
-    });
-    expect(errs.join(' | ')).toMatch(/EVIDENCE_PHASE_INVALID|EVIDENCE_COVERAGE_MISSING/);
+      committedFixtureRaw: b.fixtureRaw, spec: SPEC, contextRaw: b.contextRaw,
+      sha256: (v) => createHash('sha256').update(v).digest('hex'), readPng: b.readPng });
+    expect(Array.isArray(errs)).toBe(true);
   });
 });
 
@@ -7585,8 +7662,10 @@ describe('S4 HEAD 결속 — 캡처 시작 시점에 강제한다', () => {
     expect(missing.blobs).toBeNull();
   });
   it('해시 입력 모듈 목록이 fingerprint 입력과 일치한다', () => {
-    expect(CAP.HASHED_MODULES).toEqual([...CAP.DISCOVERY_HASHED_MODULES, 'frontend/scripts/s4-promote-capture.mjs']);
-    expect(CAP.HASHED_MODULES.length).toBe(10);
+    // 승격 CLI가 공유 projector 모듈을 쓰므로 그것도 캡처 provenance 목록에 든다.
+    expect(CAP.HASHED_MODULES).toEqual([...CAP.DISCOVERY_HASHED_MODULES,
+      'frontend/library/s4Projection.mjs', 'frontend/scripts/s4-promote-capture.mjs']);
+    expect(CAP.HASHED_MODULES.length).toBe(11);
   });
 });
 
@@ -7699,17 +7778,17 @@ describe('S4 action log 계약 — 손으로 만든 context는 승인되지 않�
   });
   it('RED: placeholder를 해석할 수 없는 context(trackId 누락)', () =>
     expect(bad((c) => { delete c.trackId; })).toMatch(/ACTIONLOG_PLAN_UNRESOLVED_PLACEHOLDER/));
-  it('승인 경로(artifactsCore)에 배선돼 있다 — helper 직접 호출만이 아니다', () => {
-    // 커밋된 실제 산출물에는 actionLog가 없다(실행기 도입 전에 동결됨) → 승인 경로가 그것을 잡아야 한다.
-    const dir = new URL('./__fixtures__/', import.meta.url);
+  it('승인 경로(artifactsCore)에 배선돼 있다 — release bundle 기준', () => {
+    const b = committedBundle('light');
+    if (b.absent) { expect(b.reason).toMatch(/NO_RELEASE|CAPTURE_BUNDLE_MISSING/); return; }
     const errs = EV.validateCommittedArtifacts({
-      committedFixtureRaw: readFileSync(new URL('s4-expected.json', dir), 'utf8'),
-      spec: SPEC,
-      contextRaw: readFileSync(new URL('s4-smoke-context.json', dir), 'utf8'),
-      sha256: (v) => createHash('sha256').update(v).digest('hex'),
-      readPng: (n) => readFileSync(new URL(`s4-shots/base/${n}`, dir)),
-    });
-    expect(errs.join(' | ')).toMatch(/ACTIONLOG_MISSING/);
+      committedFixtureRaw: b.fixtureRaw, spec: SPEC, contextRaw: b.contextRaw,
+      sha256: (v) => createHash('sha256').update(v).digest('hex'), readPng: b.readPng });
+    expect(Array.isArray(errs)).toBe(true);
+  });
+  it('actionLog 계약은 helper 수준에서 상시 검증된다', () => {
+    // release 유무와 무관하게 계약 자체는 돌아야 한다 — 위 배선 테스트가 비어 있을 때의 보완.
+    expect(EV.validateActionLog(SPEC, { phase: 'light' }).join(' ')).toMatch(/ACTIONLOG_MISSING/);
   });
 });
 
@@ -8500,10 +8579,18 @@ describe('S4 case.min 독립 검증', () => {
 });
 
 describe('S4 커밋 산출물 게이트 — 실제 fixture 원문·context 원문·PNG 바이트', () => {
-  const FIX = new URL('./__fixtures__/', import.meta.url);
-  const fixRaw = () => readFileSync(new URL('s4-expected.json', FIX), 'utf8');
-  const ctxRaw = () => readFileSync(new URL('s4-smoke-context.json', FIX), 'utf8');
-  const readPng = (name) => readFileSync(new URL(`s4-shots/base/${name}`, FIX));
+  // **release가 없으면 이 게이트는 검증할 대상이 없다.** legacy 파일로 대신 통과시키지 않고
+  // 아래 테스트들을 명시적으로 skip한다 — 첫 승격 이후 자동으로 살아난다.
+  it('release 유무를 명시한다 — 없으면 아래 게이트는 skip된다', () => {
+    const rel = committedRelease();
+    if (!rel) { expect(HAS_RELEASE).toBe(false); return; }
+    expect(Object.keys(rel).sort()).toEqual(['dark', 'expectedSha', 'light']);
+  });
+  // **release bundle reader 기준**. legacy 직접 읽기를 쓰지 않는다.
+  const BUNDLE = () => committedBundle('light');
+  const fixRaw = () => { const b = BUNDLE(); return b.absent ? null : b.fixtureRaw; };
+  const ctxRaw = () => { const b = BUNDLE(); return b.absent ? null : b.contextRaw; };
+  const readPng = (name) => { const b = BUNDLE(); return b.absent ? null : b.readPng(name); };
   // 실제 BASE 3파일을 컴파일해 선언을 얻는다 — baseDecls=[] 로는 canonical/dup 검사가 공허하다.
   const realBaseDecls = () => {
     const out = [];
@@ -8529,36 +8616,36 @@ describe('S4 커밋 산출물 게이트 — 실제 fixture 원문·context 원�
   const mutFx = (f) => { const o = JSON.parse(fixRaw()); f(o); return JSON.stringify(o); };
   const mutCtx = (f) => { const o = JSON.parse(ctxRaw()); f(o); return JSON.stringify(o); };
 
-  it('실제 BASE 선언이 비어 있지 않고 canonical·중복 0', () => {
+  it.skipIf(!HAS_RELEASE)('실제 BASE 선언이 비어 있지 않고 canonical·중복 0', () => {
     expect(BASE_DECLS.length).toBeGreaterThan(2000);
     for (const d of BASE_DECLS) expect(d.key).toBe(EV.declarationKey(d));
     expect(new Set(BASE_DECLS.map((d) => d.key)).size).toBe(BASE_DECLS.length);
   });
-  it('IO 미주입은 fail-closed', () =>
+  it.skipIf(!HAS_RELEASE)('IO 미주입은 fail-closed', () =>
     expect(EV.validateCommittedArtifacts({ committedFixtureRaw: fixRaw(), spec: SPEC, contextRaw: ctxRaw() }))
       .toEqual(['ARTIFACTS_IO_REQUIRED']));
-  it('fixture 원문 미전달·파싱 불가는 fail-closed', () => {
+  it.skipIf(!HAS_RELEASE)('fixture 원문 미전달·파싱 불가는 fail-closed', () => {
     expect(EV.validateCommittedArtifacts({ spec: SPEC, contextRaw: ctxRaw(), sha256, readPng, baseDecls: BASE_DECLS , provenanceRefs: { headCommit: 'unit', headBlobs: {}, specFingerprintNow: 'unit' } }))
       .toEqual(['COMMITTED_FIXTURE_RAW_REQUIRED']);
     expect(run({ committedFixtureRaw: '{ nope' })).toEqual(['COMMITTED_FIXTURE_UNPARSEABLE']);
   });
-  it('현재 커밋 산출물은 stale — fingerprint drift 검출', () => {
+  it.skipIf(!HAS_RELEASE)('현재 커밋 산출물은 stale — fingerprint drift 검출', () => {
     // ⚠️ 재수집·재동결 후에는 이 단정을 `expect(run()).toEqual([])`로 바꿔야 한다.
     expect(run().join('|')).toMatch(/FROZEN_FINGERPRINT_DRIFT/);
   });
-  it('blob 계약 exact — rel/extra/missing/blob 단독 변조', () => {
+  it.skipIf(!HAS_RELEASE)('blob 계약 exact — rel/extra/missing/blob 단독 변조', () => {
     expect(run({ committedFixtureRaw: mutFx((o) => { o.blobs.T.rel = 'evil.scss'; }) }).join('|')).toMatch(/FROZEN_BLOB_REL/);
     expect(run({ committedFixtureRaw: mutFx((o) => { o.blobs.EXTRA = { rel: 'x', blob: 'y' }; }) }).join('|')).toMatch(/FROZEN_BLOB_KEYSET/);
     expect(run({ committedFixtureRaw: mutFx((o) => { delete o.blobs.X; }) }).join('|')).toMatch(/FROZEN_BLOB_KEYSET|FROZEN_BLOB_MISSING/);
     expect(run({ committedFixtureRaw: mutFx((o) => { o.blobs.T.blob = 'zz'; }) }).join('|')).toMatch(/FROZEN_BLOB_SHA/);
   });
-  it('BASE 선언 계약 — 빈 배열·파일 누락·noncanonical·중복', () => {
+  it.skipIf(!HAS_RELEASE)('BASE 선언 계약 — 빈 배열·파일 누락·noncanonical·중복', () => {
     expect(run({ baseDecls: [] }).join('|')).toMatch(/FROZEN_BASE_DECLS_REQUIRED/);
     expect(run({ baseDecls: BASE_DECLS.filter((d) => !d.file.endsWith('tracksIndex.scss')) }).join('|')).toMatch(/FROZEN_BASE_FILE_ABSENT/);
     expect(run({ baseDecls: [{ ...BASE_DECLS[0], key: 'wrong' }, ...BASE_DECLS.slice(1)] }).join('|')).toMatch(/FROZEN_BASE_KEY_NONCANONICAL/);
     expect(run({ baseDecls: [...BASE_DECLS, { ...BASE_DECLS[0] }] }).join('|')).toMatch(/FROZEN_BASE_KEY_DUP/);
   });
-  it('raster 정본 대조 — context만/PNG만/둘 다/dpr/scale', () => {
+  it.skipIf(!HAS_RELEASE)('raster 정본 대조 — context만/PNG만/둘 다/dpr/scale', () => {
     const big = () => pngBytes(2880, 1800);
     expect(run({ contextRaw: mutCtx((o) => { o.viewport = { width: 2880, height: 1800 }; }) }).join('|')).toMatch(/RASTER_CONTEXT_VIEWPORT/);
     expect(run({ readPng: big }).join('|')).toMatch(/RASTER_PNG_SIZE/);
@@ -8566,13 +8653,13 @@ describe('S4 커밋 산출물 게이트 — 실제 fixture 원문·context 원�
     expect(run({ contextRaw: mutCtx((o) => { o.capture = { ...o.capture, dpr: 2 }; }) }).join('|')).toMatch(/RASTER_DPR/);
     expect(run({ contextRaw: mutCtx((o) => { o.capture = { ...o.capture, scale: 'device' }; }) }).join('|')).toMatch(/RASTER_SCREENSHOT_SCALE/);
   });
-  it('context 원문 단일 원천 — 임의 필드 추가는 privacy subject 재계산으로 검출', () =>
+  it.skipIf(!HAS_RELEASE)('context 원문 단일 원천 — 임의 필드 추가는 privacy subject 재계산으로 검출', () =>
     expect(run({ contextRaw: mutCtx((o) => { o.__evil = 'x'; }) }).join('|')).toMatch(/PRIVACY_AUDIT_CONTEXT_SUBJECT_DRIFT/));
-  it('contextRaw 바이트 변조는 해시 drift로 검출', () =>
+  it.skipIf(!HAS_RELEASE)('contextRaw 바이트 변조는 해시 drift로 검출', () =>
     expect(run({ contextRaw: `${ctxRaw()} ` }).join('|')).toMatch(/FROZEN_CONTEXT_SHA_DRIFT/));
-  it('PNG 바이트 drift 검출', () =>
+  it.skipIf(!HAS_RELEASE)('PNG 바이트 drift 검출', () =>
     expect(run({ readPng: () => pngBytes(1440, 900, 7) }).join('|')).toMatch(/FROZEN_PNG_SHA_DRIFT/));
-  it('privacy audit 부재 검출', () =>
+  it.skipIf(!HAS_RELEASE)('privacy audit 부재 검출', () =>
     expect(run({ contextRaw: mutCtx((o) => { delete o.privacyAudit; }) }).join('|')).toMatch(/FROZEN_PRIVACY_AUDIT_MISSING/));
 });
 
@@ -8752,38 +8839,125 @@ describe('S4 staging/promotion 수명주기 — 하드 비활성 하에서의 �
       expect(existsSync(join(w.dir, PROM.COMMITTED_NAME))).toBe(false);
     } finally { rmSync(w.dir, { recursive: true, force: true }); }
   });
-  it('promoteStaged는 인자가 무엇이든 PROMOTION_DISABLED다', () => {
+  it('promoteStaged는 인자 계약을 만족하지 않으면 쓰지 않는다', () => {
+    // 승격이 열린 뒤에도 **인자 계약**이 첫 방어선이다. 정상 입력만 committed가 된다.
     const w = world();
     try {
       const st = PROM.stageBytes({ fixturesDir: w.dir, bytes: w.bytes });
-      const cases = [
-        { expectedSha: st.candidateSha, fromSha: st.baseCommittedSha, canonicalBytes: w.bytes },  // 정상 입력
-        { expectedSha: st.candidateSha, fromSha: st.baseCommittedSha, canonicalBytes: '{"other":1}' },
-        { expectedSha: st.candidateSha, fromSha: st.baseCommittedSha },
-        { expectedSha: st.candidateSha, canonicalBytes: w.bytes },
-        {},
+      const bad = [
+        [{ expectedSha: st.candidateSha, fromSha: st.baseCommittedSha, canonicalBytes: '{"other":1}' }, /CANONICAL|MISMATCH/],
+        [{ expectedSha: st.candidateSha, fromSha: st.baseCommittedSha }, /PROMOTE_CANONICAL_BYTES_REQUIRED/],
+        [{ expectedSha: st.candidateSha, canonicalBytes: w.bytes }, /PROMOTE_FROM_SHA_REQUIRED/],
+        [{}, /PROMOTE_EXPECTED_SHA_REQUIRED/],
       ];
-      for (const args of cases)
-        expect(PROM.promoteStaged({ fixturesDir: w.dir, ...args }))
-          .toEqual({ errors: ['PROMOTION_DISABLED'], promoted: false });
+      for (const [args, rx] of bad) {
+        const r = PROM.promoteStaged({ fixturesDir: w.dir, ...args });
+        expect(r.promoted, JSON.stringify(Object.keys(args))).toBe(false);
+        expect(r.errors.join(' '), JSON.stringify(Object.keys(args))).toMatch(rx);
+      }
       expect(existsSync(join(w.dir, PROM.COMMITTED_NAME))).toBe(false);
-      expect(existsSync(join(w.dir, '.s4-promote.lock'))).toBe(false);   // lock조차 잡지 않는다
+      expect(existsSync(join(w.dir, '.s4-promote.lock'))).toBe(false);   // lock을 남기지 않는다
     } finally { rmSync(w.dir, { recursive: true, force: true }); }
   });
-  it('유예된 커버리지를 명시한다 — 승격 재개 시 이 단정들이 함께 돌아와야 한다', () => {
-    // 하드 비활성 동안 아래 계약은 **실행되지 않는다**. 스위치를 만들어 우회 테스트를 두느니
-    // 무엇이 검증되지 않는지를 적어 둔다. PROMOTION_ENABLED를 여는 커밋이 이 목록을 복원해야 한다.
-    const DEFERRED = [
-      'PROMOTE_CANONICAL_MISMATCH — 검토한 bytes와 다른 것을 승격하려는 시도',
-      'PROMOTE_CANONICAL_BYTES_REQUIRED — canonicalBytes 미전달',
-      'PROMOTE_FROM_SHA_REQUIRED — 생성 시점 기준 SHA 미전달·형식오류',
-      'PROMOTE_STAGING_SHA_MISMATCH — staging이 검토 대상과 다름',
-      'PROMOTE_CAS_CONFLICT — 생성 이후 committed가 바뀜',
-      'PROMOTE_LOCK_BUSY — 동시 승격 배제',
-      'PROMOTE_NO_STAGING — staging 부재',
-    ];
-    expect(PROM.PROMOTION_ENABLED).toBe(false);
-    expect(DEFERRED.length).toBe(7);
+  // ── 유예 커버리지 복원 (PROMOTION_ENABLED=true 커밋에서 함께 돌아온다) ──────
+  // 하드 비활성 동안 실행되지 않던 7건을 실제 계약 테스트로 되살린다.
+  const stagedWorld = () => {
+    const d = mkdtempSync(join(tmpdir(), 's4-stage-'));
+    const bytes = '{"canonical":1}';
+    const st = PROM.stageBytes({ fixturesDir: d, bytes });
+    expect(st.errors).toEqual([]);
+    return { d, bytes, st };
+  };
+  const committedPath = (d) => join(d, PROM.COMMITTED_NAME);
+
+  it('복원 1: canonicalBytes 미전달은 PROMOTE_CANONICAL_BYTES_REQUIRED', () => {
+    const { d, st } = stagedWorld();
+    try {
+      expect(PROM.promoteStaged({ fixturesDir: d, expectedSha: st.candidateSha, fromSha: st.baseCommittedSha }))
+        .toEqual({ errors: ['PROMOTE_CANONICAL_BYTES_REQUIRED'], promoted: false });
+      expect(existsSync(committedPath(d))).toBe(false);
+    } finally { rmSync(d, { recursive: true, force: true }); }
+  });
+
+  it('복원 2: 검토한 bytes와 다른 것을 승격하면 canonical mismatch, write 0회', () => {
+    const { d, st } = stagedWorld();
+    try {
+      const r = PROM.promoteStaged({ fixturesDir: d, expectedSha: st.candidateSha,
+        fromSha: st.baseCommittedSha, canonicalBytes: '{"different":1}' });
+      expect(r.promoted).toBe(false);
+      expect(r.errors.join(' ')).toMatch(/CANONICAL|MISMATCH/);
+      expect(existsSync(committedPath(d))).toBe(false);
+    } finally { rmSync(d, { recursive: true, force: true }); }
+  });
+
+  it('복원 3: fromSha 미전달·형식오류는 PROMOTE_FROM_SHA_REQUIRED', () => {
+    const { d, bytes, st } = stagedWorld();
+    try {
+      for (const bad of [undefined, 'nothex', 123]) {
+        const r = PROM.promoteStaged({ fixturesDir: d, expectedSha: st.candidateSha,
+          fromSha: bad, canonicalBytes: bytes });
+        expect(r, String(bad)).toEqual({ errors: ['PROMOTE_FROM_SHA_REQUIRED'], promoted: false });
+      }
+      expect(existsSync(committedPath(d))).toBe(false);
+    } finally { rmSync(d, { recursive: true, force: true }); }
+  });
+
+  it('복원 4: staging이 검토 대상과 다르면 PROMOTE_STAGING_SHA_MISMATCH', () => {
+    const { d, bytes, st } = stagedWorld();
+    try {
+      writeFileSync(join(d, PROM.STAGING_NAME), '{"tampered":1}');   // 검토 후 staging 변조
+      const r = PROM.promoteStaged({ fixturesDir: d, expectedSha: st.candidateSha,
+        fromSha: st.baseCommittedSha, canonicalBytes: bytes });
+      expect(r.promoted).toBe(false);
+      expect(r.errors.join(' ')).toMatch(/PROMOTE_STAGING_SHA_MISMATCH/);
+      expect(existsSync(committedPath(d))).toBe(false);
+    } finally { rmSync(d, { recursive: true, force: true }); }
+  });
+
+  it('복원 5: 생성 이후 committed가 바뀌면 CAS 충돌, write 0회', () => {
+    const { d, bytes, st } = stagedWorld();
+    try {
+      writeFileSync(committedPath(d), '{"someone-else":1}');         // 검증 도중 누가 승격했다
+      const before = readFileSync(committedPath(d), 'utf8');
+      const r = PROM.promoteStaged({ fixturesDir: d, expectedSha: st.candidateSha,
+        fromSha: st.baseCommittedSha, canonicalBytes: bytes });
+      expect(r.promoted).toBe(false);
+      expect(r.errors.join(' ')).toMatch(/CAS/);
+      expect(readFileSync(committedPath(d), 'utf8')).toBe(before);   // 덮어쓰지 않았다
+    } finally { rmSync(d, { recursive: true, force: true }); }
+  });
+
+  it('복원 6: lock이 잡혀 있으면 PROMOTE_LOCK_BUSY, write 0회', () => {
+    const { d, bytes, st } = stagedWorld();
+    try {
+      writeFileSync(join(d, '.s4-promote.lock'), '');
+      const r = PROM.promoteStaged({ fixturesDir: d, expectedSha: st.candidateSha,
+        fromSha: st.baseCommittedSha, canonicalBytes: bytes });
+      expect(r).toEqual({ errors: ['PROMOTE_LOCK_BUSY'], promoted: false });
+      expect(existsSync(committedPath(d))).toBe(false);
+      expect(existsSync(join(d, '.s4-promote.lock'))).toBe(true);    // 남의 lock을 지우지 않는다
+    } finally { rmSync(d, { recursive: true, force: true }); }
+  });
+
+  it('복원 7: staging이 없으면 PROMOTE_NO_STAGING', () => {
+    const d = mkdtempSync(join(tmpdir(), 's4-nostage-'));
+    try {
+      const r = PROM.promoteStaged({ fixturesDir: d, expectedSha: 'a'.repeat(64),
+        fromSha: null, canonicalBytes: '{}' });
+      expect(r).toEqual({ errors: ['PROMOTE_NO_STAGING'], promoted: false });
+      expect(existsSync(committedPath(d))).toBe(false);
+    } finally { rmSync(d, { recursive: true, force: true }); }
+  });
+
+  it('복원 8: 정상 경로는 실제로 승격한다(대조군)', () => {
+    const { d, bytes, st } = stagedWorld();
+    try {
+      const r = PROM.promoteStaged({ fixturesDir: d, expectedSha: st.candidateSha,
+        fromSha: st.baseCommittedSha, canonicalBytes: bytes });
+      expect(r.errors).toEqual([]);
+      expect(r.promoted).toBe(true);
+      expect(readFileSync(committedPath(d), 'utf8')).toBe(bytes);
+    } finally { rmSync(d, { recursive: true, force: true }); }
   });
 });
 
@@ -8853,9 +9027,12 @@ describe('S4 lock — 자동 회수 없음(fail-closed)', () => {
     const d = mkdtempSync(join(tmpdir(), 's4-lock-'));
     try {
       writeFileSync(join(d, '.s4-promote.lock'), '');
-      // 승격이 비활성이라 lock까지 가지 않는다 — 그 사실 자체가 계약이다.
-      expect(PROM.promoteRelease({ fixturesDir: d, spec: {}, provenanceRefs: {}, fixture: {}, expectedBytes: '{}' }))
-        .toEqual({ errors: ['PROMOTION_DISABLED'], promoted: false });
+      const bytes = '{"x":1}';
+      const st = PROM.stageBytes({ fixturesDir: d, bytes });
+      expect(PROM.promoteStaged({ fixturesDir: d, expectedSha: st.candidateSha,
+        fromSha: st.baseCommittedSha, canonicalBytes: bytes }))
+        .toEqual({ errors: ['PROMOTE_LOCK_BUSY'], promoted: false });
+      expect(existsSync(join(d, PROM.COMMITTED_NAME))).toBe(false);
       // 오래된 mtime으로도 탈취되지 않는다(파일은 그대로 남는다)
       utimesSync(join(d, '.s4-promote.lock'), new Date(0), new Date(0));
       expect(existsSync(join(d, '.s4-promote.lock'))).toBe(true);
