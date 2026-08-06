@@ -5353,6 +5353,90 @@ describe('S4 generator authority — 시작 commit 고정', () => {
   }, 30000);
 });
 
+// ── 픽셀 정착: 유한 재시도 ──────────────────────────────────────────────────
+describe('S4 픽셀 정착 — 예산 안에서 연속 2장 동일, 미수렴은 fail-closed', () => {
+  // 프레임 시퀀스를 그대로 재생하는 driver. 실제 브라우저 없이 정착 판정만 고정한다.
+  const drv = (frames) => {
+    let i = 0;
+    return { sleep: async () => {}, screenshot: async () => frames[Math.min(i++, frames.length - 1)],
+      evaluate: async () => [] };
+  };
+  const B = (t) => Buffer.from(t);
+
+  it('GREEN: 첫 비교에서 바로 같으면 1회로 끝난다', async () => {
+    const r = await RUN.settlePixels(drv([B('A')]), B('A'), 's');
+    expect(r.settled).toBe(true);
+    expect(r.attempts).toBe(1);
+    expect(r.png.toString()).toBe('A');
+  });
+
+  it('GREEN: 흔들리다가 연속 2장이 같아지면 그 시점에 정착한다', async () => {
+    // 첫 장 A → B, C, D, D  → 4번째 시도에서 D===D
+    const r = await RUN.settlePixels(drv([B('B'), B('C'), B('D'), B('D')]), B('A'), 's');
+    expect(r.settled).toBe(true);
+    expect(r.attempts).toBe(4);
+    // 산출물은 **정착한 마지막 장**이다 — 첫 장은 아직 전환 중이었을 수 있다.
+    expect(r.png.toString()).toBe('D');
+    expect(r.sizes).toHaveLength(5);
+  });
+
+  it('RED: 예산 안에 수렴하지 않으면 settled=false이고 마지막 두 장을 넘긴다', async () => {
+    const alt = ['X', 'Y', 'X', 'Y', 'X', 'Y', 'X', 'Y', 'X', 'Y'].map(B);
+    const r = await RUN.settlePixels(drv(alt), B('W'), 's', 1500, 300);
+    expect(r.settled).toBe(false);
+    expect(r.elapsedMs).toBe(1500);
+    expect(r.attempts).toBe(5);                       // 1500 / 300
+    expect(r.last.a.toString()).not.toBe(r.last.b.toString());
+    expect(r.png).toBeUndefined();                    // 산출물을 만들지 않는다
+  });
+
+  it('RED: 스크린샷이 비면 즉시 실패한다', async () => {
+    const r = await RUN.settlePixels(drv([null]), B('A'), 's');
+    expect(r.settled).toBe(false);
+  });
+
+  it('예산·간격 상수와 배선', () => {
+    expect(RUN.PIXEL_SETTLE_MS).toBe(300);
+    expect(RUN.PIXEL_SETTLE_BUDGET_MS).toBeGreaterThanOrEqual(3000);
+    expect(RUN.PIXEL_SETTLE_BUDGET_MS).toBeLessThanOrEqual(5000);
+    const src = readFileSync(new URL('./s4CaptureRunner.mjs', import.meta.url), 'utf8');
+    // runSurface가 이 루프를 쓰고, 실패 시 진단을 모은다.
+    expect(src).toContain('const st = await settlePixels(driver, png, surface.name)');
+    expect(src).toContain('RUN_UNSTABLE_PIXELS');
+    expect(src).toContain('OVERFLOW_PROBE_SOURCE');
+    // 정착 실패는 여전히 fail-closed다 — errors가 비지 않는다.
+    const fn = src.slice(src.indexOf('const st = await settlePixels'), src.indexOf('\n// 산출물은 **candidate'));
+    expect(fn).toContain('RUN_UNSTABLE_PIXELS');
+    expect(fn.indexOf('if (!st.settled)')).toBeLessThan(fn.indexOf('RUN_UNSTABLE_PIXELS'));
+  });
+
+  it('diffBbox는 다른 픽셀의 경계 상자를 준다', () => {
+    const a = pngBytes(8, 8, 1);
+    const b = pngBytes(8, 8, 1);
+    expect(RUN.diffBbox(a, b)).toEqual({ ok: true, pixels: 0, bbox: null });
+    const c = pngBytes(8, 8, 2);
+    const d = RUN.diffBbox(a, c);
+    expect(d.ok).toBe(true);
+    expect(d.pixels).toBeGreaterThan(0);
+    expect(d.bbox).toMatchObject({ x: expect.any(Number), y: expect.any(Number) });
+    // 크기가 다르면 fail-closed
+    expect(RUN.diffBbox(a, pngBytes(9, 8, 1)).ok).toBe(false);
+  });
+
+  it('--scan은 아무것도 쓰지 않는다 (모드 파싱과 sink 미호출)', () => {
+    const ok = CAP.parseCaptureArgs(['--scan', 'timeline,tree', '--phase', 'dark'], SPEC);
+    expect(ok.error).toBeUndefined();
+    expect(ok.scanList).toEqual(['timeline', 'tree']);
+    expect(CAP.parseCaptureArgs(['--scan', 'nope'], SPEC).error).toMatch(/UNKNOWN_SURFACE/);
+    expect(CAP.parseCaptureArgs(['--scan', 'all'], SPEC).scanList).toHaveLength(SPEC.REQUIRED_SMOKE_SURFACES.length);
+    const src = readFileSync(new URL('../scripts/s4-capture.mjs', import.meta.url), 'utf8');
+    const blk = src.slice(src.indexOf('if (cli.scan) {'), src.indexOf('// ── phase capture는'));
+    expect(blk).not.toContain('writeCandidate');
+    expect(blk).not.toContain('runPhaseCaptureImpl');
+    expect(blk).toContain('wrote: false');
+  });
+});
+
 // ── projector BASE 소스의 pinned reader ─────────────────────────────────────
 describe('S4 pinned source — projector Git 읽기가 환경을 상속하지 않는다', () => {
   const T = SPEC.FILES.T.rel;
@@ -9408,11 +9492,11 @@ describe('S4 캡처 진입점 — core를 우회하는 어댑터를 막는다', 
   });
   it('인자 문법이 엄격하다', () => {
     expect(CAP.parseCaptureArgs(['--phase', 'light'], SPEC))
-      .toEqual({ phase: 'light', port: 10098, discover: false, canary: null, repeat: 1, timeoutMs: CAP.RPC_TIMEOUT_MS });
+      .toEqual({ phase: 'light', port: 10098, discover: false, canary: null, scan: null, repeat: 1, timeoutMs: CAP.RPC_TIMEOUT_MS });
     expect(CAP.parseCaptureArgs(['--phase', 'dark', '--port', '10099'], SPEC))
-      .toEqual({ phase: 'dark', port: 10099, discover: false, canary: null, repeat: 1, timeoutMs: CAP.RPC_TIMEOUT_MS });
+      .toEqual({ phase: 'dark', port: 10099, discover: false, canary: null, scan: null, repeat: 1, timeoutMs: CAP.RPC_TIMEOUT_MS });
     expect(CAP.parseCaptureArgs(['--discover'], SPEC))
-      .toEqual({ phase: null, port: 10098, discover: true, canary: null, repeat: 1, timeoutMs: CAP.RPC_TIMEOUT_MS });
+      .toEqual({ phase: null, port: 10098, discover: true, canary: null, scan: null, repeat: 1, timeoutMs: CAP.RPC_TIMEOUT_MS });
     expect(CAP.parseCaptureArgs(['--discover', '--phase', 'light'], SPEC).error).toMatch(/EXACTLY_ONE_MODE/);
     expect(CAP.parseCaptureArgs([], SPEC).error).toMatch(/EXACTLY_ONE_MODE/);
     expect(CAP.parseCaptureArgs(['--phase', 'sepia'], SPEC).error).toMatch(/PHASE_REQUIRED/);

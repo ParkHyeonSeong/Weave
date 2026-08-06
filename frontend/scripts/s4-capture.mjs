@@ -26,7 +26,7 @@
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import * as RAW_SPEC from '../library/s4Spec.mjs';
-import { runCapture, writeCandidate, CANDIDATE_CAS_ANY, executeSurfaceSteps, PHASES } from '../library/s4CaptureRunner.mjs';
+import { runCapture, writeCandidate, CANDIDATE_CAS_ANY, diffBbox, executeSurfaceSteps, PHASES } from '../library/s4CaptureRunner.mjs';
 import { NETWORK_INSTALL_SOURCE, NETWORK_DRAIN_SOURCE, NETWORK_IDLE_SOURCE,
   NETWORK_HOOK_VERSION } from '../library/s4DomProbe.mjs';
 import { snapshotSpec, specFingerprint, datasetDigest, validateDatasetContract,
@@ -64,7 +64,7 @@ export const ADAPTER_PORT = 10098;
 export { worktreeDirtyEntries };
 
 export function parseCaptureArgs(argv, spec) {
-  const out = { phase: null, port: 10098, discover: false, canary: null, repeat: 1, timeoutMs: RPC_TIMEOUT_MS };
+  const out = { phase: null, port: 10098, discover: false, canary: null, scan: null, repeat: 1, timeoutMs: RPC_TIMEOUT_MS };
   const rest = [];
   const seenFlags = new Set();
   for (const a of argv) {
@@ -80,12 +80,25 @@ export function parseCaptureArgs(argv, spec) {
     if (k === '--phase') out.phase = v;
     else if (k === '--port') out.port = Number(v);
     else if (k === '--canary') out.canary = v;
+    else if (k === '--scan') out.scan = v;
     else if (k === '--repeat') out.repeat = Number(v);
     else if (k === '--timeoutMs') out.timeoutMs = Number(v);
     else return { error: `UNKNOWN_ARG ${k}` };
   }
-  const modes = [out.discover, !!out.canary, !!out.phase].filter(Boolean).length;
-  if (modes !== 1) return { error: 'EXACTLY_ONE_MODE (--discover | --canary <surface> | --phase <light|dark>)' };
+  // --scan은 모드이고 --phase는 그 수식어다(어느 테마로 스캔할지). 나머지는 배타적이다.
+  const modes = [out.discover, !!out.canary, !!out.scan, !!out.phase && !out.scan].filter(Boolean).length;
+  if (modes !== 1) return { error: 'EXACTLY_ONE_MODE (--discover | --canary <surface> | --scan <a,b,..|all> [--phase] | --phase <light|dark>)' };
+  if (out.scan) {
+    // **아무것도 쓰지 않는 정착 스캔.** surface를 실제로 실행해 픽셀이 예산 안에 정착하는지만 본다.
+    const names = (spec && spec.REQUIRED_SMOKE_SURFACES ? spec.REQUIRED_SMOKE_SURFACES : []).map((x) => x.name);
+    if (out.scan !== 'all') {
+      const want = out.scan.split(',').map((x) => x.trim()).filter(Boolean);
+      if (!want.length) return { error: 'SCAN_EMPTY' };
+      const bad = want.filter((n) => names.length && !names.includes(n));
+      if (bad.length) return { error: `UNKNOWN_SURFACE ${bad.join(',')}` };
+      out.scanList = want;
+    } else out.scanList = names;
+  }
   if (out.phase && !PHASES.includes(out.phase)) return { error: `PHASE_REQUIRED (${PHASES.join('|')})` };
   if (out.canary) {
     const names = (spec && spec.REQUIRED_SMOKE_SURFACES ? spec.REQUIRED_SMOKE_SURFACES : []).map((x) => x.name);
@@ -464,7 +477,7 @@ export async function main(argv, { log = console.log, err = console.error } = {}
   const rawSnap0 = snapshotSpec(RAW_SPEC);
   const cli = parseCaptureArgs(argv, rawSnap0.spec);
   if (cli.error) {
-    err('usage: node scripts/s4-capture.mjs (--discover | --canary <surface> --repeat 2 | --phase <light|dark>) [--port 10098]');
+    err('usage: node scripts/s4-capture.mjs (--discover | --canary <surface> --repeat 2 | --scan <a,b|all> [--phase <light|dark>] | --phase <light|dark>) [--port 10098]');
     err(`  ${cli.error}`);
     return 2;
   }
@@ -515,6 +528,50 @@ export async function main(argv, { log = console.log, err = console.error } = {}
     }
     log(JSON.stringify(r.payload, null, 1));
     return 0;
+  }
+
+  // ── 정착 스캔(--scan) ───────────────────────────────────────────────────────
+  // **아무것도 쓰지 않는다.** surface를 실제로 실행해 픽셀이 예산 안에 정착하는지만 본다.
+  // 실패한 surface는 diff bbox와 살아 있는 스크롤 영역을 함께 보고한다.
+  // capture sink(runPhaseCaptureImpl)를 부르지 않으므로 candidate가 생길 경로가 없다.
+  if (cli.scan) {
+    const dirtyS = worktreeDirtyEntries(REPO_DIR);
+    if (dirtyS.length) {
+      err(`WORKTREE_DIRTY — total=${dirtyS.length}`);
+      for (const e of dirtyS.slice(0, 20)) err(`  ${e}`);
+      return 1;
+    }
+    const byName = new Map(SPEC.REQUIRED_SMOKE_SURFACES.map((x) => [x.name, x]));
+    const phase = cli.phase || 'light';
+    const report = [];
+    for (const name of cli.scanList) {
+      const one = { ...SPEC, REQUIRED_SMOKE_SURFACES: [byName.get(name)] };
+      const session = await withBridge({ cli, err, label: `scan ${name} (${phase})` }, async (dd) => {
+        const r = await runCapture({ spec: one, rawContext: CAPTURE_SCENARIO, driver: dd,
+          selectors: captureSelectors(SPEC), phase, provenance: null });
+        return r;
+      });
+      const r = session && session.value;
+      const diag = (r && r.settleDiags && r.settleDiags[0]) || null;
+      const row = { surface: name, phase, ok: !!(r && r.errors.length === 0) };
+      if (diag) {
+        row.attempts = diag.attempts;
+        row.elapsedMs = diag.elapsedMs;
+        if (diag.sizes) row.sizes = diag.sizes;
+        if (diag.overflow) row.overflow = diag.overflow;
+        if (diag.last && diag.last.a && diag.last.b) {
+          const d = diffBbox(diag.last.a, diag.last.b);
+          row.diff = d.ok ? { pixels: d.pixels, bbox: d.bbox } : { error: d.reason };
+        }
+      }
+      if (r && r.errors.length) row.errors = r.errors.slice(0, 5);
+      if (!r) row.errors = ['SCAN_NO_RESULT'];
+      report.push(row);
+      err(`scan ${name}: ${row.ok ? `settled attempts=${row.attempts} ${row.elapsedMs}ms`
+        : `UNSETTLED ${JSON.stringify(row.diff || row.errors)}`}`);
+    }
+    log(JSON.stringify({ mode: 'scan', phase, wrote: false, report }, null, 1));
+    return report.every((x) => x.ok) ? 0 : 1;
   }
 
   // ── phase capture는 dataset 계약이 성립한 뒤에만 시작한다 ──────────────────

@@ -47,6 +47,7 @@
 import { readFileSync, mkdirSync, writeFileSync, mkdtempSync, renameSync, rmSync, existsSync, readdirSync,
   lstatSync, realpathSync, openSync, closeSync, unlinkSync, fstatSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { PNG } from 'pngjs';   // 외부 패키지 — 정적 import closure(로컬 상대 경로)에 영향 없다
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { join, dirname, sep } from 'node:path';
@@ -79,8 +80,39 @@ export const OP_SCHEMA = {
 };
 const ASSERTING_OPS = new Set(['waitFor', 'expectPresent', 'expectAbsent']);
 export const SETTLE_TIMEOUT_MS = 12000;
-export const PIXEL_SETTLE_MS = 300;   // 정착 확인 간격
+export const PIXEL_SETTLE_MS = 300;          // 정착 확인 간격
+// 정착은 **연속 2장 동일**로 판정하되, 한 번만 보고 포기하지 않고 예산 안에서 반복한다.
+// 이전 판은 첫 스크린샷 직후 300ms에 딱 한 번 비교해서, 그 순간이 마침 전환 중이면 그대로
+// RED였다(실증: timeline은 오버레이 스크롤바 페이드 때문에 이 한 번의 비교에서 계속 걸렸다).
+// 계약은 그대로다 — 연속 2장이 바이트 동일해야 하고, 예산 안에 못 만나면 fail-closed다.
+export const PIXEL_SETTLE_BUDGET_MS = 5000;
 export const PHASES = ['light', 'dark'];
+
+// 브라우저에서 실행되는 진단 소스. **정착 실패 시에만** 부른다 —
+// 어떤 스크롤 영역이 살아 있는지(오버레이 스크롤바 후보)를 그대로 돌려준다.
+export const OVERFLOW_PROBE_SOURCE = `function () {
+  var out = [];
+  var all = document.querySelectorAll('*');
+  for (var i = 0; i < all.length; i++) {
+    var el = all[i];
+    var cs = getComputedStyle(el);
+    var scrollableX = el.scrollWidth > el.clientWidth + 1
+      && (cs.overflowX === 'auto' || cs.overflowX === 'scroll');
+    var scrollableY = el.scrollHeight > el.clientHeight + 1
+      && (cs.overflowY === 'auto' || cs.overflowY === 'scroll');
+    if (!scrollableX && !scrollableY) continue;
+    var r = el.getBoundingClientRect();
+    out.push({
+      selector: (el.className && typeof el.className === 'string')
+        ? '.' + el.className.trim().split(/\\s+/).join('.') : el.nodeName,
+      axis: (scrollableX ? 'x' : '') + (scrollableY ? 'y' : ''),
+      client: [el.clientWidth, el.clientHeight],
+      scroll: [el.scrollWidth, el.scrollHeight],
+      rect: [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)],
+    });
+  }
+  return out;
+}`;
 
 // 실행 계획 — 순수 함수. resolveActions 결과만 쓰고, 미해결 placeholder·미지 op·필드 누락을 잡는다.
 export function planSurface(surface, rawContext) {
@@ -350,11 +382,73 @@ export async function runSurface({ surface, rawContext, driver, selectors, raste
   // **선택이 아니다.** 이전 판은 driver.sleep이 있을 때만 돌아서, sleep 없는 어댑터를 쓰면
   // 변동하는 PNG도 GREEN이었다. 정착 검사를 못 하는 driver는 캡처를 만들 자격이 없다.
   if (typeof driver.sleep !== 'function') return fail(`RUN_DRIVER_NO_SLEEP ${surface.name}`);
-  await driver.sleep(PIXEL_SETTLE_MS);
-  const again = await driver.screenshot();
-  const settled = !!again && again.length === png.length && Buffer.compare(Buffer.from(png), Buffer.from(again)) === 0;
-  if (!settled) return fail(`RUN_UNSTABLE_PIXELS ${surface.name} ${png.length} vs ${again ? again.length : 'null'}`);
-  return { errors: [], log, occurrences, png, settled, coverageEvidence, darkReview };
+  const st = await settlePixels(driver, png, surface.name);
+  if (!st.settled) {
+    // 실패 진단 — 어디가 얼마나 흔들렸는지와 살아 있는 스크롤 영역을 함께 남긴다.
+    // 이게 없으면 "불안정하다"까지만 알고 원인 조사를 매번 손으로 다시 해야 한다.
+    const diag = { attempts: st.attempts, elapsedMs: st.elapsedMs, sizes: st.sizes, last: st.last, overflow: null };
+    try { diag.overflow = await driver.evaluate(OVERFLOW_PROBE_SOURCE, null); } catch (e) { diag.overflow = `PROBE_THREW ${(e && e.message) || e}`; }
+    return { errors: [`RUN_UNSTABLE_PIXELS ${surface.name} ${st.sizes.join('/')}`],
+      log, settleDiag: { surface: surface.name, ...diag } };
+  }
+  return { errors: [], log, occurrences, png: st.png, settled: true,
+    settleDiag: { surface: surface.name, attempts: st.attempts, elapsedMs: st.elapsedMs },
+    coverageEvidence, darkReview };
+}
+
+// 두 PNG가 다른 픽셀의 **경계 상자**와 개수. 정착 실패 원인을 화면 좌표로 지목한다.
+// **여기 두는 이유**: s4PixelDiff는 s4Evaluator를 거쳐 이 모듈을 참조하므로 반대 방향
+// import가 순환이 되고, 캡처 CLI가 s4PixelDiff를 직접 import하면 discovery closure(정본 9파일)가
+// 넓어져 커밋된 discovery 증거가 깨진다. pngjs는 외부 패키지라 closure에 영향이 없다.
+export function diffBbox(aBuf, bBuf) {
+  let a = null, b = null;
+  try { a = PNG.sync.read(Buffer.from(aBuf)); b = PNG.sync.read(Buffer.from(bBuf)); }
+  catch (e) { return { ok: false, reason: `DECODE ${(e && e.message) || e}` }; }
+  if (a.width !== b.width || a.height !== b.height)
+    return { ok: false, reason: `SIZE ${a.width}x${a.height} vs ${b.width}x${b.height}` };
+  let x1 = Infinity, y1 = Infinity, x2 = -1, y2 = -1, n = 0;
+  for (let y = 0; y < a.height; y += 1) {
+    for (let x = 0; x < a.width; x += 1) {
+      const i = (y * a.width + x) * 4;
+      if (a.data[i] === b.data[i] && a.data[i + 1] === b.data[i + 1]
+        && a.data[i + 2] === b.data[i + 2] && a.data[i + 3] === b.data[i + 3]) continue;
+      n += 1;
+      if (x < x1) x1 = x;
+      if (x > x2) x2 = x;
+      if (y < y1) y1 = y;
+      if (y > y2) y2 = y;
+    }
+  }
+  if (n === 0) return { ok: true, pixels: 0, bbox: null };
+  return { ok: true, pixels: n, bbox: { x: x1, y: y1, w: x2 - x1 + 1, h: y2 - y1 + 1 } };
+}
+
+// 연속 2장이 바이트 동일할 때까지 예산 안에서 반복한다. 정착하면 **마지막(=정착한) PNG**를
+// 산출물로 쓴다 — 첫 장은 아직 전환 중이었을 수 있다. DOM은 이 구간에서 바뀌지 않으므로
+// 앞서 측정한 occurrence와 어긋나지 않는다.
+export async function settlePixels(driver, first, name, budgetMs = PIXEL_SETTLE_BUDGET_MS, stepMs = PIXEL_SETTLE_MS) {
+  const sizes = [first.length];
+  let prev = Buffer.from(first);
+  let elapsed = 0;
+  let attempts = 0;
+  let last = null;
+  while (elapsed < budgetMs) {
+    await driver.sleep(stepMs);
+    elapsed += stepMs;
+    attempts += 1;
+    const next = await driver.screenshot();
+    if (!next || typeof next.length !== 'number' || next.length === 0)
+      return { settled: false, attempts, elapsedMs: elapsed, sizes, name, last };
+    const buf = Buffer.from(next);
+    sizes.push(buf.length);
+    if (buf.length === prev.length && Buffer.compare(prev, buf) === 0)
+      return { settled: true, attempts, elapsedMs: elapsed, sizes, png: next };
+    last = { a: prev, b: buf };
+    prev = buf;
+  }
+  // 미수렴 — 마지막 두 장을 그대로 넘긴다. diff bbox 계산은 CLI가 한다
+  // (여기서 s4PixelDiff를 부르면 s4PixelDiff→s4Evaluator→runner 순환이 생긴다).
+  return { settled: false, attempts, elapsedMs: elapsed, sizes, name, last };
 }
 
 // 산출물은 **candidate 위치에만**, **phase별로 분리해서** 쓴다.
@@ -687,7 +781,7 @@ export async function runCapture({ spec, rawContext, driver, selectors, phase, p
   if (errors.length) return { errors, context: null };
 
   const baseLightMaskRects = {}, actionLog = {}, pngByCaptureName = {};
-  const coverageEvidence = {}, darkReview = {};
+  const coverageEvidence = {}, darkReview = {}, settleDiags = [];
   let datasetStart = null, datasetEnd = null;
   let themeTouched = false;
   try {
@@ -712,6 +806,8 @@ export async function runCapture({ spec, rawContext, driver, selectors, phase, p
 
     for (const surface of surfaces) {
       const r = await runSurface({ surface, rawContext, driver, selectors, raster, spec, phase });
+      // 정착 진단은 성패와 무관하게 모은다 — 실패했을 때 원인을 밖에서 볼 수 있어야 한다.
+      if (r.settleDiag) settleDiags.push(r.settleDiag);
       if (r.errors.length) { errors.push(...r.errors); throw new Error('__abort'); }
       baseLightMaskRects[surface.name] = r.occurrences;
       actionLog[surface.name] = r.log;
@@ -746,7 +842,7 @@ export async function runCapture({ spec, rawContext, driver, selectors, phase, p
       } catch (e) { errors.push(`RUN_RESTORE_FAILED ${e && e.message}`); }
     }
   }
-  if (errors.length) return { errors, context: null };
+  if (errors.length) return { errors, context: null, settleDiags };
 
   const context = {
     ...rawContext,
@@ -765,7 +861,7 @@ export async function runCapture({ spec, rawContext, driver, selectors, phase, p
   // 도중 변경을 잡아 종료해도 오염된 candidate가 디스크에 남았다.
   // 순서는 `메모리 캡처 → postflight → writeCandidate` 여야 한다.
   const contextRaw = JSON.stringify(context, null, 1);
-  return { errors, context, contextRaw, pngByCaptureName, datasetStart, datasetEnd,
+  return { errors, context, contextRaw, pngByCaptureName, datasetStart, datasetEnd, settleDiags,
     expectedCaptureNames: surfaces.map((x) => x.captureName) };
 }
 
