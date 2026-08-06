@@ -546,9 +546,12 @@ export async function main(argv, { log = console.log, err = console.error } = {}
     const report = [];
     for (const name of cli.scanList) {
       const one = { ...SPEC, REQUIRED_SMOKE_SURFACES: [byName.get(name)] };
-      const session = await withBridge({ cli, err, label: `scan ${name} (${phase})` }, async (dd) => {
-        const r = await runCapture({ spec: one, rawContext: CAPTURE_SCENARIO, driver: dd,
-          selectors: captureSelectors(SPEC), phase, provenance: null });
+      const session = await withBridge({ cli, err, label: `scan ${name} (${phase})` }, async (dd, setFatal) => {
+        // 캡처와 **같은 attempt 수명주기**를 쓴다 — 이게 없으면 어댑터에 활성 페이지가 없다.
+        const r = await withAttempt(dd, 1, () => runCapture({
+          spec: one, rawContext: CAPTURE_SCENARIO, driver: dd,
+          selectors: captureSelectors(SPEC), phase, provenance: null }));
+        if (r.errors.length) setFatal(1);      // 러너 오류가 primary — shutdown이 덮지 않게 한다
         return r;
       });
       const r = session && session.value;
