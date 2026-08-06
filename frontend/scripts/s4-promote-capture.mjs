@@ -7,21 +7,22 @@
 //   node scripts/s4-promote-capture.mjs      (light+dark를 한 트랜잭션으로)
 //
 // 계약:
-//  - 검증기를 주입하지 않는다. promoteRelease가 내부에서 구체 검증기를 부른다.
+//  - 검증기도 승인 함수도 주입하지 않는다. 승격 모듈이 내부에서 구체 구현을 부른다.
+//  - authority 입력(모듈 목록·startHead·pinned blobs)도 넘기지 않는다 — 승격이 파생한다.
 //  - projection은 **s4Projection 공유 모듈**을 쓴다(생성기와 같은 구현, 복제 없음).
 //  - expected fixture의 smoke는 **candidate bundle의 실제 바이트**에서 만든다.
 //  - Git blob resolver를 넘기지 않는다 — 승격 모듈이 스스로 해석한다.
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
-import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import * as RAW_SPEC from '../library/s4Spec.mjs';
 import * as EV from '../library/s4Evaluator.mjs';
 import * as CANON from '../library/s4Canonicalize.mjs';
 import * as PROJ from '../library/s4Projection.mjs';
 import { readCandidateBundle } from '../library/s4CaptureRunner.mjs';
-import { promoteRelease, approveForPromotion, headBlobBinding, readRelease } from '../library/s4Promote.mjs';
+import { promoteRelease, approveForPromotion, headBlobBinding, readRelease,
+  readPinnedGitFile } from '../library/s4Promote.mjs';
 import { HASHED_MODULES, REPO_DIR, worktreeDirtyEntries } from './s4-capture.mjs';
 
 // 인자가 없다. **두 phase를 함께** 승격하는 것이 유일한 동작이다 —
@@ -43,16 +44,15 @@ export async function main(argv, { log = console.log, err = console.error } = {}
   }
   const SPEC = snap.spec;
   const sha256 = (v) => createHash('sha256').update(v).digest('hex');
-  const gitExec = (c) => execSync(c, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
 
   // 승격은 정본을 만든다 — 워킹트리 전체가 clean일 때만 시작한다.
-  const dirty = worktreeDirtyEntries(REPO_DIR, gitExec);
+  const dirty = worktreeDirtyEntries(REPO_DIR);
   if (dirty.length) {
     err(`REPO_DIRTY — total=${dirty.length}`);
     for (const e of dirty.slice(0, 20)) err(`  ${e}`);
     return 1;
   }
-  const head = headBlobBinding(REPO_DIR, HASHED_MODULES, gitExec);
+  const head = headBlobBinding(REPO_DIR, HASHED_MODULES);
   if (head.errors.length) {
     err(`HEAD_BINDING_FAILED — total=${head.errors.length}`);
     for (const e of head.errors) err(`  ${e}`);
@@ -78,7 +78,14 @@ export async function main(argv, { log = console.log, err = console.error } = {}
   // ── projector 경로(생성기와 동일 구현) ────────────────────────────────────
   const require = createRequire(`${FRONT}/package.json`);
   const sass = require('sass'); const postcss = require('postcss');
-  const gitShow = (ref, rel) => gitExec(`git -C ${REPO} show ${ref}:frontend/${rel}`);
+  // BASE 소스는 s4-gen과 **같은 pinned reader**로 읽는다 — 환경 상속도, 구현 분기도 없다.
+  const BLOB_BY_REL = new Map(Object.values(SPEC.FILES).map((f) => [f.rel, f.blob]));
+  let pinnedError = null;
+  const gitShow = (ref, rel) => {
+    const r = readPinnedGitFile(REPO_DIR, ref, rel, BLOB_BY_REL.get(rel));
+    if (r.errors.length) { pinnedError = `PINNED_SOURCE ${rel}: ${r.errors.join(' | ')}`; throw new Error(pinnedError); }
+    return r.bytes;
+  };
   const compileScss = (src, rel) => sass.compileString(src,
     { loadPaths: [`${FRONT}/styles`, FRONT], url: new URL(`file://${FRONT}/${rel}`) }).css;
   const { pr } = PROJ.buildProjection({ spec: SPEC, gitShow, compileScss, frontDir: FRONT, sass, postcss });
@@ -126,7 +133,7 @@ export async function main(argv, { log = console.log, err = console.error } = {}
   // 전부 통과한 bytes만 canonical expectedBytes가 된다. writer는 메모리에만 남긴다.
   let expectedBytes = null;
   const approve = approveForPromotion({
-    approveAndWrite: EV.approveAndWrite, repoDir: REPO_DIR, evidenceFiles: files,
+    repoDir: REPO_DIR, evidenceFiles: files,
     fixture, spec: SPEC, contrastResults: pr.contrast.results,
     actualDecls: pr.projDecls, actualRaw: pr.projSrc, preAnnSources: pr.preAnnSrc,
     actualAllowIdToKey: pr.attribution.allowIdToKey, baseDecls: pr.baseDecls,
@@ -153,7 +160,7 @@ export async function main(argv, { log = console.log, err = console.error } = {}
     fromRelease, expectedBytes,                 // fixture를 따로 넘기지 않는다 — bytes가 정본이다
     candidates: cands,                          // CLI가 읽어 고정한 snapshot
     discoveryEvidence: { files }, repoDir: REPO_DIR,
-    hashedModules: HASHED_MODULES, startHead: head.headCommit,
+    // hashedModules·startHead는 넘기지 않는다 — 승격이 자기 authority 입력을 스스로 파생한다.
   });
   if (r.errors.length) {
     err(`PROMOTE FAILED — total=${r.errors.length}`);

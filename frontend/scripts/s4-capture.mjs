@@ -26,13 +26,15 @@
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import * as RAW_SPEC from '../library/s4Spec.mjs';
-import { runCapture, writeCandidate, executeSurfaceSteps, PHASES } from '../library/s4CaptureRunner.mjs';
+import { runCapture, writeCandidate, CANDIDATE_CAS_ANY, executeSurfaceSteps, PHASES } from '../library/s4CaptureRunner.mjs';
 import { NETWORK_INSTALL_SOURCE, NETWORK_DRAIN_SOURCE, NETWORK_IDLE_SOURCE,
   NETWORK_HOOK_VERSION } from '../library/s4DomProbe.mjs';
 import { snapshotSpec, specFingerprint, datasetDigest, validateDatasetContract,
   buildActionContext } from '../library/s4Evaluator.mjs';
 import { createHash } from 'node:crypto';
-import { headBlobBinding, worktreeDirtyEntries } from '../library/s4Promote.mjs';
+import { headBlobBinding, worktreeDirtyEntries, currentHeadCommit,
+  DISCOVERY_ENTRY, DISCOVERY_HASHED_MODULES, HASHED_MODULES,
+  GENERATOR_ENTRY, GENERATOR_HASHED_MODULES } from '../library/s4Promote.mjs';
 import { execSync } from 'node:child_process';
 
 // 이 파일 전체 바이트도 신뢰 입력이다 — 우회 어댑터가 생기면 이 바이트가 그대로인지가 단서다.
@@ -253,36 +255,11 @@ export const CAPTURE_SCENARIO = {
 // 이 CLI의 **정적 import closure**(기계 산출) + 브라우저를 실제로 모는 어댑터.
 // 손으로 열거하면 빠진다 — 실증: s4Evaluator가 쓰는 cssColorLiterals.mjs가 없었다.
 // 상설 테스트가 closure를 다시 계산해 이 목록과 exact 대조한다.
-export const DISCOVERY_ENTRY = 'frontend/scripts/s4-capture.mjs';
-// **s4Spec의 PROVENANCE_BLOB_PATHS에서 파생한다.** 두 곳에 적으면 provenance가 신고하는
-// 집합과 검증기가 기대하는 집합이 갈릴 수 있고, 그때 어느 쪽이 정본인지가 사라진다.
-export const DISCOVERY_HASHED_MODULES = [...RAW_SPEC.PROVENANCE_BLOB_PATHS];
-// 캡처는 산출물을 만든다 — 승격까지의 전 경로가 clean이어야 한다.
-export const HASHED_MODULES = [
-  ...DISCOVERY_HASHED_MODULES,
-  'frontend/library/s4Projection.mjs',
-  // privacy audit 부착 도구도 capture authority에 든다 — 캡처는 이 도구가 커밋된
-  // 이후의 clean HEAD에서만 돈다.
-  'frontend/scripts/s4-audit-candidate.mjs',
-  'frontend/scripts/s4-promote-capture.mjs',
-];
-
-// **generator authority는 discovery provenance와 다른 것이다.**
-// discovery 9파일은 "그때 관찰한 코드"이고, 이 목록은 "지금 fixture를 만드는 코드"다.
-// s4-gen.mjs 진입점의 정적 import closure이며 s4-gen.mjs 자신을 반드시 포함한다.
-export const GENERATOR_ENTRY = 'frontend/scripts/s4-gen.mjs';
-export const GENERATOR_HASHED_MODULES = [
-  GENERATOR_ENTRY,
-  'frontend/library/cssColorLiterals.mjs',
-  'frontend/library/s4Projection.mjs',
-  'frontend/library/s4Canonicalize.mjs',
-  'frontend/library/s4CaptureRunner.mjs',
-  'frontend/library/s4DomProbe.mjs',
-  'frontend/library/s4Evaluator.mjs',
-  'frontend/library/s4Promote.mjs',
-  'frontend/library/s4Spec.mjs',
-  'frontend/scripts/s4-capture.mjs',
-];
+// **정본은 s4Promote가 소유한다.** 이전 판은 이 스크립트가 목록을 정의해 승격에 넘겼고,
+// 그래서 승격 authority의 범위가 caller 손에 있었다. 여기서는 재수출만 한다 —
+// capture/audit/promotion이 같은 값을 본다.
+export { DISCOVERY_ENTRY, DISCOVERY_HASHED_MODULES, HASHED_MODULES,
+  GENERATOR_ENTRY, GENERATOR_HASHED_MODULES };
 export const REPO_DIR = fileURLToPath(new URL('../../', import.meta.url));
 
 export function captureSelectors(spec) {
@@ -509,14 +486,13 @@ export async function main(argv, { log = console.log, err = console.error } = {}
   // 있고 서로 겹치지 않는다. main에 공통 게이트를 두면 orchestrator를 우회하는 mutant가
   // main의 게이트에 걸려 잡히지 않는다(실증).
   if (cli.discover || cli.canary) {
-    const gitExec0 = (c) => execSync(c, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-    const dirtyObs = worktreeDirtyEntries(REPO_DIR, gitExec0);
+    const dirtyObs = worktreeDirtyEntries(REPO_DIR);
     if (dirtyObs.length) {
       err(`WORKTREE_DIRTY — total=${dirtyObs.length}`);
       for (const e of dirtyObs.slice(0, 20)) err(`  ${e}`);
       return 1;
     }
-    const head = headBlobBinding(REPO_DIR, DISCOVERY_HASHED_MODULES, gitExec0);
+    const head = headBlobBinding(REPO_DIR, DISCOVERY_HASHED_MODULES);
     if (head.errors.length) {
       err(`HEAD_BINDING_FAILED — total=${head.errors.length}`);
       for (const e of head.errors) err(`  ${e}`);
@@ -525,14 +501,13 @@ export async function main(argv, { log = console.log, err = console.error } = {}
     const r = await runObservation({ SPEC, cli, head, log: () => {}, err });
     if (r.code) return r.code;
     // 관찰 도중 워킹카피가 바뀌었으면 이 목록의 출처가 흔들린다 — **출력 전에** 확인한다.
-    const head2 = headBlobBinding(REPO_DIR, DISCOVERY_HASHED_MODULES,
-      (c) => execSync(c, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }), head.headCommit);
+    const head2 = headBlobBinding(REPO_DIR, DISCOVERY_HASHED_MODULES, head.headCommit);
     if (head2.errors.length || JSON.stringify(head2.blobs) !== JSON.stringify(head.blobs)) {
       err('HEAD_BINDING_DRIFTED_DURING_OBSERVE');
       for (const e of head2.errors) err(`  ${e}`);
       return 1;
     }
-    const dirty1 = worktreeDirtyEntries(REPO_DIR, (c) => execSync(c, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }));
+    const dirty1 = worktreeDirtyEntries(REPO_DIR);
     if (dirty1.length) {
       err(`WORKTREE_DIRTIED_DURING_OBSERVE — total=${dirty1.length}`);
       for (const e of dirty1.slice(0, 20)) err(`  ${e}`);
@@ -682,20 +657,20 @@ export function phaseGateDecision({ stage, dirtyEntries, head, pinnedBlobs, cano
 async function runPhaseCaptureImpl({ SPEC, cli, fixturesDir, log = console.log, err = console.error }) {
   const repoDir = REPO_DIR;
   // git은 **module-bound**다 — 주입 지점이 없다.
-  const gitExec = (c) => execSync(c, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+
   const readHeadCommit = () => {
-    try { return gitExec(`git -C ${repoDir} rev-parse HEAD`).trim(); } catch (e) { return null; }
+    return currentHeadCommit(repoDir);
   };
   // ① 시작: worktree를 **정확히 한 번** 읽는다. 두 번 읽으면 첫 관측이 dirty인데 두 번째가
   // clean인 창이 생기고, 그 사이에 HEAD 결속이 끼어든다.
-  const dirty0 = worktreeDirtyEntries(repoDir, gitExec);
+  const dirty0 = worktreeDirtyEntries(repoDir);
   if (dirty0.length) {
     const g = phaseGateDecision({ stage: 'start', dirtyEntries: dirty0, head: null, canonPaths: HASHED_MODULES });
     for (const e of g.errors) err(e);
     return 1;                                   // headBlobBinding을 부르지 않는다
   }
   // ② clean일 때만 HEAD를 한 번 계산한다.
-  const head = headBlobBinding(repoDir, HASHED_MODULES, gitExec);
+  const head = headBlobBinding(repoDir, HASHED_MODULES);
   const g0 = phaseGateDecision({ stage: 'start', dirtyEntries: dirty0, head, canonPaths: HASHED_MODULES });
   if (!g0.ok) { for (const e of g0.errors) err(e); return 1; }
   // ③ pure capture
@@ -704,14 +679,16 @@ async function runPhaseCaptureImpl({ SPEC, cli, fixturesDir, log = console.log, 
   const result = core.result;
   // ④⑤ 종료: 쓰기 전에 다시 본다. 먼저 쓰면 오염된 candidate가 남는다.
   const g1 = phaseGateDecision({ stage: 'end',
-    dirtyEntries: worktreeDirtyEntries(repoDir, gitExec),
-    head: headBlobBinding(repoDir, HASHED_MODULES, gitExec, head.headCommit),
+    dirtyEntries: worktreeDirtyEntries(repoDir),
+    head: headBlobBinding(repoDir, HASHED_MODULES, head.headCommit),
     pinnedBlobs: head.blobs, canonPaths: HASHED_MODULES,
     startCommit: head.headCommit, currentCommit: readHeadCommit() });
   if (!g1.ok) { for (const e of g1.errors) err(e); return 1; }
 
   // postflight를 통과한 뒤에만 candidate를 기록한다.
   const wErrors = writeCandidate({ fixturesDir, phase: cli.phase, contextRaw: result.contextRaw,
+    // 캡처는 **방금 찍은 것을 공개하는 것**이 계약이다 — 이전 candidate가 무엇이든 교체한다.
+    expectedCurrentBundleName: CANDIDATE_CAS_ANY,
     pngByCaptureName: result.pngByCaptureName, expectedCaptureNames: result.expectedCaptureNames });
   if (wErrors.length) { err(`WRITE FAILED`); for (const e of wErrors) err(`  ${e}`); return 1; }
   log(`captured phase=${cli.phase} surfaces=${SPEC.REQUIRED_SMOKE_SURFACES.length} → candidate only`);

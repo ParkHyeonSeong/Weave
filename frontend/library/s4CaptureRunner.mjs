@@ -455,8 +455,64 @@ export const COMMIT_POINT = 'pointer-rename';
 //     candidate를 신뢰하지 말고 해당 phase를 다시 캡처한다. pointer를 손으로 되돌리지 말 것.
 export const LOCK_RECOVERY = ['WRITE_LOCK_BUSY', 'WRITE_LOCK_OWNERSHIP_LOST', 'WRITE_COMMITTED_BUT'];
 
-export function writeCandidate({ fixturesDir, phase, contextRaw, pngByCaptureName, expectedCaptureNames }) {
+// pointer CAS 기대값. **모든 호출부가 하나를 고르도록 필수 인자로 둔다** — 기본값을 주면
+// 그 기본값이 곧 우회로가 된다.
+//  - 문자열      : 현재 pointer가 정확히 그것일 때만 교체한다(검토→발행 사이 교체 검출).
+//  - null        : pointer가 **없어야** 한다(최초 발행).
+//  - CANDIDATE_CAS_ANY : 현재 값과 무관하게 발행한다. 캡처는 방금 찍은 것을 공개하는 것이
+//    계약이므로 여기에 해당한다. audit처럼 "검토한 그 바이트"에 결속돼야 하는 경로는 쓰면 안 된다.
+export const CANDIDATE_CAS_ANY = Symbol.for('s4.candidate.cas.any');
+
+function currentPointerName(root, phase) {
+  const pointer = join(root, CANDIDATE_POINTER(phase));
+  if (!existsSync(pointer)) return null;
+  try { return readFileSync(pointer, 'utf8').trim(); } catch (e) { return { unreadable: true }; }
+}
+
+// ── candidate lock 정본 ──────────────────────────────────────────────────────
+// **writeCandidate와 승격이 같은 lock을 쓴다.** 이전 판은 lock이 writeCandidate 안에만
+// 있어서, 승격이 candidate CAS를 확인한 뒤 release pointer를 쓰기까지의 긴 구간이 잠기지
+// 않았다 — 그 사이 A→B로 candidate가 교체돼도 승격은 stale A를 그대로 committed로 만들었다
+// (실증: hijack writeCandidate가 errors=[]로 성공하고 pointer가 B로 옮겨진 채 promoted=true).
+export const candidateLockPath = (fixturesDir, phase) => join(fixturesDir, CANDIDATE_ROOT, `.lock-${phase}`);
+
+export function acquireCandidateLock(fixturesDir, phase) {
+  if (!PHASES.includes(phase)) return { ok: false, errors: [`LOCK_PHASE_INVALID ${String(phase)}`] };
+  const root = join(fixturesDir, CANDIDATE_ROOT);
+  try { mkdirSync(root, { recursive: true }); }
+  catch (e) { return { ok: false, errors: [`LOCK_ROOT_FAILED ${(e && e.message) || e}`] }; }
+  // root가 밖을 가리키면 lock조차 밖에 만들지 않는다.
+  const bad = safeNode(fixturesDir, root, 'dir');
+  if (bad) return { ok: false, errors: [`LOCK_${bad}`] };
+  const p = candidateLockPath(fixturesDir, phase);
+  let fd = null;
+  try { fd = openSync(p, 'wx'); } catch (e) { return { ok: false, errors: [`LOCK_BUSY ${phase} ${p}`] }; }
+  let id = null;
+  try { const st = fstatSync(fd); id = `${st.dev}:${st.ino}`; }
+  catch (e) {
+    try { closeSync(fd); } catch (e2) { /* noop */ }
+    return { ok: false, errors: [`LOCK_STAT_FAILED ${(e && e.message) || e}`] };
+  }
+  // 이름이 같아도 다른 파일일 수 있다 — 소유권은 dev/ino로 본다.
+  const stillOurs = () => {
+    try { const st = lstatSync(p); return `${st.dev}:${st.ino}` === id; } catch (e) { return false; }
+  };
+  const release = () => {
+    const ours = stillOurs();
+    try { closeSync(fd); } catch (e) { /* noop */ }
+    if (ours) try { unlinkSync(p); } catch (e) { /* noop */ }   // 남의 lock은 지우지 않는다
+    return ours;
+  };
+  return { ok: true, errors: [], phase, stillOurs, release };
+}
+
+export function writeCandidate({ fixturesDir, phase, contextRaw, pngByCaptureName, expectedCaptureNames,
+  expectedCurrentBundleName }) {
   if (typeof contextRaw !== 'string') return ['WRITE_CONTEXT_RAW_REQUIRED'];
+  if (expectedCurrentBundleName === undefined) return ['WRITE_CAS_EXPECTATION_REQUIRED'];
+  if (expectedCurrentBundleName !== CANDIDATE_CAS_ANY && expectedCurrentBundleName !== null
+    && (typeof expectedCurrentBundleName !== 'string' || !expectedCurrentBundleName))
+    return [`WRITE_CAS_EXPECTATION_SHAPE ${String(expectedCurrentBundleName)}`];
   if (!PHASES.includes(phase)) return [`WRITE_PHASE_INVALID ${phase}`];
   // 해시 전에 입력 형태를 못박는다 — Array/plain object/byte 값이 아니면 해시가 의미를 잃는다.
   if (!Array.isArray(expectedCaptureNames)) return ['WRITE_EXPECTED_NAMES_NOT_ARRAY'];
@@ -486,14 +542,9 @@ export function writeCandidate({ fixturesDir, phase, contextRaw, pngByCaptureNam
   const bundleDir = join(root, bundleName);
   const pointer = join(root, CANDIDATE_POINTER(phase));
   let tmp = null;
-  let lockFd = null;
-  let lockId = null;
-  const lockPath = join(root, `.lock-${phase}`);
-  // 우리가 연 lock이 아직 우리 것인지 — dev/ino로 본다. 이름이 같아도 다른 파일일 수 있다.
-  const lockStillOurs = () => {
-    try { const st = lstatSync(lockPath); return `${st.dev}:${st.ino}` === lockId; }
-    catch (e) { return false; }
-  };
+  let lock = null;
+  const lockPath = candidateLockPath(fixturesDir, phase);
+  const lockStillOurs = () => (lock ? lock.stillOurs() : false);
   try {
     mkdirSync(root, { recursive: true });
     // **containment/symlink 검증을 먼저** 한다. root가 밖을 가리키면 lock조차 밖에 만들면 안 된다.
@@ -501,12 +552,15 @@ export function writeCandidate({ fixturesDir, phase, contextRaw, pngByCaptureNam
       const e = safeNode(fixturesDir, p2, k);
       if (e) return [`WRITE_${e}`];
     }
-    // cooperative lock — O_EXCL. **자동 stale 회수는 없다**(소유자가 살아 있어도 탈취된다).
+    // cooperative lock — **승격이 잡는 것과 같은 lock이다**(acquireCandidateLock 단일 구현).
+    // **자동 stale 회수는 없다**(소유자가 살아 있어도 탈취된다).
     // 잔존 lock 복구는 아래 LOCK_RECOVERY 절차대로 사람이 한다.
-    try { lockFd = openSync(lockPath, 'wx'); }
-    catch (e) { return [`WRITE_LOCK_BUSY ${lockPath}`]; }
-    try { const st = fstatSync(lockFd); lockId = `${st.dev}:${st.ino}`; }
-    catch (e) { return [`WRITE_LOCK_STAT_FAILED ${(e && e.message) || e}`]; }
+    lock = acquireCandidateLock(fixturesDir, phase);
+    if (!lock.ok) {
+      const busy = lock.errors.join(' ');
+      lock = null;
+      return [busy.includes('LOCK_BUSY') ? `WRITE_LOCK_BUSY ${lockPath}` : `WRITE_${busy}`];
+    }
     if (!existsSync(bundleDir)) {
       tmp = mkdtempSync(join(root, `.tmp-${phase}-`));
       for (const [name, bytes] of Object.entries(pngByCaptureName)) writeFileSync(join(tmp, name), bytes);
@@ -522,6 +576,15 @@ export function writeCandidate({ fixturesDir, phase, contextRaw, pngByCaptureNam
 
     // commit **직전**에 lock 소유권을 확인한다. 잃었으면 pointer를 쓰지 않는다.
     if (!lockStillOurs()) return ['WRITE_LOCK_OWNERSHIP_LOST'];
+    // ── pointer CAS ─────────────────────────────────────────────────────────
+    // **lock 안에서, rename 직전에** 본다. 호출부가 미리 읽어 비교하는 것으로는 대체되지
+    // 않는다 — 그 사이 구간이 잠기지 않아 검토한 것과 다른 candidate 위에 발행된다.
+    if (expectedCurrentBundleName !== CANDIDATE_CAS_ANY) {
+      const cur = currentPointerName(root, phase);
+      if (cur && cur.unreadable) return ['WRITE_CAS_POINTER_UNREADABLE'];
+      if (cur !== expectedCurrentBundleName)
+        return [`WRITE_POINTER_CAS ${String(cur)} != ${String(expectedCurrentBundleName)}`];
+    }
     // ── commit point ────────────────────────────────────────────────────────
     // 여기까지의 실패는 **publish되지 않은 실패**다. pointer rename이 성공하는 순간
     // 새 candidate가 공개된다.
@@ -543,14 +606,10 @@ export function writeCandidate({ fixturesDir, phase, contextRaw, pngByCaptureNam
     return [`WRITE_FAILED ${(e && e.message) || e}`];
   } finally {
     if (tmp) try { rmSync(tmp, { recursive: true, force: true }); } catch (e) { /* best effort */ }
-    if (lockFd !== null) {
-      // 우리 것일 때만 반납한다. **범위 주의**: 정상 cooperative writer와 이미 존재하던
-      // foreign lock은 보호하지만, ownership 검사 **직후** 같은 사용자가 out-of-band로
-      // unlink/replace하는 창은 범위 밖이다(OS advisory lock을 도입하지 않는다).
-      const ours = lockStillOurs();
-      try { closeSync(lockFd); } catch (e) { /* noop */ }
-      if (ours) try { unlinkSync(lockPath); } catch (e) { /* noop */ }
-    }
+    // 우리 것일 때만 반납한다. **범위 주의**: 정상 cooperative writer와 이미 존재하던
+    // foreign lock은 보호하지만, ownership 검사 **직후** 같은 사용자가 out-of-band로
+    // unlink/replace하는 창은 범위 밖이다(OS advisory lock을 도입하지 않는다).
+    if (lock) lock.release();
   }
   return [];
 }

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync, readdirSync, mkdtempSync, writeFileSync, rmSync, symlinkSync, utimesSync, existsSync, mkdirSync, chmodSync } from 'node:fs';
+import { readFileSync, readdirSync, mkdtempSync, writeFileSync, rmSync, symlinkSync, utimesSync, existsSync, mkdirSync, chmodSync, copyFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { resolve, join, sep } from 'node:path';
+import { resolve, join, sep, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { compile, compileString } from 'sass';
@@ -18,7 +18,9 @@ import * as AUDIT from '../scripts/s4-audit-candidate.mjs';   // privacy audit �
 import { execSync as __exec } from 'node:child_process';
 import { PNG } from 'pngjs';                          // 픽셀 테스트용(ESM — require 금지)
 import { execSync } from 'node:child_process';        // 기존 파일에 없으므로 신규 추가
-import { pathToFileURL } from 'node:url';             // compileString에 실제 파일 URL을 줘야 상대 @use가 풀린다
+import { pathToFileURL } from 'node:url';
+import { createRequire } from 'node:module';
+import * as PROJ from './s4Projection.mjs';             // compileString에 실제 파일 URL을 줘야 상대 @use가 풀린다
 const sha256 = (x) => createHash('sha256').update(x).digest('hex');
 const REPO = resolve(__dirname, '../..');   // BASE 소스를 git에서 읽을 때 사용
 // 실제 PNG 바이트. evaluator가 pngjs로 진짜 decode하므로 헤더 흉내로는 통과하지 않는다.
@@ -4695,7 +4697,7 @@ describe('S4 커밋된 캡처 실행기 — 세만틱은 러너가 소유하고 
       expect(Object.keys(r.context.actionLog)).toEqual(['r-a']);
       // **캡처는 아무것도 쓰지 않는다** — 쓰기는 postflight를 통과한 호출부의 몫이다.
       expect(existsSync(join(dir, 's4-shots', RUN.CANDIDATE_BUNDLE_DIR('light')))).toBe(false);
-      expect(RUN.writeCandidate({ fixturesDir: dir, phase: 'light', contextRaw: r.contextRaw,
+      expect(RUN.writeCandidate({ expectedCurrentBundleName: RUN.CANDIDATE_CAS_ANY, fixturesDir: dir, phase: 'light', contextRaw: r.contextRaw,
         pngByCaptureName: r.pngByCaptureName, expectedCaptureNames: r.expectedCaptureNames })).toEqual([]);
       expect(RUN.readCandidateBundle(dir, 'light').contextRaw).toBe(r.contextRaw);
       expect(EV.decodePngHeader(RUN.readCandidateBundle(dir, 'light').pngByName['r-a.png']))
@@ -4840,7 +4842,7 @@ describe('S4 캡처 산출물 — phase 분리·exact set·atomic 교체', () =>
     const dir = mkdtempSync(join(tmpdir(), 's4-cand-'));
     try {
       for (const [phase, png] of [['light', PNG_A()], ['dark', PNG_B()]])
-        expect(RUN.writeCandidate({ fixturesDir: dir, phase, contextRaw: `{"phase":"${phase}"}`,
+        expect(RUN.writeCandidate({ expectedCurrentBundleName: RUN.CANDIDATE_CAS_ANY, fixturesDir: dir, phase, contextRaw: `{"phase":"${phase}"}`,
           pngByCaptureName: { 'a.png': png }, expectedCaptureNames: ['a.png'] })).toEqual([]);
       expect(JSON.parse(RUN.readCandidateBundle(dir, 'light').contextRaw).phase).toBe('light');
       expect(JSON.parse(RUN.readCandidateBundle(dir, 'dark').contextRaw).phase).toBe('dark');
@@ -4851,7 +4853,7 @@ describe('S4 캡처 산출물 — phase 분리·exact set·atomic 교체', () =>
   it('RED: 파일명 집합이 기대와 다르면 아무것도 쓰지 않는다', () => {
     const dir = mkdtempSync(join(tmpdir(), 's4-cand-'));
     try {
-      const e = RUN.writeCandidate({ fixturesDir: dir, phase: 'light', contextRaw: '{}',
+      const e = RUN.writeCandidate({ expectedCurrentBundleName: RUN.CANDIDATE_CAS_ANY, fixturesDir: dir, phase: 'light', contextRaw: '{}',
         pngByCaptureName: { 'a.png': PNG_A() }, expectedCaptureNames: ['a.png', 'b.png'] });
       expect(e.join()).toMatch(/WRITE_CAPTURE_SET_MISMATCH .*missing=\[b\.png\]/);
       expect(existsSync(join(dir, 's4-shots', RUN.CANDIDATE_BUNDLE_DIR('light')))).toBe(false);
@@ -4860,9 +4862,9 @@ describe('S4 캡처 산출물 — phase 분리·exact set·atomic 교체', () =>
   it('잔존 파일이 살아남지 않는다 — 디렉터리를 통째로 교체한다', () => {
     const dir = mkdtempSync(join(tmpdir(), 's4-cand-'));
     try {
-      RUN.writeCandidate({ fixturesDir: dir, phase: 'light', contextRaw: '{}',
+      RUN.writeCandidate({ expectedCurrentBundleName: RUN.CANDIDATE_CAS_ANY, fixturesDir: dir, phase: 'light', contextRaw: '{}',
         pngByCaptureName: { 'a.png': PNG_A(), 'stale.png': PNG_A() }, expectedCaptureNames: ['a.png', 'stale.png'] });
-      RUN.writeCandidate({ fixturesDir: dir, phase: 'light', contextRaw: '{}',
+      RUN.writeCandidate({ expectedCurrentBundleName: RUN.CANDIDATE_CAS_ANY, fixturesDir: dir, phase: 'light', contextRaw: '{}',
         pngByCaptureName: { 'a.png': PNG_A() }, expectedCaptureNames: ['a.png'] });
       expect(Object.keys(RUN.readCandidateBundle(dir, 'light').pngByName)).toEqual(['a.png']);   // stale.png가 사라졌다
       // bundle에는 context.json이 함께 들어 있다 — PNG 집합만 본다.
@@ -4888,7 +4890,10 @@ describe('S4 캡처 산출물 — phase 분리·exact set·atomic 교체', () =>
 // 그 사실 자체가 계약이다 — 없는데 legacy 파일로 대신 통과시키면 게이트가 거짓말을 한다.
 const FIXTURES_DIR = fileURLToPath(new URL('./__fixtures__/', import.meta.url));
 const committedRelease = () => PROM.readRelease(FIXTURES_DIR);
-const HAS_RELEASE = !!PROM.readRelease(FIXTURES_DIR);
+// **상태는 세 갈래다.** `!!readRelease(...)`는 "없음"과 "깨짐"을 똑같이 false로 만들어
+// malformed JSON·schema drift·symlink를 전부 조용히 skip시켰다(실증). 판정은 정본 함수가 한다.
+const RELEASE_STATE = PROM.releaseGateState(PROM.readReleaseChecked(FIXTURES_DIR));
+const HAS_RELEASE = RELEASE_STATE.mode === 'run';
 const committedBundleAt = (dir, phase = 'light') => {
   const rel = PROM.readRelease(dir);
   if (!rel) return { absent: true, reason: 'NO_RELEASE' };
@@ -4903,10 +4908,43 @@ const committedBundleAt = (dir, phase = 'light') => {
 const committedBundle = (phase = 'light') => committedBundleAt(FIXTURES_DIR, phase);
 
 // ── privacy audit 부착 명령 ─────────────────────────────────────────────────
+// **production topology를 그대로 만든다**: fixturesDir가 repoDir **안**이고,
+// `__fixtures__/.gitignore`도 운영과 같은 바이트다. 서로 다른 temp root를 쓰면
+// "승격이 자기 산출물로 스스로 dirty가 된다"는 실제 경로가 테스트에서 사라진다
+// (실증: 그 topology에서 첫 승격이 PROMOTE_AUTHORITY_FAILED_LATE WORKTREE_DIRTY 5로 죽었다).
+const FX_REL = 'frontend/library/__fixtures__';
+const REPO_FILES = [...new Set([...CAP.HASHED_MODULES, ...CAP.GENERATOR_HASHED_MODULES])];
+const tinyRepo = ({ fixturesSymlinkTo = null } = {}) => {
+  const r = mkdtempSync(join(tmpdir(), 's4-repo-'));
+  for (const rel of REPO_FILES) {
+    mkdirSync(join(r, rel.split('/').slice(0, -1).join('/')), { recursive: true });
+    writeFileSync(join(r, rel), `// ${rel}\n`);
+  }
+  const fx = join(r, FX_REL);
+  // fixturesSymlinkTo: canonical __fixtures__ 자리를 **밖을 가리키는 symlink**로 만든다.
+  if (fixturesSymlinkTo) symlinkSync(fixturesSymlinkTo, fx);
+  else mkdirSync(fx, { recursive: true });
+  writeFileSync(join(fx, '.gitignore'),
+    readFileSync(fileURLToPath(new URL('./__fixtures__/.gitignore', import.meta.url)), 'utf8'));
+  execSync(`git -C ${r} init -q && git -C ${r} add -A && ` +
+    `git -C ${r} -c user.email=t@t -c user.name=t commit -q -m x`, { stdio: 'ignore' });
+  const head = execSync(`git -C ${r} rev-parse HEAD`, { encoding: 'utf8' }).trim();
+  const blobs = Object.fromEntries(CAP.HASHED_MODULES.map((rel) => [rel,
+    execSync(`git -C ${r} rev-parse HEAD:${rel}`, { encoding: 'utf8' }).trim()]));
+  return { dir: r, head, blobs, fixturesDir: fx };
+};
+const dirtyOf = (repo) => PROM.worktreeDirtyEntries(repo.dir);
+
 describe('S4 audit-candidate — 실제 바이트에서 계산하고 새 bundle을 발행한다', () => {
   const NAMES = () => SPEC.REQUIRED_SMOKE_SURFACES.map((x) => x.captureName);
-  const review = (over = {}) => ({ scope: AUDIT.AUDIT_SCOPE,
-    captures: NAMES().map((n) => ({ captureName: n, pass: true, findings: [] })), ...over });
+  // **검토 대상 결속**: review는 자기가 무엇을 봤는지(phase·bundleName·context hash·PNG sha)
+  // 스스로 말하고, 그 넷이 지금 candidate의 실제 바이트와 exact여야 한다.
+  const BOUND = (over = {}) => ({ phase: 'light', bundleName: 'bundle-light-x',
+    contextSubjectSha256: 'ctxsha',
+    shaByName: Object.fromEntries(NAMES().map((n) => [n, `sha-${n}`])), ...over });
+  const review = (over = {}, b = BOUND()) => ({ scope: AUDIT.AUDIT_SCOPE,
+    phase: b.phase, bundleName: b.bundleName, contextSubjectSha256: b.contextSubjectSha256,
+    captures: NAMES().map((n) => ({ captureName: n, sha256: b.shaByName[n], pass: true, findings: [] })), ...over });
 
   it('CLI 문법 — --phase/--review 정확히 두 쌍', () => {
     expect(AUDIT.parseAuditArgs(['--phase', 'light', '--review', 'r.json'])).toEqual({ phase: 'light', reviewPath: 'r.json' });
@@ -4915,38 +4953,203 @@ describe('S4 audit-candidate — 실제 바이트에서 계산하고 새 bundle�
   });
 
   it('검토 결과는 exact 23개여야 한다', () => {
-    expect(AUDIT.validateReview(review(), NAMES())).toEqual([]);
+    expect(AUDIT.validateReview(review(), NAMES(), BOUND())).toEqual([]);
     const short = review(); short.captures.pop();
-    expect(AUDIT.validateReview(short, NAMES()).join(' ')).toMatch(/REVIEW_CAPTURE_SET missing=/);
-    const extra = review(); extra.captures.push({ captureName: 'ghost.png', pass: true, findings: [] });
-    expect(AUDIT.validateReview(extra, NAMES()).join(' ')).toMatch(/REVIEW_CAPTURE_SET .*extra=\[ghost.png\]/);
+    expect(AUDIT.validateReview(short, NAMES(), BOUND()).join(' ')).toMatch(/REVIEW_CAPTURE_SET missing=/);
+    const extra = review(); extra.captures.push({ captureName: 'ghost.png', sha256: 'x', pass: true, findings: [] });
+    expect(AUDIT.validateReview(extra, NAMES(), BOUND()).join(' ')).toMatch(/REVIEW_CAPTURE_SET .*extra=\[ghost.png\]/);
     const dup = review(); dup.captures[1] = { ...dup.captures[0] };
-    expect(AUDIT.validateReview(dup, NAMES()).join(' ')).toMatch(/REVIEW_CAPTURE_SET|REVIEW_CAPTURE_DUPLICATE/);
+    expect(AUDIT.validateReview(dup, NAMES(), BOUND()).join(' ')).toMatch(/REVIEW_CAPTURE_SET|REVIEW_CAPTURE_DUPLICATE/);
   });
 
-  it('RED: pass:false / pass와 findings 모순 / scope 오류', () => {
+  it('RED: pass:false / pass와 findings 모순 / scope 오류 / 여분 키', () => {
     const f = review(); f.captures[0].pass = false;
-    expect(AUDIT.validateReview(f, NAMES()).join(' ')).toMatch(/REVIEW_NOT_PASSED/);
+    expect(AUDIT.validateReview(f, NAMES(), BOUND()).join(' ')).toMatch(/REVIEW_NOT_PASSED/);
     const c = review(); c.captures[0].findings = ['face visible'];
-    expect(AUDIT.validateReview(c, NAMES()).join(' ')).toMatch(/REVIEW_PASS_WITH_FINDINGS/);
-    expect(AUDIT.validateReview(review({ scope: 'wrong' }), NAMES()).join(' ')).toMatch(/REVIEW_SCOPE/);
-    expect(AUDIT.validateReview(null, NAMES())).toEqual(['REVIEW_SHAPE']);
+    expect(AUDIT.validateReview(c, NAMES(), BOUND()).join(' ')).toMatch(/REVIEW_PASS_WITH_FINDINGS/);
+    expect(AUDIT.validateReview(review({ scope: 'wrong' }), NAMES(), BOUND()).join(' ')).toMatch(/REVIEW_SCOPE/);
+    expect(AUDIT.validateReview(review({ note: 'x' }), NAMES(), BOUND()).join(' ')).toMatch(/REVIEW_KEYS/);
+    const ek = review(); ek.captures[0] = { ...ek.captures[0], extra: 1 };
+    expect(AUDIT.validateReview(ek, NAMES(), BOUND()).join(' ')).toMatch(/REVIEW_ENTRY_KEYS/);
+    expect(AUDIT.validateReview(null, NAMES(), BOUND())).toEqual(['REVIEW_SHAPE']);
+  });
+
+  it('RED: 검토 대상이 다르면(phase·bundle·context·PNG) 전부 잡힌다', () => {
+    const b = BOUND();
+    expect(AUDIT.validateReview(review({}, BOUND({ phase: 'dark' })), NAMES(), b).join(' '))
+      .toMatch(/REVIEW_PHASE dark != light/);
+    expect(AUDIT.validateReview(review({}, BOUND({ bundleName: 'bundle-light-OTHER' })), NAMES(), b).join(' '))
+      .toMatch(/REVIEW_BUNDLE bundle-light-OTHER != bundle-light-x/);
+    expect(AUDIT.validateReview(review({}, BOUND({ contextSubjectSha256: 'stale' })), NAMES(), b).join(' '))
+      .toMatch(/REVIEW_CONTEXT_SUBJECT stale != ctxsha/);
+    const png = review(); png.captures[3].sha256 = 'drifted';
+    expect(AUDIT.validateReview(png, NAMES(), b).join(' ')).toMatch(/REVIEW_CAPTURE_SHA .* drifted != /);
   });
 
   it('SHA는 입력이 아니라 실제 PNG 바이트에서 계산한다', () => {
     const src = readFileSync(new URL('../scripts/s4-audit-candidate.mjs', import.meta.url), 'utf8');
-    expect(src).toContain('sha256: sha256(bytes)');
+    expect(src).toContain('shaByName[n] = sha256(bytes)');
     expect(src).toContain('CANON.canonicalize(subject)');
-    // in-place 수정이 아니라 새 bundle 발행
+    // in-place 수정이 아니라 새 bundle 발행 + pointer CAS로 잠근다
     expect(src).toContain('writeCandidate({ fixturesDir, phase: cli.phase');
+    expect(src).toContain('expectedCurrentBundleName: d.expectedCurrentBundleName');
+    expect(src).toContain('expectedCurrentBundleName: candidate.bundleName');
+    expect(src).not.toContain('CANDIDATE_CAS_ANY');
     expect(src).not.toMatch(/writeFileSync\([^)]*content\.json/);
     // capture authority 목록에 든다
     expect(CAP.HASHED_MODULES).toContain('frontend/scripts/s4-audit-candidate.mjs');
+    // CLI 진입점은 argv만 넘긴다 — 실행 파일이 다른 루트를 가리키게 만들 수 없다.
+    expect(src).toContain('main(process.argv.slice(2)).then');
+    expect(src).not.toMatch(/main\(process\.argv[^)]*\),\s*\{/);
   });
 
   it('audit 부재는 승격에서 RED', () => {
     expect(EV.validatePrivacyAudit(undefined, { captures: [], contextSubjectSha256: 'x' }).length).toBeGreaterThan(0);
   });
+
+  // ── auditDecision 행동 테스트 (순수 코어 · 파일을 쓰지 않는다) ───────────────
+  // main은 운영 루트에 고정돼 있으므로 임시 topology로 돌릴 수 없다. 판정을 순수 코어로
+  // 빼서 축별로 직접 돌린다 — "그래서 write 0인가"는 코어가 errors를 내면 main이
+  // writeCandidate까지 가지 않는다는 소스 순서와 함께 성립한다.
+  const A_SHA = (v) => createHash('sha256').update(v).digest('hex');
+  const aFacts = (phase = 'light') => {
+    const repo = tinyRepo();
+    const fp = EV.specFingerprint(EV.snapshotSpec(SPEC).spec, A_SHA);
+    const pngs = Object.fromEntries(NAMES().map((n, i) => [n, pngBytes(4, 3, i + 1)]));
+    const subject = { phase, provenance: { headCommit: repo.head, blobs: repo.blobs, specFingerprint: fp } };
+    const contextRaw = JSON.stringify(subject, null, 1);
+    const bundleName = `bundle-${phase}-${RUN.bundleContentHash(contextRaw, pngs)}`;
+    const rv = { scope: AUDIT.AUDIT_SCOPE, phase, bundleName,
+      contextSubjectSha256: A_SHA(JSON.stringify(CANON.canonicalize(subject))),
+      captures: NAMES().map((n) => ({ captureName: n, sha256: A_SHA(pngs[n]), pass: true, findings: [] })) };
+    return { repo, pngs, subject, contextRaw, bundleName, review: rv, fp,
+      candidate: { bundleName, contextRaw, pngByName: pngs },
+      head: { errors: [], headCommit: repo.head, blobs: repo.blobs } };
+  };
+  const decide = (f, over = {}) => AUDIT.auditDecision({ phase: f.subject.phase, dirtyEntries: [],
+    head: f.head, fingerprintNow: f.fp, candidate: f.candidate, review: f.review,
+    captureNames: NAMES(), sha256: A_SHA, ...over });
+
+  it('GREEN: 일치하는 review만 새 audit을 만든다', () => {
+    const f = aFacts();
+    try {
+      const d = decide(f);
+      expect(d.errors).toEqual([]);
+      expect(d.privacyAudit.scope).toBe(AUDIT.AUDIT_SCOPE);
+      expect(d.privacyAudit.captures).toHaveLength(NAMES().length);
+      expect(d.expectedCurrentBundleName).toBe(f.bundleName);     // pointer CAS 기대값
+      // 새 context는 원본 subject + audit이고, 원본 bundle 이름과 다르다(불변 발행).
+      const ctx = JSON.parse(d.nextContextRaw);
+      expect(ctx.phase).toBe('light');
+      expect(RUN.bundleContentHash(d.nextContextRaw, f.pngs)).not.toBe(RUN.bundleContentHash(f.contextRaw, f.pngs));
+    } finally { rmSync(f.repo.dir, { recursive: true, force: true }); }
+  }, 30000);
+
+  it('RED: light review를 dark에 쓰면 판정 거부', () => {
+    const fl = aFacts('light'); const fd = aFacts('dark');
+    try {
+      const d = AUDIT.auditDecision({ phase: 'dark', dirtyEntries: [], head: fd.head,
+        fingerprintNow: fd.fp, candidate: fd.candidate, review: fl.review,
+        captureNames: NAMES(), sha256: A_SHA });
+      expect(d.nextContextRaw).toBe(null);
+      expect(d.errors.join(' ')).toMatch(/REVIEW_PHASE light != dark/);
+      expect(d.errors.join(' ')).toMatch(/REVIEW_BUNDLE/);
+    } finally { rmSync(fl.repo.dir, { recursive: true, force: true }); rmSync(fd.repo.dir, { recursive: true, force: true }); }
+  }, 30000);
+
+  it('RED: dirty/staged/untracked·HEAD 결속 실패·provenance·phase·stale bundle 전부 거부', () => {
+    const f = aFacts();
+    try {
+      const cases = {
+        untracked: { dirtyEntries: ['?? frontend/library/X.txt'] },
+        staged: { dirtyEntries: ['A  frontend/library/Y.txt'] },
+        modified: { dirtyEntries: [' M frontend/library/s4Spec.mjs'] },
+        'head-binding': { head: { errors: ['WORKING_DIFFERS_FROM_HEAD frontend/library/s4Spec.mjs a != b'] } },
+        'provenance-head': { head: { errors: [], headCommit: 'f'.repeat(40), blobs: f.repo.blobs } },
+        'provenance-blobs': { head: { errors: [], headCommit: f.repo.head, blobs: { x: 'y' } } },
+        fingerprint: { fingerprintNow: 'drifted' },
+        phase: { phase: 'dark' },
+        'stale-bundle': { candidate: { ...f.candidate, bundleName: 'bundle-light-OTHER' } },
+      };
+      const seen = {};
+      for (const [label, over] of Object.entries(cases)) {
+        const d = decide(f, over);
+        expect(d.nextContextRaw, label).toBe(null);
+        expect(d.privacyAudit, label).toBe(null);
+        expect(d.errors.length, label).toBeGreaterThan(0);
+        seen[label] = d.errors[0];
+      }
+      expect(seen.untracked).toMatch(/REPO_DIRTY/);
+      expect(seen.staged).toMatch(/REPO_DIRTY/);
+      expect(seen['head-binding']).toBe('HEAD_BINDING_FAILED');
+      expect(seen['provenance-head']).toBe('CANDIDATE_PROVENANCE_MISMATCH');
+      expect(seen.fingerprint).toBe('CANDIDATE_PROVENANCE_MISMATCH');
+      expect(seen.phase).toMatch(/CANDIDATE_PHASE_MISMATCH light != dark/);
+      expect(seen['stale-bundle']).toBe('REVIEW_INVALID');
+    } finally { rmSync(f.repo.dir, { recursive: true, force: true }); }
+  }, 30000);
+
+  it('main은 authority 루트를 주입받지 않는다 — fake clean repoDir로도 write 0', async () => {
+    // 운영 루트는 모듈 상수 하나뿐이다. 인자를 넣어도 무시되고, 실제 repo/fixtures가 쓰인다.
+    const fake = tinyRepo();
+    const out = [];
+    try {
+      const src = readFileSync(new URL('../scripts/s4-audit-candidate.mjs', import.meta.url), 'utf8');
+      const sig = src.slice(src.indexOf('export async function main'), src.indexOf('{', src.indexOf('export async function main')));
+      for (const banned of ['repoDir', 'fixturesDir']) expect(sig, banned).not.toContain(banned);
+      expect(src).toContain('const repoDir = REPO_DIR;');
+      expect(src).toContain('const fixturesDir = FIXTURES_DIR;');
+      // 실제로 불러도 fake 루트가 쓰이지 않는다.
+      const code = await AUDIT.main(['--phase', 'light', '--review', join(fake.dir, 'nope.json')],
+        { log: (m) => out.push(m), err: (m) => out.push(m), repoDir: fake.dir, fixturesDir: fake.fixturesDir });
+      expect(code).toBe(1);
+      // fake 루트에는 아무것도 쓰지 않았고, 운영 fixtures에도 candidate가 생기지 않았다.
+      expect(existsSync(join(fake.fixturesDir, 's4-candidates'))).toBe(false);
+      expect(existsSync(join(AUDIT.FIXTURES_DIR, 's4-candidates'))).toBe(false);
+    } finally { rmSync(fake.dir, { recursive: true, force: true }); }
+  }, 30000);
+
+  it('main은 코어가 거부하면 writeCandidate까지 가지 않는다 (소스 순서)', () => {
+    const src = readFileSync(new URL('../scripts/s4-audit-candidate.mjs', import.meta.url), 'utf8');
+    const m = src.slice(src.indexOf('export async function main'));
+    expect(m.indexOf('auditDecision({')).toBeLessThan(m.indexOf('writeCandidate({'));
+    expect(m.indexOf('AUDIT_REJECTED')).toBeLessThan(m.indexOf('writeCandidate({'));
+    // 코어는 파일을 만지지 않는다.
+    const core = src.slice(src.indexOf('export function auditDecision'), src.indexOf('export async function main'));
+    for (const banned of ['writeFileSync', 'readFileSync', 'execSync', 'mkdirSync', 'rmSync'])
+      expect(core, banned).not.toContain(banned);
+  });
+
+  it('RED: pointer CAS — lock 안에서 확인하므로 외부 사전 check로 대체되지 않는다', () => {
+    const repo = tinyRepo(); const d = repo.fixturesDir;
+    try {
+      const p1 = pngBytes(2, 2, 5);
+      expect(RUN.writeCandidate({ fixturesDir: d, phase: 'light', contextRaw: '{"x":0}',
+        pngByCaptureName: { 'a.png': p1 }, expectedCaptureNames: ['a.png'],
+        expectedCurrentBundleName: null })).toEqual([]);
+      const cur = RUN.readCandidateBundle(d, 'light').bundleName;
+      // 다른 값을 기대하면 발행되지 않는다.
+      const e = RUN.writeCandidate({ fixturesDir: d, phase: 'light', contextRaw: '{"x":1}',
+        pngByCaptureName: { 'a.png': pngBytes(2, 2, 7) }, expectedCaptureNames: ['a.png'],
+        expectedCurrentBundleName: 'bundle-light-STALE' });
+      expect(e.join(' ')).toMatch(/WRITE_POINTER_CAS .* != bundle-light-STALE/);
+      expect(RUN.readCandidateBundle(d, 'light').bundleName).toBe(cur);
+      // pointer가 이미 있는데 null(최초 발행)을 기대해도 막힌다.
+      const e2 = RUN.writeCandidate({ fixturesDir: d, phase: 'light', contextRaw: '{"x":2}',
+        pngByCaptureName: { 'a.png': pngBytes(2, 2, 8) }, expectedCaptureNames: ['a.png'],
+        expectedCurrentBundleName: null });
+      expect(e2.join(' ')).toMatch(/WRITE_POINTER_CAS/);
+      // 기대값 자체를 빠뜨리면 fail-closed다 — 기본값이 곧 우회로이므로 기본값을 두지 않는다.
+      const e3 = RUN.writeCandidate({ fixturesDir: d, phase: 'light', contextRaw: '{"x":3}',
+        pngByCaptureName: { 'a.png': pngBytes(2, 2, 9) }, expectedCaptureNames: ['a.png'] });
+      expect(e3).toEqual(['WRITE_CAS_EXPECTATION_REQUIRED']);
+      // CAS 비교는 **lock 안, rename 직전**에 있다.
+      const rsrc = readFileSync(new URL('./s4CaptureRunner.mjs', import.meta.url), 'utf8');
+      const fn = rsrc.slice(rsrc.indexOf('export function writeCandidate'));
+      expect(fn.indexOf('lockStillOurs()')).toBeLessThan(fn.indexOf('WRITE_POINTER_CAS'));
+      expect(fn.indexOf('WRITE_POINTER_CAS')).toBeLessThan(fn.indexOf('renameSync(ptmp, pointer)'));
+    } finally { rmSync(repo.dir, { recursive: true, force: true }); }
+  }, 30000);
 });
 
 // ── s4-gen은 committed를 쓰지 않는다 ────────────────────────────────────────
@@ -4970,27 +5173,405 @@ describe('S4 generator — committed를 바꾸지 못한다', () => {
   });
 });
 
+// 실제 BASE 3파일을 컴파일해 선언을 얻는다. **두 곳(committed gate·positive baseline)이
+// 같은 것을 쓴다** — baseDecls=[] 로는 canonical/dup 검사가 공허하다.
+let BASE_DECLS_MEMO = null;
+const sharedBaseDecls = () => {
+  if (BASE_DECLS_MEMO) return BASE_DECLS_MEMO;
+  const out = [];
+  for (const k of Object.keys(SPEC.FILES)) {
+    const rel = SPEC.FILES[k].rel;
+    const src = execSync(`git -C ${REPO} show ${SPEC.BASE}:frontend/${rel}`, { encoding: 'utf8' });
+    const css = compileString(src, { syntax: 'scss', url: pathToFileURL(resolve(__dirname, '..', rel)),
+      loadPaths: [resolve(__dirname, '../styles')] }).css;
+    out.push(...EV.collectDeclarations(postcss.parse(css), rel));
+  }
+  BASE_DECLS_MEMO = out;
+  return out;
+};
+
+// ── authority 정본: 모듈 목록 단일화 + 실제 pinned blobs 대조 ─────────────────
+describe('S4 promotion authority — 목록 정본화와 pinned blob 실대조', () => {
+  it('capture/audit/promotion이 같은 목록 객체를 본다', () => {
+    // 재수출이므로 **같은 객체**여야 한다. 복사본이면 한쪽만 바뀌는 드리프트가 가능해진다.
+    expect(CAP.HASHED_MODULES).toBe(PROM.HASHED_MODULES);
+    expect(CAP.DISCOVERY_HASHED_MODULES).toBe(PROM.DISCOVERY_HASHED_MODULES);
+    expect(CAP.GENERATOR_HASHED_MODULES).toBe(PROM.GENERATOR_HASHED_MODULES);
+    expect(PROM.HASHED_MODULES).toHaveLength(12);
+    expect(PROM.DISCOVERY_HASHED_MODULES).toEqual([...SPEC.PROVENANCE_BLOB_PATHS]);
+    // 목록이 얼어 있다 — 밖에서 push로 줄이거나 늘릴 수 없다.
+    expect(Object.isFrozen(PROM.HASHED_MODULES)).toBe(true);
+    expect(() => { PROM.HASHED_MODULES.push('x'); }).toThrow();
+    // 스크립트가 자기 목록을 다시 정의하지 않는다.
+    const csrc = readFileSync(new URL('../scripts/s4-capture.mjs', import.meta.url), 'utf8');
+    expect(csrc).not.toContain('export const HASHED_MODULES = [');
+    expect(csrc).not.toContain('export const DISCOVERY_HASHED_MODULES = [');
+  });
+
+  it('GREEN/RED: pinned blobs를 실제로 대조한다 (자기비교가 아니다)', () => {
+    const repo = tinyRepo();
+    try {
+      // 대조군: 지금 repo 상태 = pinned → ok
+      expect(PROM.promotionAuthority(repo.dir, repo.head, repo.blobs, null))
+        .toEqual({ ok: true, errors: [] });
+      // 한 파일의 pinned 값만 다르게 주면 **그 경로가 지목돼** RED가 된다.
+      const bad = { ...repo.blobs, 'frontend/library/s4Spec.mjs': 'f'.repeat(40) };
+      const r = PROM.promotionAuthority(repo.dir, repo.head, bad, null);
+      expect(r.ok).toBe(false);
+      expect(r.errors.join(' ')).toMatch(/BLOBS_DIFFER frontend\/library\/s4Spec\.mjs/);
+      // pinned에만 있는 경로도 잡는다.
+      const extra = { ...repo.blobs, 'frontend/library/GHOST.mjs': 'a'.repeat(40) };
+      expect(PROM.promotionAuthority(repo.dir, repo.head, extra, null).errors.join(' '))
+        .toMatch(/BLOBS_EXTRA_PINNED frontend\/library\/GHOST\.mjs/);
+      // HEAD 이동도 본다.
+      expect(PROM.promotionAuthority(repo.dir, 'c'.repeat(40), repo.blobs, null).errors.join(' '))
+        .toMatch(/HEAD_MOVED/);
+      // 자기비교 코드가 남아 있지 않다(주석은 그 결함을 설명하므로 코드에서만 찾는다).
+      const src = readFileSync(new URL('./s4Promote.mjs', import.meta.url), 'utf8');
+      const code = src.split('\n').map((l) => l.replace(/(^|[^:'"`])\/\/.*$/, '$1')).join('\n');
+      expect(code).not.toContain('startHead && h.blobs');
+    } finally { rmSync(repo.dir, { recursive: true, force: true }); }
+  }, 30000);
+
+  it('allowance 없이는 어떤 dirty도 허용되지 않는다', () => {
+    const repo = tinyRepo();
+    try {
+      writeFileSync(join(repo.dir, 'frontend/library/Z.txt'), 'z');
+      const r = PROM.promotionAuthority(repo.dir, repo.head, repo.blobs, null);
+      expect(r.ok).toBe(false);
+      expect(r.errors.join(' ')).toMatch(/WORKTREE_DIRTY 1: \?\? frontend\/library\/Z\.txt/);
+    } finally { rmSync(repo.dir, { recursive: true, force: true }); }
+  }, 30000);
+});
+
+// ── F5: committed release 상태 판정 · F7: generator authority ────────────────
+describe('S4 release 상태 fail-closed — 깨진 release는 skip이 아니다', () => {
+  const mk = () => { const d = mkdtempSync(join(tmpdir(), 's4-rel-'));
+    mkdirSync(join(d, 's4-capture'), { recursive: true }); return d; };
+  const put = (d, body) => writeFileSync(join(d, 's4-capture', 'release.json'), body);
+  const state = (d) => PROM.releaseGateState(PROM.readReleaseChecked(d));
+
+  it('absent만 skip이다', () => {
+    const d = mk();
+    try { expect(state(d)).toEqual({ mode: 'skip', errors: [] }); }
+    finally { rmSync(d, { recursive: true, force: true }); }
+  });
+
+  it('정상 release는 run이다', () => {
+    const d = mk();
+    try {
+      put(d, JSON.stringify({ light: 'a'.repeat(64), dark: 'b'.repeat(64), expectedSha: 'c'.repeat(64) }));
+      expect(state(d)).toEqual({ mode: 'run', errors: [] });
+    } finally { rmSync(d, { recursive: true, force: true }); }
+  });
+
+  it.each([
+    ['malformed JSON', (d) => put(d, '{ not json'), /RELEASE_UNPARSEABLE/],
+    ['schema drift(키 누락)', (d) => put(d, JSON.stringify({ light: 'a'.repeat(64), dark: 'b'.repeat(64) })), /RELEASE_KEYS/],
+    ['schema drift(비-hex)', (d) => put(d, JSON.stringify({ light: 'zz', dark: 'yy', expectedSha: 'xx' })), /RELEASE_VALUE/],
+    ['배열', (d) => put(d, '[]'), /RELEASE_SHAPE|RELEASE_KEYS/],
+  ])('RED: %s는 fail이다 (skip 아님)', (_n, mutate, rx) => {
+    const d = mk();
+    try {
+      mutate(d);
+      const st = state(d);
+      expect(st.mode).toBe('fail');
+      expect(st.errors.join(' ')).toMatch(rx);
+      // 이전 판의 판정식은 여기서 조용히 false(=skip)가 됐다.
+      expect(!!PROM.readRelease(d)).toBe(false);
+    } finally { rmSync(d, { recursive: true, force: true }); }
+  });
+
+  it('RED: release.json이 외부 symlink여도 fail이다', () => {
+    const d = mk(); const outside = mkdtempSync(join(tmpdir(), 's4-out-'));
+    try {
+      const ext = join(outside, 'release.json');
+      writeFileSync(ext, JSON.stringify({ light: 'a'.repeat(64), dark: 'b'.repeat(64), expectedSha: 'c'.repeat(64) }));
+      symlinkSync(ext, join(d, 's4-capture', 'release.json'));
+      const st = state(d);
+      expect(st.mode).toBe('fail');
+      expect(st.errors.join(' ')).toMatch(/RELEASE_NODE_SYMLINK|RELEASE_NODE_ESCAPES/);
+    } finally { rmSync(d, { recursive: true, force: true }); rmSync(outside, { recursive: true, force: true }); }
+  });
+
+  it('게이트가 light·dark 모두 validateCaptureBundle 전체를 부른다', () => {
+    const src = readFileSync(new URL('./themeTokens.test.js', import.meta.url), 'utf8');
+    const blk = src.slice(src.indexOf("describe('S4 커밋 산출물 게이트"));
+    const gate = blk.slice(0, blk.indexOf('\ndescribe('));
+    expect(gate).toContain('EV.validateCaptureBundle({');
+    expect(gate).toContain("for (const ph of ['light', 'dark']) expect(runBundle(ph), ph).toEqual([])");
+    // light 전용 fixture/mask/BASE 결속은 validateCommittedArtifacts에 남아 있다.
+    expect(gate).toContain('EV.validateCommittedArtifacts({');
+    expect(gate).toContain("const BUNDLE = () => committedBundle('light')");
+  });
+
+  it('게이트가 이 판정 함수를 실제로 쓴다', () => {
+    const src = readFileSync(new URL('./themeTokens.test.js', import.meta.url), 'utf8');
+    expect(src).toContain('PROM.releaseGateState(PROM.readReleaseChecked(FIXTURES_DIR))');
+    expect(src).toContain("const HAS_RELEASE = RELEASE_STATE.mode === 'run'");
+    // 금지 문자열은 **조립해서** 만든다 — 리터럴로 적으면 이 단정문 자체가 걸린다.
+    expect(src).not.toContain(`const HAS_RELEASE = !${'!'}PROM.readRelease`);
+  });
+});
+
+describe('S4 generator authority — 시작 commit 고정', () => {
+  it('GREEN: 시작 commit 그대로면 ok', () => {
+    const repo = tinyRepo();
+    try { expect(PROM.generatorAuthority(repo.dir, repo.head)).toEqual({ ok: true, errors: [] }); }
+    finally { rmSync(repo.dir, { recursive: true, force: true }); }
+  }, 30000);
+
+  it('RED: clean A → clean B checkout이면 write 0 (HEAD_MOVED)', () => {
+    const repo = tinyRepo();
+    const ex = (c) => execSync(c, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    try {
+      const A = repo.head;
+      writeFileSync(join(repo.dir, 'frontend/library/s4Spec.mjs'), '// B\n');
+      ex(`git -C ${repo.dir} add -A && git -C ${repo.dir} -c user.email=t@t -c user.name=t commit -q -m B`);
+      const B = ex(`git -C ${repo.dir} rev-parse HEAD`).trim();
+      expect(B).not.toBe(A);
+      // 워킹트리는 여전히 clean이다 — 이전 판의 게이트는 이것만 봤다.
+      expect(PROM.worktreeDirtyEntries(repo.dir)).toEqual([]);
+      const a = PROM.generatorAuthority(repo.dir, A);
+      expect(a.ok).toBe(false);
+      expect(a.errors.join(' ')).toMatch(new RegExp(`HEAD_MOVED ${A} -> ${B}`));
+      // 시작 commit 기준 blob 드리프트도 함께 지목된다.
+      expect(a.errors.join(' ')).toMatch(/GENERATOR_WORKING_DIFFERS_FROM_HEAD frontend\/library\/s4Spec\.mjs/);
+      expect(a.errors.join(' ')).toMatch(/AUTHORITY_WORKING_DIFFERS_FROM_HEAD frontend\/library\/s4Spec\.mjs/);
+    } finally { rmSync(repo.dir, { recursive: true, force: true }); }
+  }, 30000);
+
+  it('RED: dirty·잘못된 시작 commit도 막는다', () => {
+    const repo = tinyRepo();
+    try {
+      expect(PROM.generatorAuthority(repo.dir, 'nothex').errors.join(' ')).toMatch(/START_COMMIT_REQUIRED/);
+      writeFileSync(join(repo.dir, 'frontend/library/Z.txt'), 'z');
+      const a = PROM.generatorAuthority(repo.dir, repo.head);
+      expect(a.ok).toBe(false);
+      expect(a.errors.join(' ')).toMatch(/WORKTREE_DIRTY 1: \?\? frontend\/library\/Z\.txt/);
+    } finally { rmSync(repo.dir, { recursive: true, force: true }); }
+  }, 30000);
+});
+
+// ── projector BASE 소스의 pinned reader ─────────────────────────────────────
+describe('S4 pinned source — projector Git 읽기가 환경을 상속하지 않는다', () => {
+  const T = SPEC.FILES.T.rel;
+  // alt repo: BASE 3파일을 복사하되 track.scss만 0.04 → 0.041, 그리고 branch `81ad606`.
+  const altRepo = () => {
+    const d = mkdtempSync(join(tmpdir(), 's4-alt-'));
+    for (const k of Object.keys(SPEC.FILES)) {
+      const { rel } = SPEC.FILES[k];
+      const src = execSync(`git -C ${REPO} show ${SPEC.BASE}:frontend/${rel}`, { encoding: 'utf8' });
+      mkdirSync(join(d, 'frontend', rel.split('/').slice(0, -1).join('/')), { recursive: true });
+      writeFileSync(join(d, 'frontend', rel), k === 'T' ? src.replace(/0\.04\b/g, '0.041') : src);
+    }
+    execSync(`git -C ${d} init -q && git -C ${d} add -A && git -C ${d} ` +
+      `-c user.email=t@t -c user.name=t commit -q -m alt`, { stdio: 'ignore' });
+    execSync(`git -C ${d} branch ${SPEC.BASE}`, { stdio: 'ignore' });   // 축약 SHA와 같은 이름의 branch
+    return d;
+  };
+  const withEnv = (alt, fn) => {
+    const saved = {};
+    for (const k of ['GIT_DIR', 'GIT_WORK_TREE']) saved[k] = process.env[k];
+    try {
+      process.env.GIT_DIR = join(alt, '.git');
+      process.env.GIT_WORK_TREE = alt;
+      return fn();
+    } finally {
+      for (const k of ['GIT_DIR', 'GIT_WORK_TREE']) { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; }
+    }
+  };
+
+  it('선재현 대조: 셸 방식은 alt repo의 변조본을 읽는다', () => {
+    const alt = altRepo();
+    try {
+      const shell = (env) => execSync(`git -C ${REPO} show ${SPEC.BASE}:frontend/${T}`,
+        { encoding: 'utf8', ...(env ? { env: { ...process.env, GIT_DIR: join(alt, '.git'), GIT_WORK_TREE: alt } } : {}) });
+      expect(shell(false).includes('0.041')).toBe(false);
+      expect(shell(true).includes('0.041')).toBe(true);            // 환경 상속 시 변조본
+      expect(sha256(shell(false))).not.toBe(sha256(shell(true)));
+      // alt의 OID는 정본 blob과 다르다 — pinned reader가 이것으로 막는다.
+      expect(execSync(`git -C ${alt} rev-parse ${SPEC.BASE}:frontend/${T}`, { encoding: 'utf8' }).trim())
+        .not.toBe(SPEC.FILES.T.blob);
+    } finally { rmSync(alt, { recursive: true, force: true }); }
+  }, 30000);
+
+  it('GREEN: pinned reader는 GIT_DIR/GIT_WORK_TREE 변이에도 exact 동일 bytes', () => {
+    const alt = altRepo();
+    try {
+      const read = () => PROM.readPinnedGitFile(REPO, SPEC.BASE, T, SPEC.FILES.T.blob);
+      const base = read();
+      expect(base.errors).toEqual([]);
+      expect(base.oid).toBe(SPEC.FILES.T.blob);
+      const mut = withEnv(alt, read);
+      expect(mut.errors).toEqual([]);
+      expect(sha256(mut.bytes)).toBe(sha256(base.bytes));          // exact 동일
+      expect(mut.bytes.includes('0.041')).toBe(false);
+    } finally { rmSync(alt, { recursive: true, force: true }); }
+  }, 30000);
+
+  it('GREEN: projector source와 serialized fixture SHA가 env 변이에도 동일', () => {
+    const alt = altRepo();
+    const require2 = createRequire(`${resolve(__dirname, '..')}/package.json`);
+    const sass2 = require2('sass'); const postcss2 = require2('postcss');
+    const FRONT = resolve(__dirname, '..');
+    const BLOB_BY_REL = new Map(Object.values(SPEC.FILES).map((f) => [f.rel, f.blob]));
+    const gitShow = (ref, rel) => {
+      const r = PROM.readPinnedGitFile(REPO, ref, rel, BLOB_BY_REL.get(rel));
+      if (r.errors.length) throw new Error(r.errors.join(' | '));
+      return r.bytes;
+    };
+    const compileScss = (src, rel) => sass2.compileString(src,
+      { syntax: 'scss', url: pathToFileURL(`${FRONT}/${rel}`), loadPaths: [`${FRONT}/styles`] }).css;
+    const run = () => {
+      const { pr, baseSources } = PROJ.buildProjection({ spec: SPEC, gitShow, compileScss,
+        frontDir: FRONT, sass: sass2, postcss: postcss2 });
+      expect(pr.errors).toEqual([]);
+      const fingerprint = EV.specFingerprint(EV.snapshotSpec(SPEC).spec, sha256);
+      const smoke = { contextSha256: 'a'.repeat(64), captures: [] };
+      const { fixture } = PROJ.buildProjectedFixture({ spec: SPEC, pr, fingerprint, smoke });
+      return { srcSha: sha256(Object.keys(baseSources).sort().map((k) => baseSources[k]).join('\0')),
+        fixSha: sha256(EV.serializeFixture(fixture)) };
+    };
+    try {
+      const base = run();
+      const mut = withEnv(alt, run);
+      expect(mut.srcSha).toBe(base.srcSha);                        // projector source 동일
+      expect(mut.fixSha).toBe(base.fixSha);                        // serialized fixture 동일
+    } finally { rmSync(alt, { recursive: true, force: true }); }
+  }, 60000);
+
+  it('RED: OID가 정본 blob과 다르면 fail-closed (bytes 없음)', () => {
+    const alt = altRepo();
+    try {
+      // alt repo를 repoDir로 직접 지목해도 OID 대조에서 막힌다.
+      const r = PROM.readPinnedGitFile(alt, SPEC.BASE, T, SPEC.FILES.T.blob);
+      expect(r.bytes).toBe(null);
+      expect(r.errors.join(' ')).toMatch(/PINNED_BLOB_MISMATCH/);
+      // caller가 기대 blob을 alt 값으로 낮춰 잡아도 정본 spec 대조에서 막힌다.
+      const altOid = execSync(`git -C ${alt} rev-parse ${SPEC.BASE}:frontend/${T}`, { encoding: 'utf8' }).trim();
+      expect(PROM.readPinnedGitFile(alt, SPEC.BASE, T, altOid).errors.join(' ')).toMatch(/PINNED_BLOB_NOT_CANON/);
+      // 형태 검증
+      expect(PROM.readPinnedGitFile(REPO, 'zz', T, SPEC.FILES.T.blob).errors.join(' ')).toMatch(/PINNED_REF_FORMAT/);
+      expect(PROM.readPinnedGitFile(REPO, SPEC.BASE, '../etc/passwd', SPEC.FILES.T.blob).errors.join(' '))
+        .toMatch(/PINNED_REL_NONCANONICAL/);
+      expect(PROM.readPinnedGitFile(REPO, SPEC.BASE, 'styles/other.scss', SPEC.FILES.T.blob).errors.join(' '))
+        .toMatch(/PINNED_REL_NOT_IN_SPEC/);
+    } finally { rmSync(alt, { recursive: true, force: true }); }
+  }, 30000);
+
+  // ── 검증과 읽기 사이 ref 이동(TOCTOU) ────────────────────────────────────
+  // canonical commit과 bad commit을 둔 alt repo에서 `refs/heads/<BASE>`를 **검증 직후**
+  // 옮긴다. 이전 판은 `rev-parse <ref>:<path>`로 확인한 뒤 `show <ref>:<path>`를 다시 돌려서
+  // errors=[]·oid=canonical인데 bytes는 "/* BAD */"였다.
+  const twoCommitAlt = () => {
+    const d = mkdtempSync(join(tmpdir(), 's4-toc-'));
+    for (const k of Object.keys(SPEC.FILES)) {
+      const { rel } = SPEC.FILES[k];
+      mkdirSync(join(d, 'frontend', rel.split('/').slice(0, -1).join('/')), { recursive: true });
+      writeFileSync(join(d, 'frontend', rel),
+        execSync(`git -C ${REPO} show ${SPEC.BASE}:frontend/${rel}`, { encoding: 'utf8' }));
+    }
+    const g = (c) => execSync(`git -C ${d} ${c}`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    g('init -q'); g('add -A'); g('-c user.email=t@t -c user.name=t commit -q -m canonical');
+    const good = g('rev-parse HEAD').trim();
+    writeFileSync(join(d, 'frontend', T),
+      `/* BAD */\n${execSync(`git -C ${REPO} show ${SPEC.BASE}:frontend/${T}`, { encoding: 'utf8' })}`);
+    g('add -A'); g('-c user.email=t@t -c user.name=t commit -q -m bad');
+    const bad = g('rev-parse HEAD').trim();
+    g(`update-ref refs/heads/${SPEC.BASE} ${good}`);
+    return { dir: d, good, bad, badBlob: g(`rev-parse ${bad}:frontend/${T}`).trim() };
+  };
+  const gitBlobHash = (buf) => createHash('sha1')
+    .update(Buffer.concat([Buffer.from(`blob ${buf.length}\0`, 'utf8'), buf])).digest('hex');
+
+  it('RED: 검증과 읽기 사이 ref가 canonical→bad로 움직여도 bad bytes를 돌려주지 않는다', () => {
+    const alt = twoCommitAlt();
+    const shim = mkdtempSync(join(tmpdir(), 's4-shim-'));
+    const REAL = execSync('command -v git', { encoding: 'utf8' }).trim();
+    const prevPath = process.env.PATH;
+    try {
+      expect(alt.badBlob).not.toBe(SPEC.FILES.T.blob);
+      // rev-parse 1회차(=OID 검증) 직후 ref를 bad로 옮긴다.
+      writeFileSync(join(shim, 'git'), `#!/bin/sh
+if [ "$3" = "rev-parse" ]; then
+  n=$(cat ${join(shim, 'c')} 2>/dev/null || echo 0); n=$((n+1)); echo $n > ${join(shim, 'c')}
+  out=$(${REAL} "$@"); rc=$?
+  if [ "$n" = "1" ]; then ${REAL} -C ${alt.dir} update-ref refs/heads/${SPEC.BASE} ${alt.bad}; fi
+  printf '%s\n' "$out"; exit $rc
+fi
+exec ${REAL} "$@"
+`);
+      execSync(`chmod +x ${join(shim, 'git')}`);
+      process.env.PATH = `${shim}:${prevPath}`;
+      const r = PROM.readPinnedGitFile(alt.dir, SPEC.BASE, T, SPEC.FILES.T.blob);
+      // ref가 실제로 움직였는지 먼저 확인한다(변이가 유효했다는 증거).
+      expect(execSync(`git -C ${alt.dir} rev-parse refs/heads/${SPEC.BASE}`, { encoding: 'utf8' }).trim())
+        .toBe(alt.bad);
+      // 허용 결과는 둘 뿐이다: canonical bytes + errors=[] · 또는 fail-closed.
+      if (r.errors.length === 0) {
+        expect(r.bytes).not.toBeNull();
+        const h = gitBlobHash(Buffer.from(r.bytes, 'utf8'));
+        expect(h).toBe(SPEC.FILES.T.blob);          // 돌려준 바이트의 blob = 정본
+        expect(h).toBe(r.oid);
+        expect(h).not.toBe(alt.badBlob);
+        expect(r.bytes.startsWith('/* BAD */')).toBe(false);
+      } else {
+        expect(r.bytes).toBeNull();                 // fail-closed면 bytes가 없다
+      }
+      // 어떤 경우에도 "bad bytes + errors=[]"는 불가능하다.
+      expect(r.errors.length === 0 && r.bytes !== null
+        && gitBlobHash(Buffer.from(r.bytes, 'utf8')) === alt.badBlob).toBe(false);
+    } finally {
+      process.env.PATH = prevPath;
+      rmSync(alt.dir, { recursive: true, force: true });
+      rmSync(shim, { recursive: true, force: true });
+    }
+  }, 30000);
+
+  it('bytes는 검증된 oid로 읽고 해시를 재계산해 대조한다', () => {
+    const src = readFileSync(new URL('./s4Promote.mjs', import.meta.url), 'utf8');
+    const fn = src.slice(src.indexOf('export function readPinnedGitFile'));
+    const body = fn.slice(0, fn.indexOf('\nexport '));
+    // ref로 다시 읽지 않는다.
+    expect(body).not.toContain("'show'");
+    expect(body).toContain("gitArgv(['-C', repoDir, 'cat-file', 'blob', oid], 'buffer')");
+    // 순서: OID 대조 → cat-file → 바이트 해시 재계산 대조
+    expect(body.indexOf('PINNED_BLOB_MISMATCH')).toBeLessThan(body.indexOf("'cat-file'"));
+    expect(body.indexOf("'cat-file'")).toBeLessThan(body.indexOf('PINNED_BYTES_HASH'));
+    expect(body).toContain('PINNED_BYTES_BLOB');
+    // 정상 경로의 해시 대조가 실제로 성립한다.
+    const r = PROM.readPinnedGitFile(REPO, SPEC.BASE, T, SPEC.FILES.T.blob);
+    expect(r.errors).toEqual([]);
+    expect(gitBlobHash(Buffer.from(r.bytes, 'utf8'))).toBe(SPEC.FILES.T.blob);
+    expect(r.oid).toBe(SPEC.FILES.T.blob);
+  }, 30000);
+
+  it('두 스크립트가 같은 helper를 쓰고, 셸 git 읽기가 남아 있지 않다', () => {
+    for (const f of ['s4-gen.mjs', 's4-promote-capture.mjs']) {
+      const src = readFileSync(new URL(`../scripts/${f}`, import.meta.url), 'utf8');
+      expect(src, f).toContain('readPinnedGitFile(');
+      expect(src, f).not.toContain('execSync(');                   // 셸 git 읽기 없음
+      expect(src, f).not.toMatch(/git -C \$\{REPO\} show/);
+      expect(src, f).not.toMatch(/git -C \$\{REPO\} rev-parse \$\{SPEC\.BASE\}/);
+    }
+    // generic runner는 export되지 않는다.
+    const psrc = readFileSync(new URL('./s4Promote.mjs', import.meta.url), 'utf8');
+    expect(psrc).not.toContain('export function gitArgv');
+    expect(psrc).not.toContain('export const gitAuthority');
+  });
+});
+
 // ── promotion positive path (계약 완결 minimal world) ───────────────────────
 describe('S4 promotion positive — 실제로 승격하고 release가 셋을 함께 가리킨다', () => {
   // **깨끗한 임시 repo를 repoDir로 쓴다.** authority는 모듈 내부 검사이고 우회 스위치가
   // 없으므로, 개발 중 dirty한 실제 repo로는 이 축을 시험할 수 없다. 게이트를 약화하는 대신
   // 게이트가 들여다볼 루트를 깨끗한 것으로 준다(fixturesDir과 같은 성격).
-  const tinyRepo = () => {
-    const r = mkdtempSync(join(tmpdir(), 's4-repo-'));
-    for (const rel of CAP.HASHED_MODULES) {
-      mkdirSync(join(r, rel.split('/').slice(0, -1).join('/')), { recursive: true });
-      writeFileSync(join(r, rel), `// ${rel}\n`);
-    }
-    execSync(`git -C ${r} init -q && git -C ${r} add -A && ` +
-      `git -C ${r} -c user.email=t@t -c user.name=t commit -q -m x`, { stdio: 'ignore' });
-    const head = execSync(`git -C ${r} rev-parse HEAD`, { encoding: 'utf8' }).trim();
-    const blobs = Object.fromEntries(CAP.HASHED_MODULES.map((rel) => [rel,
-      execSync(`git -C ${r} rev-parse HEAD:${rel}`, { encoding: 'utf8' }).trim()]));
-    return { dir: r, head, blobs };
-  };
   const RASTER = { width: 40, height: 30, dpr: 1, screenshotScale: 'css' };
+  // coverage/contrast/conversion을 빈 집합으로 둔다 — **승인 경로의 conformance까지**
+  // 통과하는 계약 완결 world여야 공식 wrapper positive가 성립한다.
   const SURF = { name: 'p1', captureName: 'p1.png', actions: [], requiredElements: [],
-    coverageSelectors: [{ selector: '.Cov' }], darkReviewSelectors: [] };
+    coverageSelectors: [], darkReviewSelectors: [] };
   // minimal world에 맞는 evidence를 **실제 Git OID**로 합성한다. 승격 모듈이 내부에서
   // resolver를 만들므로 blob은 진짜 값이어야 한다(스텁을 넣을 자리가 없다).
   const synFor = (spec, repo) => {
@@ -5043,7 +5624,11 @@ describe('S4 promotion positive — 실제로 승격하고 release가 셋을 함
   };
   // 승격이 요구하는 모든 계약을 만족하는 최소 spec.
   const P_SPEC = (repo) => synFor({ ...SPEC, REQUIRED_SMOKE_SURFACES: [SURF], RASTER_CONTRACT: RASTER,
-    LIGHT_DIFF_MASKS: {}, ELEMENT_SCALES: { p1: {} }, MASK_PIXEL_BUDGET: { p1: 0 }, SELECTOR_SIZE_ENVELOPE: {} }, repo);
+    LIGHT_DIFF_MASKS: {}, ELEMENT_SCALES: { p1: {} }, MASK_PIXEL_BUDGET: { p1: 0 }, SELECTOR_SIZE_ENVELOPE: {},
+    CONVERSIONS: [], CONTRAST_CASES: [], CONTRAST_REFERENCE: {}, ANNOTATIONS: [],
+    COUNTS: { conversions: 0, changedDecls: 0, newDecls: 0, newRules: 0, residual: 0,
+      rawLiterals: 0, processedLiterals: 0, allowIds: 0 },
+    DARK_DECL_COUNTS: { T: 0, X: 0, S: 0 } }, repo);
   const ctxFor = (phase, spec, repo) => {
     const png = PNG();
     const responses = prodResponses(spec);
@@ -5051,7 +5636,7 @@ describe('S4 promotion positive — 실제로 승격하고 release가 셋을 함
       ...SPEC.SCENARIO_CANON, phase,
       viewport: { width: RASTER.width, height: RASTER.height },
       capture: { type: 'png', scale: RASTER.screenshotScale, dpr: RASTER.dpr },
-      coverageEvidence: { p1: { '.Cov': { count: 1, visible: 1 } } },
+      coverageEvidence: { p1: {} },
       actionLog: { p1: [] },
       baseLightMaskRects: { p1: {} },
       provenance: { headCommit: repo.head, blobs: repo.blobs,
@@ -5065,15 +5650,15 @@ describe('S4 promotion positive — 실제로 승격하고 release가 셋을 함
       captures: [{ captureName: 'p1.png', sha256: sha256(png), pass: true, findings: [] }] };
     return { raw: JSON.stringify({ ...subject, privacyAudit }, null, 1), png };
   };
-  const world = () => {
-    const d = mkdtempSync(join(tmpdir(), 's4-pos-'));
-    const repo = tinyRepo();
+  const world = (repoOpts = {}) => {
+    const repo = tinyRepo(repoOpts);
+    const d = repo.fixturesDir;                 // production topology: fixturesDir ⊂ repoDir
     const built = P_SPEC(repo);
     const spec = built.spec; const evidenceFiles = built.files;
     const cands = {};
     for (const phase of ['light', 'dark']) {
       const { raw, png } = ctxFor(phase, spec, repo);
-      const e = RUN.writeCandidate({ fixturesDir: d, phase, contextRaw: raw,
+      const e = RUN.writeCandidate({ expectedCurrentBundleName: RUN.CANDIDATE_CAS_ANY, fixturesDir: d, phase, contextRaw: raw,
         pngByCaptureName: { 'p1.png': png }, expectedCaptureNames: ['p1.png'] });
       expect(e, phase).toEqual([]);
       cands[phase] = RUN.readCandidateBundle(d, phase);
@@ -5084,21 +5669,35 @@ describe('S4 promotion positive — 실제로 승격하고 release가 셋을 함
       counts: { conversions: 0, changed: 0, new: 0, newRules: 0, residual: 0, raw: 0, processed: 0, allowBearing: 0 },
       allowIdToKey: {}, smoke: { contextSha256: sha256(cands.light.contextRaw),
         captures: [{ captureName: 'p1.png', sha256: sha256(cands.light.pngByName['p1.png']) }] },
-      expectedAfter: {}, changed: [], new: [], residual: [], contrast: [] };
+      expectedAfter: [], changed: [], new: [], residual: [], contrast: [] };
     const expectedBytes = JSON.stringify(fixture, null, 1);
     return { d, spec, cands, expectedBytes, evidenceFiles, repo };
   };
+  // hashedModules·startHead는 **넘기지 않는다** — 승격이 스스로 파생한다. over로 억지로
+  // 넣어 보는 것 자체가 아래 우회 시도 테스트다.
   const promote = (w, over = {}) => PROM.promoteRelease({
     fixturesDir: w.d, spec: w.spec,
     provenanceRefs: { headCommit: w.repo.head, headBlobs: w.repo.blobs,
       specFingerprintNow: JSON.parse(w.cands.light.contextRaw).provenance.specFingerprint },
     fromRelease: PROM.readRelease(w.d), expectedBytes: w.expectedBytes, candidates: w.cands,
-    discoveryEvidence: { files: w.evidenceFiles }, repoDir: w.repo.dir,
-    hashedModules: CAP.HASHED_MODULES, startHead: w.repo.head, ...over });
+    discoveryEvidence: { files: w.evidenceFiles }, repoDir: w.repo.dir, ...over });
+  const kill = (w, ...extra) => {
+    rmSync(w.repo.dir, { recursive: true, force: true });
+    for (const p of extra) rmSync(p, { recursive: true, force: true });
+  };
+  // 승격이 만들어야 하는 산출물 5건(=version 2×(context+png) + expected 1)의 repo 상대 경로.
+  const outputsOf = (w, rel) => [
+    `${FX_REL}/s4-capture/expected/${rel.expectedSha}.json`,
+    ...['light', 'dark'].flatMap((p) => [`${FX_REL}/s4-capture/versions/${rel[p]}/context.json`,
+      `${FX_REL}/s4-capture/versions/${rel[p]}/shots/p1.png`]),
+  ].sort();
 
-  it('GREEN 대조군: errors===[] · promoted===true · release가 셋을 함께 가리킨다', () => {
+  it('GREEN 대조군: production topology에서 promoted:true · release가 셋을 함께 가리킨다', () => {
     const w = world();
     try {
+      // 시작 시점 topology 자체를 단정한다 — fixturesDir가 repo 안이고 트리는 clean이다.
+      expect(w.d.startsWith(w.repo.dir + '/')).toBe(true);
+      expect(dirtyOf(w.repo)).toEqual([]);
       const r = promote(w);
       expect(r.errors).toEqual([]);
       expect(r.promoted).toBe(true);
@@ -5114,20 +5713,579 @@ describe('S4 promotion positive — 실제로 승격하고 release가 셋을 함
       const exp = PROM.readCommittedExpected(w.d);
       expect(exp.errors).toEqual([]);
       expect(exp.bytes).toBe(w.expectedBytes);          // committed bytes === 승인 bytes
-    } finally { rmSync(w.d, { recursive: true, force: true }); rmSync(w.repo.dir, { recursive: true, force: true }); }
+      // 승격 뒤 워킹트리에 남는 것은 **release + 산출물 5건뿐**이다. 이 목록이 곧
+      // late authority가 허용한 집합이고, 그 밖의 것이 있었다면 승격이 실패했어야 한다.
+      expect(dirtyOf(w.repo).map((e) => e.slice(3)).sort())
+        .toEqual([`${FX_REL}/s4-capture/release.json`, ...outputsOf(w, rel)].sort());
+    } finally { kill(w); }
+  }, 30000);
+
+  // ── 승격 도중 개입을 만드는 결정론적 훅 ──────────────────────────────────────
+  // late authority가 부르는 **두 번째 `git status`** 순간에 개입한다. PATH 앞에 git shim을
+  // 두므로 제품 코드에 테스트용 seam을 만들지 않는다.
+  const REAL_GIT = execSync('command -v git', { encoding: 'utf8' }).trim();
+  const shimAt2 = (dir, body) => {
+    writeFileSync(join(dir, 'git'), `#!/bin/sh
+if [ "$3" = "status" ]; then
+  n=$(cat ${join(dir, 'count')} 2>/dev/null || echo 0); n=$((n+1)); echo $n > ${join(dir, 'count')}
+  if [ "$n" = "2" ]; then
+${body}
+  fi
+fi
+exec ${REAL_GIT} "$@"
+`);
+    execSync(`chmod +x ${join(dir, 'git')}`);
+    const prev = process.env.PATH; process.env.PATH = `${dir}:${prev}`;
+    return () => { process.env.PATH = prev; };
+  };
+  const nextOf = (w) => ({ expectedSha: sha256(w.expectedBytes),
+    light: PROM.bundleDigest(w.cands.light.contextRaw, w.cands.light.pngByName),
+    dark: PROM.bundleDigest(w.cands.dark.contextRaw, w.cands.dark.pngByName) });
+  // 디스크에 실제로 남은 write 수를 센다 — "write 0"을 문장이 아니라 개수로 확인한다.
+  const writeCounts = (w) => {
+    const vroot = join(w.d, 's4-capture', 'versions');
+    const eroot = join(w.d, 's4-capture', 'expected');
+    const cnt = (p2) => (existsSync(p2) ? readdirSync(p2).filter((n) => !n.startsWith('.')).length : 0);
+    return { versions: cnt(vroot), expected: cnt(eroot),
+      release: existsSync(join(w.d, 's4-capture', 'release.json')) ? 1 : 0,
+      candidates: ['light', 'dark'].filter((ph) => RUN.readCandidateBundle(w.d, ph).errors.length === 0).length };
+  };
+
+  // ── F1: late authority는 산출물의 **존재**까지 본다 ───────────────────────────
+  it.each([
+    ['context.json', (w, n) => join(w.d, 's4-capture', 'versions', n.light, 'context.json')],
+    ['shots/p1.png', (w, n) => join(w.d, 's4-capture', 'versions', n.dark, 'shots', 'p1.png')],
+    ['expected', (w, n) => PROM.expectedPath(w.d, n.expectedSha)],
+  ])('RED: readback 뒤 %s가 사라지면 release write 0', (_label, pick) => {
+    const w = world(); const sd = mkdtempSync(join(tmpdir(), 's4-shim-'));
+    const n = nextOf(w);
+    const off = shimAt2(sd, `    rm -f ${pick(w, n)}`);
+    try {
+      const r = promote(w);
+      expect(r.promoted).toBe(false);
+      expect(r.errors.join(' ')).toMatch(/PROMOTE_AUTHORITY_FAILED_LATE .*ALLOWED_MISSING/);
+      expect(PROM.readRelease(w.d)).toBe(null);
+      expect(writeCounts(w).release).toBe(0);
+    } finally { off(); kill(w, sd); }
+  }, 30000);
+
+  // ── G1: late version shape ─────────────────────────────────────────────────
+  it('RED: late authority 시점에 shots/EXTRA_EMPTY_DIR/가 생기면 release write 0', () => {
+    const w = world(); const sd = mkdtempSync(join(tmpdir(), 's4-shim-'));
+    const n = nextOf(w);
+    // 빈 디렉터리는 git이 추적하지 않아 status에 잡히지 않는다 — shape 재검증만이 잡는다.
+    const off = shimAt2(sd, `    mkdir -p ${join(w.d, 's4-capture', 'versions', n.light, 'shots', 'EXTRA_EMPTY_DIR')}`);
+    try {
+      const r = promote(w);
+      expect(r.promoted).toBe(false);
+      expect(r.errors.join(' ')).toMatch(/VERSION_NODE_NOT_FILE|VERSION_FILE_SET/);
+      expect(PROM.readRelease(w.d)).toBe(null);
+      expect(writeCounts(w).release).toBe(0);
+    } finally { off(); kill(w, sd); }
+  }, 30000);
+
+  // ── G4: 승격 sink의 고정 루트 ───────────────────────────────────────────────
+  it('RED: clean clone repoDir + 별도 fixturesDir이면 version/expected/release write 0', () => {
+    const w = world();
+    const alien = mkdtempSync(join(tmpdir(), 's4-alien-'));
+    try {
+      for (const ph of ['light', 'dark'])
+        RUN.writeCandidate({ fixturesDir: alien, phase: ph, contextRaw: w.cands[ph].contextRaw,
+          pngByCaptureName: w.cands[ph].pngByName, expectedCaptureNames: ['p1.png'],
+          expectedCurrentBundleName: null });
+      const cands2 = { light: RUN.readCandidateBundle(alien, 'light'), dark: RUN.readCandidateBundle(alien, 'dark') };
+      const r = PROM.promoteRelease({ fixturesDir: alien, spec: w.spec,
+        provenanceRefs: { headCommit: w.repo.head, headBlobs: w.repo.blobs,
+          specFingerprintNow: JSON.parse(w.cands.light.contextRaw).provenance.specFingerprint },
+        fromRelease: null, expectedBytes: w.expectedBytes, candidates: cands2,
+        discoveryEvidence: { files: w.evidenceFiles }, repoDir: w.repo.dir });
+      expect(r.promoted).toBe(false);
+      expect(r.errors.join(' ')).toMatch(/PROMOTE_FIXTURES_ROOT/);
+      const cnt = (p2) => (existsSync(p2) ? readdirSync(p2).filter((x) => !x.startsWith('.')).length : 0);
+      expect(cnt(join(alien, 's4-capture', 'versions'))).toBe(0);
+      expect(cnt(join(alien, 's4-capture', 'expected'))).toBe(0);
+      expect(existsSync(join(alien, 's4-capture', 'release.json'))).toBe(false);
+      // 정본 경로 자체가 없는 repoDir도 거부한다.
+      const bare = mkdtempSync(join(tmpdir(), 's4-bare-'));
+      expect(PROM.fixturesRootError(bare, w.d)).toMatch(/PROMOTE_FIXTURES_ROOT_ABSENT/);
+      expect(PROM.fixturesRootError(w.repo.dir, w.d)).toBe(null);      // 정상 topology는 통과
+      rmSync(bare, { recursive: true, force: true });
+    } finally { rmSync(alien, { recursive: true, force: true }); kill(w); }
+  }, 30000);
+
+  it('RED: canonical __fixtures__가 외부 symlink면 outside write 0', () => {
+    const outside = mkdtempSync(join(tmpdir(), 's4-out-'));
+    writeFileSync(join(outside, 'KEEP.txt'), 'keep');
+    // canonical 자리(frontend/library/__fixtures__)가 밖을 가리키는 symlink인 repo.
+    // realpath만 비교하면 fixturesDir와 canonical의 realpath가 **둘 다 outside**라 통과했다.
+    const w = world({ fixturesSymlinkTo: outside });
+    try {
+      expect(PROM.fixturesRootError(w.repo.dir, w.d)).toMatch(/PROMOTE_FIXTURES_ROOT_SYMLINK/);
+      const r = promote(w);
+      expect(r.promoted).toBe(false);
+      expect(r.errors.join(' ')).toMatch(/PROMOTE_FIXTURES_ROOT_SYMLINK/);
+      const cnt = (p2) => (existsSync(p2) ? readdirSync(p2).filter((x) => !x.startsWith('.')).length : 0);
+      expect(cnt(join(outside, 's4-capture', 'versions'))).toBe(0);
+      expect(cnt(join(outside, 's4-capture', 'expected'))).toBe(0);
+      expect(existsSync(join(outside, 's4-capture', 'release.json'))).toBe(false);
+      expect(readFileSync(join(outside, 'KEEP.txt'), 'utf8')).toBe('keep');   // 기존 파일 불변
+    } finally { kill(w, outside); }
+  }, 30000);
+
+  it('GREEN: 실제 디렉터리 topology는 통과한다', () => {
+    const w = world();
+    try {
+      expect(PROM.fixturesRootError(w.repo.dir, w.d)).toBe(null);
+      expect(promote(w).promoted).toBe(true);
+    } finally { kill(w); }
+  }, 30000);
+
+  // ── G5: 첫 release 이후 provenance 계보 ─────────────────────────────────────
+  it('GREEN: capture A → artifact-only commit B 뒤에도 게이트가 성립한다', () => {
+    const w = world();
+    const ex = (c) => execSync(c, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    try {
+      expect(promote(w).promoted).toBe(true);
+      const A = w.repo.head;
+      ex(`git -C ${w.repo.dir} add -A && git -C ${w.repo.dir} ` +
+        `-c user.email=t@t -c user.name=t commit -q -m artifacts`);
+      const B = ex(`git -C ${w.repo.dir} rev-parse HEAD`).trim();
+      expect(B).not.toBe(A);
+      const b = PROM.readCaptureBundle(w.d, 'light');
+      const pv = JSON.parse(b.contextRaw).provenance;
+      // 계보가 성립한다: 실재 commit · B의 ancestor · capture blob 일치 · 현재 blob 동일.
+      const ln = PROM.provenanceLineage({ repoDir: w.repo.dir, captureCommit: pv.headCommit, recordedBlobs: pv.blobs });
+      expect(ln.errors).toEqual([]);
+      expect(ln.ok).toBe(true);
+      expect(ln.headCommit).toBe(B);
+      // 그 계보 위에서 bundle 검증이 GREEN이다.
+      for (const ph of ['light', 'dark']) {
+        const bb = PROM.readCaptureBundle(w.d, ph);
+        expect(EV.validateCaptureBundle({ spec: w.spec, phase: ph, contextRaw: bb.contextRaw,
+          pngByName: bb.pngByName,
+          provenanceRefs: { headCommit: pv.headCommit, headBlobs: pv.blobs,
+            specFingerprintNow: pv.specFingerprint } }), ph).toEqual([]);
+      }
+    } finally { kill(w); }
+  }, 30000);
+
+  it('RED: hashed module working file이 dirty면 계보가 성립하지 않는다', () => {
+    const w = world();
+    const ex = (c) => execSync(c, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const victim = join(w.repo.dir, 'frontend/library/s4Spec.mjs');
+    const orig = readFileSync(victim, 'utf8');
+    try {
+      expect(promote(w).promoted).toBe(true);
+      const pv = JSON.parse(PROM.readCaptureBundle(w.d, 'light').contextRaw).provenance;
+      ex(`git -C ${w.repo.dir} add -A && git -C ${w.repo.dir} ` +
+        `-c user.email=t@t -c user.name=t commit -q -m artifacts`);
+      const ln = () => PROM.provenanceLineage({ repoDir: w.repo.dir, captureCommit: pv.headCommit, recordedBlobs: pv.blobs });
+      expect(ln().errors).toEqual([]);                       // 대조군: clean이면 GREEN
+      // (1) unstaged 수정
+      writeFileSync(victim, '// DIRTY\n');
+      const u = ln();
+      expect(u.ok).toBe(false);
+      expect(u.errors.join(' ')).toMatch(/LINEAGE_WORKING_BLOB WORKING_DIFFERS_FROM_HEAD frontend\/library\/s4Spec\.mjs/);
+      // (2) staged 수정
+      ex(`git -C ${w.repo.dir} add -A`);
+      const st = ln();
+      expect(st.ok).toBe(false);
+      expect(st.errors.join(' ')).toMatch(/LINEAGE_WORKING_BLOB/);
+      // 되돌리면 다시 GREEN — 전체 worktree clean을 요구하는 것이 아니라 HASHED_MODULES만 본다.
+      writeFileSync(victim, orig);
+      ex(`git -C ${w.repo.dir} add -A`);
+      writeFileSync(join(w.repo.dir, 'frontend/library/UNRELATED.txt'), 'x');   // 무관한 dirty는 허용
+      expect(ln().errors).toEqual([]);
+      ex(`git -C ${w.repo.dir} add frontend/library/UNRELATED.txt`);            // staged여도 범위 밖
+      expect(ln().errors).toEqual([]);
+    } finally { kill(w); }
+  }, 30000);
+
+  it('RED: Git index 변조 — index-only 내용·staged deletion·mode 변경', () => {
+    const w = world();
+    const ex = (c) => execSync(c, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const VICTIM = 'frontend/library/s4Spec.mjs';
+    const victim = join(w.repo.dir, VICTIM);
+    try {
+      expect(promote(w).promoted).toBe(true);
+      const pv = JSON.parse(PROM.readCaptureBundle(w.d, 'light').contextRaw).provenance;
+      ex(`git -C ${w.repo.dir} add -A && git -C ${w.repo.dir} ` +
+        `-c user.email=t@t -c user.name=t commit -q -m artifacts`);
+      const ln = () => PROM.provenanceLineage({ repoDir: w.repo.dir, captureCommit: pv.headCommit, recordedBlobs: pv.blobs });
+      const orig = readFileSync(victim, 'utf8');
+      expect(ln().errors).toEqual([]);                       // 대조군: index/working/HEAD 동일
+
+      // (1) index-only 변조 — EVIL을 add한 뒤 working file만 HEAD 바이트로 되돌린다.
+      writeFileSync(victim, '// EVIL\n');
+      ex(`git -C ${w.repo.dir} add ${VICTIM}`);
+      writeFileSync(victim, orig);
+      const workingHash = ex(`git -C ${w.repo.dir} hash-object ${VICTIM}`).trim();
+      const headBlob = ex(`git -C ${w.repo.dir} rev-parse HEAD:${VICTIM}`).trim();
+      const indexBlob = ex(`git -C ${w.repo.dir} ls-files --stage -- ${VICTIM}`).trim().split(/\s+/)[1];
+      expect(workingHash).toBe(headBlob);                    // working은 HEAD와 같다
+      expect(indexBlob).not.toBe(headBlob);                  // index만 다르다
+      expect(ex(`git -C ${w.repo.dir} status --porcelain -- ${VICTIM}`).trim()).toMatch(/^M/);
+      const i1 = ln();
+      expect(i1.ok).toBe(false);
+      expect(i1.errors.join(' ')).toMatch(new RegExp(`LINEAGE_INDEX_BLOB ${VICTIM.replace(/[./]/g, '\\$&')}`));
+
+      // (2) staged deletion
+      ex(`git -C ${w.repo.dir} reset -q --hard`);
+      expect(ln().errors).toEqual([]);
+      ex(`git -C ${w.repo.dir} rm -q --cached ${VICTIM}`);
+      const i2 = ln();
+      expect(i2.ok).toBe(false);
+      expect(i2.errors.join(' ')).toMatch(new RegExp(`LINEAGE_INDEX_MISSING ${VICTIM.replace(/[./]/g, '\\$&')}`));
+
+      // (3) staged mode 변경(100644 → 100755)
+      ex(`git -C ${w.repo.dir} reset -q --hard`);
+      ex(`git -C ${w.repo.dir} update-index --chmod=+x ${VICTIM}`);
+      expect(ex(`git -C ${w.repo.dir} ls-files --stage -- ${VICTIM}`).trim().split(/\s+/)[0]).toBe('100755');
+      const i3 = ln();
+      expect(i3.ok).toBe(false);
+      expect(i3.errors.join(' ')).toMatch(/LINEAGE_INDEX_MODE .* 100755 != 100644/);
+      expect(i3.errors.join(' ')).toMatch(/LINEAGE_INDEX_CAPTURE_MODE/);
+
+      // 복구하면 다시 GREEN이고, HASHED_MODULES 밖의 staged 파일은 범위 밖이다.
+      ex(`git -C ${w.repo.dir} update-index --chmod=-x ${VICTIM}`);
+      writeFileSync(join(w.repo.dir, 'frontend/library/OTHER.txt'), 'o');
+      ex(`git -C ${w.repo.dir} add frontend/library/OTHER.txt`);
+      expect(ln().errors).toEqual([]);
+    } finally { kill(w); }
+  }, 30000);
+
+  it('RED: GIT_* 환경으로 index/repo를 바꿔치기해도 우회 불가', () => {
+    const w = world();
+    const ex = (c) => execSync(c, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const VICTIM = 'frontend/library/s4Spec.mjs';
+    const victim = join(w.repo.dir, VICTIM);
+    const alt = tinyRepo();                       // 깨끗한 대체 repo(= 우회에 쓸 GIT_DIR/index)
+    const cleanIndex = join(alt.dir, 'clean.index');
+    const saved = {};
+    const KEYS = ['GIT_INDEX_FILE', 'GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR', 'GIT_OBJECT_DIRECTORY'];
+    for (const k of KEYS) saved[k] = process.env[k];
+    try {
+      expect(promote(w).promoted).toBe(true);
+      const pv = JSON.parse(PROM.readCaptureBundle(w.d, 'light').contextRaw).provenance;
+      ex(`git -C ${w.repo.dir} add -A && git -C ${w.repo.dir} ` +
+        `-c user.email=t@t -c user.name=t commit -q -m artifacts`);
+      const ln = () => PROM.provenanceLineage({ repoDir: w.repo.dir, captureCommit: pv.headCommit, recordedBlobs: pv.blobs });
+      expect(ln().errors).toEqual([]);                        // 대조군
+      // clean 시점의 index 사본을 떠 둔 뒤, default index에만 EVIL을 stage한다.
+      copyFileSync(join(w.repo.dir, '.git', 'index'), cleanIndex);
+      const orig = readFileSync(victim, 'utf8');
+      writeFileSync(victim, '// EVIL\n');
+      ex(`git -C ${w.repo.dir} add ${VICTIM}`);
+      writeFileSync(victim, orig);                            // working만 HEAD 바이트로 복원
+      expect(ln().errors.join(' ')).toMatch(/LINEAGE_INDEX_BLOB/);
+      // 어떤 GIT_* 선택자를 걸어도 default index/repo를 계속 본다.
+      for (const [k, v] of [['GIT_INDEX_FILE', cleanIndex], ['GIT_DIR', join(alt.dir, '.git')],
+        ['GIT_WORK_TREE', alt.dir], ['GIT_COMMON_DIR', join(alt.dir, '.git')],
+        ['GIT_OBJECT_DIRECTORY', join(alt.dir, '.git', 'objects')]]) {
+        process.env[k] = v;
+        const r = ln();
+        expect(r.ok, k).toBe(false);
+        expect(r.errors.join(' '), k).toMatch(/LINEAGE_INDEX_BLOB/);
+        delete process.env[k];
+      }
+      // authority 러너는 하나이고 GIT_* 를 제거한 환경에서만 돈다.
+      const src = readFileSync(new URL('./s4Promote.mjs', import.meta.url), 'utf8');
+      expect(src).toContain("if (!k.startsWith('GIT_')) env[k] = v;");
+      expect(src).toContain('env: authorityEnv()');
+      const code = src.split('\n').map((l) => l.replace(/(^|[^:'"`])\/\/.*$/, '$1')).join('\n');
+      expect(code).not.toContain('execSync(');                 // 셸 문자열 러너 없음
+      expect(code.match(/execFileSync\(/g)).toHaveLength(1);  // argv 러너 단 하나
+      // 세 helper 어디에도 exec 주입 인자가 없다.
+      expect(code).toContain('export function worktreeStatusEntries(repoDir) {');
+      expect(code).toContain('export function worktreeDirtyEntries(repoDir) {');
+      expect(code).toContain('export function headBlobBinding(repoDir, relPaths, pinnedCommit) {');
+      // production 스크립트도 인자 없이 부른다.
+      for (const f of ['s4-capture.mjs', 's4-audit-candidate.mjs', 's4-gen.mjs', 's4-promote-capture.mjs']) {
+        const ss = readFileSync(new URL(`../scripts/${f}`, import.meta.url), 'utf8');
+        expect(ss, f).not.toMatch(/worktree(Dirty|Status)Entries\([^)]+,/);
+        expect(ss, f).not.toMatch(/headBlobBinding\([^)]*gitExec/);
+      }
+    } finally {
+      for (const k of KEYS) { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; }
+      rmSync(alt.dir, { recursive: true, force: true });
+      kill(w);
+    }
+  }, 30000);
+
+  it('RED: GIT_* 환경에서도 production capture start/end authority가 dirty를 본다', () => {
+    const repo = tinyRepo();
+    const alt = tinyRepo();                        // 우회에 쓸 깨끗한 대체 repo
+    const ex = (c) => execSync(c, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const VICTIM = 'frontend/library/s4Spec.mjs';
+    const victim = join(repo.dir, VICTIM);
+    const cleanIndex = join(alt.dir, 'clean.index');
+    const KEYS = ['GIT_INDEX_FILE', 'GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR'];
+    const saved = {};
+    for (const k of KEYS) saved[k] = process.env[k];
+    try {
+      copyFileSync(join(repo.dir, '.git', 'index'), cleanIndex);
+      const orig = readFileSync(victim, 'utf8');
+      writeFileSync(victim, '// EVIL\n');
+      ex(`git -C ${repo.dir} add ${VICTIM}`);
+      writeFileSync(victim, orig);                 // working === HEAD, index만 EVIL
+      expect(ex(`git -C ${repo.dir} hash-object ${VICTIM}`).trim())
+        .toBe(ex(`git -C ${repo.dir} rev-parse HEAD:${VICTIM}`).trim());
+
+      // production capture가 쓰는 그 조합: worktreeDirtyEntries + headBlobBinding + phaseGateDecision
+      const gate = (stage, pinned) => {
+        const dirty = CAP.worktreeDirtyEntries(repo.dir);
+        const head = PROM.headBlobBinding(repo.dir, CAP.HASHED_MODULES, pinned);
+        return { dirty, g: CAP.phaseGateDecision({ stage, dirtyEntries: dirty, head, canonPaths: CAP.HASHED_MODULES }) };
+      };
+      const base = gate('start');
+      expect(base.dirty.length).toBeGreaterThan(0);
+      expect(base.g.ok).toBe(false);
+      const head0 = PROM.headBlobBinding(repo.dir, CAP.HASHED_MODULES);
+      for (const [k, v] of [['GIT_INDEX_FILE', cleanIndex], ['GIT_DIR', join(alt.dir, '.git')],
+        ['GIT_WORK_TREE', alt.dir], ['GIT_COMMON_DIR', join(alt.dir, '.git')]]) {
+        process.env[k] = v;
+        const st = gate('start');
+        const en = gate('end', head0.headCommit);
+        expect(st.dirty.length, `${k} start`).toBeGreaterThan(0);
+        expect(st.g.ok, `${k} start`).toBe(false);
+        expect(en.g.ok, `${k} end`).toBe(false);
+        // candidate write 0 — 게이트가 막았으므로 산출물 자체가 없다.
+        expect(existsSync(join(repo.fixturesDir, 's4-candidates')), k).toBe(false);
+        delete process.env[k];
+      }
+      // 복구하면 GREEN이고, HASHED_MODULES 밖 staged 파일은 범위 밖이다.
+      ex(`git -C ${repo.dir} reset -q --hard`);
+      expect(gate('start').g.ok).toBe(true);
+      writeFileSync(join(repo.dir, 'frontend/library/OTHER.txt'), 'o');
+      ex(`git -C ${repo.dir} add frontend/library/OTHER.txt`);
+      expect(PROM.headBlobBinding(repo.dir, CAP.HASHED_MODULES).errors).toEqual([]);
+    } finally {
+      for (const k of KEYS) { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; }
+      rmSync(repo.dir, { recursive: true, force: true });
+      rmSync(alt.dir, { recursive: true, force: true });
+    }
+  }, 30000);
+
+  it('RED: hashed module을 바꾼 commit C / 비-ancestor commit', () => {
+    const w = world();
+    const ex = (c) => execSync(c, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    try {
+      expect(promote(w).promoted).toBe(true);
+      const pv = JSON.parse(PROM.readCaptureBundle(w.d, 'light').contextRaw).provenance;
+      ex(`git -C ${w.repo.dir} add -A && git -C ${w.repo.dir} ` +
+        `-c user.email=t@t -c user.name=t commit -q -m artifacts`);
+      // (1) contract module을 바꾼 commit C → 현재 blob이 기록과 다르다.
+      writeFileSync(join(w.repo.dir, 'frontend/library/s4Spec.mjs'), '// C\n');
+      ex(`git -C ${w.repo.dir} add -A && git -C ${w.repo.dir} ` +
+        `-c user.email=t@t -c user.name=t commit -q -m C`);
+      const lnC = PROM.provenanceLineage({ repoDir: w.repo.dir, captureCommit: pv.headCommit, recordedBlobs: pv.blobs });
+      expect(lnC.ok).toBe(false);
+      expect(lnC.errors.join(' ')).toMatch(/LINEAGE_CURRENT_BLOB frontend\/library\/s4Spec\.mjs/);
+      // (2) 비-ancestor commit — 다른 갈래에서 만든 commit을 capture로 신고한다.
+      ex(`git -C ${w.repo.dir} checkout -q -b side ${pv.headCommit}`);
+      writeFileSync(join(w.repo.dir, 'frontend/library/SIDE.txt'), 'side\n');
+      ex(`git -C ${w.repo.dir} add -A && git -C ${w.repo.dir} ` +
+        `-c user.email=t@t -c user.name=t commit -q -m side`);
+      const side = ex(`git -C ${w.repo.dir} rev-parse HEAD`).trim();
+      ex(`git -C ${w.repo.dir} checkout -q -`);
+      const lnS = PROM.provenanceLineage({ repoDir: w.repo.dir, captureCommit: side, recordedBlobs: pv.blobs });
+      expect(lnS.ok).toBe(false);
+      expect(lnS.errors.join(' ')).toMatch(/LINEAGE_NOT_ANCESTOR/);
+      // (3) 존재하지 않는 commit
+      expect(PROM.provenanceLineage({ repoDir: w.repo.dir, captureCommit: 'f'.repeat(40), recordedBlobs: pv.blobs })
+        .errors.join(' ')).toMatch(/LINEAGE_COMMIT_UNKNOWN/);
+      expect(PROM.provenanceLineage({ repoDir: w.repo.dir, captureCommit: 'nothex', recordedBlobs: pv.blobs })
+        .errors.join(' ')).toMatch(/LINEAGE_COMMIT_FORMAT/);
+      // (4) 기록 blob 자체를 위조하면 capture 시점 대조에서 잡힌다.
+      const forged = { ...pv.blobs, 'frontend/library/s4Promote.mjs': 'a'.repeat(40) };
+      expect(PROM.provenanceLineage({ repoDir: w.repo.dir, captureCommit: pv.headCommit, recordedBlobs: forged })
+        .errors.join(' ')).toMatch(/LINEAGE_CAPTURE_BLOB frontend\/library\/s4Promote\.mjs/);
+    } finally { kill(w); }
+  }, 30000);
+
+  // ── G3: generator sink authority ────────────────────────────────────────────
+  it('RED: serialize 중 clean A→B checkout이면 sink write 0, staging 파일 미생성', () => {
+    const w = world();
+    const ex = (c) => execSync(c, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const staging = join(w.d, PROM.STAGING_NAME);
+    let wrote = 0;
+    try {
+      const A = w.repo.head;
+      const light = JSON.parse(w.cands.light.contextRaw);
+      const call = () => PROM.approveForPromotion({
+        repoDir: w.repo.dir, evidenceFiles: w.evidenceFiles, spec: w.spec,
+        fixture: JSON.parse(w.expectedBytes), contrastResults: [],
+        actualDecls: [], actualRaw: {}, preAnnSources: {}, actualAllowIdToKey: new Map(),
+        baseDecls: sharedBaseDecls(),
+        contextRaw: w.cands.light.contextRaw, sha256,
+        readPng: (n) => { const b = w.cands.light.pngByName[n];
+          return b ? { bytes: b, width: 40, height: 30 } : { bytes: Buffer.alloc(0) }; },
+        provenanceRefs: { headCommit: A, headBlobs: w.repo.blobs,
+          specFingerprintNow: light.provenance.specFingerprint },
+        // **serialize 도중** clean commit B로 이동한다 — 워킹트리는 계속 clean이다.
+        serialize: (f) => {
+          writeFileSync(join(w.repo.dir, 'frontend/library/NOTE.txt'), 'b\n');
+          ex(`git -C ${w.repo.dir} add -A && git -C ${w.repo.dir} ` +
+            `-c user.email=t@t -c user.name=t commit -q -m B`);
+          return JSON.stringify(f, null, 1);
+        },
+        write: PROM.sinkWriter({ repoDir: w.repo.dir, startCommit: A,
+          write: (bytes) => { wrote += 1; mkdirSync(w.d, { recursive: true }); writeFileSync(staging, bytes); } }),
+      });
+      // 승인 orchestration이 sink 예외를 삼키든 던지든 **write는 0**이어야 한다.
+      let a = null, thrown = '';
+      try { a = call(); } catch (e) { thrown = String((e && e.message) || e); }
+      const said = thrown || (a ? a.errors.join(' ') : '');
+      expect(a ? a.wrote : false).toBe(false);
+      expect(said).toMatch(/GENERATOR_AUTHORITY_AT_SINK/);
+      expect(said).toMatch(/HEAD_MOVED/);
+      expect(wrote).toBe(0);                                   // 실제 write 콜백이 돌지 않았다
+      expect(existsSync(staging)).toBe(false);                 // staging 파일 미생성
+      // 대조군: HEAD가 그대로면 같은 sinkWriter가 정상 통과한다.
+      let ok = 0;
+      const nowHead = ex(`git -C ${w.repo.dir} rev-parse HEAD`).trim();
+      PROM.sinkWriter({ repoDir: w.repo.dir, startCommit: nowHead, write: () => { ok += 1; } })('x');
+      expect(ok).toBe(1);
+    } finally { kill(w); }
+  }, 30000);
+
+  // ── F2: lock을 잃으면 아무것도 지우지 않는다 ─────────────────────────────────
+  it('RED: A가 lock을 잃는 사이 B가 같은 digest로 승격 — B의 산출물이 보존된다', () => {
+    const w = world(); const sd = mkdtempSync(join(tmpdir(), 's4-shim-'));
+    const n = nextOf(w);
+    const lock = join(w.d, '.s4-promote.lock');
+    const relp = join(w.d, 's4-capture', 'release.json');
+    // A가 version/expected를 만든 뒤 B가 lock을 인계받아 같은 digest로 release를 완성한다.
+    const off = shimAt2(sd, `    rm -f ${lock}; printf 'B' > ${lock}
+    printf '%s' '${JSON.stringify(n)}' > ${relp}`);
+    try {
+      const r = promote(w);
+      expect(r.promoted).toBe(false);
+      // A는 실패하되 **정리하지 않는다** — 그 파일들이 곧 B의 release 본체다.
+      expect(PROM.readRelease(w.d)).toEqual(n);
+      for (const ph of ['light', 'dark']) expect(PROM.readCaptureBundle(w.d, ph).errors, ph).toEqual([]);
+      const exp = PROM.readCommittedExpected(w.d);
+      expect(exp.errors).toEqual([]);
+      expect(exp.bytes).toBe(w.expectedBytes);
+      expect(writeCounts(w)).toMatchObject({ versions: 2, expected: 1, release: 1 });
+      expect(readFileSync(lock, 'utf8')).toBe('B');       // 남의 lock을 지우지 않았다
+    } finally { off(); kill(w, sd); }
+  }, 30000);
+
+  // ── F3: candidate CAS 구간이 잠긴다 ──────────────────────────────────────────
+  it('RED: 승격 진행 중 writeCandidate A→B는 lock에 막힌다 (stale A 승격 불가)', () => {
+    const w = world(); const sd = mkdtempSync(join(tmpdir(), 's4-shim-'));
+    const outp = join(sd, 'writeres.json');
+    const runner = fileURLToPath(new URL('./s4CaptureRunner.mjs', import.meta.url));
+    writeFileSync(join(sd, 'hijack.mjs'),
+      `import {writeCandidate,readCandidateBundle,CANDIDATE_CAS_ANY} from ${JSON.stringify(runner)};`
+      + `import {writeFileSync} from 'node:fs';`
+      + `const e=writeCandidate({fixturesDir:${JSON.stringify(w.d)},phase:'light',contextRaw:'HIJACK',`
+      + `pngByCaptureName:{'p1.png':Buffer.from([1,2,3])},expectedCaptureNames:['p1.png'],`
+      + `expectedCurrentBundleName:CANDIDATE_CAS_ANY});`
+      + `writeFileSync(${JSON.stringify(outp)},JSON.stringify({e,ptr:readCandidateBundle(`
+      + `${JSON.stringify(w.d)},'light').bundleName||null}));`);
+    const off = shimAt2(sd, `    ${process.execPath} ${join(sd, 'hijack.mjs')} >/dev/null 2>&1 || true`);
+    try {
+      const before = RUN.readCandidateBundle(w.d, 'light').bundleName;
+      const r = promote(w);
+      // 승격은 정상 완료된다 — 가로채기가 막혔기 때문이다.
+      expect(r.errors).toEqual([]);
+      expect(r.promoted).toBe(true);
+      const hij = JSON.parse(readFileSync(outp, 'utf8'));
+      expect(hij.e.join(' ')).toMatch(/WRITE_LOCK_BUSY/);      // A→B 시도가 lock에 막혔다
+      expect(hij.ptr).toBe(before);                            // pointer는 그대로였다
+      expect(RUN.readCandidateBundle(w.d, 'light').bundleName).toBe(before);
+    } finally { off(); kill(w, sd); }
+  }, 30000);
+
+  it('RED: candidate lock이 이미 잡혀 있으면 승격이 시작하지 않는다', () => {
+    const w = world();
+    const held = RUN.acquireCandidateLock(w.d, 'dark');
+    try {
+      expect(held.ok).toBe(true);
+      const r = promote(w);
+      expect(r.promoted).toBe(false);
+      expect(r.errors.join(' ')).toMatch(/PROMOTE_CANDIDATE_LOCK_BUSY dark/);
+      expect(writeCounts(w)).toMatchObject({ versions: 0, expected: 0, release: 0 });
+      // light lock은 반납됐다 — 실패해도 남의 것을 잡아두지 않는다.
+      const l = RUN.acquireCandidateLock(w.d, 'light');
+      expect(l.ok).toBe(true); l.release();
+    } finally { held.release(); kill(w); }
+  }, 30000);
+
+  // ── F6: light/dark 실산출물을 모두 checked reader로 연다 ──────────────────────
+  it('GREEN/RED: 승격 뒤 light·dark 양쪽이 열리고, dark 변조는 잡힌다', () => {
+    const w = world();
+    try {
+      expect(promote(w).promoted).toBe(true);
+      const rel = PROM.readRelease(w.d);
+      for (const ph of ['light', 'dark']) {
+        const b = PROM.readCaptureBundle(w.d, ph);
+        expect(b.errors, ph).toEqual([]);
+        expect(Object.keys(b.pngByName).sort(), ph).toEqual(['p1.png']);
+        expect(JSON.parse(b.contextRaw).phase, ph).toBe(ph);
+        expect(b.digest, ph).toBe(rel[ph]);
+      }
+      // dark PNG 변조 → digest 재계산으로 잡힌다.
+      const dpng = join(w.d, 's4-capture', 'versions', rel.dark, 'shots', 'p1.png');
+      const orig = readFileSync(dpng);
+      writeFileSync(dpng, pngBytes(40, 30, 3));
+      expect(PROM.readCaptureBundle(w.d, 'dark').errors.join(' ')).toMatch(/VERSION_TAMPERED/);
+      expect(PROM.readCaptureBundle(w.d, 'light').errors).toEqual([]);   // light는 무관하다
+      writeFileSync(dpng, orig);
+      // dark context 삭제 → file set에서 잡힌다.
+      rmSync(join(w.d, 's4-capture', 'versions', rel.dark, 'context.json'));
+      expect(PROM.readCaptureBundle(w.d, 'dark').errors.join(' ')).toMatch(/VERSION_FILE_SET/);
+      // dark version 디렉터리 통째 삭제.
+      rmSync(join(w.d, 's4-capture', 'versions', rel.dark), { recursive: true, force: true });
+      expect(PROM.readCaptureBundle(w.d, 'dark').errors.join(' ')).toMatch(/VERSION_MISSING/);
+      expect(committedBundleAt(w.d, 'dark').absent).toBe(true);
+    } finally { kill(w); }
+  }, 30000);
+
+  // ── 실제 승인 wrapper부터 promoteRelease까지 실제 함수로 연결된 positive ──────
+  it('공식 승인 wrapper(approveForPromotion) → promoteRelease 실제 연결 positive', () => {
+    const w = world();
+    try {
+      // approveForPromotion은 evaluator의 승인 구현을 **정적으로** 부른다. 여기서는
+      // 그 wrapper가 실제로 bytes를 만들어 내는지만 본다(주입 파라미터가 없다).
+      let wrote = null;
+      const light = JSON.parse(w.cands.light.contextRaw);
+      const a = PROM.approveForPromotion({
+        repoDir: w.repo.dir, evidenceFiles: w.evidenceFiles, spec: w.spec,
+        fixture: JSON.parse(w.expectedBytes), contrastResults: [],
+        actualDecls: [], actualRaw: {}, preAnnSources: {}, actualAllowIdToKey: new Map(),
+        baseDecls: sharedBaseDecls(),
+        contextRaw: w.cands.light.contextRaw, sha256,
+        readPng: (n) => { const b = w.cands.light.pngByName[n];
+          return b ? { bytes: b, width: 40, height: 30 } : { bytes: Buffer.alloc(0) }; },
+        provenanceRefs: { headCommit: w.repo.head, headBlobs: w.repo.blobs,
+          specFingerprintNow: light.provenance.specFingerprint },
+        serialize: (f) => JSON.stringify(f, null, 1), write: (b) => { wrote = b; },
+      });
+      // 승인 경로가 evidence·candidate·conformance를 전부 통과했다.
+      expect(a.errors).toEqual([]);
+      expect(typeof wrote).toBe('string');
+      // 그 bytes를 그대로 승격에 넣으면 실제로 승격된다.
+      const r = promote({ ...w, expectedBytes: wrote });
+      expect(r.errors).toEqual([]);
+      expect(r.promoted).toBe(true);
+      expect(PROM.readCommittedExpected(w.d).bytes).toBe(wrote);
+    } finally { kill(w); }
   }, 30000);
 
   it('RED: candidate CAS — 승인 뒤 candidate가 바뀌면 write 0', () => {
     const w = world();
     try {
       const { raw, png } = ctxFor('light', w.spec, w.repo);
-      RUN.writeCandidate({ fixturesDir: w.d, phase: 'light', contextRaw: `${raw} `,
+      RUN.writeCandidate({ expectedCurrentBundleName: RUN.CANDIDATE_CAS_ANY, fixturesDir: w.d, phase: 'light', contextRaw: `${raw} `,
         pngByCaptureName: { 'p1.png': png }, expectedCaptureNames: ['p1.png'] });
       const r = promote(w);
       expect(r.promoted).toBe(false);
       expect(r.errors.join(' ')).toMatch(/PROMOTE_CANDIDATE_CAS|PROMOTE_CANDIDATE_DIGEST_CAS/);
       expect(PROM.readRelease(w.d)).toBe(null);
-    } finally { rmSync(w.d, { recursive: true, force: true }); rmSync(w.repo.dir, { recursive: true, force: true }); }
+    } finally { kill(w); }
   }, 30000);
 
   it('RED: lock busy — write 0, 남의 lock 보존', () => {
@@ -5138,18 +6296,113 @@ describe('S4 promotion positive — 실제로 승격하고 release가 셋을 함
       expect(r).toEqual({ errors: ['PROMOTE_LOCK_BUSY'], promoted: false });
       expect(PROM.readRelease(w.d)).toBe(null);
       expect(readFileSync(join(w.d, '.s4-promote.lock'), 'utf8')).toBe('FOREIGN');
-    } finally { rmSync(w.d, { recursive: true, force: true }); rmSync(w.repo.dir, { recursive: true, force: true }); }
+    } finally { kill(w); }
   }, 30000);
 
-  it('RED: authority 실패(HEAD 이동) — expected도 만들지 않는다', () => {
+  // ── late authority: 자기 산출물은 GREEN, 그 밖의 변화는 전부 RED ──────────────
+  it('RED: 무관한 untracked 파일 — allowance 밖이라 write 0', () => {
     const w = world();
     try {
-      const r = promote(w, { startHead: 'a'.repeat(40) });
+      writeFileSync(join(w.repo.dir, 'frontend/library/UNRELATED.txt'), 'x');
+      const r = promote(w);
       expect(r.promoted).toBe(false);
-      expect(r.errors.join(' ')).toMatch(/PROMOTE_AUTHORITY_FAILED/);
+      expect(r.errors.join(' ')).toMatch(/PROMOTE_AUTHORITY_FAILED .*WORKTREE_DIRTY/);
+      expect(r.errors.join(' ')).toContain('UNRELATED.txt');
       expect(PROM.readRelease(w.d)).toBe(null);
       expect(existsSync(join(w.d, 's4-capture', 'expected'))).toBe(false);
-    } finally { rmSync(w.d, { recursive: true, force: true }); rmSync(w.repo.dir, { recursive: true, force: true }); }
+    } finally { kill(w); }
+  }, 30000);
+
+  it('RED: tracked 모듈 수정 — working이 HEAD와 다르면 write 0', () => {
+    const w = world();
+    try {
+      writeFileSync(join(w.repo.dir, 'frontend/library/s4Spec.mjs'), '// tampered\n');
+      const r = promote(w);
+      expect(r.promoted).toBe(false);
+      expect(r.errors.join(' ')).toMatch(/WORKTREE_DIRTY|WORKING_DIFFERS_FROM_HEAD/);
+      expect(PROM.readRelease(w.d)).toBe(null);
+    } finally { kill(w); }
+  }, 30000);
+
+  it('RED: staged 변경 — 허용 경로에 staged로 올려도 write 0', () => {
+    const w = world();
+    try {
+      // 산출물과 **같은 이름**을 미리 staged로 올린다. `??`가 아니므로 허용되지 않는다.
+      const rel = { expectedSha: sha256(w.expectedBytes),
+        light: PROM.bundleDigest(w.cands.light.contextRaw, w.cands.light.pngByName),
+        dark: PROM.bundleDigest(w.cands.dark.contextRaw, w.cands.dark.pngByName) };
+      const p = join(w.repo.dir, outputsOf(w, rel)[0]);
+      mkdirSync(dirname(p), { recursive: true });
+      writeFileSync(p, 'staged');
+      execSync(`git -C ${w.repo.dir} add -f ${p}`, { stdio: 'ignore' });
+      const r = promote(w);
+      expect(r.promoted).toBe(false);
+      expect(r.errors.join(' ')).toMatch(/PROMOTE_AUTHORITY_FAILED .*WORKTREE_DIRTY/);
+      expect(PROM.readRelease(w.d)).toBe(null);
+    } finally { kill(w); }
+  }, 30000);
+
+  it('RED: 허용 경로에 이름만 맞는 다른 내용을 심어두면 write 0', () => {
+    const w = world();
+    try {
+      const rel = { expectedSha: sha256(w.expectedBytes),
+        light: PROM.bundleDigest(w.cands.light.contextRaw, w.cands.light.pngByName),
+        dark: PROM.bundleDigest(w.cands.dark.contextRaw, w.cands.dark.pngByName) };
+      const p = join(w.repo.dir, `${FX_REL}/s4-capture/versions/${rel.light}/context.json`);
+      mkdirSync(dirname(p), { recursive: true });
+      writeFileSync(p, 'NOT-THE-CONTEXT');
+      const r = promote(w);
+      expect(r.promoted).toBe(false);
+      expect(r.errors.join(' ')).toMatch(/ALLOWED_CONTENT|PROMOTE_VERSION_TAMPERED|VERSION_FILE_SET/);
+      expect(PROM.readRelease(w.d)).toBe(null);
+    } finally { kill(w); }
+  }, 30000);
+
+  it('RED: provenanceRefs가 정본 HEAD와 다르면 write 0', () => {
+    const w = world();
+    try {
+      const r = promote(w, { provenanceRefs: { headCommit: 'a'.repeat(40), headBlobs: w.repo.blobs,
+        specFingerprintNow: JSON.parse(w.cands.light.contextRaw).provenance.specFingerprint } });
+      expect(r.promoted).toBe(false);
+      // 두 겹이 있다: bundle 검증(EVIDENCE_PROVENANCE_HEAD)과 승격의 정본 cross-check
+      // (PROMOTE_PROVENANCE_HEAD). 어느 쪽이 먼저 잡든 write는 0이어야 한다.
+      expect(r.errors.join(' ')).toMatch(/PROVENANCE_HEAD/);
+      expect(PROM.readRelease(w.d)).toBe(null);
+    } finally { kill(w); }
+  }, 30000);
+
+  it('RED: fake 승인 함수·축소 hashedModules·임의 startHead를 넣어도 우회 불가', () => {
+    const w = world();
+    try {
+      writeFileSync(join(w.repo.dir, 'frontend/library/UNRELATED.txt'), 'x');
+      // 세 우회 시도를 **한꺼번에** 넣는다. 전부 무시되고 authority는 그대로 막는다.
+      const r = promote(w, { hashedModules: [], startHead: 'b'.repeat(40),
+        approveAndWrite: () => ({ errors: [], wrote: true, bytes: '{}' }) });
+      expect(r.promoted).toBe(false);
+      expect(r.errors.join(' ')).toMatch(/WORKTREE_DIRTY/);
+      expect(PROM.readRelease(w.d)).toBe(null);
+      // approveForPromotion에도 승인 함수를 넣을 자리가 없다 — 넣어도 evaluator 구현이 돈다.
+      let called = 0;
+      const a = PROM.approveForPromotion({ repoDir: w.repo.dir, evidenceFiles: w.evidenceFiles,
+        spec: w.spec, approveAndWrite: () => { called += 1; return { errors: [], wrote: true, bytes: 'X' }; },
+        serialize: (f) => JSON.stringify(f), write: () => {} });
+      expect(called).toBe(0);
+      expect(a.wrote).toBe(false);                      // 진짜 승인기는 계약 미충족으로 막았다
+    } finally { kill(w); }
+  }, 30000);
+
+  it('GREEN: 앞선 실패가 남긴 것이 없어 재시도가 시작부터 막히지 않는다', () => {
+    const w = world();
+    try {
+      writeFileSync(join(w.repo.dir, 'frontend/library/UNRELATED.txt'), 'x');
+      expect(promote(w).promoted).toBe(false);
+      rmSync(join(w.repo.dir, 'frontend/library/UNRELATED.txt'));
+      // 실패한 실행이 산출물을 남겼다면 여기서 START authority가 죽는다(선재현된 경로다).
+      expect(dirtyOf(w.repo)).toEqual([]);
+      const r = promote(w);
+      expect(r.errors).toEqual([]);
+      expect(r.promoted).toBe(true);
+    } finally { kill(w); }
   }, 30000);
 
   it('RED: expected tamper — 정확한 이름으로 심어둬도 잡힌다', () => {
@@ -5159,9 +6412,9 @@ describe('S4 promotion positive — 실제로 승격하고 release가 셋을 함
       writeFileSync(PROM.expectedPath(w.d, sha256(w.expectedBytes)), '{"tampered":1}');
       const r = promote(w);
       expect(r.promoted).toBe(false);
-      expect(r.errors.join(' ')).toMatch(/PROMOTE_EXPECTED_TAMPERED/);
+      expect(r.errors.join(' ')).toMatch(/ALLOWED_CONTENT|PROMOTE_EXPECTED_TAMPERED/);
       expect(PROM.readRelease(w.d)).toBe(null);
-    } finally { rmSync(w.d, { recursive: true, force: true }); rmSync(w.repo.dir, { recursive: true, force: true }); }
+    } finally { kill(w); }
   }, 30000);
 
   it('RED: expected dir이 외부 symlink면 외부 write 0, pointer 불변', () => {
@@ -5174,7 +6427,96 @@ describe('S4 promotion positive — 실제로 승격하고 release가 셋을 함
       expect(r.errors.join(' ')).toMatch(/NODE_SYMLINK|NODE_ESCAPES|PATH_ESCAPES/);
       expect(readdirSync(outside)).toEqual([]);          // 밖에 아무것도 안 썼다
       expect(PROM.readRelease(w.d)).toBe(null);
-    } finally { rmSync(w.d, { recursive: true, force: true }); rmSync(outside, { recursive: true, force: true }); }
+    } finally { kill(w, outside); }
+  }, 30000);
+
+  // ── checked reader: release/version 노드 안전성 ──────────────────────────────
+  it('RED: release.json이 외부 symlink면 읽기 자체가 막힌다 — 외부 read 0', () => {
+    const w = world(); const outside = mkdtempSync(join(tmpdir(), 's4-out-'));
+    try {
+      expect(promote(w).promoted).toBe(true);
+      const real = PROM.readRelease(w.d);
+      const ext = join(outside, 'release.json');
+      writeFileSync(ext, JSON.stringify(real, null, 1));
+      rmSync(join(w.d, 's4-capture', 'release.json'));
+      symlinkSync(ext, join(w.d, 's4-capture', 'release.json'));
+      const c = PROM.readReleaseChecked(w.d);
+      expect(c.errors.join(' ')).toMatch(/RELEASE_NODE_SYMLINK|RELEASE_NODE_ESCAPES/);
+      expect(c.release).toBe(null);
+      expect(PROM.readRelease(w.d)).toBe(null);
+      // 같은 checked reader를 쓰는 두 경로가 함께 막힌다.
+      expect(PROM.readCaptureBundle(w.d, 'light').errors.length).toBeGreaterThan(0);
+      expect(PROM.readCommittedExpected(w.d).bytes).toBe(null);
+    } finally { kill(w, outside); }
+  }, 30000);
+
+  it('RED: release digest에 traversal을 넣으면 스키마에서 먼저 막힌다', () => {
+    const w = world();
+    try {
+      expect(promote(w).promoted).toBe(true);
+      const rel = PROM.readRelease(w.d);
+      writeFileSync(join(w.d, 's4-capture', 'release.json'),
+        JSON.stringify({ ...rel, light: '../../../../etc' }, null, 1));
+      expect(PROM.validateReleaseShape({ ...rel, light: '../../../../etc' }))
+        .toEqual(['RELEASE_VALUE light ../../../../etc']);
+      expect(PROM.readCaptureBundle(w.d, 'light').errors).toEqual(['RELEASE_VALUE light ../../../../etc']);
+      expect(PROM.readCommittedExpected(w.d).errors).toEqual(['RELEASE_VALUE light ../../../../etc']);
+    } finally { kill(w); }
+  }, 30000);
+
+  it('RED: version 안의 context/shots/PNG가 symlink면 controlled RED', () => {
+    const w = world(); const outside = mkdtempSync(join(tmpdir(), 's4-out-'));
+    try {
+      expect(promote(w).promoted).toBe(true);
+      const rel = PROM.readRelease(w.d);
+      const vdir = join(w.d, 's4-capture', 'versions', rel.light);
+      writeFileSync(join(outside, 'ctx'), w.cands.light.contextRaw);
+      rmSync(join(vdir, 'context.json'));
+      symlinkSync(join(outside, 'ctx'), join(vdir, 'context.json'));
+      const v = PROM.readVersionChecked(w.d, rel.light);
+      expect(v.errors.join(' ')).toMatch(/VERSION_NODE_SYMLINK/);
+      // capture bundle 경로도 같은 reader를 쓰므로 같이 막힌다.
+      expect(PROM.readCaptureBundle(w.d, 'light').errors.join(' ')).toMatch(/VERSION_NODE_SYMLINK/);
+    } finally { kill(w, outside); }
+  }, 30000);
+
+  it('RED: version 디렉터리에 여분 파일이 있으면 file set에서 잡힌다', () => {
+    const w = world();
+    try {
+      expect(promote(w).promoted).toBe(true);
+      const rel = PROM.readRelease(w.d);
+      writeFileSync(join(w.d, 's4-capture', 'versions', rel.dark, 'EXTRA'), 'x');
+      expect(PROM.readVersionChecked(w.d, rel.dark).errors.join(' ')).toMatch(/VERSION_FILE_SET/);
+      expect(PROM.readCaptureBundle(w.d, 'dark').errors.join(' ')).toMatch(/VERSION_FILE_SET/);
+    } finally { kill(w); }
+  }, 30000);
+
+  // ── lock ownership ──────────────────────────────────────────────────────────
+  it('RED: lock이 교체되면 pointer write 0이고 남의 lock을 지우지 않는다', () => {
+    const w = world(); const shimDir = mkdtempSync(join(tmpdir(), 's4-git-'));
+    const realGit = execSync('command -v git', { encoding: 'utf8' }).trim();
+    const prevPath = process.env.PATH;
+    try {
+      // `git status`가 두 번째로 불리는 순간 = **late authority 시점**에 lock을 교체한다.
+      // 이 시점 이후 promoteRelease는 pointer를 쓰기 직전에 소유권을 다시 본다.
+      const cnt = join(shimDir, 'count');
+      const lock = join(w.d, '.s4-promote.lock');
+      writeFileSync(join(shimDir, 'git'), `#!/bin/sh
+if [ "$3" = "status" ]; then
+  n=$(cat ${cnt} 2>/dev/null || echo 0); n=$((n+1)); echo $n > ${cnt}
+  if [ "$n" = "2" ]; then rm -f ${lock}; printf 'OTHER' > ${lock}; fi
+fi
+exec ${realGit} "$@"
+`);
+      execSync(`chmod +x ${join(shimDir, 'git')}`);
+      process.env.PATH = `${shimDir}:${prevPath}`;
+      const r = promote(w);
+      expect(r.promoted).toBe(false);
+      expect(r.errors).toEqual(['PROMOTE_LOCK_OWNERSHIP_LOST']);
+      expect(PROM.readRelease(w.d)).toBe(null);
+      // 남의 lock은 그대로 남아 있어야 한다 — 지우면 상호배제를 두 번 깬다.
+      expect(readFileSync(lock, 'utf8')).toBe('OTHER');
+    } finally { process.env.PATH = prevPath; kill(w, shimDir); }
   }, 30000);
 
   it('RED: pointer write 실패 — 이전 release+expected가 계속 선택된다', () => {
@@ -5186,20 +6528,14 @@ describe('S4 promotion positive — 실제로 승격하고 release가 셋을 함
       // release.json을 디렉터리로 바꿔 다음 pointer write를 실패시킨다.
       rmSync(join(w.d, 's4-capture', 'release.json'));
       mkdirSync(join(w.d, 's4-capture', 'release.json'));
-      const w2 = { ...w, expectedBytes: `${w.expectedBytes} ` };
-      const r = PROM.promoteRelease({ fixturesDir: w.d, spec: w.spec,
-        provenanceRefs: { headCommit: w.repo.head, headBlobs: w.repo.blobs,
-          specFingerprintNow: JSON.parse(w.cands.light.contextRaw).provenance.specFingerprint },
-        fromRelease: null, expectedBytes: w2.expectedBytes, candidates: w.cands,
-        discoveryEvidence: { files: w.evidenceFiles }, repoDir: w.repo.dir,
-        hashedModules: CAP.HASHED_MODULES, startHead: w.repo.head });
+      const r = promote({ ...w, expectedBytes: `${w.expectedBytes} ` }, { fromRelease: null });
       expect(r.promoted).toBe(false);
       // pointer를 원복하면 이전 release+expected가 그대로 유효하다.
       rmSync(join(w.d, 's4-capture', 'release.json'), { recursive: true, force: true });
       writeFileSync(join(w.d, 's4-capture', 'release.json'), JSON.stringify(first, null, 1));
       expect(PROM.readRelease(w.d)).toEqual(first);
       expect(PROM.readCommittedExpected(w.d).bytes).toBe(firstExp.bytes);
-    } finally { rmSync(w.d, { recursive: true, force: true }); rmSync(w.repo.dir, { recursive: true, force: true }); }
+    } finally { kill(w); }
   }, 30000);
 
   it('release가 있으면 committed reader가 실제로 읽는다 (skip 11개의 전제)', () => {
@@ -5212,7 +6548,27 @@ describe('S4 promotion positive — 실제로 승격하고 release가 셋을 함
       expect(Object.keys(b.pngByName)).toEqual(['p1.png']);
       // dark도 같은 reader로 읽힌다.
       expect(committedBundleAt(w.d, 'dark').absent).toBe(false);
-    } finally { rmSync(w.d, { recursive: true, force: true }); rmSync(w.repo.dir, { recursive: true, force: true }); }
+    } finally { kill(w); }
+  }, 30000);
+
+  // **non-skip clean baseline.** release가 커밋되기 전에도 "정상 산출물이면 오류 0"이
+  // 행동으로 증명돼야 한다 — 그러지 않으면 committed gate의 정답이 검증되지 않은 채 남는다.
+  it('실제 release에 대한 validateCommittedArtifacts clean baseline은 []', () => {
+    const w = world();
+    try {
+      expect(promote(w).promoted).toBe(true);
+      const b = committedBundleAt(w.d, 'light');
+      expect(b.absent).toBe(false);
+      const light = JSON.parse(b.contextRaw);
+      const errs = EV.validateCommittedArtifacts({
+        committedFixtureRaw: b.fixtureRaw, spec: w.spec, contextRaw: b.contextRaw, sha256,
+        readPng: (n) => { const x = b.pngByName[n]; return x ? { bytes: x, width: 40, height: 30 } : null; },
+        baseDecls: sharedBaseDecls(),
+        provenanceRefs: { headCommit: w.repo.head, headBlobs: w.repo.blobs,
+          specFingerprintNow: light.provenance.specFingerprint },
+      });
+      expect(errs).toEqual([]);
+    } finally { kill(w); }
   }, 30000);
 });
 
@@ -5258,7 +6614,9 @@ describe('S4 승격 활성 — 열려 있어도 계약 없이는 쓰지 않는�
     const body = fn.slice(0, fn.indexOf('\n}\n'));
     expect(body).not.toContain('discoveryEvidence.gitBlob');
     expect(body).toContain('promoteGitBlob(repoDir, canonPaths, ref, rel)');
-    expect(src).toContain("execFileSync('git', ['-C', repoDir, 'rev-parse'");
+    // 러너는 단일 argv 함수(gitAuthority)로 통일됐다 — 문자열 보간이 없다.
+    expect(src).toContain("return gitAuthority(repoDir, 'rev-parse', `${ref}:${rel}`).trim();");
+    expect(src).toContain('const gitAuthority = (repoDir, ...args) => gitArgv([');
   });
   it('spec은 진입 직후 정확히 한 번 동결된다', () => {
     const src = readFileSync(new URL('./s4Promote.mjs', import.meta.url), 'utf8');
@@ -5287,11 +6645,15 @@ describe('S4 승격 활성 — 열려 있어도 계약 없이는 쓰지 않는�
     expect(src).toContain('PROJ.buildProjection(');
     expect(src).toContain('PROJ.buildProjectedFixture(');
     expect(src).toContain('approveForPromotion({');
-    expect(src).toContain('approveAndWrite: EV.approveAndWrite');
+    // 승인 함수를 넘기지 않는다 — s4Promote가 evaluator 구현을 정적으로 부른다.
+    expect(src).not.toContain('approveAndWrite');
+    expect(src).toContain('approveForPromotion({');
     expect(src).toContain('promoteRelease({');
     expect(src).toContain('candidates: cands');
-    expect(src).toContain('hashedModules: HASHED_MODULES');
-    expect(src).toContain('startHead: head.headCommit');
+    // authority 입력을 넘기지 않는다 — 승격이 스스로 파생한다.
+    expect(src).not.toContain('hashedModules:');
+    expect(src).not.toContain('startHead:');
+
     expect(src).toContain('readCandidateBundle(fixturesDir, phase)');
     // projection을 복제하지 않는다 — 공유 모듈만 쓴다.
     expect(src).not.toContain('evaluateProjection(');
@@ -6227,7 +7589,7 @@ describe('S4 candidate 원자성 — context와 PNG가 한 덩어리로 공개�
       pngs: Object.fromEntries(Object.keys(r.pngByName).sort().map((n) => [n, sha256(r.pngByName[n])])) };
   };
   const seed = (d) => {
-    const e = RUN.writeCandidate({ fixturesDir: d, phase: 'light', contextRaw: 'OLD-CONTEXT',
+    const e = RUN.writeCandidate({ expectedCurrentBundleName: RUN.CANDIDATE_CAS_ANY, fixturesDir: d, phase: 'light', contextRaw: 'OLD-CONTEXT',
       pngByCaptureName: { 'a.png': PNG_X() }, expectedCaptureNames: ['a.png'] });
     expect(e).toEqual([]);
     return snapshot(d);
@@ -6238,7 +7600,7 @@ describe('S4 candidate 원자성 — context와 PNG가 한 덩어리로 공개�
 
   it('GREEN: context와 PNG가 같은 bundle에 함께 공개된다', () => {
     const d = mk();
-    expect(RUN.writeCandidate({ fixturesDir: d, phase: 'light', contextRaw: 'CTX',
+    expect(RUN.writeCandidate({ expectedCurrentBundleName: RUN.CANDIDATE_CAS_ANY, fixturesDir: d, phase: 'light', contextRaw: 'CTX',
       pngByCaptureName: { 'a.png': PNG_X() }, expectedCaptureNames: ['a.png'] })).toEqual([]);
     const r = RUN.readCandidateBundle(d, 'light');
     expect(r.errors).toEqual([]);
@@ -6256,7 +7618,7 @@ describe('S4 candidate 원자성 — context와 PNG가 한 덩어리로 공개�
     // temp 생성 자체를 실패시킨다 — 어느 지점에서 실패해도 결과는 같아야 한다.
     const shotsRoot = join(d, RUN.CANDIDATE_ROOT);
     chmodSync(shotsRoot, 0o500);
-    const e = RUN.writeCandidate({ fixturesDir: d, phase: 'light', contextRaw: 'NEW-CONTEXT',
+    const e = RUN.writeCandidate({ expectedCurrentBundleName: RUN.CANDIDATE_CAS_ANY, fixturesDir: d, phase: 'light', contextRaw: 'NEW-CONTEXT',
       pngByCaptureName: { 'b.png': PNG_Y() }, expectedCaptureNames: ['b.png'] });
     chmodSync(shotsRoot, 0o700);
     expect(e.length).toBeGreaterThan(0);
@@ -6269,7 +7631,7 @@ describe('S4 candidate 원자성 — context와 PNG가 한 덩어리로 공개�
   it('RED: PNG 이름이 예약어/경로면 아무것도 쓰지 않는다', () => {
     const d = mk(); const before = seed(d);
     for (const bad of [{ [RUN.BUNDLE_CONTEXT_NAME]: PNG_Y() }, { 'a/b.png': PNG_Y() }, { '../x.png': PNG_Y() }]) {
-      const e = RUN.writeCandidate({ fixturesDir: d, phase: 'light', contextRaw: 'N',
+      const e = RUN.writeCandidate({ expectedCurrentBundleName: RUN.CANDIDATE_CAS_ANY, fixturesDir: d, phase: 'light', contextRaw: 'N',
         pngByCaptureName: bad, expectedCaptureNames: Object.keys(bad) });
       expect(e.length).toBeGreaterThan(0);
     }
@@ -6280,7 +7642,7 @@ describe('S4 candidate 원자성 — context와 PNG가 한 덩어리로 공개�
 
   it('RED: 캡처 집합 불일치면 이전 bundle 유지', () => {
     const d = mk(); const before = seed(d);
-    const e = RUN.writeCandidate({ fixturesDir: d, phase: 'light', contextRaw: 'N',
+    const e = RUN.writeCandidate({ expectedCurrentBundleName: RUN.CANDIDATE_CAS_ANY, fixturesDir: d, phase: 'light', contextRaw: 'N',
       pngByCaptureName: { 'a.png': PNG_Y() }, expectedCaptureNames: ['a.png', 'b.png'] });
     expect(e.join(' ')).toMatch(/WRITE_CAPTURE_SET_MISMATCH/);
     expect(snapshot(d)).toEqual(before);
@@ -6289,7 +7651,7 @@ describe('S4 candidate 원자성 — context와 PNG가 한 덩어리로 공개�
 
   it('기존 bundle이 있어도 교체는 원자적이고 잔존 temp가 없다', () => {
     const d = mk(); seed(d);
-    expect(RUN.writeCandidate({ fixturesDir: d, phase: 'light', contextRaw: 'CTX2',
+    expect(RUN.writeCandidate({ expectedCurrentBundleName: RUN.CANDIDATE_CAS_ANY, fixturesDir: d, phase: 'light', contextRaw: 'CTX2',
       pngByCaptureName: { 'b.png': PNG_Y() }, expectedCaptureNames: ['b.png'] })).toEqual([]);
     const r = RUN.readCandidateBundle(d, 'light');
     expect(r.contextRaw).toBe('CTX2');
@@ -6300,8 +7662,8 @@ describe('S4 candidate 원자성 — context와 PNG가 한 덩어리로 공개�
 
   it('phase는 서로 다른 bundle이다', () => {
     const d = mk();
-    RUN.writeCandidate({ fixturesDir: d, phase: 'light', contextRaw: 'L', pngByCaptureName: { 'a.png': PNG_X() }, expectedCaptureNames: ['a.png'] });
-    RUN.writeCandidate({ fixturesDir: d, phase: 'dark', contextRaw: 'D', pngByCaptureName: { 'a.png': PNG_Y() }, expectedCaptureNames: ['a.png'] });
+    RUN.writeCandidate({ expectedCurrentBundleName: RUN.CANDIDATE_CAS_ANY, fixturesDir: d, phase: 'light', contextRaw: 'L', pngByCaptureName: { 'a.png': PNG_X() }, expectedCaptureNames: ['a.png'] });
+    RUN.writeCandidate({ expectedCurrentBundleName: RUN.CANDIDATE_CAS_ANY, fixturesDir: d, phase: 'dark', contextRaw: 'D', pngByCaptureName: { 'a.png': PNG_Y() }, expectedCaptureNames: ['a.png'] });
     expect(RUN.readCandidateBundle(d, 'light').contextRaw).toBe('L');
     expect(RUN.readCandidateBundle(d, 'dark').contextRaw).toBe('D');
     rmSync(d, { recursive: true, force: true });
@@ -6505,7 +7867,7 @@ describe('S4 phase positive — capturePhaseCore가 code=0에 도달한다', () 
     const core = await p;
     let bundle = null;
     if (core.code === 0 && !over.skipWrite) {
-      const w = RUN.writeCandidate({ fixturesDir: dir, phase: 'light',
+      const w = RUN.writeCandidate({ expectedCurrentBundleName: RUN.CANDIDATE_CAS_ANY, fixturesDir: dir, phase: 'light',
         contextRaw: core.result.contextRaw, pngByCaptureName: core.result.pngByCaptureName,
         expectedCaptureNames: core.result.expectedCaptureNames });
       expect(w).toEqual([]);
@@ -6567,7 +7929,7 @@ describe('S4 candidate publish — pointer 하나만 바뀌고 public 경로가 
   const mk = () => mkdtempSync(join(tmpdir(), 's4pub-'));
   const root = (d) => join(d, RUN.CANDIDATE_ROOT);
   const ptr = (d) => join(root(d), RUN.CANDIDATE_POINTER('light'));
-  const put = (d, ctx, pngs) => RUN.writeCandidate({ fixturesDir: d, phase: 'light',
+  const put = (d, ctx, pngs) => RUN.writeCandidate({ expectedCurrentBundleName: RUN.CANDIDATE_CAS_ANY, fixturesDir: d, phase: 'light',
     contextRaw: ctx, pngByCaptureName: pngs, expectedCaptureNames: Object.keys(pngs) });
   const readable = (d) => { const r = RUN.readCandidateBundle(d, 'light'); return r.errors.length ? null : r; };
 
@@ -6704,16 +8066,21 @@ describe('S4 phase mid-run dirty — worktree가 더러워지면 write 0회', ()
       ['?? frontend/newfile.js\0', /\?\? frontend\/newfile/],
       ['R  new/path.js\0old/path.js\0', /R {2}old\/path.js -> new\/path.js/],
     ];
+    // 파싱 계약은 **순수 함수**로 본다 — exec 주입 지점을 만들지 않는다.
+    const text = (es) => es.map((e2) => (e2.from ? `${e2.xy} ${e2.from} -> ${e2.path}` : `${e2.xy} ${e2.path}`)).join(' ');
     for (const [porcelain, rx] of cases) {
-      const e = CAP.worktreeDirtyEntries('/repo', exec(porcelain));
-      expect(e.length, porcelain).toBeGreaterThan(0);
-      expect(e.join(' ')).toMatch(rx);
+      const es = PROM.parsePorcelainZ(porcelain);
+      expect(es.length, porcelain).toBeGreaterThan(0);
+      expect(text(es)).toMatch(rx);
     }
-    // git status 자체가 실패해도 fail-closed다.
-    expect(CAP.worktreeDirtyEntries('/repo', () => { throw new Error('git gone'); }).join(' '))
-      .toMatch(/WORKTREE_STATUS_FAILED/);
+    // git status 자체가 실패하면 fail-closed다 — git repo가 아닌 실제 경로로 확인한다.
+    const notRepo = mkdtempSync(join(tmpdir(), 's4-notrepo-'));
+    try {
+      expect(CAP.worktreeDirtyEntries(notRepo).join(' ')).toMatch(/WORKTREE_STATUS_FAILED/);
+    } finally { rmSync(notRepo, { recursive: true, force: true }); }
     // clean이면 빈 배열
-    expect(CAP.worktreeDirtyEntries('/repo', exec(''))).toEqual([]);
+    expect(PROM.parsePorcelainZ('')).toEqual([]);
+    void exec;
   });
 
   it('writer는 캡처 후 postflight에서 worktree를 다시 본다', () => {
@@ -6765,7 +8132,7 @@ describe('S4 candidate storage — 전용 ignored root, race 재검증, symlink 
   const mk = () => mkdtempSync(join(tmpdir(), 's4cs-'));
   const root = (d) => join(d, RUN.CANDIDATE_ROOT);
   const ptr = (d, ph = 'light') => join(root(d), RUN.CANDIDATE_POINTER(ph));
-  const put = (d, ctx, pngs, ph = 'light') => RUN.writeCandidate({ fixturesDir: d, phase: ph,
+  const put = (d, ctx, pngs, ph = 'light') => RUN.writeCandidate({ expectedCurrentBundleName: RUN.CANDIDATE_CAS_ANY, fixturesDir: d, phase: ph,
     contextRaw: ctx, pngByCaptureName: pngs, expectedCaptureNames: Object.keys(pngs) });
   const P1 = () => ({ 'a.png': Buffer.from('1') });
 
@@ -6811,7 +8178,7 @@ describe('S4 candidate storage — 전용 ignored root, race 재검증, symlink 
     expect(status()).toBe('');
     expect(put(fx, 'LIGHT', P1(), 'light')).toEqual([]);
     expect(status()).toBe('');                       // candidate가 worktree를 더럽히지 않는다
-    expect(CAP.worktreeDirtyEntries(d, (c) => execSync(c, { encoding: 'utf8' }))).toEqual([]);
+    expect(CAP.worktreeDirtyEntries(d)).toEqual([]);
     expect(put(fx, 'DARK', P1(), 'dark')).toEqual([]);
     expect(status()).toBe('');
     expect(RUN.readCandidateBundle(fx, 'light').contextRaw).toBe('LIGHT');
@@ -6873,7 +8240,7 @@ describe('S4 candidate storage — 전용 ignored root, race 재검증, symlink 
       { phase: 'light', contextRaw: 'x', pngByCaptureName: { '.dot.png': Buffer.from('1') }, expectedCaptureNames: ['.dot.png'] },
     ]) {
       let out = null;
-      expect(() => { out = RUN.writeCandidate({ fixturesDir: d, ...args }); }).not.toThrow();
+      expect(() => { out = RUN.writeCandidate({ expectedCurrentBundleName: RUN.CANDIDATE_CAS_ANY, fixturesDir: d, ...args }); }).not.toThrow();
       expect(Array.isArray(out)).toBe(true);
       expect(out.length).toBeGreaterThan(0);
     }
@@ -6978,7 +8345,7 @@ describe('S4 lifecycle 진단 — primary 다음에 나온다', () => {
 describe('S4 candidate commit — lock · commit point · 입력 검증', () => {
   const mk = () => mkdtempSync(join(tmpdir(), 's4cc-'));
   const root = (d) => join(d, RUN.CANDIDATE_ROOT);
-  const put = (d, ctx, pngs, ph = 'light') => RUN.writeCandidate({ fixturesDir: d, phase: ph,
+  const put = (d, ctx, pngs, ph = 'light') => RUN.writeCandidate({ expectedCurrentBundleName: RUN.CANDIDATE_CAS_ANY, fixturesDir: d, phase: ph,
     contextRaw: ctx, pngByCaptureName: pngs, expectedCaptureNames: Object.keys(pngs) });
   const P1 = () => ({ 'a.png': Buffer.from('1') });
 
@@ -7053,6 +8420,7 @@ describe('S4 candidate commit — lock · commit point · 입력 검증', () => 
     ];
     for (const [over, rx] of bad) {
       const args = { fixturesDir: d, phase: 'light', contextRaw: 'A',
+        expectedCurrentBundleName: RUN.CANDIDATE_CAS_ANY,
         pngByCaptureName: P1(), expectedCaptureNames: ['a.png'], ...over };
       let out = null;
       expect(() => { out = RUN.writeCandidate(args); }).not.toThrow();
@@ -7170,7 +8538,7 @@ describe('S4 phase gate — 순수 결정 함수 + 실제 Git checkout', () => {
     writeFileSync(join(d, 'a.txt'), 'x'); mkdirSync(join(d, 'sub'));
     writeFileSync(join(d, 'sub', 'b.txt'), 'y');
     execSync(`git -C ${d} init -q && git -C ${d} add -A && git -C ${d} -c user.email=t@t -c user.name=t commit -q -m i`, { stdio: 'ignore' });
-    const dirty = () => CAP.worktreeDirtyEntries(d, (c) => execSync(c, { encoding: 'utf8' }));
+    const dirty = () => CAP.worktreeDirtyEntries(d);
     expect(dirty()).toEqual([]);
     writeFileSync(join(d, 'a.txt'), 'changed');
     expect(dirty().join(' ')).toMatch(/ M a\.txt/);
@@ -7280,15 +8648,15 @@ describe('S4 HEAD 이동 — pinned blob만으로는 못 잡는다', () => {
     execSync(`git -C ${d} init -q && git -C ${d} add -A && git -C ${d} -c user.email=t@t -c user.name=t commit -q -m A`, { stdio: 'ignore' });
     const A = g('rev-parse HEAD').trim();
     const exec = (c) => execSync(c, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-    const head0 = PROM.headBlobBinding(d, CAP.HASHED_MODULES, exec);
+    const head0 = PROM.headBlobBinding(d, CAP.HASHED_MODULES);
     expect(head0.errors).toEqual([]);
     // 캡처 중 제품 SCSS만 바꾼 clean commit B
     writeFileSync(join(d, 'frontend', 'styles', 'x.scss'), '.a{color:blue}\n');
     execSync(`git -C ${d} add -A && git -C ${d} -c user.email=t@t -c user.name=t commit -q -m B`, { stdio: 'ignore' });
     const B = g('rev-parse HEAD').trim();
     expect(B).not.toBe(A);
-    expect(CAP.worktreeDirtyEntries(d, exec)).toEqual([]);            // clean이다
-    const head1 = PROM.headBlobBinding(d, CAP.HASHED_MODULES, exec, A);
+    expect(CAP.worktreeDirtyEntries(d)).toEqual([]);            // clean이다
+    const head1 = PROM.headBlobBinding(d, CAP.HASHED_MODULES, A);
     expect(head1.errors).toEqual([]);                                  // 인프라 blob은 동일
     expect(JSON.stringify(head1.blobs)).toBe(JSON.stringify(head0.blobs));
     // pinned blob만 보면 통과한다 — 현재 HEAD를 독립적으로 봐야 잡힌다.
@@ -7321,11 +8689,25 @@ describe('S4 generator authority — 자기 자신을 포함한 closure + clean 
 
   it('generator는 시작과 write 직전에 repo clean을 본다', () => {
     const src = readFileSync(new URL('../scripts/s4-gen.mjs', import.meta.url), 'utf8');
-    expect(src).toContain("requireCleanRepo('AT_START')");
-    expect(src).toContain("requireCleanRepo('BEFORE_WRITE')");
+    // clean만 보는 게 아니라 **시작 commit에 못박은 authority**를 본다.
+    expect(src).toContain("requireStartAuthority('AT_START')");
+    expect(src).toContain("requireStartAuthority('BEFORE_WRITE')");
     expect(src).toContain('GENERATOR_HASHED_MODULES');
-    expect(src.indexOf("requireCleanRepo('AT_START')")).toBeLessThan(src.indexOf('PROJ.buildProjection('));
-    expect(src.indexOf("requireCleanRepo('BEFORE_WRITE')")).toBeLessThan(src.indexOf('EV.approveAndWrite({'));
+    expect(src).toContain('const START_COMMIT = START.headCommit');
+    // provenance는 시작 commit 기준으로만 만든다.
+    expect(src).toContain('headBlobBinding(REPO_DIR, HASHED_MODULES, START_COMMIT)');
+    expect(src.indexOf("requireStartAuthority('AT_START')")).toBeLessThan(src.indexOf('PROJ.buildProjection('));
+    expect(src.indexOf("requireStartAuthority('BEFORE_WRITE')")).toBeLessThan(src.indexOf('EV.approveAndWrite({'));
+    // 옛 clean-only 게이트는 남아 있지 않다.
+    expect(src).not.toContain('requireCleanRepo');
+    // **sink 직전 게이트**: 실제 write 콜백을 sinkWriter가 감싼다 — mkdir/write보다 앞이다.
+    expect(src).toContain('PROMOTE_IO.sinkWriter({');
+    const sink = src.slice(src.indexOf('PROMOTE_IO.sinkWriter({'));
+    expect(sink.indexOf('startCommit: START_COMMIT')).toBeLessThan(sink.indexOf('mkdirSync(FIXDIR'));
+    expect(sink.indexOf('startCommit: START_COMMIT')).toBeLessThan(sink.indexOf('writeFileSync(candidatePath'));
+    const sw = readFileSync(new URL('./s4Promote.mjs', import.meta.url), 'utf8');
+    const fn2 = sw.slice(sw.indexOf('export function sinkWriter'));
+    expect(fn2.indexOf('generatorAuthority(repoDir, startCommit)')).toBeLessThan(fn2.indexOf('write(bytes)'));
   });
 
   it.each([
@@ -7356,7 +8738,7 @@ describe('S4 candidate lock — ownership과 foreign lock', () => {
   const mk = () => mkdtempSync(join(tmpdir(), 's4lk-'));
   const root = (d) => join(d, RUN.CANDIDATE_ROOT);
   const lockOf = (d) => join(root(d), '.lock-light');
-  const put = (d, ctx) => RUN.writeCandidate({ fixturesDir: d, phase: 'light', contextRaw: ctx,
+  const put = (d, ctx) => RUN.writeCandidate({ expectedCurrentBundleName: RUN.CANDIDATE_CAS_ANY, fixturesDir: d, phase: 'light', contextRaw: ctx,
     pngByCaptureName: { 'a.png': Buffer.from('1') }, expectedCaptureNames: ['a.png'] });
 
   it('RED: root가 outside symlink면 밖에 lock을 만들지 않는다', () => {
@@ -7388,7 +8770,9 @@ describe('S4 candidate lock — ownership과 foreign lock', () => {
   it('ownership 검사와 복구 절차가 코드에 있다', () => {
     const src = readFileSync(new URL('./s4CaptureRunner.mjs', import.meta.url), 'utf8');
     expect(src).toContain('WRITE_LOCK_OWNERSHIP_LOST');
-    expect(src).toContain('fstatSync(lockFd)');
+    // lock 구현은 **acquireCandidateLock 하나**다 — 승격도 같은 것을 잡는다.
+    expect(src).toContain('export function acquireCandidateLock');
+    expect(src).toContain('fstatSync(fd)');
     expect(src).toContain('lockStillOurs()');
     expect(RUN.LOCK_RECOVERY).toEqual(['WRITE_LOCK_BUSY', 'WRITE_LOCK_OWNERSHIP_LOST', 'WRITE_COMMITTED_BUT']);
     // 자동 stale 회수가 없다 — mtime 기반 판단이 없어야 한다.
@@ -7403,7 +8787,10 @@ describe('S4 candidate lock — ownership과 foreign lock', () => {
     const src = readFileSync(new URL('./s4CaptureRunner.mjs', import.meta.url), 'utf8');
     const fn = src.slice(src.indexOf('export function writeCandidate'));
     const body = fn.slice(0, fn.indexOf('\nexport function readCandidateBundle'));
-    expect(body.indexOf('safeNode(fixturesDir, p2, k)')).toBeLessThan(body.indexOf("openSync(lockPath, 'wx')"));
+    expect(body.indexOf('safeNode(fixturesDir, p2, k)')).toBeLessThan(body.indexOf('acquireCandidateLock(fixturesDir, phase)'));
+    // lock 구현 자체도 root containment를 먼저 본다.
+    const lk = src.slice(src.indexOf('export function acquireCandidateLock'));
+    expect(lk.indexOf("safeNode(fixturesDir, root, 'dir')")).toBeLessThan(lk.indexOf("openSync(p, 'wx')"));
   });
 });
 
@@ -7451,7 +8838,7 @@ describe('S4 main→sink 호출 결속 — 우회 mutant는 RED', () => {
 
   it('RED: 시작 게이트를 삭제한 mutant는 다른 지점에서 죽는다', async () => {
     const r = await runMain((src) => src.replace(
-      "  const dirty0 = worktreeDirtyEntries(repoDir, gitExec);",
+      "  const dirty0 = worktreeDirtyEntries(repoDir);",
       '  const dirty0 = [];'));
     expect(r.errs).not.toMatch(/WORKTREE_DIRTY/);      // 시작 게이트가 사라졌다
     expect(r.code).toBe(1);                            // 그래도 HEAD 게이트가 받는다
@@ -7976,11 +9363,11 @@ describe('S4 HEAD 결속 — 캡처 시작 시점에 강제한다', () => {
   const exec = (c) => __exec(c, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
   it('tracked + working blob === HEAD blob 을 모두 본다', () => {
     // tracked 여부만 보면 로컬 수정본이 통과한다(LAYOUT_UNIT 1/64→1/8 후 재동결 시나리오).
-    const clean = PROM.headBlobBinding(REPO, ['frontend/package.json'], exec);
+    const clean = PROM.headBlobBinding(REPO, ['frontend/package.json']);
     expect(clean.errors).toEqual([]);
     expect(clean.headCommit).toMatch(/^[0-9a-f]{40}$/);
     expect(clean.blobs['frontend/package.json']).toMatch(/^[0-9a-f]{40}$/);
-    const missing = PROM.headBlobBinding(REPO, ['frontend/__definitely_not_tracked__.mjs'], exec);
+    const missing = PROM.headBlobBinding(REPO, ['frontend/__definitely_not_tracked__.mjs']);
     expect(missing.errors.join()).toMatch(/HASH_OBJECT_FAILED|NOT_TRACKED_AT_HEAD/);
     expect(missing.blobs).toBeNull();
   });
@@ -8905,10 +10292,12 @@ describe('S4 case.min 독립 검증', () => {
 describe('S4 커밋 산출물 게이트 — 실제 fixture 원문·context 원문·PNG 바이트', () => {
   // **release가 없으면 이 게이트는 검증할 대상이 없다.** legacy 파일로 대신 통과시키지 않고
   // 아래 테스트들을 명시적으로 skip한다 — 첫 승격 이후 자동으로 살아난다.
-  it('release 유무를 명시한다 — 없으면 아래 게이트는 skip된다', () => {
-    const rel = committedRelease();
-    if (!rel) { expect(HAS_RELEASE).toBe(false); return; }
-    expect(Object.keys(rel).sort()).toEqual(['dark', 'expectedSha', 'light']);
+  // **non-skip.** 실제 FIXTURES_DIR의 release 상태가 fail이면 여기서 RED다 — 건너뛰지 않는다.
+  it('release 상태는 fail-closed다 — 깨진 release는 skip이 아니라 RED', () => {
+    expect(RELEASE_STATE.mode === 'fail' ? RELEASE_STATE.errors : []).toEqual([]);
+    expect(['skip', 'run']).toContain(RELEASE_STATE.mode);
+    if (RELEASE_STATE.mode === 'run')
+      expect(Object.keys(committedRelease()).sort()).toEqual(['dark', 'expectedSha', 'light']);
   });
   // **release bundle reader 기준**. legacy 직접 읽기를 쓰지 않는다.
   const BUNDLE = () => committedBundle('light');
@@ -8916,30 +10305,114 @@ describe('S4 커밋 산출물 게이트 — 실제 fixture 원문·context 원�
   const ctxRaw = () => { const b = BUNDLE(); return b.absent ? null : b.contextRaw; };
   const readPng = (name) => { const b = BUNDLE(); return b.absent ? null : b.readPng(name); };
   // 실제 BASE 3파일을 컴파일해 선언을 얻는다 — baseDecls=[] 로는 canonical/dup 검사가 공허하다.
-  const realBaseDecls = () => {
-    const out = [];
-    for (const k of Object.keys(SPEC.FILES)) {
-      const rel = SPEC.FILES[k].rel;
-      const src = execSync(`git -C ${REPO} show ${SPEC.BASE}:frontend/${rel}`, { encoding: 'utf8' });
-      const css = compileString(src, { syntax: 'scss', url: pathToFileURL(resolve(__dirname, '..', rel)),
-        loadPaths: [resolve(__dirname, '../styles')] }).css;
-      out.push(...EV.collectDeclarations(postcss.parse(css), rel));
-    }
-    return out;
-  };
+  const realBaseDecls = sharedBaseDecls;
   const run = (over = {}) => EV.validateCommittedArtifacts({
     committedFixtureRaw: 'committedFixtureRaw' in over ? over.committedFixtureRaw : fixRaw(),
     spec: over.spec || SPEC,
     contextRaw: 'contextRaw' in over ? over.contextRaw : ctxRaw(),
     sha256, readPng: over.readPng || readPng,
     baseDecls: 'baseDecls' in over ? over.baseDecls : BASE_DECLS,
-    provenanceRefs: 'provenanceRefs' in over ? over.provenanceRefs
-      : { headCommit: 'unit', headBlobs: {}, specFingerprintNow: 'unit' },
+    provenanceRefs: 'provenanceRefs' in over ? over.provenanceRefs : REAL_REFS(),
   });
   const BASE_DECLS = realBaseDecls();
+  // **정본 provenance를 계보로 결속한다.** `unit/{}/unit` 자리표시자는 provenance 계약을
+  // 무력화하고, "기록 headCommit === 지금 HEAD"는 artifact-only commit 직후부터 영구 RED가
+  // 된다(실증). 캡처 시점 commit을 계보(실재·ancestor·capture blob·현재 blob)로 검증한 뒤
+  // **그 시점 값**을 기준으로 쓴다.
+  let REFS_MEMO = null;
+  const REAL_REFS = () => {
+    if (REFS_MEMO) return REFS_MEMO;
+    const pv = JSON.parse(ctxRaw()).provenance || {};
+    REFS_MEMO = { headCommit: pv.headCommit, headBlobs: pv.blobs || {},
+      specFingerprintNow: EV.specFingerprint(EV.snapshotSpec(SPEC).spec, sha256),
+      lineage: PROM.provenanceLineage({ repoDir: REPO, captureCommit: pv.headCommit, recordedBlobs: pv.blobs }) };
+    return REFS_MEMO;
+  };
+  it.skipIf(!HAS_RELEASE)('capture commit 계보가 성립한다 — 실재·ancestor·capture blob·현재 blob', () => {
+    expect(REAL_REFS().lineage.errors).toEqual([]);
+    expect(REAL_REFS().lineage.ok).toBe(true);
+  });
   const mutFx = (f) => { const o = JSON.parse(fixRaw()); f(o); return JSON.stringify(o); };
   const mutCtx = (f) => { const o = JSON.parse(ctxRaw()); f(o); return JSON.stringify(o); };
 
+  // **두 phase 모두** 연다. 이전 판은 light만 봐서 dark version이 통째로 사라져도 GREEN이었다(실증).
+  it.skipIf(!HAS_RELEASE)('light·dark 양쪽 version이 checked reader로 열린다', () => {
+    const want = SPEC.REQUIRED_SMOKE_SURFACES.map((x) => x.captureName).sort();
+    const rel = committedRelease();
+    for (const ph of ['light', 'dark']) {
+      const b = PROM.readCaptureBundle(FIXTURES_DIR, ph);
+      expect(b.errors, ph).toEqual([]);
+      expect(Object.keys(b.pngByName).sort(), ph).toEqual(want);
+      expect(b.digest, ph).toBe(rel[ph]);
+      const ctx = JSON.parse(b.contextRaw);
+      expect(ctx.phase, ph).toBe(ph);
+      expect(ctx.privacyAudit, ph).toBeTruthy();
+    }
+    expect(rel.light).not.toBe(rel.dark);
+  });
+  // **두 phase 모두 validateCaptureBundle 전체를 돌린다.** 이전 판은 게이트에서 이 함수를
+  // 한 번도 부르지 않았고(호출 0건), light만 fixture 결속으로 봤다.
+  const bundleOf = (ph) => {
+    const b = PROM.readCaptureBundle(FIXTURES_DIR, ph);
+    return { contextRaw: b.contextRaw, pngByName: b.pngByName };
+  };
+  const runBundle = (ph, over = {}) => {
+    const b = bundleOf(ph);
+    return EV.validateCaptureBundle({ spec: SPEC, phase: ph,
+      contextRaw: 'contextRaw' in over ? over.contextRaw : b.contextRaw,
+      pngByName: over.pngByName || b.pngByName,
+      provenanceRefs: over.provenanceRefs || REAL_REFS() });
+  };
+  const mutBundleCtx = (ph, f) => { const o = JSON.parse(bundleOf(ph).contextRaw); f(o); return JSON.stringify(o); };
+
+  it.skipIf(!HAS_RELEASE)('light·dark 모두 validateCaptureBundle 전체가 GREEN', () => {
+    for (const ph of ['light', 'dark']) expect(runBundle(ph), ph).toEqual([]);
+  });
+  it.skipIf(!HAS_RELEASE)('RED: malformed PNG (양 phase)', () => {
+    for (const ph of ['light', 'dark']) {
+      const b = bundleOf(ph);
+      const n = Object.keys(b.pngByName)[0];
+      expect(runBundle(ph, { pngByName: { ...b.pngByName, [n]: Buffer.from('not a png') } }).join('|'), ph)
+        .toMatch(/PNG|RASTER/);
+    }
+  });
+  it.skipIf(!HAS_RELEASE)('RED: 잘못된 raster (양 phase)', () => {
+    for (const ph of ['light', 'dark']) {
+      expect(runBundle(ph, { contextRaw: mutBundleCtx(ph, (o) => { o.viewport = { width: 2880, height: 1800 }; }) }).join('|'), ph)
+        .toMatch(/RASTER_CONTEXT_VIEWPORT/);
+      expect(runBundle(ph, { contextRaw: mutBundleCtx(ph, (o) => { o.capture = { ...o.capture, dpr: 2 }; }) }).join('|'), ph)
+        .toMatch(/RASTER_DPR/);
+    }
+  });
+  it.skipIf(!HAS_RELEASE)('RED: actionLog·coverage·darkReview·dataset·provenance 변조 (양 phase)', () => {
+    const first = (o) => Object.keys(o)[0];
+    for (const ph of ['light', 'dark']) {
+      expect(runBundle(ph, { contextRaw: mutBundleCtx(ph, (o) => { o.actionLog[first(o.actionLog)] = []; }) }).join('|'), `${ph} actionLog`)
+        .toMatch(/ACTION|LOG/);
+      expect(runBundle(ph, { contextRaw: mutBundleCtx(ph, (o) => { o.coverageEvidence = {}; }) }).join('|'), `${ph} coverage`)
+        .toMatch(/COVERAGE|SURFACE/);
+      expect(runBundle(ph, { contextRaw: mutBundleCtx(ph, (o) => { o.datasetResponses = []; }) }).join('|'), `${ph} dataset`)
+        .toMatch(/DATASET/);
+      expect(runBundle(ph, { provenanceRefs: { ...REAL_REFS(), headCommit: 'f'.repeat(40) } }).join('|'), `${ph} provenance`)
+        .toMatch(/EVIDENCE_PROVENANCE_HEAD/);
+      expect(runBundle(ph, { contextRaw: mutBundleCtx(ph, (o) => { o.privacyAudit = undefined; }) }).join('|'), `${ph} privacy`)
+        .toMatch(/PRIVACY_AUDIT/);
+    }
+    // darkReview는 dark 산출물에만 있는 축이다.
+    expect(runBundle('dark', { contextRaw: mutBundleCtx('dark', (o) => { o.darkReview = {}; }) }).join('|'))
+      .toMatch(/DARK_REVIEW|SURFACE/);
+  });
+
+  it.skipIf(!HAS_RELEASE)('dark raster·privacy도 정본과 대조된다', () => {
+    const b = PROM.readCaptureBundle(FIXTURES_DIR, 'dark');
+    const ctx = JSON.parse(b.contextRaw);
+    expect(ctx.viewport).toEqual({ width: SPEC.RASTER_CONTRACT.width, height: SPEC.RASTER_CONTRACT.height });
+    expect(ctx.capture).toMatchObject({ dpr: SPEC.RASTER_CONTRACT.dpr, scale: SPEC.RASTER_CONTRACT.screenshotScale });
+    const { privacyAudit, ...subject } = ctx;
+    expect(EV.validatePrivacyAudit(privacyAudit, {
+      captures: SPEC.REQUIRED_SMOKE_SURFACES.map((x) => ({ captureName: x.captureName, sha256: sha256(b.pngByName[x.captureName]) })),
+      contextSubjectSha256: sha256(JSON.stringify(CANON.canonicalize(subject))) })).toEqual([]);
+  });
   it.skipIf(!HAS_RELEASE)('실제 BASE 선언이 비어 있지 않고 canonical·중복 0', () => {
     expect(BASE_DECLS.length).toBeGreaterThan(2000);
     for (const d of BASE_DECLS) expect(d.key).toBe(EV.declarationKey(d));
@@ -8953,9 +10426,15 @@ describe('S4 커밋 산출물 게이트 — 실제 fixture 원문·context 원�
       .toEqual(['COMMITTED_FIXTURE_RAW_REQUIRED']);
     expect(run({ committedFixtureRaw: '{ nope' })).toEqual(['COMMITTED_FIXTURE_UNPARSEABLE']);
   });
-  it.skipIf(!HAS_RELEASE)('현재 커밋 산출물은 stale — fingerprint drift 검출', () => {
-    // ⚠️ 재수집·재동결 후에는 이 단정을 `expect(run()).toEqual([])`로 바꿔야 한다.
-    expect(run().join('|')).toMatch(/FROZEN_FINGERPRINT_DRIFT/);
+  // **정상 정답은 오류 0이다.** 이전 판은 "지금 산출물은 stale이니 drift가 나야 한다"를
+  // 기대값으로 굳혀 두었는데, 그러면 게이트가 통과해야 할 상태를 한 번도 확인하지 않는다.
+  // (release 없이도 이 정답이 확인되도록 promotion positive에 non-skip baseline을 두었다.)
+  it.skipIf(!HAS_RELEASE)('정상 committed 산출물은 오류 0', () => {
+    expect(run()).toEqual([]);
+  });
+  it.skipIf(!HAS_RELEASE)('fingerprint drift는 검출된다', () => {
+    expect(run({ provenanceRefs: { ...REAL_REFS(), specFingerprintNow: 'drifted' } }).join('|'))
+      .toMatch(/FINGERPRINT/);
   });
   it.skipIf(!HAS_RELEASE)('blob 계약 exact — rel/extra/missing/blob 단독 변조', () => {
     expect(run({ committedFixtureRaw: mutFx((o) => { o.blobs.T.rel = 'evil.scss'; }) }).join('|')).toMatch(/FROZEN_BLOB_REL/);
@@ -9169,7 +10648,7 @@ describe('S4 승격 트랜잭션 — expected 불변 결속과 candidate CAS', (
     const png = { 'a.png': Buffer.from('P') };
     const mk = (phase, tag) => {
       const ctx = JSON.stringify({ ...SPEC.SCENARIO_CANON, phase, datasetResponses: prodResponses(), ...tag });
-      const e = RUN.writeCandidate({ fixturesDir: d, phase, contextRaw: ctx,
+      const e = RUN.writeCandidate({ expectedCurrentBundleName: RUN.CANDIDATE_CAS_ANY, fixturesDir: d, phase, contextRaw: ctx,
         pngByCaptureName: png, expectedCaptureNames: ['a.png'] });
       expect(e).toEqual([]);
       return RUN.readCandidateBundle(d, phase);
@@ -9205,18 +10684,30 @@ describe('S4 승격 트랜잭션 — expected 불변 결속과 candidate CAS', (
   it('authority 인자 누락은 write 0 — 콜백 주입 지점이 없다', () => {
     const w = synWorld();
     try {
-      expect(call(w, { hashedModules: undefined }).errors).toEqual(['PROMOTE_HASHED_MODULES_REQUIRED']);
-      expect(call(w, { startHead: 'nothex' }).errors).toEqual(['PROMOTE_START_HEAD_REQUIRED']);
-      // HEAD가 다르면 내부 authority가 막는다(콜백이 아니라 모듈 검사다).
-      const r = call(w, { startHead: 'f'.repeat(40) });
-      expect(r.promoted).toBe(false);
+      // **hashedModules·startHead는 파라미터가 아니다.** 넣어도 무시되고, 승격은 자기가
+      // 파생한 값으로 authority를 본다(여기 synWorld의 repoDir는 git repo가 아니므로 막힌다).
+      for (const over of [{ hashedModules: [] }, { startHead: 'f'.repeat(40) }, {}]) {
+        const r = call(w, over);
+        expect(r.promoted, JSON.stringify(Object.keys(over))).toBe(false);
+        expect(r.errors.length, JSON.stringify(Object.keys(over))).toBeGreaterThan(0);
+      }
       expect(PROM.readRelease(w.d)).toBe(null);
       expect(existsSync(join(w.d, 's4-capture', 'expected'))).toBe(false);   // expected도 안 만든다
-      // 주입 가능한 postflight 인자가 없다.
+      // 주입 가능한 postflight/모듈목록/startHead 인자가 없다.
       const src = readFileSync(new URL('./s4Promote.mjs', import.meta.url), 'utf8');
       const fn = src.slice(src.indexOf('export function promoteRelease'));
-      expect(fn.slice(0, fn.indexOf(')'))).not.toContain('postflight');
-      expect(fn).toContain('promotionAuthority(repoDir, hashedModules, startHead)');
+      const sig = fn.slice(0, fn.indexOf('{'));
+      for (const banned of ['postflight', 'hashedModules', 'startHead', 'approveAndWrite'])
+        expect(sig, banned).not.toContain(banned);
+      expect(fn).toContain('promotionAuthority(repoDir, startHead, pinnedBlobs, allowance)');
+      expect(fn).toContain('headBlobBinding(repoDir, HASHED_MODULES)');
+      // late authority → version shape 재검증 → lock ownership → pointer write 순서.
+      const at = (t) => fn.indexOf(t);
+      expect(at('PROMOTE_AUTHORITY_FAILED_LATE')).toBeLessThan(at('PROMOTE_LATE_'));
+      expect(at('PROMOTE_LATE_')).toBeLessThan(at('PROMOTE_LOCK_OWNERSHIP_LOST'));
+      expect(at('PROMOTE_LOCK_OWNERSHIP_LOST')).toBeLessThan(at('atomicWrite(releasePath(fixturesDir)'));
+      // 쓰는 루트는 고정이다.
+      expect(fn).toContain('fixturesRootError(repoDir, fixturesDir)');
     } finally { rmSync(w.d, { recursive: true, force: true }); }
   });
 
@@ -9234,7 +10725,7 @@ describe('S4 승격 트랜잭션 — expected 불변 결속과 candidate CAS', (
     const w = synWorld();
     try {
       // CLI가 읽은 snapshot은 그대로 두고 디스크의 candidate만 바꾼다.
-      RUN.writeCandidate({ fixturesDir: w.d, phase: 'light',
+      RUN.writeCandidate({ expectedCurrentBundleName: RUN.CANDIDATE_CAS_ANY, fixturesDir: w.d, phase: 'light',
         contextRaw: JSON.stringify({ ...SPEC.SCENARIO_CANON, phase: 'light', datasetResponses: prodResponses(), B: 1 }),
         pngByCaptureName: { 'a.png': Buffer.from('P') }, expectedCaptureNames: ['a.png'] });
       const r = call(w);
@@ -9377,7 +10868,12 @@ describe('S4 lock — 자동 회수 없음(fail-closed)', () => {
     const code = src.replace(/\/\*[\s\S]*?\*\//g, '').split('\n')
       .map((l) => l.replace(/(^|[^:'"`])\/\/.*$/, '$1')).join('\n');
     // unlinkSync(lock)은 **자기 lock 해제**(finally)라 정상이다. 금지 대상은 시간 기반 회수뿐이다.
-    for (const banned of ['nowMs', 'staleMs', 'mtimeMs', 'statSync(lock']) expect(code).not.toContain(banned);
+    for (const banned of ['nowMs', 'staleMs', 'mtimeMs', 'atimeMs', 'ctimeMs', 'Date.now'])
+      expect(code).not.toContain(banned);
+    // 소유권 판정은 **dev/ino**여야 한다 — 이름만 보면 교체된 lock을 우리 것으로 오인한다.
+    expect(code).toContain('fstatSync(fd)');
+    expect(code).toContain('st.dev}:${st.ino}');
+    expect(code).toContain('if (ours) try { unlinkSync(lock)');
     expect(code).toContain('finally');
     void png;
   });

@@ -1,8 +1,8 @@
 import { createRequire } from 'node:module';
-import { execSync, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import * as PROMOTE_IO from '../library/s4Promote.mjs';
-import { HASHED_MODULES, GENERATOR_HASHED_MODULES, REPO_DIR, worktreeDirtyEntries } from './s4-capture.mjs';
+import { HASHED_MODULES, GENERATOR_HASHED_MODULES, REPO_DIR } from './s4-capture.mjs';
 import { createHash } from 'node:crypto';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import * as RAW_SPEC from '../library/s4Spec.mjs';
@@ -30,7 +30,14 @@ const FRONT = fileURLToPath(new URL('../', import.meta.url)).replace(/\/$/, '');
 const require = createRequire(`${FRONT}/package.json`);
 const sass = require('sass'); const postcss = require('postcss');
 const sha = (s) => createHash('sha256').update(s).digest('hex');
-const gitShow = (ref, rel) => execSync(`git -C ${REPO} show ${ref}:frontend/${rel}`, { encoding: 'utf8' });
+// BASE 소스는 **승격 모듈의 pinned reader** 하나로만 읽는다 — 환경이 제거된 argv 러너를 쓰고
+// OID가 SPEC.FILES의 blob과 exact일 때만 bytes를 준다(GIT_DIR 상속 우회 차단).
+const BLOB_BY_REL = new Map(Object.values(SPEC.FILES).map((f) => [f.rel, f.blob]));
+const gitShow = (ref, rel) => {
+  const r = PROMOTE_IO.readPinnedGitFile(REPO_DIR, ref, rel, BLOB_BY_REL.get(rel));
+  if (r.errors.length) die(`PINNED_SOURCE ${rel}`, r.errors);
+  return r.bytes;
+};
 // 임시 파일을 쓰지 않는다 — 예측 가능한 /tmp 경로에 O_EXCL 없이 write하면 미리 심어둔
 // 심볼릭 링크로 임의 파일이 덮어써진다(리뷰 실증). compileString + loadPaths로 충분하다.
 // 실제 파일 URL을 주면 상대 @use가 그대로 해석되어 import 문자열 정규식이 필요 없고,
@@ -42,25 +49,28 @@ const die = (msg, arr) => {   // 총수를 함께 찍는다 — 잘린 20건을 
   console.error(`${msg} — total=${n} shown=${Math.min(n, 20)}`, arr && arr.slice(0, 20));
   process.exit(1); };
 
-// 1) blob 검증
+// 1) blob 검증 — 읽기와 같은 pinned reader를 쓴다(경로가 둘로 갈리지 않는다).
 for (const k of Object.keys(SPEC.FILES)) { const { rel, blob } = SPEC.FILES[k];
-  const h = execSync(`git -C ${REPO} rev-parse ${SPEC.BASE}:frontend/${rel}`, { encoding: 'utf8' }).trim();
-  if (h !== blob) die(`BLOB_MISMATCH ${rel} ${h}`); }
+  const r = PROMOTE_IO.readPinnedGitFile(REPO_DIR, SPEC.BASE, rel, blob);
+  if (r.errors.length) die(`BLOB_MISMATCH ${rel}`, r.errors); }
 // 2) 테마 값 맵(라이트/다크) — **공유 projector 모듈**이 만든다(승격 경로와 같은 구현).
 // 3) 단일 evaluator 경로(검수 §4) — projection·solo attribution·identity·annotation·dark·selector·contrast 일괄
 // ── generator authority ────────────────────────────────────────────────────
 // **discovery provenance 9파일과 다른 것이다.** 저기는 "그때 관찰한 코드", 여기는
 // "지금 fixture를 만드는 코드"다. s4-gen.mjs 자신을 포함한 정적 import closure를 잠근다.
-const gitExecPlain = (c) => execSync(c, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-const requireCleanRepo = (where) => {
-  const dirty = worktreeDirtyEntries(REPO, gitExecPlain);
-  if (dirty.length) die(`REPO_DIRTY_${where} — total=${dirty.length}`, dirty.slice(0, 20));
+// **시작 commit에 못박는다.** 이전 판은 write 직전에 워킹트리 clean만 봤고, 실행 중
+// 다른 clean commit으로 checkout해도 그대로 통과했다(실증: A→B checkout 뒤
+// worktreeDirtyEntries가 []이고 시작 commit 재검증 코드는 없었다). 그러면 fixture가
+// 신고하는 provenance(A)와 실제로 읽은 소스(B)가 갈린다.
+const START = PROMOTE_IO.headBlobBinding(REPO_DIR, GENERATOR_HASHED_MODULES);
+if (START.errors.length) die('GENERATOR_HEAD_BINDING_FAILED', START.errors);
+const START_COMMIT = START.headCommit;
+// clean + HEAD 동일 + 시작 commit 기준 blob 동일. 판정은 승격 모듈이 소유한다.
+const requireStartAuthority = (where) => {
+  const a = PROMOTE_IO.generatorAuthority(REPO_DIR, START_COMMIT);
+  if (!a.ok) die(`GENERATOR_AUTHORITY_${where}`, a.errors);
 };
-requireCleanRepo('AT_START');
-{
-  const g = PROMOTE_IO.headBlobBinding(REPO_DIR, GENERATOR_HASHED_MODULES, gitExecPlain);
-  if (g.errors.length) die('GENERATOR_HEAD_BINDING_FAILED', g.errors);
-}
+requireStartAuthority('AT_START');
 
 // ── discovery 증거 preflight ────────────────────────────────────────────────
 // **projection보다 먼저.** 커밋된 Run A/B 원문이 현재 manifest와 맞지 않으면 아무것도 만들지
@@ -100,8 +110,9 @@ if (pr.errors.length) die('EVALUATE_PROJECTION', pr.errors);
 
 const fingerprint = EV.specFingerprint(SPEC, sha);
 // provenance 대조 기준을 **지금** 계산한다. 생략하면 승인이 provenance의 존재만 보게 된다.
-const HEAD = PROMOTE_IO.headBlobBinding(REPO_DIR, HASHED_MODULES,
-  (c) => execSync(c, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }));
+// provenance는 **시작 commit 기준으로만** 만든다 — 중간에 HEAD가 움직여도 다른 commit의
+// blob이 섞이지 않는다(움직였다면 write 직전 authority가 막는다).
+const HEAD = PROMOTE_IO.headBlobBinding(REPO_DIR, HASHED_MODULES, START_COMMIT);
 if (HEAD.errors.length) die('HEAD_BINDING', HEAD.errors);
 const PROVENANCE_REFS = { headCommit: HEAD.headCommit, headBlobs: HEAD.blobs, specFingerprintNow: fingerprint };
 // 6b) smoke trust chain — context 원문과 destination PNG(legacy committed 24개, 현재 target 23)의 실제 바이트로 계산
@@ -142,8 +153,9 @@ const contextRawStr = ctxRaw.toString('utf8');
 // 승인 경로는 한 번만 정의한다. writer만 바꿔 끼운다 — 승격도 같은 검증을 통과한 bytes만 쓴다.
 let canonicalBytes = null;
 const runApproval = (write) => {
-  // serialize/write **직전**에 다시 본다 — 그 사이에 워킹트리가 바뀌면 산출물의 출처가 흔들린다.
-  requireCleanRepo('BEFORE_WRITE');
+  // serialize/write **직전**에 다시 본다 — 워킹트리뿐 아니라 **HEAD가 시작 commit 그대로인지**,
+  // 시작 commit 기준 blob이 그대로인지까지 본다.
+  requireStartAuthority('BEFORE_WRITE');
   return EV.approveAndWrite({
   fixture, spec: SPEC, contrastResults: pr.contrast.results,
   actualDecls: pr.projDecls, actualRaw: pr.projSrc, preAnnSources: pr.preAnnSrc,
@@ -158,11 +170,16 @@ const runApproval = (write) => {
 
 // **committed를 쓰지 않는다.** 승인 bytes를 진단용 candidate 파일로만 남긴다.
 let candidatePath = null;
-const approve = runApproval((bytes) => {
-  mkdirSync(FIXDIR, { recursive: true });
-  candidatePath = `${FIXDIR}/${PROMOTE_IO.STAGING_NAME}`;
-  writeFileSync(candidatePath, bytes);
-});
+// writer를 sinkWriter로 감싼다 — **mkdir/write보다 authority가 먼저** 온다.
+// serialize나 validator가 도는 사이에 HEAD가 움직이면 여기서 걸리고 staging 파일은 생기지 않는다.
+const approve = runApproval(PROMOTE_IO.sinkWriter({
+  repoDir: REPO_DIR, startCommit: START_COMMIT,
+  write: (bytes) => {
+    mkdirSync(FIXDIR, { recursive: true });
+    candidatePath = `${FIXDIR}/${PROMOTE_IO.STAGING_NAME}`;
+    writeFileSync(candidatePath, bytes);
+  },
+}));
 if (approve.errors.length) die('APPROVE', approve.errors);
 const json = approve.bytes;
 console.log(`candidate expected → ${candidatePath}`);
