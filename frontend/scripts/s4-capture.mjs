@@ -543,36 +543,39 @@ export async function main(argv, { log = console.log, err = console.error } = {}
     }
     const byName = new Map(SPEC.REQUIRED_SMOKE_SURFACES.map((x) => [x.name, x]));
     const phase = cli.phase || 'light';
-    const report = [];
-    for (const name of cli.scanList) {
-      const one = { ...SPEC, REQUIRED_SMOKE_SURFACES: [byName.get(name)] };
-      const session = await withBridge({ cli, err, label: `scan ${name} (${phase})` }, async (dd, setFatal) => {
-        // 캡처와 **같은 attempt 수명주기**를 쓴다 — 이게 없으면 어댑터에 활성 페이지가 없다.
-        const r = await withAttempt(dd, 1, () => runCapture({
-          spec: one, rawContext: CAPTURE_SCENARIO, driver: dd,
-          selectors: captureSelectors(SPEC), phase, provenance: null }));
-        if (r.errors.length) setFatal(1);      // 러너 오류가 primary — shutdown이 덮지 않게 한다
-        return r;
-      });
-      const r = session && session.value;
-      const diag = (r && r.settleDiags && r.settleDiags[0]) || null;
-      const row = { surface: name, phase, ok: !!(r && r.errors.length === 0) };
-      if (diag) {
-        row.attempts = diag.attempts;
-        row.elapsedMs = diag.elapsedMs;
-        if (diag.sizes) row.sizes = diag.sizes;
-        if (diag.overflow) row.overflow = diag.overflow;
-        if (diag.last && diag.last.a && diag.last.b) {
-          const d = diffBbox(diag.last.a, diag.last.b);
-          row.diff = d.ok ? { pixels: d.pixels, bbox: d.bbox } : { error: d.reason };
+    // **브리지 한 세션에서 전부 돈다.** surface마다 브리지를 다시 열면 어댑터를 그만큼 다시
+    // 붙여야 하고, 그 사이 상태가 달라져 비교 조건이 흔들린다. attempt만 surface마다 새로 연다.
+    const session = await withBridge({ cli, err, label: `scan ${cli.scanList.length} surfaces (${phase})` },
+      async (dd) => {
+        const rows = [];
+        for (const name of cli.scanList) {
+          const one = { ...SPEC, REQUIRED_SMOKE_SURFACES: [byName.get(name)] };
+          let r = null;
+          try {
+            r = await withAttempt(dd, rows.length + 1, () => runCapture({
+              spec: one, rawContext: CAPTURE_SCENARIO, driver: dd,
+              selectors: captureSelectors(SPEC), phase, provenance: null }));
+          } catch (e) { r = { errors: [`SCAN_THREW ${(e && e.message) || e}`], settleDiags: [] }; }
+          const diag = (r && r.settleDiags && r.settleDiags[0]) || null;
+          const row = { surface: name, phase, ok: !!(r && r.errors.length === 0) };
+          if (diag) {
+            row.attempts = diag.attempts;
+            row.elapsedMs = diag.elapsedMs;
+            if (diag.sizes) row.sizes = diag.sizes;
+            if (diag.overflow) row.overflow = diag.overflow;
+            if (diag.last && diag.last.a && diag.last.b) {
+              const d = diffBbox(diag.last.a, diag.last.b);
+              row.diff = d.ok ? { pixels: d.pixels, bbox: d.bbox } : { error: d.reason };
+            }
+          }
+          if (r && r.errors.length) row.errors = r.errors.slice(0, 5);
+          rows.push(row);
+          err(`scan ${name}: ${row.ok ? `settled attempts=${row.attempts} ${row.elapsedMs}ms`
+            : `UNSETTLED ${JSON.stringify(row.diff || row.errors)}`}`);
         }
-      }
-      if (r && r.errors.length) row.errors = r.errors.slice(0, 5);
-      if (!r) row.errors = ['SCAN_NO_RESULT'];
-      report.push(row);
-      err(`scan ${name}: ${row.ok ? `settled attempts=${row.attempts} ${row.elapsedMs}ms`
-        : `UNSETTLED ${JSON.stringify(row.diff || row.errors)}`}`);
-    }
+        return rows;
+      });
+    const report = (session && session.value) || [];
     log(JSON.stringify({ mode: 'scan', phase, wrote: false, report }, null, 1));
     return report.every((x) => x.ok) ? 0 : 1;
   }
