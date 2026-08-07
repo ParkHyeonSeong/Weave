@@ -4,6 +4,7 @@
 import { Extension } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import WeaveLink from './extensions/WeaveLink';
+import YUndoRedo from './extensions/YUndoRedo';
 import Placeholder from '@tiptap/extension-placeholder';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import { Table } from '@tiptap/extension-table';
@@ -35,13 +36,15 @@ export function buildCanvasEditorExtensions({ canvasId } = {}) {
   const ext = [
     StarterKit.configure({
       codeBlock: false,
-      history: false,
+      // undoRedo: v3 옵션명(구 history는 무효 no-op) — yUndoPlugin(CanvasCollabEditor)과의 이중 undo 차단
+      undoRedo: false,
       link: false, // WeaveLink로 별도 등록(WEAVE-37 inclusive 분리) — StarterKit 번들 Link와 중복 방지
     }),
     WeaveLink.configure({
       openOnClick: false,
       HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' },
     }),
+    YUndoRedo, // undoRedo:false로 사라진 undo/redo 명령·Mod-z 키맵을 Yjs 인지 방식으로 복원
     ResizableImage,
     Placeholder.configure({ placeholder: 'Start writing...' }),
     CodeBlockLowlight.configure({ lowlight }),

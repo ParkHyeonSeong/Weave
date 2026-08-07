@@ -537,10 +537,12 @@ export default function CanvasEditorToolbar({ editor, rawModeEnabled = false, ra
       <Sep />
 
       {/* Undo / Redo */}
-      <Btn onClick={() => editor.chain().focus().undo().run()} title="Undo">
+      {/* Yjs undo/redo는 포커스가 필요 없다 — blur 상태에서 focus()를 태우면 rAF 지연 selection이
+          빈 fragment redo와 겹쳐 문서를 <p></p><p>…</p>로 오염시킨다(WEAVE-37). commands.undo/redo만 호출. */}
+      <Btn onClick={() => editor.commands.undo()} title="Undo">
         <Undo2 size={16} />
       </Btn>
-      <Btn onClick={() => editor.chain().focus().redo().run()} title="Redo">
+      <Btn onClick={() => editor.commands.redo()} title="Redo">
         <Redo2 size={16} />
       </Btn>
 
