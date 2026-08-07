@@ -4,12 +4,27 @@ import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { applyLinkValue, isEditingLink, editingLinkMark } from './editorLink.js';
 import WeaveLink from '../components/Canvas/extensions/WeaveLink.js';
+import { WEAVE_CORE_EXTENSION_OPTIONS } from './editorCoreOptions.js';
 
 // Canvas의 최악 케이스(autolink:true → Link.inclusive:true)로 에디터를 만들어
 // "삽입 직후 다음 입력이 링크로 이어짐"까지 잡는다. Scrum(autolink:false)은 더 안전한 부분집합.
 function makeEditor(content = '<p></p>') {
   return new Editor({
     extensions: [StarterKit.configure({ link: { openOnClick: false, autolink: true } })],
+    content,
+  });
+}
+
+// 프로덕션 4표면(TaskDesc·Comment·Issue·Canvas)과 동일 구성: StarterKit link:false + WeaveLink.
+// 모듈 스코프(형제 describe 재사용) + core guard(삭제+removeMark를 직접 검증하므로 Task 1이
+// 막은 비동기 RangeError가 테스트에서 되살아나는 것 방지).
+function makeWeaveLinkEditor(content = '<p></p>') {
+  return new Editor({
+    coreExtensionOptions: WEAVE_CORE_EXTENSION_OPTIONS,
+    extensions: [
+      StarterKit.configure({ codeBlock: false, link: false }),
+      WeaveLink.configure({ openOnClick: false, HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' } }),
+    ],
     content,
   });
 }
@@ -255,21 +270,6 @@ describe('Edge cases - 같은 href·다른 attrs 인접 링크(전체 attrs 스�
 });
 
 describe('WeaveLink - inclusive를 autolink에서 분리 (WEAVE-37)', () => {
-  // 프로덕션 4표면(TaskDesc·Comment·Issue·Canvas)과 동일 구성:
-  // StarterKit link:false + WeaveLink 별도 등록 (canvasEditorExtensions.js:36-44 패턴)
-  function makeWeaveLinkEditor(content = '<p></p>') {
-    return new Editor({
-      extensions: [
-        StarterKit.configure({ codeBlock: false, link: false }),
-        WeaveLink.configure({
-          openOnClick: false,
-          HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' },
-        }),
-      ],
-      content,
-    });
-  }
-
   it('업스트림 Link(autolink:true)는 끝 글자 삭제 후 재입력 시 link를 상속한다 — 버그 재현 핀', () => {
     // 이 테스트가 tiptap 업그레이드 후 깨지면 업스트림이 inclusive를 분리한 것 → WeaveLink 제거 검토 신호
     editor = makeEditor('<p><a href="https://a.com">one</a></p>'); // 기존 팩토리 = inclusive:true
@@ -301,5 +301,217 @@ describe('WeaveLink - inclusive를 autolink에서 분리 (WEAVE-37)', () => {
     applyLinkValue(editor, 'example.com');
     editor.view.dispatch(editor.state.tr.insertText('X'));
     expect(editor.getHTML()).toMatch(/<\/a>X/);
+  });
+});
+
+describe('WeaveLink 링크 무결성 플러그인 (WEAVE-37 잔존 경로)', () => {
+  // R1 라이브 재현(2026-07-14): 더블클릭 부분선택 삭제 후 내부 타이핑이 옛 href로 전부 링크됨
+  it('URL-미러 링크의 부분 삭제는 링크를 통째로 해제한다 (Rule B)', () => {
+    editor = makeWeaveLinkEditor(
+      '<p>start <a href="https://example.com">https://example.com</a> end</p>'
+    );
+    // 'example' 구간 삭제 → 텍스트 "https://.com" ≠ href
+    // 실제 제스처: 선택 → Backspace → **현재 selection 위치**에 타이핑(14차 P2: 하드코딩 16은
+    // 삭제 후 실제 caret(15)이 아니었고, 삽입된 NEW도 확인하지 않았다).
+    editor.commands.setTextSelection({ from: 15, to: 22 });
+    editor.commands.deleteSelection();
+    const html = editor.getHTML();
+    expect(html).not.toContain('<a ');           // mark 해제 → 잔존물이 평문화
+    expect(html).toContain('https://.com');       // 텍스트 자체는 보존(사용자가 지우게)
+    editor.commands.insertContent('NEW');         // 삭제 직후 caret에 타이핑(R1 재현 제스처)
+    expect(editor.getText()).toContain('https://NEW.com');
+    expect(editor.getHTML()).not.toContain('<a ');
+    expect(JSON.stringify(editor.getJSON())).not.toContain('"type":"link"'); // link mark 0개
+  });
+
+  it('라벨 링크의 라벨 부분 편집은 링크를 유지한다 (Rule B 비적용)', () => {
+    editor = makeWeaveLinkEditor('<p><a href="https://x.com">click here</a></p>');
+    editor.commands.deleteRange({ from: 6, to: 11 }); // ' here' 삭제 → 'click'
+    expect(editor.getHTML()).toContain('href="https://x.com"');
+    expect(editor.getHTML()).toContain('>click</a>');
+  });
+
+  it('공백만 남은 링크런은 mark만 제거하고 공백 텍스트는 남긴다 (Rule A — 17차 P2)', () => {
+    editor = makeWeaveLinkEditor('<p><a href="https://x.com">a b</a></p>');
+    editor.commands.deleteRange({ from: 3, to: 4 }); // 'b' 삭제
+    editor.commands.deleteRange({ from: 1, to: 2 }); // 'a' 삭제 → marked ' '만 잔존
+    expect(editor.getHTML()).not.toContain('<a ');
+    expect(editor.getText()).toBe(' ');             // 공백 텍스트는 보존(mark만 제거)
+  });
+
+  it('storedMarks의 link는 즉시 제거된다 (Rule C — DOM-변이 삭제 주입 방어)', () => {
+    editor = makeWeaveLinkEditor('<p><a href="https://x.com">x</a>y</p>');
+    const { state } = editor;
+    const link = state.schema.marks.link.create({ href: 'https://x.com' });
+    editor.view.dispatch(state.tr.setStoredMarks([link]));
+    expect(editor.state.storedMarks?.some((m) => m.type.name === 'link') ?? false).toBe(false);
+  });
+
+  it('Rule C는 link만 제거하고 bold 등 비링크 stored mark는 보존한다 (8차 P1)', () => {
+    editor = makeWeaveLinkEditor('<p><a href="https://x.com">x</a>y</p>');
+    const { state } = editor;
+    const link = state.schema.marks.link.create({ href: 'https://x.com' });
+    const bold = state.schema.marks.bold.create();
+    editor.view.dispatch(state.tr.setStoredMarks([bold, link]));
+    const names = (editor.state.storedMarks || []).map((m) => m.type.name);
+    expect(names).toContain('bold');       // 보존
+    expect(names).not.toContain('link');   // 제거
+  });
+
+  it('Rule A/B가 문서 link를 지우는 동시에 storedMarks=[bold]가 보존된다 (14·15차 P1 — 통합)', () => {
+    // 15차 실측: setStoredMarks와 deleteRange를 **별도 dispatch**하면 삭제 tr의 ReplaceStep이
+    // storedMarks를 null로 리셋해(실측 (A) → null) 플러그인 실행 시점엔 bold 정보가 이미 없다.
+    // → 삭제와 stored mark 주입을 **같은 root transaction**으로 보내야 한다(실측 (B) → ['bold']).
+    editor = makeWeaveLinkEditor(
+      '<p>start <a href="https://example.com">https://example.com</a> end</p>'
+    );
+    editor.commands.setTextSelection({ from: 15, to: 22 });         // 'example' 선택
+    const bold = editor.state.schema.marks.bold.create();
+    editor.view.dispatch(
+      editor.state.tr.deleteSelection().setStoredMarks([bold])      // delete step **뒤에** stored 설정
+    );
+    expect(editor.getHTML()).not.toContain('<a ');                  // 문서 link 해제(Rule B)
+    expect((editor.state.storedMarks || []).map((m) => m.type.name)).toEqual(['bold']); // bold 보존
+  });
+
+  it('무관한 편집은 기존 링크를 건드리지 않는다', () => {
+    editor = makeWeaveLinkEditor(
+      '<p><a href="https://example.com">https://example.com</a> tail</p>'
+    );
+    editor.commands.insertContentAt(editor.state.doc.content.size - 1, '!');
+    expect(editor.getHTML()).toContain('>https://example.com</a>');
+  });
+
+  it('www 형태 미러(href에 프로토콜 보강됨)도 편집 시 해제된다 (Rule B 정규화)', () => {
+    editor = makeWeaveLinkEditor('<p><a href="http://www.foo.com">www.foo.com</a></p>');
+    editor.commands.deleteRange({ from: 5, to: 8 }); // 'foo' 삭제
+    expect(editor.getHTML()).not.toContain('<a ');
+  });
+
+  it('email 미러(mailto: href)도 편집 시 해제된다 (Rule B — linkify 판정)', () => {
+    editor = makeWeaveLinkEditor(
+      '<p><a href="mailto:user@example.com">user@example.com</a></p>'
+    );
+    editor.commands.deleteRange({ from: 2, to: 6 }); // 'ser@' 삭제
+    expect(editor.getHTML()).not.toContain('<a ');
+  });
+
+  it('스킴만 다른 라벨 링크(텍스트 https://x.com, href http://x.com)는 미러가 아니다 — 편집해도 링크 유지', () => {
+    editor = makeWeaveLinkEditor('<p><a href="http://x.com">https://x.com</a>z</p>');
+    editor.commands.deleteRange({ from: 9, to: 10 }); // 라벨 한 글자 삭제 — 라벨 편집
+    expect(editor.getHTML()).toContain('href="http://x.com"');
+  });
+
+  it('preventAutolink 메타가 붙은 삭제여도 공백-only 잔존은 정리된다 (Rule A 무조건 실행)', () => {
+    editor = makeWeaveLinkEditor('<p><a href="https://x.com">x  </a>y</p>');
+    const { state } = editor;
+    // 팝오버 unsetLink 계열이 남길 수 있는 잔존을 모사: x만 지우고 marked 공백 2개 잔존
+    const tr = state.tr.delete(1, 2).setMeta('preventAutolink', true);
+    editor.view.dispatch(tr);
+    expect(editor.getHTML()).not.toContain('<a ');
+  });
+
+  it('툴바(applyLinkValue) 무스킴 bare-domain 링크도 미러다 — 부분삭제 시 해제 (2차 리뷰 P1)', () => {
+    editor = makeWeaveLinkEditor('<p></p>');
+    // 실제 생성 경로: 라벨 "example.com"(무스킴 원문) + href https://example.com
+    // (normalizeLinkHref editorLink.js:33 → insertContent :80-83). linkify 기본 보강은
+    // http://라 완전일치 비교로는 미러 인식 실패 — isUrlMirror의 무스킴 관용이 계약.
+    applyLinkValue(editor, 'example.com');
+    expect(editor.getHTML()).toContain('href="https://example.com"');
+    editor.commands.deleteRange({ from: 2, to: 5 }); // 라벨 일부 삭제 → 미러 깨짐
+    expect(editor.getHTML()).not.toContain('<a ');
+  });
+
+  it('로컬 팝오버로 미러의 href만 변경하면 링크가 유지된다 (preventAutolink Rule B 스킵 — 4차 정리 항목)', () => {
+    editor = makeWeaveLinkEditor('<p><a href="https://example.com">https://example.com</a></p>');
+    editor.commands.setTextSelection(3); // 링크 내부 커서 → applyLinkValue의 mark 분기
+    applyLinkValue(editor, 'https://changed.com'); // extendMarkRange+setLink — preventAutolink 메타
+    expect(editor.getHTML()).toContain('href="https://changed.com"');
+    expect(editor.getHTML()).toContain('>https://example.com</a>'); // 라벨 유지·링크 생존
+  });
+
+  it('미러 앞의 비인접 같은-attrs 새 라벨 링크 삽입은 라벨을 보존한다 (overlap — 5차 P1)', () => {
+    editor = makeWeaveLinkEditor('<p>x <a href="https://example.com">https://example.com</a></p>');
+    editor.commands.insertContentAt(1, {
+      type: 'text', text: 'docs', marks: [{ type: 'link', attrs: { href: 'https://example.com' } }],
+    });
+    expect(editor.getHTML()).toContain('>docs</a>');
+    expect(editor.getHTML()).toContain('>https://example.com</a>');
+  });
+
+  it('미러 바로 앞(인접·경계)에 같은-href 라벨 링크를 삽입해도 둘 다 해제되지 않는다 (10차 P1)', () => {
+    // 인접 삽입은 병합 run "docshttps://example.com"을 만든다 — old 미러의 부분수열이 아니라 보호.
+    editor = makeWeaveLinkEditor('<p><a href="https://example.com">https://example.com</a></p>');
+    editor.commands.insertContentAt(1, {
+      type: 'text', text: 'docs', marks: [{ type: 'link', attrs: { href: 'https://example.com' } }],
+    });
+    expect(editor.getHTML()).toContain('<a ');                 // 링크 생존(전체 unlink 아님)
+    expect(editor.getText()).toContain('docshttps://example.com');
+  });
+
+  it('부분수열이 되는 병합(.com+공백 삭제 → examplecom)에서도 옆 라벨이 보존된다 (12차 P1)', () => {
+    // "https://example.com" 미러 + 공백 + 같은 href "com" 라벨. 미러의 ".com"과 공백을 삭제하면
+    // "https://examplecom"으로 병합 — 이 텍스트는 미러의 부분수열이라 부분수열 가드는 뚫린다.
+    // containment 가드는 투영이 old 미러 범위를 넘어(옆 라벨까지) 불간섭 → 라벨 생존.
+    editor = makeWeaveLinkEditor(
+      '<p><a href="https://example.com">https://example.com</a> <a href="https://example.com">com</a></p>'
+    );
+    const dotCom = 1 + 'https://example'.length;      // '.com' 시작
+    editor.commands.deleteRange({ from: dotCom, to: dotCom + '.com'.length + 1 }); // '.com'+공백 삭제
+    // anchor/mark 전수 검증(13차 P2): 병합 run이 통째로 해제되지 않고 링크 mark가 살아있어야 한다
+    const marked = JSON.stringify(editor.getJSON()).match(/"type":"link"/g) || [];
+    expect(marked.length).toBeGreaterThan(0);        // link mark 생존
+    expect(editor.getText()).toContain('examplecom');
+    expect(editor.getHTML()).toContain('href="https://example.com"');
+  });
+
+  it('KNOWN LIMIT(D6): 실제 backspace 연타로 미러+라벨이 점진 병합되면 최종 삭제에서 라벨까지 해제된다', () => {
+    // 14차 P1: 두 개의 **같은 href** 링크(미러 + 라벨)가 공백 하나로 인접할 때, 커서를 라벨 앞에
+    // 두고 오른쪽→왼쪽 backspace로 '.com'+공백을 지우면 트랜잭션마다 병합 run이 갱신되고, 어느
+    // 순간 텍스트가 정확한 미러가 됐다가 마지막 삭제에서 containment를 통과해 병합 run 전체가 해제된다.
+    // 단일 트랜잭션 삭제는 보호되지만(위 테스트), 다중 트랜잭션 병합은 provenance가 소실돼 못 막는다.
+    // 이 테스트는 **현재(의도된) 동작을 고정**한다 — 개선(provenance 추적, D6-옵션B) 시 기대를 뒤집는다.
+    editor = makeWeaveLinkEditor(
+      '<p><a href="https://example.com">https://example.com</a> <a href="https://example.com">com</a></p>'
+    );
+    let caret = 1 + 'https://example.com'.length + 1; // 라벨 'com' 시작(공백 뒤)
+    for (let i = 0; i < 5; i += 1) { editor.commands.deleteRange({ from: caret - 1, to: caret }); caret -= 1; }
+    // 알려진 한계를 **실제로 고정**한다(14차 P1: 텍스트만 보면 무플러그인 main·제안 구현·Rule B
+    // 삭제 mutation이 전부 통과해 아무것도 못 잡았다). 링크가 해제된다는 현재 동작을 anchor와
+    // link mark 0개로 단언 — 동작이 바뀌면(예: D6=B provenance 추적 채택) 이 테스트가 먼저 깨진다.
+    expect(editor.getText()).toContain('examplecom');
+    expect(editor.getHTML()).not.toContain('<a ');
+    expect(JSON.stringify(editor.getJSON())).not.toContain('"type":"link"');
+  });
+
+  it('미러 텍스트를 선택-교체(삽입 포함)하면 링크가 유지된다 — 삭제-only 계약 (11차 P1)', () => {
+    // 'example'을 선택해 'e'로 교체 → 결과 "https://e.com"은 old 미러의 부분수열이지만
+    // 트랜잭션에 삽입이 있어 isDeletionOnly=false → Rule B 미적용(링크 유지).
+    editor = makeWeaveLinkEditor('<p><a href="https://example.com">https://example.com</a></p>');
+    const start = 1 + 'https://'.length;
+    editor.commands.insertContentAt({ from: start, to: start + 'example'.length }, 'e');
+    expect(editor.getHTML()).toContain('href="https://example.com"'); // 링크 생존
+    expect(editor.getText()).toContain('https://e.com');
+  });
+
+  it('미러 바로 뒤(인접)에 같은-href 라벨을 삽입해도 해제되지 않는다 (10차 P1)', () => {
+    editor = makeWeaveLinkEditor('<p><a href="https://example.com">https://example.com</a></p>');
+    const end = 1 + 'https://example.com'.length;
+    editor.commands.insertContentAt(end, {
+      type: 'text', text: 'docs', marks: [{ type: 'link', attrs: { href: 'https://example.com' } }],
+    });
+    expect(editor.getHTML()).toContain('<a ');
+  });
+
+  it('미러+공백+같은-href 라벨에서 공백 삭제로 두 링크가 병합돼도 링크가 해제되지 않는다 (8·9차 P1)', () => {
+    // 공백 삭제 → 동일 attrs 두 링크가 하나로 coalesce: "https://example.comdocs".
+    // 병합 run의 old 투영이 단일 미러 범위를 벗어나므로 Rule B 불간섭(정당 라벨 보호).
+    // 이 테스트는 플러그인 없이도 통과하는 positive control(가드가 빠지면 실패) — 9차 정정.
+    editor = makeWeaveLinkEditor(
+      '<p><a href="https://example.com">https://example.com</a> <a href="https://example.com">docs</a></p>'
+    );
+    const spacePos = 1 + 'https://example.com'.length; // 문단 시작(1) + 미러 텍스트 끝 = 공백 위치
+    editor.commands.deleteRange({ from: spacePos, to: spacePos + 1 });
+    expect(editor.getHTML()).toContain('>https://example.comdocs</a>'); // 병합 링크 통째 생존
   });
 });
