@@ -130,6 +130,67 @@ def test_bookmark_label_bracket_escape_roundtrip():
     assert '예시 ] 사이트' in out
 
 
+# ---- WEAVE-37: 일반 <a> 링크 직렬화 계약 (frontend WeaveLink와 계약쌍) ----
+
+def test_generic_anchor_paren_href_encoded():
+    # 칩/북마크 전용이던 _esc_link_url 계약을 일반 <a>로 확장 (frontend WeaveLink와 쌍)
+    md = html_to_markdown('<p><a href="https://example.com/a)b">t</a></p>')
+    assert '[t](https://example.com/a%29b)' in md
+
+
+def test_empty_label_link_fallback_ingress():
+    # [](url)이 빈 <a></a>로 렌더되면 API/MCP ingress(ensure_html, task.py:140 등)에서 무음 소실
+    html = markdown_to_html('[](https://example.com)')
+    assert '>https://example.com</a>' in html
+
+
+def test_empty_link_pair_removed():
+    # []() degenerate — backend는 빈 쌍 제거(frontend는 리터럴 유지, 계약 §빈 링크 발산).
+    # exact 계약(15차 P2): <a>가 없을 뿐 아니라 결과가 정확히 'a  b'
+    assert markdown_to_html('a []() b').strip() == '<p>a  b</p>'
+
+
+def test_generic_anchor_chomp_preserved():
+    # markdownify chomp 계약 보존(15차 P2) — 앞뒤 공백이 링크 밖으로 나온다
+    assert html_to_markdown('<p>x<a href="https://x.com"> t </a>y</p>') == 'x [t](https://x.com) y'
+
+
+def test_mirror_link_egress_labeled_not_angle():
+    # <a href=x>x</a> → [x](x) (축약 <x> 금지) — 재왕복 is_html 오판 차단(7차 P1)
+    md = html_to_markdown('<p><a href="https://example.com">https://example.com</a></p>')
+    assert md == '[https://example.com](https://example.com)'
+    assert '<https' not in md
+
+
+def test_link_title_quote_roundtrip_exact():
+    # quote escape 구현을 삭제하면 실패해야 한다(20차 P2: backslash 케이스만으론 못 잡음)
+    title = 'say "hi"'
+    md = html_to_markdown(f'<p><a href="https://x.com" title=\'{title}\'>t</a></p>')
+    from bs4 import BeautifulSoup
+    assert BeautifulSoup(markdown_to_html(md), 'html.parser').a['title'] == title
+
+
+def test_link_title_quote_and_backslash_roundtrip_exact():
+    title = 'a\\"b'          # backslash + quote 혼합
+    md = html_to_markdown(f'<p><a href="https://x.com" title=\'{title}\'>t</a></p>')
+    from bs4 import BeautifulSoup
+    assert BeautifulSoup(markdown_to_html(md), 'html.parser').a['title'] == title
+
+
+def test_link_title_backslash_roundtrip_exact():
+    # 17차 P1: egress substring이 아니라 **재파싱 후 title 원문 복원**을 구조로 검증한다.
+    title = 'end\\'                      # 런타임 값: end + backslash 1개
+    md = html_to_markdown(f'<p><a href="https://x.com" title="{title}">t</a></p>')
+    html = markdown_to_html(md)
+    from bs4 import BeautifulSoup
+    assert BeautifulSoup(html, 'html.parser').a['title'] == title
+
+
+def test_code_anchor_not_linkified():
+    # <code> 안의 <a>는 _noformat 가드로 텍스트만 남아야 한다(8차 P1)
+    assert html_to_markdown('<p><code><a href="https://x.com">y</a></code></p>') == '`y`'
+
+
 def test_unknown_tag_degrades_to_text():
     assert '남는 텍스트' in html_to_markdown('<figure><figcaption>남는 텍스트</figcaption></figure>')
 

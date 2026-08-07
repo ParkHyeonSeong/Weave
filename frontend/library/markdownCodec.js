@@ -8,9 +8,9 @@
 // - breaks: true는 markdownMath.js의 new Marked({ breaks: true })와 dialect 일치 조건.
 // - MarkdownManager 생성자는 중첩 토크나이즈 헬퍼용 this.lexer를 전역 defaults로
 //   만들므로 인스턴스 defaults로 재생성해 보정한다.
-import { Marked } from 'marked';
 import { generateHTML, generateJSON } from '@tiptap/core';
 import { Markdown, MarkdownManager } from '@tiptap/markdown';
+import { createWeaveMarked } from './markedFactory';
 
 const managerCache = new WeakMap();
 
@@ -22,7 +22,9 @@ function stripMarkdownExtension(extensions) {
 }
 
 function createManager(extensions) {
-  const md = new Marked({ breaks: true });
+  // createWeaveMarked: md.Lexer가 정규화 subclass라 이 manager도, 리스트 재토큰화
+  // (this.lexer.inlineTokens dist:392)도 bare URL de-link·빈 라벨 폴백을 자동 적용한다.
+  const md = createWeaveMarked();
   const manager = new MarkdownManager({ marked: md, extensions: stripMarkdownExtension(extensions) });
   manager.lexer = new md.Lexer(md.defaults);
   return manager;
@@ -42,7 +44,9 @@ export function getMarkdownManager(extensions) {
 // 에디터용: 기존 extensions에 @tiptap/markdown 확장을 덧붙인다.
 // contentType: 'markdown' 파싱과 editor.getMarkdown()/editor.markdown이 활성화된다(S3 raw 모드용).
 export function buildMarkdownExtensions(extensions) {
-  return [...extensions, Markdown.configure({ marked: new Marked({ breaks: true }) })];
+  // createWeaveMarked: TipTap Markdown.configure의 별도 manager(editor.markdown, contentType md)도
+  // new markedInstance.Lexer()로 정규화 subclass를 받아 dialect·빈 라벨 폴백이 적용된다.
+  return [...extensions, Markdown.configure({ marked: createWeaveMarked() })];
 }
 
 // raw 모드·전체 직렬화: 에디터 현재 문서 → markdown

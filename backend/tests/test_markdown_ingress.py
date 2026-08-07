@@ -131,6 +131,16 @@ async def test_task_create_html_passthrough(db_session):
     assert task["description"] == html
 
 
+async def test_task_create_empty_label_link_fallback(db_session):
+    # [](url)이 빈 <a></a>로 렌더되면 ingress에서 URL 무음 소실 — 라벨 폴백 계약(WEAVE-37)
+    user, branch = await _seed_branch(db_session, "ING_LNK")
+    body = task_schema.TaskCreate(title="t", description="[](https://example.com)")
+    res = await task_ctrl.create(body, branch, _req(user), db_session)
+    assert res["status"] is True
+    task = await task_model.find_by_id(res["task_id"], db_session)
+    assert '>https://example.com</a>' in task["description"]
+
+
 async def test_task_update_converts_markdown(db_session):
     user, branch = await _seed_branch(db_session, "ING_C")
     tid = await _make_task(db_session, branch, user)

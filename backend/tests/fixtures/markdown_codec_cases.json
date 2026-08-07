@@ -304,5 +304,79 @@
       "roundtrip"
     ],
     "note": "percent-encoded 괄호 href를 양쪽 파서(marked/markdown-it)가 그대로 보존 — encodeMarkdownUrl 출력의 왕복 안정성 계약"
+  },
+  {
+    "name": "bare-url-not-autolinked",
+    "markdown": "보기 https://example.com 끝",
+    "html_tiptap": "<p>보기 https://example.com 끝</p>",
+    "html_ingress": "<p>보기 https://example.com 끝</p>\n",
+    "directions": [
+      "md->html"
+    ],
+    "note": "GFM url tokenizer autolink 제거 — backend commonmark(linkify off)와 dialect 정렬(WEAVE-37 R4). roundtrip 안정이라 regen 허용(불변이 회귀 증거)"
+  },
+  {
+    "name": "paren-url-not-autolinked",
+    "markdown": "앞 (https://example.com) 뒤",
+    "html_tiptap": "<p>앞 (https://example.com) 뒤</p>",
+    "html_ingress": "<p>앞 (https://example.com) 뒤</p>\n",
+    "directions": [
+      "md->html"
+    ],
+    "note": "(url) 괄호 잔존물이 링크로 부활하지 않음(WEAVE-37 R4-①)"
+  },
+  {
+    "name": "bare-email-not-autolinked",
+    "markdown": "문의 user@example.com 로",
+    "html_tiptap": "<p>문의 user@example.com 로</p>",
+    "html_ingress": "<p>문의 user@example.com 로</p>\n",
+    "directions": [
+      "md->html"
+    ],
+    "note": "GFM url tokenizer는 email도 자동링크 — dialect 통일에 포함(backend와 동일)"
+  },
+  {
+    "name": "angle-email-md-only",
+    "regen": false,
+    "markdown": "<user@example.com>",
+    "html_tiptap": "<p><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"mailto:user@example.com\">user@example.com</a></p>",
+    "html_ingress": "<p><a href=\"mailto:user@example.com\">user@example.com</a></p>\n",
+    "directions": [
+      "md->html"
+    ],
+    "note": "commonmark autolink 유지 증거 — <url>은 [url](url)로 재직렬화되어 roundtrip 불안정 → regen:false, md->html 전용"
+  },
+  {
+    "name": "angle-autolink-md-only",
+    "regen": false,
+    "markdown": "<https://example.com>",
+    "html_tiptap": "<p><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://example.com\">https://example.com</a></p>",
+    "html_ingress": "<p><a href=\"https://example.com\">https://example.com</a></p>\n",
+    "directions": [
+      "md->html"
+    ],
+    "note": "commonmark 꺾쇠 autolink 유지 — regen 스크립트는 directions 무시하고 markdown을 재직렬화하므로 <url>이 [url](url)로 바뀌어 케이스 자멸 → regen:false 필수"
+  },
+  {
+    "name": "empty-label-link-fallback",
+    "regen": false,
+    "markdown": "[](https://example.com)",
+    "html_tiptap": "<p><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://example.com\">https://example.com</a></p>",
+    "html_ingress": "<p><a href=\"https://example.com\">https://example.com</a></p>\n",
+    "directions": [
+      "md->html"
+    ],
+    "note": "[](url) 빈 라벨은 URL을 라벨로 폴백(무음 소실 방지) — roundtrip은 [url](url)로 재직렬화되어 regen이 케이스를 지운다 → regen:false, md->html 전용"
+  },
+  {
+    "name": "link-paren-href-encode",
+    "regen": false,
+    "markdown": "[t](https://example.com/a%29b)",
+    "html_tiptap": "<p><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://example.com/a)b\">t</a></p>",
+    "html_ingress": null,
+    "directions": [
+      "html->md"
+    ],
+    "note": "일반 <a> href의 unbalanced ')'를 egress에서 percent-encode(WeaveLink.renderMarkdown/_esc_link_url 계약쌍). raw ')' href 손입력 → regen이 이미-인코딩 HTML로 덮어 회귀 검증 무력화 → regen:false, html->md 전용"
   }
 ]

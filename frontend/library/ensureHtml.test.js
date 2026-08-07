@@ -29,4 +29,8 @@ describe('ensureRenderableHtml (md 폴백 승격)', () => {
     expect(ensureRenderableHtml('')).toBe('');
     expect(ensureRenderableHtml(null)).toBe(null);
   });
+  it('[](url) 빈 라벨 링크는 URL 라벨로 폴백 렌더된다 (WEAVE-37 무음 소실 방지)', () => {
+    expect(ensureRenderableHtml('[](https://example.com)'))
+      .toContain('<a href="https://example.com">https://example.com</a>');
+  });
 });

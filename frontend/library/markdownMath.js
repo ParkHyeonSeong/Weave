@@ -1,4 +1,5 @@
 import { Marked } from 'marked';
+import { createWeaveMarked, weaveMarkedToHtml } from './markedFactory';
 
 // data-latex는 속성값으로 들어가므로 &, <, >, " 이스케이프 필수
 function escapeAttr(s) {
@@ -60,13 +61,16 @@ const inlineMathExtension = {
   },
 };
 
-// 인스턴스 분리: 전역 marked를 오염시키지 않는다
-const plainMarked = new Marked({ breaks: true });
-const mathMarked = new Marked({ breaks: true });
+// 인스턴스 분리: 전역 marked를 오염시키지 않는다. createWeaveMarked로 dialect(bare URL
+// de-link)·빈 라벨 폴백을 direct 경로에도 통일한다(WEAVE-37 Task 4).
+const plainMarked = createWeaveMarked();
+const mathMarked = createWeaveMarked();
 mathMarked.use({ extensions: [blockMathExtension, inlineMathExtension] });
 
+// ⚠️ .parse()는 shadow한 md.lexer를 호출하지 않는다(19차 P1 실측) — 반드시 명시적
+//    lexer→정규화→parser 경로(weaveMarkedToHtml)를 써야 direct 경로도 정규화된다.
 export function markdownToHtml(text, { math = false } = {}) {
-  return (math ? mathMarked : plainMarked).parse(text);
+  return weaveMarkedToHtml(math ? mathMarked : plainMarked, text);
 }
 
 // 붙여넣은 텍스트가 블록 수식을 담고 있는지 — 마크다운 감지의 강한 신호로 사용
@@ -92,9 +96,40 @@ const MD_PATTERNS = [
   /^\|.+\|$/m,           // 테이블
 ];
 
+// 감지 전용 raw marked 인스턴스(정규화 안 함).
+// ⚠️ plainMarked(=createWeaveMarked)의 lexer는 빈 라벨을 이미 URL 라벨로 채워버리므로
+//    그걸로 감지하면 항상 false다(9차 P1 실측 자기무력화) — 반드시 별도 raw lexer로 판정.
+const detectMarked = new Marked({ breaks: true });
+
+// [](url) 빈 라벨 링크가 최상위(다른 링크 밖)에 실토큰으로 존재하는가 — 정규식이 아니라
+// lexer 토큰트리로 판정한다(코드스팬·이미지·이스케이프 오탐 방지 + table 셀·[][ref] 포함).
+// 사전 필터는 '[' 존재만(ref-style [][r]은 '](' 없이도 빈 링크 — 5차 prefilter 결함).
+export function hasEmptyLabelLink(text) {
+  if (!text || !text.includes('[')) return false;
+  let found = false;
+  const walk = (tokens, inLink) => {
+    for (const t of tokens || []) {
+      if (found) return;
+      if (t.type === 'link') {
+        if (!inLink && !(t.tokens && t.tokens.length) && t.href) { found = true; return; }
+        walk(t.tokens, true);
+      } else if (t.type === 'table') {
+        (t.header || []).forEach((c) => walk(c.tokens, inLink));
+        (t.rows || []).forEach((r) => r.forEach((c) => walk(c.tokens, inLink)));
+      } else if (t.type !== 'codespan' && t.type !== 'code') {
+        walk(t.tokens, inLink);              // t.tokens가 [] truthy여서 items 건너뛰는 것 방지(9차)
+        walk(t.items, inLink);
+      }
+    }
+  };
+  walk(detectMarked.lexer(text), false);
+  return found;
+}
+
 export function looksLikeMarkdown(text, { math = false } = {}) {
   // 헤더/코드블록/(수식 노드를 아는 에디터에선) 블록·인라인 수식은 단독으로도 마크다운 판정
   if (MD_PATTERNS[0].test(text) || MD_PATTERNS[1].test(text)) return true;
+  if (hasEmptyLabelLink(text)) return true; // WEAVE-37: 빈 라벨 링크 무음 소실 방지(단독 강신호)
   if (math && (hasMathBlock(text) || hasInlineMath(text))) return true;
 
   let matchCount = 0;

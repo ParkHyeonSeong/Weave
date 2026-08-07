@@ -54,4 +54,18 @@ describe('MarkdownPastePlugin shift 탈출구', () => {
     const paragraphs = editor.getJSON().content.filter((n) => n.type === 'paragraph');
     expect(paragraphs.length).toBe(2);
   });
+
+  it('[](url) 단독 붙여넣기는 URL 라벨 링크로 변환된다 (빈 라벨 폴백 — WEAVE-37)', () => {
+    // looksLikeMarkdown이 hasEmptyLabelLink로 감지 → markdownToHtml이 URL을 라벨로 채워 삽입.
+    editor = new Editor({ extensions: [StarterKit], content: '<p></p>' });
+    editor.view.input.shiftKey = false;
+    const handled = plugin.props.handlePaste(editor.view, makePasteEvent('[](https://example.com)'));
+    expect(handled).toBe(true);
+    const findLink = (n) => ((n?.type === 'text' && n.marks?.find((m) => m.type === 'link'))
+      ? n : (n?.content || []).reduce((acc, c) => acc ?? findLink(c), null));
+    const node = findLink(editor.getJSON());
+    expect(node).toBeTruthy();
+    expect(node.text).toBe('https://example.com');                                  // 텍스트 === URL
+    expect(node.marks.find((m) => m.type === 'link').attrs.href).toBe('https://example.com');
+  });
 });

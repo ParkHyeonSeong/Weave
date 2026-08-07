@@ -29,7 +29,8 @@ mdit-py-plugins 0.6.1) — 상세는 .superpowers/sdd/task-S2.1-report.md:
 import re
 
 from markdown_it import MarkdownIt
-from markdownify import MarkdownConverter, abstract_inline_conversion
+from markdown_it.token import Token  # [](url) 빈 라벨 폴백 core rule (WEAVE-37, JS엔 state.Token 있으나 py엔 없음)
+from markdownify import MarkdownConverter, abstract_inline_conversion, chomp
 from mdit_py_plugins.dollarmath import dollarmath_plugin
 from mdit_py_plugins.tasklists import tasklists_plugin
 
@@ -109,6 +110,29 @@ class _WeaveConverter(MarkdownConverter):
             label = el.get('data-title') or el.get('data-url', '')
             return f"\n[{_esc_link_text(label)}]({_esc_link_url(el.get('data-url', ''))})\n\n"
         return text  # 미커버 div — 텍스트 강등
+
+    def convert_a(self, el, text, parent_tags):
+        # 기본 markdownify convert_a의 _noformat 가드·chomp를 **그대로 보존**하고(8차 P1:
+        # 누락 시 <code><a>y</a></code>가 'y'가 아니라 '[y](url)'로 오염), autolink 축약만
+        # 덮어쓴다. 축약(<url>)은 egress→ingress 재왕복에서 is_html 오판으로 raw 저장되므로
+        # (7차 실측) text==href여도 **항상 명시적 [label](url)**. href 괄호는 _esc_link_url,
+        # title은 backslash-먼저 escape(frontend WeaveLink와 동일).
+        if '_noformat' in parent_tags:
+            return text
+        prefix, suffix, text = chomp(text)
+        if not text:
+            return ''
+        href = el.get('href')
+        if not href:
+            return text
+        dest = _esc_link_url(href)
+        title = el.get('title')
+        if title:
+            t = title.replace('\\', '\\\\').replace('"', '\\"')
+            return f'{prefix}[{text}]({dest} "{t}"){suffix}'
+        return f'{prefix}[{text}]({dest}){suffix}'
+    # 주의(5·7차): 라벨 text의 [·] escape는 markdownify가 text를 이미 처리한 뒤라 여기서
+    # 재escape는 이중이 될 수 있어 두지 않는다 — 라벨 특수문자 왕복은 frontend와 함께 D3 한계.
 
     # Tiptap 리스트 아이템은 항상 자식을 <p>로 감싼다. markdownify 기본값은
     # p를 앞뒤 빈 줄(\n\n)로 감싸 li 안에 중첩 리스트가 있으면 그 사이에
@@ -348,6 +372,34 @@ def _build_parser() -> MarkdownIt:
     md.add_render_rule('math_inline', _render_inline_math)
     md.add_render_rule('math_inline_double', _render_inline_math)
     md.add_render_rule('math_block', _render_block_math)
+
+    def _empty_link_label(state):
+        # [](url) → markdown-it은 빈 <a></a>를 렌더해 라벨/URL이 무음 소실된다(WEAVE-37).
+        # link_open 직후가 link_close면: href 있음 → href를 라벨 텍스트로 주입,
+        # href도 빈 []() → 빈 <a href="">가 남지 않게 쌍 자체를 제거.
+        # in-place insert/del은 최악 O(n²)이므로 새 리스트를 한 번에 조립한다(8차 보완).
+        for token in state.tokens:
+            if token.type != 'inline' or not token.children:
+                continue
+            kids = token.children
+            out = []
+            i = 0
+            n = len(kids)
+            while i < n:
+                t = kids[i]
+                if t.type == 'link_open' and i + 1 < n and kids[i + 1].type == 'link_close':
+                    href = t.attrGet('href') or ''
+                    if href:
+                        text_tok = Token('text', '', 0)
+                        text_tok.content = href
+                        out.extend([t, text_tok, kids[i + 1]])
+                    # href 비면 쌍을 통째로 버림(out에 아무것도 안 넣음)
+                    i += 2
+                    continue
+                out.append(t)
+                i += 1
+            token.children = out
+    md.core.ruler.push('weave_empty_link_label', _empty_link_label)
     return md
 
 

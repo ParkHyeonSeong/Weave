@@ -4,6 +4,7 @@ import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { combineTransactionSteps, getChangedRanges, getMarkRange } from '@tiptap/core';
 import { ySyncPluginKey } from 'y-prosemirror'; // 원격 판별 — 문자열 'y-sync$' 아님(8차 P1)
 import { ReplaceStep } from '@tiptap/pm/transform'; // 삭제-only 판정(11차 P1)
+import { encodeMarkdownUrl } from './refMarkdown'; // href 괄호 percent-encode(backend _esc_link_url 계약쌍)
 
 // WEAVE-37: 업스트림 Link는 mark의 inclusive를 autolink 옵션에 묶어 둔다
 // (@tiptap/extension-link@3.20.0 dist/index.js:229-231). inclusive만 false로 분리하고
@@ -132,6 +133,25 @@ const WeaveLink = Link.extend({
   inclusive: false,
   addProseMirrorPlugins() {
     return [...(this.parent?.() || []), linkIntegrityPlugin()];
+  },
+  // parseMarkdown은 **오버라이드하지 않는다**(15차 P2 확정): 프로덕션 marked는 전부
+  // createWeaveMarked로 교체되고 normalizeWeaveTokens가 lexer 단계에서 이미 빈 라벨을 URL로
+  // 채우므로, 업스트림 parseMarkdown 상속만으로 동일한 JSON이 나온다(리뷰 실측). 중복 구현을
+  // 두면 진실원이 둘이 된다 — 정규화기를 단일 진실원으로 유지한다.
+  renderMarkdown(node, h) {
+    // 업스트림은 href를 무인코딩 삽입 — unbalanced ')'가 재파싱에서 href 절단+평문 누출을
+    // 만든다(실측). 칩/북마크와 동일하게 encodeMarkdownUrl(backend _esc_link_url 계약쌍) 적용.
+    // title 따옴표는 attrs 기반 마커라 여기서 escape 가능. 반면 **라벨 텍스트 escape는 이
+    // 레벨에선 구조적으로 불가**(5차 리뷰 실측): @tiptap/markdown은 renderMarkdown 산출물을
+    // 여닫는 마커로만 쓰고 텍스트는 renderNodesWithMarkBoundaries(dist:743-)가 원문 그대로
+    // 방출한다 — renderChildren 치환은 출력에 반영되지 않는다. 라벨 escape는 D3(텍스트
+    // 직렬화 훅) 계열 백로그·잔여 한계.
+    const href = encodeMarkdownUrl(node.attrs?.href ?? '');
+    const title = node.attrs?.title ?? '';
+    const text = h.renderChildren(node);
+    // title escape: backslash 먼저, 그다음 quote (6차 리뷰 — 역순이면 trailing \ 나 \" 왕복 깨짐)
+    const escTitle = String(title).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    return title ? `[${text}](${href} "${escTitle}")` : `[${text}](${href})`;
   },
 });
 
