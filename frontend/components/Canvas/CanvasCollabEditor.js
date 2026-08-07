@@ -11,6 +11,7 @@ import { useEditorRefHydration } from '@/library/refHydration';
 import { buildCanvasEditorExtensions } from './canvasEditorExtensions';
 import { buildMarkdownExtensions } from '@/library/markdownCodec';
 import { MarkdownClipboardExtension } from './extensions/MarkdownClipboardExtension';
+import { WEAVE_CORE_EXTENSION_OPTIONS } from '@/library/editorCoreOptions';
 
 const MAX_PLAIN_TEXT_LENGTH = 60000;
 
@@ -68,6 +69,7 @@ function CollabEditorInner({
   }, [ydoc, provider, canvasId]);
 
   const editor = useEditor({
+    coreExtensionOptions: WEAVE_CORE_EXTENSION_OPTIONS,
     immediatelyRender: false,
     extensions,
     onUpdate: ({ editor }) => {

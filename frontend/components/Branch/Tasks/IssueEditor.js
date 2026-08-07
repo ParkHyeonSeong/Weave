@@ -8,6 +8,7 @@ import { MarkdownClipboardExtension } from '@/components/Canvas/extensions/Markd
 import RawMarkdownEditor from '@/components/common/RawMarkdownEditor';
 import RawModeBadge from '@/components/common/RawModeBadge';
 import { useRawMode } from '@/library/rawMode';
+import { WEAVE_CORE_EXTENSION_OPTIONS } from '@/library/editorCoreOptions';
 
 const IssueEditor = forwardRef(({ content, placeholder, minHeight = 150, branchId, onChange, rawModeEnabled = false }, ref) => {
   const extensions = useMemo(
@@ -16,6 +17,7 @@ const IssueEditor = forwardRef(({ content, placeholder, minHeight = 150, branchI
   );
 
   const editor = useEditor({
+    coreExtensionOptions: WEAVE_CORE_EXTENSION_OPTIONS,
     immediatelyRender: false,
     extensions,
     content: content || '',

@@ -8,6 +8,7 @@ import { MarkdownClipboardExtension } from '@/components/Canvas/extensions/Markd
 import RawMarkdownEditor from '@/components/common/RawMarkdownEditor';
 import RawModeBadge from '@/components/common/RawModeBadge';
 import { useRawMode } from '@/library/rawMode';
+import { WEAVE_CORE_EXTENSION_OPTIONS } from '@/library/editorCoreOptions';
 
 /**
  * Lightweight TipTap editor for task comments.
@@ -73,6 +74,7 @@ export default function CommentEditor({
   useEffect(() => { submitHtmlRef.current = submitHtml; }, [submitHtml]);
 
   const editor = useEditor({
+    coreExtensionOptions: WEAVE_CORE_EXTENSION_OPTIONS,
     immediatelyRender: false,
     extensions,
     content: initialContent,

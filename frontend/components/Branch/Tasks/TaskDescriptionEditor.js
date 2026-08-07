@@ -11,6 +11,7 @@ import { MarkdownClipboardExtension } from '@/components/Canvas/extensions/Markd
 import RawMarkdownEditor from '@/components/common/RawMarkdownEditor';
 import RawModeBadge from '@/components/common/RawModeBadge';
 import { useRawMode } from '@/library/rawMode';
+import { WEAVE_CORE_EXTENSION_OPTIONS } from '@/library/editorCoreOptions';
 
 export default function TaskDescriptionEditor({ content, onSave, branchId }) {
   const savedRef = useRef(false);
@@ -21,6 +22,7 @@ export default function TaskDescriptionEditor({ content, onSave, branchId }) {
   );
 
   const editor = useEditor({
+    coreExtensionOptions: WEAVE_CORE_EXTENSION_OPTIONS,
     immediatelyRender: false,
     extensions,
     content: content || '',

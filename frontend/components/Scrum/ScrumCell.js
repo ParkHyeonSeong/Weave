@@ -8,6 +8,7 @@ import { useEditorRefHydration } from '@/library/refHydration';
 import { buildScrumCellExtensions } from './scrumCellExtensions';
 import { buildMarkdownExtensions } from '@/library/markdownCodec';
 import { MarkdownClipboardExtension } from '@/components/Canvas/extensions/MarkdownClipboardExtension';
+import { WEAVE_CORE_EXTENSION_OPTIONS } from '@/library/editorCoreOptions';
 
 // ydoc/provider가 준비된 뒤에만 마운트 (wrapper)
 export default function ScrumCell(props) {
@@ -33,7 +34,7 @@ function ScrumCellInner({ ydoc, fragmentKey, placeholder, members }) {
 
   // [ydoc, fragmentKey] deps → 바인딩이 바뀌면 에디터를 진짜로 재생성(setOptions가
   // ProseMirror 플러그인을 재빌드하지 않아 옛 fragment에 붙는 잠재 버그를 구조적으로 차단)
-  const editor = useEditor({ immediatelyRender: false, extensions }, [ydoc, fragmentKey]);
+  const editor = useEditor({ coreExtensionOptions: WEAVE_CORE_EXTENSION_OPTIONS, immediatelyRender: false, extensions }, [ydoc, fragmentKey]);
 
   // 칩 하이드레이션: 마운트 직후(yjs 초기 동기화 대기) + 탭 내 태스크 변경 시
   useEditorRefHydration(editor, 1000);
