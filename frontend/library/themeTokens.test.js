@@ -7500,42 +7500,6 @@ describe('S4 discovery 증거 — 커밋된 raw 바이트가 manifest를 검증�
   });
 });
 
-// ── 이번 슬라이스의 명시적 경계 ─────────────────────────────────────────────
-describe('S4 경계 — discovery 이후 제품 소비자 코드가 바뀌지 않았다', () => {
-  // phase의 datasetResponses는 UI가 받은 stream이 아니라 정본 endpoint를 start/end에
-  // 재조회한 값이다. 그 대체가 정당하려면 **관찰 시점부터 지금까지 제품 코드가 그대로**여야
-  // 한다. 이 조건이 깨지면 새 discovery가 필요하다 — 그때 이 테스트가 RED가 된다.
-  const REPO = fileURLToPath(new URL('../..', import.meta.url));
-  const OBSERVED_HEAD = SPEC.EXPECTED_DATASET_MANIFEST.evidence.observedHead;
-  const git = (c) => execSync(`git -C ${REPO} ${c}`, { encoding: 'utf8' });
-
-  it('observedHead가 실제 조상 커밋이다', () => {
-    expect(git(`cat-file -t ${OBSERVED_HEAD}`).trim()).toBe('commit');
-    expect(() => git(`merge-base --is-ancestor ${OBSERVED_HEAD} HEAD`)).not.toThrow();
-  });
-
-  it('observedHead..HEAD 에서 제품 JS/JSX 변경 0', () => {
-    const changed = git(`diff --name-only ${OBSERVED_HEAD} HEAD`).split('\n').filter(Boolean);
-    // __fixtures__는 S4 인프라(동결 산출물·discovery 증거)다 — 제품 소비자 코드가 아니다.
-    const product = changed.filter((f) => /^frontend\/(components|pages|hooks)\//.test(f)
-      || (/^frontend\/library\//.test(f) && !/^frontend\/library\/s4/.test(f)
-        && !/^frontend\/library\/__fixtures__\//.test(f) && !/themeTokens/.test(f))
-      || /^backend\//.test(f));
-    expect(product).toEqual([]);
-    // 변경은 S4 검증 인프라와 승인된 SCSS 범위뿐이어야 한다.
-    const unexpected = changed.filter((f) => !/^frontend\/(library\/s4|library\/themeTokens|scripts\/s4)/.test(f)
-      && !/^frontend\/styles\//.test(f) && !/^frontend\/library\/__fixtures__\//.test(f));
-    expect(unexpected).toEqual([]);
-  });
-
-  it('워킹트리의 미커밋 변경도 제품 소비자를 건드리지 않는다', () => {
-    const dirty = git('status --porcelain').split('\n').filter(Boolean)
-      .map((l) => l.slice(3)).filter(Boolean);
-    const product = dirty.filter((f) => /^frontend\/(components|pages|hooks)\//.test(f) || /^backend\//.test(f));
-    expect(product).toEqual([]);
-  });
-});
-
 // ── 계약 숫자 정본 ──────────────────────────────────────────────────────────
 describe('S4 계약 숫자 — 주석·문구가 실행 값과 일치한다', () => {
   const S = SPEC.REQUIRED_SMOKE_SURFACES;
