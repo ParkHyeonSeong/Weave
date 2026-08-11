@@ -22,6 +22,16 @@ EGRESS = [c for c in CASES if {"html->md", "roundtrip"} & set(c["directions"])]
 INGRESS = [c for c in CASES
            if {"md->html", "roundtrip"} & set(c["directions"]) and c.get("html_ingress")]
 
+# WEAVE-37 dialect/폴백 계약을 지키는 필수 ingress case — fail-closed manifest.
+# 이 목록은 INGRESS 필터가 html_ingress falsy를 조용히 skip하는 특성 때문에 필요하다:
+# 삭제·이름변경·directions에서 md->html 제거·html_ingress null화가 즉시 RED여야 계약이 유지된다.
+_REQUIRED_INGRESS_CASES = [
+    "empty-label-link-fallback",
+    "bare-url-not-autolinked",
+    "paren-url-not-autolinked",
+    "bare-email-not-autolinked",
+]
+
 
 @pytest.fixture(autouse=True)
 def _fixture_origin(monkeypatch):
@@ -37,3 +47,17 @@ def test_html_to_markdown_parity(case):
 @pytest.mark.parametrize("case", INGRESS, ids=[c["name"] for c in INGRESS])
 def test_markdown_to_html_parity(case):
     assert markdown_to_html(case["markdown"]) == case["html_ingress"]
+
+
+@pytest.mark.parametrize("name", _REQUIRED_INGRESS_CASES)
+def test_required_ingress_case_present_and_enforced(name):
+    # fail-closed: INGRESS 필터가 html_ingress falsy를 skip하므로, 필수 case가 삭제/이름변경되거나
+    # directions에서 md->html이 빠지거나 html_ingress가 null이 되면 parity가 조용히 통과한다.
+    # 여기서 그 4가지를 각 case별로 즉시 RED로 만든다.
+    by_name = {c["name"]: c for c in CASES}
+    c = by_name.get(name)
+    assert c is not None, f"필수 ingress case '{name}' 없음(삭제/이름변경?)"
+    assert "md->html" in c["directions"], f"'{name}' directions에 md->html 없음(축소/오탈자?)"
+    assert isinstance(c.get("html_ingress"), str) and c["html_ingress"], (
+        f"'{name}' html_ingress가 null/빈값 — INGRESS parity가 skip해 가짜 green이 된다"
+    )

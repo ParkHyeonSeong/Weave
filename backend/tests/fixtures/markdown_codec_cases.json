@@ -378,5 +378,16 @@
       "html->md"
     ],
     "note": "일반 <a> href의 unbalanced ')'를 egress에서 percent-encode(WeaveLink.renderMarkdown/_esc_link_url 계약쌍). raw ')' href 손입력 → regen이 이미-인코딩 HTML로 덮어 회귀 검증 무력화 → regen:false, html->md 전용"
+  },
+  {
+    "name": "malformed-nested-link",
+    "regen": false,
+    "markdown": "[o [](https://in.test)](https://out.test)",
+    "html_tiptap": "<p><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://out.test\">o [](https://in.test)</a></p>",
+    "html_ingress": "<p>[o <a href=\"https://in.test\">https://in.test</a>](https://out.test)</p>\n",
+    "directions": [
+      "md->html"
+    ],
+    "note": "유효하지 않은 중첩 링크 — parser-family 잔여 한계(기존 버전부터 존재). frontend(marked)는 outer 링크만 살리고 inner를 리터럴 언랩(html_tiptap), backend(markdown-it commonmark)는 CommonMark 표준대로 inner 링크를 살리고 outer 대괄호를 리터럴로 둔다(html_ingress). html_tiptap≠html_ingress로 양측 발산을 exact 고정. roundtrip 불안정 → regen:false, md->html 전용."
   }
 ]

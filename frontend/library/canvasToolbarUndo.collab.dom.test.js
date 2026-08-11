@@ -17,8 +17,18 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const flush = () => new Promise((r) => setTimeout(r, 0));
 const raf = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
 const yFrag = (ydoc) => ydoc.getXmlFragment('default').toString();
-let cleanup = [];
-afterEach(() => { cleanup.forEach((f) => f()); cleanup = []; document.body.innerHTML = ''; });
+
+// 실패 안전 teardown: React root·Editor·Y.Doc을 독립 disposer로 등록하고, 하나가 throw해도
+// 나머지를 끝까지 정리한다. document.body는 항상 초기화하고, 오류는 삼키지 않고 전부 정리 후
+// 첫 오류(또는 AggregateError)를 rethrow한다(assertion 실패에도 afterEach가 동작).
+let disposers = [];
+afterEach(() => {
+  const errors = [];
+  for (const d of disposers) { try { d(); } catch (e) { errors.push(e); } }
+  disposers = [];
+  document.body.innerHTML = '';
+  if (errors.length) throw errors.length === 1 ? errors[0] : new AggregateError(errors, 'teardown 실패');
+});
 
 // 단일 에디터 + Yjs(ySync+yUndo) — 프로덕션 배선과 동일(coreExtensionOptions 포함).
 function makeYEditor() {
@@ -36,7 +46,8 @@ function makeYEditor() {
     ],
   });
   document.body.appendChild(editor.view.dom);
-  cleanup.push(() => { editor.destroy(); ydoc.destroy(); });
+  disposers.push(() => editor.destroy());  // Editor·Y.Doc을 독립 disposer로(하나 실패해도 나머지 정리)
+  disposers.push(() => ydoc.destroy());
   return { editor, ydoc };
 }
 
@@ -46,7 +57,7 @@ function mountEditorWithToolbar() {
   document.body.append(host);
   const root = createRoot(host);
   act(() => { root.render(<CanvasEditorToolbar editor={editor} rawModeEnabled={false} />); });
-  cleanup.unshift(() => act(() => root.unmount()));   // root를 가장 먼저 정리
+  disposers.unshift(() => act(() => root.unmount()));   // React root를 가장 먼저 정리
   const btn = (title) => host.querySelector(`button[title="${title}"]`);
   return { editor, ydoc, btn };
 }
@@ -129,6 +140,41 @@ it('DOM 키맵 Mod-z/Shift-Mod-z/Mod-y가 undo/redo를 수행한다 (jsdom Mod=C
   expect(a.getHTML()).toBe(withHello);
   expect(yFrag(docA)).toBe(changedY);
   expect(ev.defaultPrevented).toBe(true);
+});
+
+it('DOM 키맵 러시아어 Mod-я / Shift-Mod-я도 undo/redo를 수행한다 (레이아웃 무관, jsdom Mod=Ctrl)', async () => {
+  // 러시아어 레이아웃에서 z 자리 물리키는 'я'를 낸다 — YUndoRedo가 'Mod-я'/'Shift-Mod-я'를
+  // 유지하는지 실제 KeyboardEvent로 고정한다. PM HTML·Y fragment·스택·defaultPrevented까지 검증.
+  const { editor: a, ydoc: docA } = makeYEditor();
+  const um = yUndoPluginKey.getState(a.state).undoManager;
+  a.view.focus();
+  await raf();
+  const empty = a.getHTML();
+  const emptyY = yFrag(docA);
+  a.commands.insertContent({ type: 'text', text: 'привет' });
+  await flush();
+  const withText = a.getHTML();
+  const changedY = yFrag(docA);
+  um.stopCapturing();
+  const beforeUndo = um.undoStack.length;
+  const key = (opts) => {
+    const ev = new KeyboardEvent('keydown', { key: 'я', ctrlKey: true, bubbles: true, cancelable: true, ...opts });
+    a.view.dom.dispatchEvent(ev);
+    return ev;
+  };
+  const undoEv = key({});                         // Mod-я = undo
+  await raf();
+  expect(a.getHTML()).toBe(empty);
+  expect(yFrag(docA)).toBe(emptyY);
+  expect(um.undoStack.length).toBe(beforeUndo - 1);
+  expect(undoEv.defaultPrevented).toBe(true);
+  const beforeRedo = um.redoStack.length;         // undo 직후 redo 스택에 1개
+  const redoEv = key({ shiftKey: true });         // Shift-Mod-я = redo
+  await raf();
+  expect(a.getHTML()).toBe(withText);
+  expect(yFrag(docA)).toBe(changedY);
+  expect(um.redoStack.length).toBe(beforeRedo - 1);
+  expect(redoEv.defaultPrevented).toBe(true);
 });
 
 it('실제 툴바 Undo/Redo 버튼 클릭이 blur 상태에서도 문서·Y를 오염 없이 되돌린다', async () => {

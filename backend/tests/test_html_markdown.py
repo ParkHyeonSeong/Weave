@@ -191,6 +191,16 @@ def test_code_anchor_not_linkified():
     assert html_to_markdown('<p><code><a href="https://x.com">y</a></code></p>') == '`y`'
 
 
+def test_malformed_nested_link_backend_inner_wins():
+    # 유효하지 않은 중첩 링크 — parser-family 차이(잔여 한계, 기존 버전부터 존재).
+    # backend(markdown-it commonmark)는 CommonMark 표준대로 **inner** 링크를 살리고 outer
+    # 대괄호는 리터럴로 남긴다. frontend(marked)는 반대로 outer만 살린다(markdownMath.test.js).
+    # 양측 발산을 exact로 고정해 회귀를 감시한다(anchor 개수만 보면 href가 뒤바뀌어도 통과).
+    assert markdown_to_html('[o [](https://in.test)](https://out.test)') == (
+        '<p>[o <a href="https://in.test">https://in.test</a>](https://out.test)</p>\n'
+    )
+
+
 def test_unknown_tag_degrades_to_text():
     assert '남는 텍스트' in html_to_markdown('<figure><figcaption>남는 텍스트</figcaption></figure>')
 

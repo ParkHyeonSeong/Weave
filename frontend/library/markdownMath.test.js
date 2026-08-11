@@ -98,8 +98,11 @@ describe('markdownToHtml direct 경로 — dialect·빈 라벨 폴백 (17차 P1)
     // 빈 라벨: 텍스트가 URL이면서 **링크 href가 정확**해야 한다(리터럴 강등 오구현 배제)
     expect(markdownToHtml('- [ ] [](https://x.com)')).toContain('<a href="https://x.com">https://x.com</a>');
     expect(markdownToHtml('- a\n- [](https://x.com)')).toContain('<a href="https://x.com">https://x.com</a>');
-    const nested = markdownToHtml('[o [](https://in.test)](https://out.test)'); // 중첩: outer만
-    expect((nested.match(/<a /g) || []).length).toBe(1);
+    // malformed nested link — parser-family 차이(잔여 한계): FE(marked) direct 경로는 outer 링크만
+    // 살리고 inner는 리터럴로 언랩한다. anchor 개수만 보면 inner href가 outer로 뒤바뀌어도 통과하므로
+    // **outer href·label을 exact**로 고정한다(backend는 반대로 inner를 살림 — test_html_markdown.py).
+    expect(markdownToHtml('[o [](https://in.test)](https://out.test)'))
+      .toBe('<p><a href="https://out.test">o [](https://in.test)</a></p>\n');
   });
 
   it('수식 혼합 문서에서도 빈 라벨 폴백이 동작한다 (mathMarked 경로)', () => {

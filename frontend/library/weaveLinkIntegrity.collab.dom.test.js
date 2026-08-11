@@ -14,23 +14,31 @@ import { WEAVE_CORE_EXTENSION_OPTIONS } from '@/library/editorCoreOptions';
 const flush = () => new Promise((r) => setTimeout(r, 0)); // 릴레이/마이크로태스크 정착
 // (raf 대기는 focus/undo 계약을 다루는 Task 3 파일에만 필요 — 여기선 쓰지 않는다, 15차 P2)
 
-// teardown registry: Editor → Y.Doc 순으로 정리하고 relay listener도 해제한다(20차 P2:
-// assertion 실패 시 수동 destroy가 실행되지 않아 누수·교차오염이 생긴다).
-let editors = [];
-let ydocs = [];
+// 실패 안전 teardown: Editor·relay listener·Y.Doc을 **독립 disposer**로 등록하고 하나가 throw해도
+// 나머지를 끝까지 정리한다(예: editor.destroy가 던지면 같은 disposer의 ydoc.destroy가 스킵되던 문제).
+// document.body는 항상 초기화하고, 오류는 삼키지 않고 전부 정리 후 첫 오류(또는 AggregateError)를
+// rethrow한다(assertion 실패에도 afterEach가 동작 — 20차 P2 누수·교차오염 방지).
+let disposers = [];
 afterEach(() => {
-  editors.forEach((e) => e.destroy());
-  ydocs.forEach((d) => { d.off('update'); d.destroy(); });
-  editors = []; ydocs = []; document.body.innerHTML = '';
+  const errors = [];
+  for (const d of disposers) { try { d(); } catch (e) { errors.push(e); } }
+  disposers = [];
+  document.body.innerHTML = '';
+  if (errors.length) throw errors.length === 1 ? errors[0] : new AggregateError(errors, 'teardown 실패');
 });
 
 // oneWay: A→B만 relay한다(D5 테스트용 — B의 오염이 A로 역전파돼 기대값까지 오염되는 것 차단, 19차 P1)
 function makePair({ oldClient = false, oneWay = false } = {}) {
   const docA = new Y.Doc();
   const docB = new Y.Doc();
-  docA.on('update', (u, origin) => { if (origin !== 'relay') Y.applyUpdate(docB, u, 'relay'); });
+  // relay 콜백을 변수로 보관해 정확 콜백으로 off한다 — 익명 콜백 등록 후 off('update')를 인자
+  // 없이 부르면 Yjs Observable.off는 no-op이라 listener가 누수된다(리뷰 발견).
+  const relayA = (u, origin) => { if (origin !== 'relay') Y.applyUpdate(docB, u, 'relay'); };
+  docA.on('update', relayA);
+  let relayB = null;
   if (!oneWay) {
-    docB.on('update', (u, origin) => { if (origin !== 'relay') Y.applyUpdate(docA, u, 'relay'); });
+    relayB = (u, origin) => { if (origin !== 'relay') Y.applyUpdate(docA, u, 'relay'); };
+    docB.on('update', relayB);
   }
   const mk = (ydoc, useStockLink) => new Editor({
     coreExtensionOptions: WEAVE_CORE_EXTENSION_OPTIONS, // Task 1 가드 — 프로덕션 동일 배선(15차 P1)
@@ -48,8 +56,13 @@ function makePair({ oldClient = false, oneWay = false } = {}) {
   const b = mk(docB, false);
   // DOM mount — 미마운트 상태의 focus()가 지연 트랜잭션으로 undo/redo 스택을 오염시킬 수 있다(11차).
   [a, b].forEach((e) => document.body.appendChild(e.view.dom.parentElement ?? e.view.dom));
-  editors.push(a, b);
-  ydocs.push(docA, docB);
+  // 독립 disposer(순서: Editor destroy → relay off(정확 콜백) → Y.Doc destroy).
+  disposers.push(() => a.destroy());
+  disposers.push(() => b.destroy());
+  disposers.push(() => docA.off('update', relayA));       // 정확 콜백으로 실제 해제
+  if (relayB) disposers.push(() => docB.off('update', relayB)); // oneWay면 등록 안 했으니 off도 안 함
+  disposers.push(() => docA.destroy());
+  disposers.push(() => docB.destroy());
   return { a, b, docA, docB }; // Y.Doc도 노출 — PM HTML과 Y fragment를 함께 비교(14차 P1)
 }
 
@@ -161,5 +174,42 @@ describe('WeaveLink 무결성 — Yjs collab(로컬 전용, D5=A)', () => {
     // B는 A가 보낸 상태를 **그대로** 가져야 한다 — 부분 청소·재배치 전부 실패로 잡힌다.
     expect(b.getJSON()).toEqual(a.getJSON());
     expect(yFrag(docB)).toBe(yFrag(docA));
+  });
+});
+
+describe('relay listener 정확 해제 + disposer 독립성 (fix 3 회귀 증거)', () => {
+  it('relay listener는 정확 콜백으로만 해제된다 — 인자 없는 off(\'update\')는 no-op', () => {
+    const docA = new Y.Doc();
+    disposers.push(() => docA.destroy()); // 실패해도 afterEach가 정리
+    let relayed = 0;
+    const relayA = (u, origin) => { if (origin !== 'relay') relayed += 1; };
+    docA.on('update', relayA);
+    docA.getText('t').insert(0, 'x');
+    expect(relayed).toBe(1);              // 등록 후 update → counter 증가
+    docA.off('update');                   // 콜백 없이 off → Yjs Observable.off는 no-op(버그 재현)
+    docA.getText('t').insert(0, 'y');
+    expect(relayed).toBe(2);              // 여전히 살아있음 — 인자 없는 off는 해제 못 함
+    docA.off('update', relayA);           // 정확 콜백으로 off
+    docA.getText('t').insert(0, 'z');
+    expect(relayed).toBe(2);              // exact off 후 update → counter 불변(실제 해제됨)
+  });
+
+  it('앞 disposer가 throw해도 relay off disposer가 실행되고 오류는 보관(rethrow용)된다', () => {
+    const docA = new Y.Doc();
+    disposers.push(() => docA.destroy());
+    let relayed = 0;
+    const relayA = (u, origin) => { if (origin !== 'relay') relayed += 1; };
+    docA.on('update', relayA);
+    const order = [];
+    const local = [
+      () => { order.push('boom'); throw new Error('boom'); },
+      () => { order.push('relayoff'); docA.off('update', relayA); },
+    ];
+    const errors = [];
+    for (const d of local) { try { d(); } catch (e) { errors.push(e); } } // afterEach 러너와 동일 패턴
+    expect(order).toEqual(['boom', 'relayoff']); // 앞 disposer throw에도 relay off 실행
+    expect(errors).toHaveLength(1);              // 오류는 삼키지 않고 보관 → 러너가 rethrow
+    docA.getText('t').insert(0, 'x');
+    expect(relayed).toBe(0);                     // off 됐으므로 update가 counter를 안 올림
   });
 });
