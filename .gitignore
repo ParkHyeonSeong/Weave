@@ -47,3 +47,6 @@ docs/
 .superpowers/
 .playwright-mcp/
 /frontend/library/__fixtures__/s4-expected.candidate.json
+
+# Build cache
+.vite/
