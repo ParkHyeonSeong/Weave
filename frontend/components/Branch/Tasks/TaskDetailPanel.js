@@ -27,6 +27,14 @@ import NavLink from '@/components/common/NavLink';
 import { taskDeleteMessage } from '@/library/taskDeleteMessage';
 import { buildTaskDescriptionExtensions } from './taskDescriptionExtensions';
 import { copyAsMarkdown } from '@/library/copyMarkdown';
+import { priorityVar } from '@/library/themePalette';
+
+const PRIORITY_OPTIONS = [
+  { value: 'urgent', label: 'Urgent', color: priorityVar('urgent') },
+  { value: 'high', label: 'High', color: priorityVar('high') },
+  { value: 'medium', label: 'Medium', color: priorityVar('medium') },
+  { value: 'low', label: 'Low', color: priorityVar('low') },
+];
 
 export default function TaskDetailPanel({ branchId, branchKey, taskTypes: externalTaskTypes, workflowStatuses: externalStatuses, taskSummary, onClose, onSelectTask }) {
   const router = useRouter();
@@ -279,12 +287,7 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
             <DetailRow label="Priority">
               <CustomSelect
                 value={task.priority}
-                options={[
-                  { value: 'urgent', label: 'Urgent', color: '#DC2626' },
-                  { value: 'high', label: 'High', color: '#F59E0B' },
-                  { value: 'medium', label: 'Medium', color: '#5E6AD2' },
-                  { value: 'low', label: 'Low', color: '#9CA3AF' },
-                ]}
+                options={PRIORITY_OPTIONS}
                 onChange={(val) => handleSelectChange('priority', val)}
                 size="sm"
               />

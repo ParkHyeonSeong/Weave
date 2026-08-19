@@ -6,6 +6,7 @@ import Avatar from '@/components/common/Avatar';
 import SavedViewSwitcher from '@/components/common/SavedViewSwitcher';
 import { isEmptySpec, emptyGroup } from '@/library/filterBuilderState';
 import FilterBuilder from './FilterBuilder';
+import { priorityVar, chipTintStyle } from '@/library/themePalette';
 
 const MAX_VISIBLE = 5;
 
@@ -33,10 +34,10 @@ const GROUP_BY_OPTIONS = [
 const MULTI_SORT_FIELDS = SORT_OPTIONS.filter((o) => o.value !== 'status');
 
 const PRIORITY_OPTIONS = [
-  { value: 'urgent', label: 'Urgent', color: '#DC2626' },
-  { value: 'high', label: 'High', color: '#F59E0B' },
-  { value: 'medium', label: 'Medium', color: '#5E6AD2' },
-  { value: 'low', label: 'Low', color: '#9CA3AF' },
+  { value: 'urgent', label: 'Urgent', color: priorityVar('urgent') },
+  { value: 'high', label: 'High', color: priorityVar('high') },
+  { value: 'medium', label: 'Medium', color: priorityVar('medium') },
+  { value: 'low', label: 'Low', color: priorityVar('low') },
 ];
 
 export default function TaskFilterBar({
@@ -399,8 +400,11 @@ export default function TaskFilterBar({
           {activeChips.map((chip) => (
             <span
               key={`${chip.category}-${chip.value}`}
-              className="TaskFilterBar__ActiveChip"
-              style={chip.color ? { borderColor: chip.color, color: chip.color, backgroundColor: chip.color + '15' } : {}}
+              className={`TaskFilterBar__ActiveChip${chip.color ? ' TaskFilterBar__ActiveChip--tinted' : ''}`}
+              // 색은 가공하지 않고 --chip-color로만 실어 보낸다. 테두리·글자·틴트는 SCSS가 만든다.
+              // ⛔ `chip.color + '15'`로 되돌리지 마라 — chip.color는 토큰 참조(var(--color-error))일 수
+              //    있어 `var(--color-error)15`가 되고, 무효 선언이 되어 배경이 transparent로 사라진다.
+              style={chipTintStyle(chip.color)}
             >
               {chip.label}
               <button

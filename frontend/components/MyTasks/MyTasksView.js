@@ -9,6 +9,7 @@ import FilterBuilder from '@/components/Branch/FilterBuilder';
 import SavedViewSwitcher from '@/components/common/SavedViewSwitcher';
 import { emptyGroup, isEmptySpec } from '@/library/filterBuilderState';
 import { applySavedView } from '@/library/savedViewState';
+import { priorityVar } from '@/library/themePalette';
 
 const STATUS_CATEGORY_OPTIONS = [
   { value: 'todo', label: 'To Do' },
@@ -18,10 +19,10 @@ const STATUS_CATEGORY_OPTIONS = [
 ];
 
 const priorityOptions = [
-  { value: 'urgent', label: 'Urgent', color: '#DC2626' },
-  { value: 'high', label: 'High', color: '#F59E0B' },
-  { value: 'medium', label: 'Medium', color: '#5E6AD2' },
-  { value: 'low', label: 'Low', color: '#9CA3AF' },
+  { value: 'urgent', label: 'Urgent', color: priorityVar('urgent') },
+  { value: 'high', label: 'High', color: priorityVar('high') },
+  { value: 'medium', label: 'Medium', color: priorityVar('medium') },
+  { value: 'low', label: 'Low', color: priorityVar('low') },
 ];
 
 const sortOptions = [

@@ -224,7 +224,7 @@
     }
 
     &--in_progress {
-      background: #2563EB;
+      background: var(--color-status-in-progress);
     }
 
     &--done {
@@ -232,7 +232,7 @@
     }
 
     &--cancelled {
-      background: #DC2626;
+      background: var(--color-error);
     }
   }
 
@@ -349,25 +349,25 @@
     align-items: center;
     gap: 6px;
     margin-top: 6px;
-    color: #6B7280;
+    color: var(--color-text-secondary);
     font-size: 11px;
   }
 
   &__ProgressIcon {
-    color: #16A34A;
+    color: var(--color-success);
     flex-shrink: 0;
   }
 
   &__ProgressText {
     font-weight: 600;
-    color: #4B5563;
+    color: var(--color-text);
   }
 
   &__ProgressBar {
     flex: 1;
     height: 4px;
     border-radius: 2px;
-    background: #E5E7EB;
+    background: var(--color-border);
     overflow: hidden;
   }
 
@@ -375,7 +375,7 @@
     display: block;
     height: 100%;
     border-radius: 2px;
-    background: #16A34A;
+    background: var(--color-success);
   }
 }
 
@@ -388,14 +388,14 @@
     align-items: flex-start;
     justify-content: center;
     padding-top: 18vh;
-    background: rgba(17, 24, 39, 0.28);
+    background: var(--color-backdrop);
   }
 
   width: min(360px, calc(100vw - 24px));
-  background: #FFFFFF;
-  border: 1px solid #E5E7EB;
+  background: var(--color-surface-overlay);
+  border: 1px solid var(--color-border);
   border-radius: 10px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.16);
+  box-shadow: var(--shadow-lg);
   overflow: hidden;
 
   &__Header {
@@ -405,8 +405,8 @@
     padding: 10px 12px;
     font-size: 12px;
     font-weight: 600;
-    color: #6B7280;
-    border-bottom: 1px solid #F3F4F6;
+    color: var(--color-text-secondary);
+    border-bottom: 1px solid var(--color-surface-hover);
   }
 
   &__Search input {
@@ -435,11 +435,11 @@
     cursor: pointer;
     font-size: 13px;
 
-    &--active { background: #F3F4F6; }
+    &--active { background: var(--color-surface-hover); }
   }
 
-  &__ItemIcon { color: #9CA3AF; flex-shrink: 0; }
-  &__ItemId { color: #6B7280; font-weight: 600; flex-shrink: 0; }
-  &__ItemTitle { color: #111827; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  &__Empty { padding: 12px; color: #9CA3AF; font-size: 13px; text-align: center; }
+  &__ItemIcon { color: var(--color-text-tertiary); flex-shrink: 0; }
+  &__ItemId { color: var(--color-text-secondary); font-weight: 600; flex-shrink: 0; }
+  &__ItemTitle { color: var(--color-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  &__Empty { padding: 12px; color: var(--color-text-tertiary); font-size: 13px; text-align: center; }
 }

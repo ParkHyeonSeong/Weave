@@ -157,7 +157,7 @@
     }
 
     &--cancelled {
-      background: #DC2626;
+      background: var(--color-error);
     }
   }
 
@@ -245,7 +245,7 @@
     }
 
     &--cancelled {
-      background: #DC2626;
+      background: var(--color-error);
     }
   }
 

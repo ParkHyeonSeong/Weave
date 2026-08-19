@@ -91,11 +91,11 @@
     margin-top: 2px;
 
     &--open {
-      color: #16A34A;
+      color: var(--color-success);
     }
 
     &--closed {
-      color: #9333EA;
+      color: var(--color-ref-issue);
     }
   }
 

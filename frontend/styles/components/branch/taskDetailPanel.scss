@@ -22,7 +22,7 @@
     top: 0; right: 0; bottom: 0;
     width: min(420px, 100%);
     z-index: 120;
-    box-shadow: -8px 0 24px rgba(0, 0, 0, 0.12);
+    box-shadow: var(--shadow-lg);
   }
 
   // -- Mobile: 풀스크린 오버레이 --
@@ -192,8 +192,8 @@
     }
 
     &--in_progress {
-      background: #EFF6FF;
-      color: #2563EB;
+      background: var(--color-status-in-progress-bg);
+      color: var(--color-status-in-progress);
     }
 
     &--done {
@@ -779,10 +779,10 @@
         line-height: 1.5;
         white-space: nowrap;
 
-        &--todo { background: rgba(0, 0, 0, 0.06); color: $color-text-secondary; }
+        &--todo { background: color-mix(in srgb, var(--color-text) 6%, transparent); color: $color-text-secondary; }
         &--in_progress { background: $color-status-in-progress-bg; color: $color-status-in-progress; }
         &--done { background: $color-success-bg; color: $color-success; }
-        &--cancelled { background: rgba(0, 0, 0, 0.06); color: $color-text-secondary; }
+        &--cancelled { background: color-mix(in srgb, var(--color-text) 6%, transparent); color: $color-text-secondary; }
         &--open { background: $color-status-in-progress-bg; color: $color-status-in-progress; }
         &--closed { background: $color-success-bg; color: $color-success; }
       }
@@ -792,8 +792,8 @@
         padding: $space-3;
         margin: 0.5em 0;
         border-left: 3px solid;
-        &[data-callout="info"] { background: #EFF6FF; border-left-color: #2563EB; }
-        &[data-callout="warning"] { background: #FFFBEB; border-left-color: $color-warning; }
+        &[data-callout="info"] { background: var(--color-status-in-progress-bg); border-left-color: var(--color-status-in-progress); }
+        &[data-callout="warning"] { background: var(--color-warning-bg); border-left-color: $color-warning; }
         &[data-callout="success"] { background: $color-success-bg; border-left-color: $color-success; }
         &[data-callout="error"] { background: $color-error-bg; border-left-color: $color-error; }
         p { margin: 0; }
@@ -912,10 +912,10 @@
     line-height: 1.5;
     white-space: nowrap;
 
-    &--todo { background: rgba(0, 0, 0, 0.06); color: $color-text-secondary; }
+    &--todo { background: color-mix(in srgb, var(--color-text) 6%, transparent); color: $color-text-secondary; }
     &--in_progress { background: $color-status-in-progress-bg; color: $color-status-in-progress; }
     &--done { background: $color-success-bg; color: $color-success; }
-    &--cancelled { background: rgba(0, 0, 0, 0.06); color: $color-text-secondary; }
+    &--cancelled { background: color-mix(in srgb, var(--color-text) 6%, transparent); color: $color-text-secondary; }
     &--open { background: $color-status-in-progress-bg; color: $color-status-in-progress; }
     &--closed { background: $color-success-bg; color: $color-success; }
   }
@@ -925,8 +925,8 @@
     padding: $space-3;
     margin: 0.5em 0;
     border-left: 3px solid;
-    &[data-callout="info"] { background: #EFF6FF; border-left-color: #2563EB; }
-    &[data-callout="warning"] { background: #FFFBEB; border-left-color: $color-warning; }
+    &[data-callout="info"] { background: var(--color-status-in-progress-bg); border-left-color: var(--color-status-in-progress); }
+    &[data-callout="warning"] { background: var(--color-warning-bg); border-left-color: $color-warning; }
     &[data-callout="success"] { background: $color-success-bg; border-left-color: $color-success; }
     &[data-callout="error"] { background: $color-error-bg; border-left-color: $color-error; }
     p { margin: 0; }
@@ -1202,7 +1202,7 @@
     background: $color-surface;
     border: 1px solid $color-input-border;
     border-radius: $radius-md;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    box-shadow: var(--shadow-md);
     z-index: 10;
     max-height: 200px;
     overflow-y: auto;

@@ -152,7 +152,7 @@
 
   &__DangerBtn {
     background: $color-error;
-    color: #fff;
+    color: var(--color-text-inverse);
 
     &:hover { background: var(--color-error-strong); }
     &:disabled { opacity: 0.5; }

@@ -1,10 +1,9 @@
-@use 'sass:color';
 @use '../../variables' as *;
 
 .SprintModal__Backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--color-backdrop);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -249,7 +248,7 @@
     }
 
     &--incomplete {
-      color: #F59E0B;
+      color: var(--color-warning);
     }
   }
 
@@ -284,7 +283,7 @@
     transition: background $transition-fast;
 
     &:hover:not(:disabled) {
-      background: color.adjust(#16A34A, $lightness: -8%);
+      background: color-mix(in srgb, var(--color-success) 88%, var(--color-text));
     }
 
     &:disabled {

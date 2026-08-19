@@ -85,7 +85,7 @@
     color: $color-text-tertiary;
 
     &--done {
-      color: #16A34A;
+      color: var(--color-success);
     }
   }
 
@@ -145,7 +145,7 @@
     padding: 0 $space-3;
     border-radius: $radius-md;
     background: $color-primary;
-    color: #fff;
+    color: var(--color-text-inverse);
     font-size: $font-size-xs;
     font-weight: $font-weight-medium;
 

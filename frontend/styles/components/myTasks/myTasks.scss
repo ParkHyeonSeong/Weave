@@ -349,6 +349,11 @@
       background: $color-success-bg;
       color: $color-success;
     }
+
+    &--cancelled {
+      background: var(--color-error-bg);
+      color: var(--color-error);
+    }
   }
 
   &__DueDate {

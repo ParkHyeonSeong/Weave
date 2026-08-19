@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Plus, X } from 'lucide-react';
 import MultiSelect from '@/components/common/MultiSelect';
+import { priorityVar } from '@/library/themePalette';
 // 순수 불변 헬퍼는 library로 분리(vitest 커버). 컴포넌트는 이를 사용만 한다.
 import {
   emptyGroup, addCondition, setGroupOp, removeNode, updateAtPath,
@@ -9,15 +10,16 @@ import {
 // ── 컴포넌트 메타 ──────────────────────────────────────────────────
 // FIELD_SPECS(backend/core/query/filter_spec.py)와 의미 일치. text op는 contains만.
 const PRIORITY_OPTIONS = [
-  { value: 'urgent', label: 'Urgent', color: '#DC2626' },
-  { value: 'high', label: 'High', color: '#F59E0B' },
-  { value: 'medium', label: 'Medium', color: '#5E6AD2' },
-  { value: 'low', label: 'Low', color: '#9CA3AF' },
+  { value: 'urgent', label: 'Urgent', color: priorityVar('urgent') },
+  { value: 'high', label: 'High', color: priorityVar('high') },
+  { value: 'medium', label: 'Medium', color: priorityVar('medium') },
+  { value: 'low', label: 'Low', color: priorityVar('low') },
 ];
 const STATUS_CATEGORY_OPTIONS = [
   { value: 'todo', label: 'To Do' },
   { value: 'in_progress', label: 'In Progress' },
   { value: 'done', label: 'Done' },
+  { value: 'cancelled', label: 'Cancelled' },
 ];
 
 // op 라벨 (UI 표기)

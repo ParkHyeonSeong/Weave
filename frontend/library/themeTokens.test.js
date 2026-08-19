@@ -215,6 +215,7 @@ const THEME_VALUE_MANIFEST = {
     'color-warning-ink-strong': '#78350F',
     'color-surface-sunken': 'rgb(245.94, 247.45, 248.96)',
     'color-surface-raised': 'rgb(252.06, 252.55, 253.04)',
+    'color-surface-overlay': '#FFFFFF',
     'color-bg-sunken': 'rgb(252.45, 252.45, 252.45)',
     'color-text-soft': 'rgb(114.25, 114.25, 114.25)',
     'color-border-faint': 'rgb(236.65, 236.65, 236.65)',
@@ -286,6 +287,7 @@ const THEME_VALUE_MANIFEST = {
     'color-warning-ink-strong': '#F3CD94',
     'color-surface-sunken': '#131418',
     'color-surface-raised': '#1B1D22',
+    'color-surface-overlay': '#1B1D22',
     'color-bg-sunken': '#0B0C0E',
     'color-text-soft': '#8B93A1',
     'color-border-faint': '#2C2E35',
@@ -399,17 +401,18 @@ describe('사이트 SCSS의 sass 색함수 $변수 입력 금지 (컴파일 의�
 
 describe('전 SCSS var(--…) 참조 커버리지', () => {
   // 테마 정의 ∪ 불변 별칭 ∪ 런타임 JS 주입 ∪ S5 이행 예정(context-menu 폴백 소비)만 허용.
-  const RUNTIME_INJECTED = ['branch-color', 'status-color', 'accent', 'sticky-header-h'];
+  // --chip-color: TaskFilterBar 활성 필터 칩이 자기 색(원시 hex 또는 var(--color-*) 토큰)을 SCSS로
+  //   넘기는 통로. JS 인라인 style(library/themePalette.js chipTintStyle)이 주입하고 taskList.scss
+  //   `.TaskFilterBar__ActiveChip--tinted`가 color-mix로 소비한다 — 보호 접두가 아니라 선언 금지와 무관.
+  const RUNTIME_INJECTED = ['branch-color', 'status-color', 'accent', 'sticky-header-h', 'chip-color'];
   // 예외는 경로+개수까지 고정 — 번지거나 늘어나면 즉시 검출, 이관(S4/S5)하면 목록·개수 갱신 신호.
   // S4 stage 3에서 track.scss 6건 이관 완료 — 미정의 var(--text-secondary/--text-tertiary)라
   //   폴백만 렌더되고 테마를 따라가지 않던 죽은 참조였고, 정의된 --color-text-* 토큰으로 교체했다.
   //   라이트 영향은 두 갈래다: tertiary 5건은 폴백 #9ca3af → --color-text-tertiary #6B7280 로
   //   **색이 바뀌는 교정**(allow #13~#17), secondary 1건(구 1207행)은 폴백이 이미 #6b7280이라
   //   **라이트 동치**이고 다크 추종만 복구된다. 사이트별 판정은 s4Spec CONVERSIONS에 있다.
-  // S5: context-menu.scss의 미정의 var 폴백 소비 2건.
-  const PENDING = {
-    'common/context-menu.scss': { 'color-hover': 1, 'color-border-subtle': 1 },
-  };
+  // S5 완료: context-menu.scss의 미정의 var 폴백 소비 2건을 정의 토큰으로 이행했다.
+  const PENDING = {};
   it('미정의 var 참조 없음 (예외는 경로·개수 고정)', () => {
     const stylesDir = resolve(__dirname, '../styles');
     const defined = new Set([...light, ...aliases, ...RUNTIME_INJECTED]);
@@ -431,6 +434,18 @@ describe('전 SCSS var(--…) 참조 커버리지', () => {
     }
     expect(offenders).toEqual([]);
     expect(seen).toEqual(PENDING); // 개수가 줄어도(이관 완료) 알림 — 목록 갱신
+  });
+});
+
+describe('AvatarStack__More는 text-secondary 단독을 쓰지 않는다 (S5 대비 회귀 차단)', () => {
+  // 11px로 숨은 멤버 수(+N)를 전달하는 본문 텍스트다. var(--color-text-secondary) 단독이면
+  // 라이트 computed가 #6B7280 on #F3F4F6 = 4.39로 4.5:1에 미달한다(실브라우저 실측).
+  it('color가 text 쪽으로 보정된 color-mix다', () => {
+    const src = readFileSync(resolve(__dirname, '../styles/components/common/avatar.scss'), 'utf8');
+    const block = src.slice(src.indexOf('&__More'));
+    const decl = block.match(new RegExp(`^[${CSS_WS_CLASS}]*color:[${CSS_WS_CLASS}]*([^;]+);`, 'm'));
+    expect(decl, '.AvatarStack__More에 color 선언이 없다').toBeTruthy();
+    expect(cssTrim(decl[1])).toBe('color-mix(in srgb, var(--color-text-secondary) 90%, var(--color-text))');
   });
 });
 

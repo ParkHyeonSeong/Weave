@@ -20,7 +20,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.5);
+    background: var(--color-backdrop);
     padding: $space-4;
     z-index: 1000;
     animation: fadeIn 150ms ease;

@@ -58,7 +58,7 @@
     white-space: nowrap;
 
     &:hover {
-      background: #F4F5F7;
+      background: var(--color-surface-hover);
       color: $color-text;
     }
   }
@@ -86,7 +86,7 @@
     user-select: none;
 
     &:hover {
-      background: #F6F7F9;
+      background: var(--color-surface-sunken);
     }
   }
 
@@ -197,12 +197,12 @@
   }
 
   &__SprintStartBtn {
-    color: #2563EB;
-    border: 1px solid #2563EB;
+    color: var(--color-status-in-progress);
+    border: 1px solid var(--color-status-in-progress);
     background: transparent;
 
     &:hover {
-      background: #EFF6FF;
+      background: var(--color-status-in-progress-bg);
     }
   }
 
@@ -525,7 +525,7 @@
     background: $color-bg;
     border: 1px solid $color-input-border;
     border-radius: 10px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    box-shadow: var(--shadow-lg);
   }
 
   &__MoreItem {
@@ -686,6 +686,19 @@
     border-radius: $radius-sm;
     white-space: nowrap;
     line-height: 1.4;
+  }
+
+  // 색이 있는 칩만. 색은 JS가 인라인 style로 `--chip-color`에 실어 보낸다
+  // (library/themePalette.js chipTintStyle) — **원시 hex(#RRGGBB)와 토큰 참조(var(--color-error) 등) 둘 다** 온다.
+  // ⛔ 색 문자열에 알파를 이어 붙이는 방식(`chip.color + '15'`)으로 되돌리지 마라: 토큰 형태에서
+  //    `var(--color-error)15`가 되어 계산값 시점에 무효가 되고, background-color가 상속되지 않는
+  //    속성이라 transparent로 떨어져 틴트가 통째로 사라진다(실측 computed rgba(0, 0, 0, 0)).
+  // 8.235294% = 0x15/0xFF — 옛 `#RRGGBB15` 알파와 같은 값(themePalette.js CHIP_TINT_PERCENT와 동기).
+  // srgb color-mix는 premultiplied 합성이라 결과가 정확히 "그 색 알파 8.235294%"와 동치다.
+  &__ActiveChip--tinted {
+    border-color: var(--chip-color);
+    color: var(--chip-color);
+    background-color: color-mix(in srgb, var(--chip-color) 8.235294%, transparent);
   }
 
   &__ActiveChipRemove {
@@ -1145,7 +1158,7 @@
     gap: 2px;
     font-size: 11px;
     font-weight: $font-weight-medium;
-    color: #16A34A;
+    color: var(--color-success);
     flex-shrink: 0;
     white-space: nowrap;
   }
@@ -1246,13 +1259,18 @@
     }
 
     &--in_progress {
-      background: #EFF6FF;
-      color: #2563EB;
+      background: var(--color-status-in-progress-bg);
+      color: var(--color-status-in-progress);
     }
 
     &--done {
       background: $color-success-bg;
       color: $color-success;
+    }
+
+    &--cancelled {
+      background: var(--color-error-bg);
+      color: var(--color-error);
     }
   }
 
@@ -1269,15 +1287,15 @@
     white-space: nowrap;
 
     &--urgent {
-      color: #DC2626;
+      color: var(--color-error);
     }
 
     &--high {
-      color: #F59E0B;
+      color: var(--color-warning);
     }
 
     &--medium {
-      color: #5E6AD2;
+      color: var(--color-primary);
     }
 
     &--low {

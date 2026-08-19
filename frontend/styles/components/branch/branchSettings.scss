@@ -343,7 +343,7 @@
     transition: background $transition-fast;
 
     &:hover {
-      background: rgba(94, 106, 210, 0.14);
+      background: color-mix(in srgb, var(--color-primary) 14%, transparent);
     }
   }
 
@@ -978,16 +978,16 @@
       background: $color-surface;
     }
     &--in_progress {
-      color: #2563EB;
-      background: rgba(37, 99, 235, 0.1);
+      color: var(--color-status-in-progress);
+      background: color-mix(in srgb, var(--color-status-in-progress) 10%, transparent);
     }
     &--done {
-      color: #16A34A;
-      background: rgba(22, 163, 74, 0.1);
+      color: var(--color-success);
+      background: color-mix(in srgb, var(--color-success) 10%, transparent);
     }
     &--cancelled {
-      color: #DC2626;
-      background: rgba(220, 38, 38, 0.1);
+      color: var(--color-error);
+      background: color-mix(in srgb, var(--color-error) 10%, transparent);
     }
   }
 

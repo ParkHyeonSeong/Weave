@@ -246,13 +246,13 @@
     ul, ol { margin: $space-1 0; padding-left: $space-4; }
     li { margin-bottom: 2px; }
     code {
-      background: rgba(0, 0, 0, 0.06);
+      background: var(--color-code-bg);
       padding: 1px 4px;
       border-radius: $radius-sm;
       font-size: 0.9em;
     }
     pre {
-      background: rgba(0, 0, 0, 0.06);
+      background: var(--color-code-block-bg);
       padding: $space-2 $space-3;
       border-radius: $radius-md;
       overflow-x: auto;

@@ -4,13 +4,15 @@ import { X, Trash2 } from 'lucide-react';
 import CustomSelect from '@/components/common/CustomSelect';
 import DatePicker from '@/components/common/DatePicker';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
+import { statusCategoryVar, DEFAULT_STATUS_FALLBACK } from '@/library/themePalette';
 
 const COLORS = ['#5E6AD2', '#2563EB', '#DC2626', '#16A34A', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4'];
 
 const STATUS_COLORS = {
-  todo: '#9CA3AF',
-  in_progress: '#2563EB',
-  done: '#16A34A',
+  todo:        statusCategoryVar('todo'),
+  in_progress: statusCategoryVar('in_progress'),
+  done:        statusCategoryVar('done'),
+  cancelled:   statusCategoryVar('cancelled'),
 };
 
 export default function EpicDetailPanel({ branchId, workflowStatuses = [], epicSummary, onClose, onSelectTask }) {
@@ -169,11 +171,7 @@ export default function EpicDetailPanel({ branchId, workflowStatuses = [], epicS
             value={epic.status}
             options={statuses.length > 0
               ? statuses.map((ws) => ({ value: ws.key, label: ws.label, color: ws.color }))
-              : [
-                { value: 'todo', label: 'To Do', color: '#9CA3AF' },
-                { value: 'in_progress', label: 'In Progress', color: '#2563EB' },
-                { value: 'done', label: 'Done', color: '#16A34A' },
-              ]
+              : DEFAULT_STATUS_FALLBACK
             }
             onChange={(val) => updateField('status', val)}
           />

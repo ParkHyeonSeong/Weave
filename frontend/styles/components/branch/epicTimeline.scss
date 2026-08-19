@@ -232,11 +232,11 @@
     }
 
     &--active {
-      background: rgba(#2563EB, 0.1);
-      border-color: rgba(#2563EB, 0.3);
+      background: color-mix(in srgb, var(--color-status-in-progress) 10%, transparent);
+      border-color: color-mix(in srgb, var(--color-status-in-progress) 30%, transparent);
 
       &:hover {
-        border-color: #2563EB;
+        border-color: var(--color-status-in-progress);
       }
     }
 
@@ -312,8 +312,8 @@
       color: $color-text-secondary;
     }
     &--active {
-      background: #EFF6FF;
-      color: #2563EB;
+      background: var(--color-status-in-progress-bg);
+      color: var(--color-status-in-progress);
     }
     &--closed {
       background: $color-surface;
@@ -479,8 +479,8 @@
     }
 
     &--in_progress {
-      background: #EFF6FF;
-      color: #2563EB;
+      background: var(--color-status-in-progress-bg);
+      color: var(--color-status-in-progress);
     }
 
     &--done {

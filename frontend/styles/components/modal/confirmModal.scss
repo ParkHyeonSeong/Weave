@@ -3,7 +3,7 @@
 .ConfirmModal__Backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--color-backdrop);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -106,7 +106,7 @@
       color: $color-text-inverse;
 
       &:hover {
-        background: #B91C1C;
+        background: var(--color-error-strong);
       }
     }
   }

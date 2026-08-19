@@ -1,5 +1,3 @@
-@use 'sass:color';
-
 .Avatar {
   display: inline-flex;
   align-items: center;
@@ -27,7 +25,7 @@
 
   &--overlap .AvatarStack__Item:not(:first-child) { margin-left: -6px; }
 
-  &__Item .Avatar { box-shadow: 0 0 0 2px #fff; }
+  &__Item .Avatar { box-shadow: 0 0 0 2px var(--color-bg); }
 
   &__More {
     display: inline-flex;
@@ -38,16 +36,18 @@
     padding: 0 6px;
     margin-left: -6px;
     border-radius: 12px;
-    background: #eef0f4;
-    color: #555;
+    background: var(--color-surface-hover);
+    // 11px로 숨은 멤버 수(+N)를 전달하는 본문 텍스트다 — text-secondary 단독은 라이트에서
+    // #6B7280 on #F3F4F6 = 4.39로 4.5:1에 미달한다(실측). text 쪽으로 10% 당겨 보정한다.
+    color: color-mix(in srgb, var(--color-text-secondary) 90%, var(--color-text));
     font-size: 11px;
     font-weight: 600;
-    box-shadow: 0 0 0 2px #fff;
+    box-shadow: 0 0 0 2px var(--color-bg);
 
     &--btn {
       border: none;
       cursor: pointer;
-      &:hover { background: color.adjust(#eef0f4, $lightness: -5%); }
+      &:hover { background: color-mix(in srgb, var(--color-surface-hover) 95%, var(--color-text)); }
     }
   }
 }

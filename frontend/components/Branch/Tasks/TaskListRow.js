@@ -9,25 +9,19 @@ import DropdownPortal from '@/components/common/DropdownPortal';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import Avatar from '@/components/common/Avatar';
 import { progressLabel, progressPercent } from '@/library/subtaskProgress';
+import { priorityVar, DEFAULT_STATUS_FALLBACK } from '@/library/themePalette';
 
 const priorityOptions = [
-  { value: 'urgent', label: 'Urgent', color: '#DC2626' },
-  { value: 'high', label: 'High', color: '#F59E0B' },
-  { value: 'medium', label: 'Medium', color: '#5E6AD2' },
-  { value: 'low', label: 'Low', color: '#9CA3AF' },
-];
-
-const DEFAULT_STATUS_OPTIONS = [
-  { value: 'todo', label: 'To Do', color: '#9CA3AF' },
-  { value: 'in_progress', label: 'In Progress', color: '#2563EB' },
-  { value: 'done', label: 'Done', color: '#16A34A' },
-  { value: 'cancelled', label: 'Cancelled', color: '#DC2626' },
+  { value: 'urgent', label: 'Urgent', color: priorityVar('urgent') },
+  { value: 'high', label: 'High', color: priorityVar('high') },
+  { value: 'medium', label: 'Medium', color: priorityVar('medium') },
+  { value: 'low', label: 'Low', color: priorityVar('low') },
 ];
 
 export default function TaskListRow({ task, branchId, taskTypes, workflowStatuses, epics, members, onClick, onContextMenu, isSelected, isOverlay, indent, expandable, expanded, onToggleExpand, progress, contextOnly }) {
   const statusOptions = (workflowStatuses && workflowStatuses.length > 0)
     ? workflowStatuses.map((ws) => ({ value: ws.key, label: ws.label, color: ws.color }))
-    : DEFAULT_STATUS_OPTIONS;
+    : DEFAULT_STATUS_FALLBACK;
   const typeConfig = (taskTypes || []).find((t) => t.type_key === task.task_type);
   const [assigneeOpen, setAssigneeOpen] = useState(false);
   const assigneeRef = useRef(null); // 트리거

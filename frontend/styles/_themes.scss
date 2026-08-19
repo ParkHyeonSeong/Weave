@@ -73,6 +73,7 @@ $_l-warning: #D97706;
   --color-warning-ink-strong: #78350F;
   --color-surface-sunken: #{color.adjust($_l-surface, $lightness: -1%)};        // scrum 57
   --color-surface-raised: #{color.adjust($_l-surface, $lightness: 1%)};         // taskList 1433
+  --color-surface-overlay: #FFFFFF;                                             // context-menu 5 — 떠 있는 표면(라이트는 순백 유지)
   --color-bg-sunken: #{color.adjust($_l-bg, $lightness: -1%)};                  // trackSettings 195
   --color-text-soft: #{color.adjust($_l-border, $lightness: -45%)};             // scrum 73·103·113·145·241 (보더 -45% = 회색 텍스트 관용구)
   --color-border-faint: #{color.adjust($_l-border, $lightness: 3%)};            // scrum 213·343
@@ -165,6 +166,7 @@ html[data-theme='dark'] {
   --color-warning-ink-strong: #F3CD94;
   --color-surface-sunken: #131418;
   --color-surface-raised: #1B1D22;
+  --color-surface-overlay: #1B1D22;
   --color-bg-sunken: #0B0C0E;
   --color-text-soft: #8B93A1;
   --color-border-faint: #2C2E35;
