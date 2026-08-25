@@ -6,10 +6,11 @@
   left: 0;
   right: 0;
   margin-bottom: $space-1;
-  background: $color-bg;
+  // 떠 있는 표면이라 --color-bg가 아니라 surface-overlay다(다크에서 한 층 뜬다).
+  background: var(--color-surface-overlay);
   border: 1px solid $color-input-border;
   border-radius: $radius-lg;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-lg);
   z-index: 10;
   overflow: hidden;
 
@@ -104,10 +105,11 @@
   left: 0;
   right: 0;
   margin-bottom: $space-1;
-  background: $color-bg;
+  // 떠 있는 표면이라 --color-bg가 아니라 surface-overlay다(다크에서 한 층 뜬다).
+  background: var(--color-surface-overlay);
   border: 1px solid $color-input-border;
   border-radius: $radius-lg;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-lg);
   z-index: 10;
   overflow: hidden;
 
@@ -162,10 +164,11 @@
   left: 0;
   right: 0;
   margin-bottom: $space-1;
-  background: $color-bg;
+  // 떠 있는 표면이라 --color-bg가 아니라 surface-overlay다(다크에서 한 층 뜬다).
+  background: var(--color-surface-overlay);
   border: 1px solid $color-input-border;
   border-radius: $radius-lg;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-lg);
   z-index: 10;
   overflow: hidden;
 

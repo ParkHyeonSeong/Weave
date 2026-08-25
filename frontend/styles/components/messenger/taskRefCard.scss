@@ -48,10 +48,13 @@
     line-height: 16px;
     flex-shrink: 0;
 
+    // ⚠️ medium=warning(amber) / high=error(red) 매핑은 현행 그대로다.
+    // 다른 표면의 우선순위 색 의미와 어긋나 보이지만 그 판정은 미결(P9)이라
+    // 여기서는 리터럴만 토큰으로 옮기고 의미는 한 글자도 바꾸지 않는다.
     &--low { background: $color-surface-hover; color: $color-text-tertiary; }
-    &--medium { background: #FEF3C7; color: #92400E; }
-    &--high { background: #FEE2E2; color: #B91C1C; }
-    &--urgent { background: #DC2626; color: #FFFFFF; }
+    &--medium { background: $color-warning-bg; color: var(--color-warning-ink-deep); }
+    &--high { background: $color-error-bg; color: var(--color-error-strong); }
+    &--urgent { background: $color-error; color: $color-text-inverse; }
   }
 
   &__Remove {

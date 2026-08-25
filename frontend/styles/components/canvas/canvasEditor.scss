@@ -112,7 +112,7 @@
         &__Handle {
           position: absolute;
           background: $color-primary;
-          border: 2px solid white;
+          border: 2px solid $color-bg;
           border-radius: 50%;
           width: 12px;
           height: 12px;
@@ -365,11 +365,11 @@
         line-height: 1.5;
         white-space: nowrap;
 
-        &--todo { background: rgba(0, 0, 0, 0.06); color: $color-text-secondary; }
+        &--todo { background: color-mix(in srgb, var(--color-text) 6%, transparent); color: $color-text-secondary; }
         &--in_progress { background: $color-status-in-progress-bg; color: $color-status-in-progress; }
         &--done { background: $color-success-bg; color: $color-success; }
         &--open { background: $color-status-in-progress-bg; color: $color-status-in-progress; }
-        &--closed { background: rgba(0, 0, 0, 0.06); color: $color-text-secondary; }
+        &--closed { background: color-mix(in srgb, var(--color-text) 6%, transparent); color: $color-text-secondary; }
       }
 
       // 콜아웃 패널
@@ -380,11 +380,11 @@
         border-left: 4px solid;
 
         &[data-callout="info"] {
-          background: #EFF6FF;
-          border-left-color: #2563EB;
+          background: var(--color-primary-wash);
+          border-left-color: $color-primary;
         }
         &[data-callout="warning"] {
-          background: #FFFBEB;
+          background: $color-warning-bg;
           border-left-color: $color-warning;
         }
         &[data-callout="success"] {
@@ -865,7 +865,7 @@
     border: none;
     border-radius: $radius-sm;
     background: $color-primary;
-    color: #fff;
+    color: $color-text-inverse;
     font-size: $font-size-xs;
     cursor: pointer;
     white-space: nowrap;
@@ -975,7 +975,7 @@
   background: $color-bg;
   border: 1px solid $color-input-border;
   border-radius: $radius-lg;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
   overflow: hidden;
 
   &__Header {
@@ -1064,7 +1064,7 @@
   background: $color-bg;
   border: 1px solid $color-input-border;
   border-radius: $radius-lg;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
   overflow: hidden;
 
   &__Header {
@@ -1140,7 +1140,7 @@
   background: $color-bg;
   border: 1px solid $color-input-border;
   border-radius: $radius-lg;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
   overflow: hidden;
 
   &__Header {
@@ -1239,7 +1239,7 @@
   background: $color-bg;
   border: 1px solid $color-input-border;
   border-radius: $radius-lg;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
   overflow: hidden;
 
   &__Header {

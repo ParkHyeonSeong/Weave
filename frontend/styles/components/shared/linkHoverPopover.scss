@@ -1,25 +1,31 @@
-// 에디터 링크 hover 시 뜨는 미니 팝오버(열기·편집·삭제). ScrumCellToolbar 다크 바와 통일.
+@use '../../variables' as *;
+
+// 에디터 링크 hover 시 뜨는 미니 팝오버(열기·편집·삭제).
+// 예전에는 고정 다크 칩(어두운 배경 + 흰 글자)이었지만 이제 테마를 따르는 떠 있는 표면이다 —
+// 배경과 전경은 반드시 같이 움직인다. 배경만 옮기면 라이트에서 흰 배경 위 흰 글자가 된다.
+// scrum.scss:357의 ScrumCellToolbar 다크 바는 S3 소유라 아직 고정 다크로 남아 있다(의도된 분기).
 .LinkHoverPopover {
   display: inline-flex; align-items: center; gap: 2px;
   max-width: 360px;
-  background: #1F2430; color: #fff;
+  background: var(--color-surface-overlay); color: $color-text;
   padding: 4px 6px; border-radius: 9px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, .22);
+  box-shadow: var(--shadow-lg);
   font-size: 12px;
 
   &__Url {
     max-width: 220px;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    color: #A5B4FC; padding: 0 4px;
+    color: $color-primary; padding: 0 4px;
   }
 
-  &__Sep { width: 1px; height: 16px; background: rgba(255, 255, 255, .18); margin: 0 3px; }
+  &__Sep { width: 1px; height: 16px; background: $color-border; margin: 0 3px; }
 
   &__Btn {
     width: 26px; height: 24px;
     display: inline-flex; align-items: center; justify-content: center;
-    border: none; background: transparent; color: #E5E7EB; border-radius: 6px; cursor: pointer;
-    &:hover { background: rgba(255, 255, 255, .12); }
-    &--danger:hover { background: rgba(239, 68, 68, .22); color: #FCA5A5; }
+    border: none; background: transparent; color: $color-text-secondary; border-radius: 6px; cursor: pointer;
+    &:hover { background: $color-surface-hover; }
+    // 아이콘 전용 버튼이라 SC 1.4.11(3:1) 기준이다 — 라이트 3.40:1 / 다크 3.98:1.
+    &--danger:hover { background: color-mix(in srgb, var(--color-error) 22%, transparent); color: $color-error; }
   }
 }

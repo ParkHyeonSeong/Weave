@@ -101,6 +101,63 @@ export const COLOR_EXCEPTIONS = [
     category: 'fixed-on-color',
     reason: '스와치 자체가 프리셋 16색 또는 사용자 저장색이다. 임의 색 위 hover 윤곽이라 표면 토큰을 쓰면 밝은 스와치에서 사라진다.',
   },
+
+  // --- S6: canvas ---
+  { file: 'styles/components/canvas/typstEditor.scss', selector: '.TypstEditor__Page', prop: 'background', value: '#fff', category: 'print-paper',
+    reason: 'Typst 미리보기는 종이를 모사한다. 스펙 2026-07-13-dark-mode-design.md:163이 다크에서도 흰 종이 유지를 의도적 예외로 명시했다.' },
+  { file: 'styles/components/canvas/typstEditor.scss', selector: '.CanvasPageView__TypstPage', prop: 'background', value: '#fff', category: 'print-paper',
+    reason: '읽기 모드의 Typst 렌더도 같은 종이 모사다. 검정 글리프가 흰 종이 위에 있어야 원본 조판과 동일하다.' },
+  // selector는 컴파일 실측값이다. 원문 :127이 .TypstEditor__Code 안에 중첩돼 있어
+  // '.yRemoteSelectionHead::after'로 쓰면 Step 4 대조가 어긋난다.
+  { file: 'styles/components/canvas/typstEditor.scss', selector: '.TypstEditor__Code .yRemoteSelectionHead::after', prop: 'color', value: '#fff', category: 'fixed-on-color',
+    reason: 'background가 inherit로 협업자 커서 색을 받는다. 배경이 임의 사용자 색이라 테마 토큰으로 대체할 수 없다.' },
+  { file: 'styles/components/canvas/canvasCollabEditor.scss', selector: '.collaboration-cursor__avatar', prop: 'color', value: 'white', category: 'fixed-on-color',
+    reason: 'buildAvatarDOM이 세팅하는 AVATAR_COLORS 12색은 library/userAvatar.js:6 주석대로 흰 텍스트 4.5:1 기준으로 선정됐다. 테마와 무관하게 흰색이 옳다.' },
+  { file: 'styles/components/canvas/typstEditor.scss', selector: '.TypstEditor__Page', prop: 'box-shadow', value: 'rgba(0, 0, 0, 0.08)', category: 'overlay-scrim',
+    reason: 'print-paper로 고정한 흰 종이를 배경에서 띄우는 그림자다. 아래 표면이 테마 토큰이 아니라 고정 흰색이라 --shadow-* 로 옮기면 다크에서 그림자만 짙어져 종이 가장자리가 탁해진다.' },
+  { file: 'styles/components/canvas/typstEditor.scss', selector: '.CanvasPageView__TypstPage', prop: 'box-shadow', value: 'rgba(0, 0, 0, 0.08)', category: 'overlay-scrim',
+    reason: '읽기 모드 종이도 같은 흰 종이 분리 그림자다. 종이가 테마 불변이므로 그 아래 그림자도 같은 검정 알파로 고정해야 편집/읽기 모드가 같아 보인다.' },
+  // selector에 ' | ' 구분자와 @media 프리픽스가 들어간다 — hitsFor의 selectorPath()가 내는 형식 그대로다.
+  // '.AnnotationSidebar::before'만 쓰면 MISSING_EXCEPTION + DEAD_EXCEPTION이 동시에 난다.
+  { file: 'styles/components/canvas/annotation.scss', selector: '@media (min-width: 768px) and (max-width: 1439px) | .AnnotationSidebar::before', prop: 'background', value: 'rgba(0, 0, 0, 0.32)', category: 'overlay-scrim',
+    reason: '주석 사이드바 뒤 본문 전체를 덮는 딤이다. 아래가 임의 문서 콘텐츠(이미지 포함)라 표면 토큰을 쓰면 다크에서 딤이 밝아져 본문이 물러나지 않는다.' },
+
+  // --- S6: profile ---
+  { file: 'styles/components/profile/profile.scss', selector: '.Profile__ColorSwatch', prop: 'box-shadow', value: 'rgba(0, 0, 0, 0.06)', category: 'fixed-on-color',
+    reason: '스와치 배경은 Profile.js:317의 style={{ background: c }}로 칠하는 AVATAR_COLORS 팔레트색이다. 밝은 스와치의 경계를 잡는 inset 링이라 테마 불변이다.' },
+  { file: 'styles/components/profile/profile.scss', selector: '.Profile__ColorSwatch--selected', prop: 'border-color', value: '#fff', category: 'fixed-on-color',
+    reason: '선택 표시 링이 팔레트색 스와치 위에 직접 얹힌다. 배경이 임의 preset 색이라 테마 토큰으로 바꾸면 밝은 스와치에서 링이 사라진다.' },
+  { file: 'styles/components/profile/profile.scss', selector: '.Profile__AvatarOverlay', prop: 'background', value: 'rgba(0, 0, 0, 0.4)', category: 'overlay-scrim',
+    reason: '업로드한 임의 아바타 이미지 위를 덮는 hover 스크림이다. 다크에서도 어두워야 그 위 흰 카메라 아이콘·문구가 읽힌다.' },
+  { file: 'styles/components/profile/profile.scss', selector: '.Profile__AvatarOverlay', prop: 'color', value: '#fff', category: 'fixed-on-color',
+    reason: '바로 위 rgba(0, 0, 0, 0.4) 스크림 위에 얹히는 카메라 아이콘 색이다. 배경이 코드 고정 검정 막이라 테마와 무관하게 흰색이 옳다.' },
+  { file: 'styles/components/profile/profile.scss', selector: '.Profile__AvatarSpinner', prop: 'border', value: 'rgba(255, 255, 255, 0.3)', category: 'fixed-on-color',
+    reason: '업로드 중 같은 검정 스크림 위에서 도는 스피너 트랙이다. 스크림 기준 대비색이라 앱 표면 토큰과 무관하다.' },
+  { file: 'styles/components/profile/profile.scss', selector: '.Profile__AvatarSpinner', prop: 'border-top-color', value: '#fff', category: 'fixed-on-color',
+    reason: '스피너의 진행 호도 검정 스크림 위에 있다. 스크림이 테마 불변이므로 흰색 고정이 정답이다.' },
+
+  // --- S6: track (S4가 인라인 주석으로 남긴 예외를 레지스트리로 이관) ---
+  { file: 'styles/components/track/track.scss', selector: '.TrackHeader__WeaveSeg', prop: 'color', value: 'rgba(255, 255, 255, 0.96)', category: 'fixed-on-color',
+    reason: '브랜치 런타임 데이터색이 배경이라 테마와 무관하게 흰 글자가 옳다. S4 인라인 주석 [S4:T201]을 그대로 이관했다. 동적 on-color 접근성 부채는 S7.' },
+  { file: 'styles/components/track/track.scss', selector: '.TrackHeader__WeaveSeg + .TrackHeader__WeaveSeg', prop: 'box-shadow', value: 'rgba(255, 255, 255, 0.18)', category: 'fixed-on-color',
+    reason: '세그먼트 구분선이 브랜치 런타임 데이터색 배경 위에 inset으로 그려진다. [S4:T201]과 같은 표면이라 테마 불변이다.' },
+  { file: 'styles/components/track/track.scss', selector: '.TrackHeader__WeaveSegCount', prop: 'background', value: 'rgba(0, 0, 0, 0.18)', category: 'fixed-on-color',
+    reason: '카운트 알약이 브랜치 런타임 데이터색 위를 눌러 대비를 만든다. 배경이 임의 데이터색이라 테마 토큰으로 대체할 수 없다.' },
+  { file: 'styles/components/track/track.scss', selector: '.ManageBranches__Mark', prop: 'color', value: '#FFFFFF', category: 'fixed-on-color',
+    reason: '체크 마크가 브랜치 런타임 데이터색 배경 위에 얹힌다. S4 인라인 주석 [S4:T2399]를 이관했다.' },
+  { file: 'styles/components/track/tracksIndex.scss', selector: '.CreateTrack__Color', prop: 'color', value: '#FFFFFF', category: 'fixed-on-color',
+    reason: '고정 preset accent 배경 위 체크 표시라 테마 불변이다. S4 인라인 주석 [S4:X147]을 이관했다.' },
+  { file: 'styles/components/track/tracksIndex.scss', selector: '.CreateTrack__BranchMark', prop: 'color', value: '#FFFFFF', category: 'fixed-on-color',
+    reason: '런타임 데이터색 배경 위 아이콘이라 테마 불변이다. S4 인라인 주석 [S4:X228]을 이관했다.' },
+
+  // --- S6: dead 3건 (globe·next는 S9 소유 — 여기 적지 마라) ---
+  // 삭제는 S9 백로그(SW 캐시·manifest와 함께 판단). fill="none"은 named color가 아니라 hit이 아니다.
+  { file: 'public/file.svg', selector: null, prop: 'fill', value: '#666', category: 'dead',
+    reason: 'Next.js 스캐폴딩 잔재로 앱 참조가 0건이다. 자산 삭제는 sw.js 프리캐시·manifest와 함께 판단해야 해서 S9로 넘긴다.' },
+  { file: 'public/vercel.svg', selector: null, prop: 'fill', value: '#fff', category: 'dead',
+    reason: 'Next.js 스캐폴딩 잔재로 앱 참조가 0건이다. 자산 삭제는 sw.js 프리캐시·manifest와 함께 판단해야 해서 S9로 넘긴다.' },
+  { file: 'public/window.svg', selector: null, prop: 'fill', value: '#666', category: 'dead',
+    reason: 'Next.js 스캐폴딩 잔재로 앱 참조가 0건이다. 자산 삭제는 sw.js 프리캐시·manifest와 함께 판단해야 해서 S9로 넘긴다.' },
 ];
 
 export function findException(file, selector, prop, value) {

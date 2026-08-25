@@ -127,7 +127,7 @@
     }
 
     &--pending {
-      background: #FFFBEB;
+      background: $color-warning-bg;
       color: $color-warning;
     }
 
@@ -164,8 +164,9 @@
     background: $color-success-bg;
     color: $color-success;
 
+    // 8%: 라이트 합성 #DFF6E6 ≈ S6 이전 #DDF5E4 (라벨 대비 2.892:1 ≥ 이전 2.865:1)
     &:hover {
-      background: #DDF5E4;
+      background: color-mix(in srgb, var(--color-success) 8%, var(--color-success-bg));
     }
   }
 
@@ -173,8 +174,9 @@
     background: $color-error-bg;
     color: $color-error;
 
+    // 4%: 라이트 합성 #FDEAEA ≈ S6 이전 #FDE8E8 (라벨 대비 4.163:1 ≥ 이전 4.113:1)
     &:hover {
-      background: #FDE8E8;
+      background: color-mix(in srgb, var(--color-error) 4%, var(--color-error-bg));
     }
   }
 
@@ -187,11 +189,12 @@
     font-size: $font-size-xs;
     font-weight: $font-weight-medium;
     color: $color-warning;
-    background: #FFFBEB;
+    background: $color-warning-bg;
     transition: all $transition-fast;
 
+    // 6%: 대비 유지 범위(≤6%) 안에서 S6 이전 #FEF3C7에 가장 근접 (2.889:1 ≥ 이전 2.861:1)
     &:hover {
-      background: #FEF3C7;
+      background: color-mix(in srgb, var(--color-warning) 6%, var(--color-warning-bg));
     }
   }
 
@@ -207,8 +210,9 @@
     background: $color-success-bg;
     transition: all $transition-fast;
 
+    // 8%: ApproveBtn과 동일 (라이트 합성 #DFF6E6, 2.892:1 ≥ 이전 2.865:1)
     &:hover {
-      background: #DDF5E4;
+      background: color-mix(in srgb, var(--color-success) 8%, var(--color-success-bg));
     }
   }
 

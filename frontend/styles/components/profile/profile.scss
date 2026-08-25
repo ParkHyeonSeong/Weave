@@ -408,12 +408,12 @@
     background: none;
     border: 1px solid $color-input-border;
     border-radius: $radius-lg;
-    color: #dc2626;
+    color: $color-error;
     font-size: $font-size-sm;
     white-space: nowrap;
     cursor: pointer;
     transition: background $transition-fast;
 
-    &:hover { background: rgba(220, 38, 38, 0.08); }
+    &:hover { background: color-mix(in srgb, var(--color-error) 8%, transparent); }
   }
 }

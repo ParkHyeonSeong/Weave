@@ -95,7 +95,7 @@
     &--active {
       border-color: $color-primary;
       color: $color-primary;
-      background: rgba(94, 106, 210, 0.08);
+      background: $color-primary-subtle;
     }
   }
 
@@ -145,7 +145,7 @@
 
     &--active {
       color: $color-primary;
-      background: rgba(94, 106, 210, 0.1);
+      background: $color-primary-subtle;
       box-shadow: inset 0 0 0 1px var(--color-selected-indicator);
     }
   }
@@ -336,13 +336,13 @@
     border-radius: $radius-sm;
 
     &--todo {
-      background: rgba(156, 163, 175, 0.15);
+      background: color-mix(in srgb, var(--color-text-secondary) 15%, transparent);
       color: $color-text-secondary;
     }
 
     &--in_progress {
-      background: #EFF6FF;
-      color: #2563EB;
+      background: $color-status-in-progress-bg;
+      color: $color-status-in-progress;
     }
 
     &--done {
@@ -382,15 +382,15 @@
     }
 
     &--urgent {
-      color: #DC2626;
+      color: $color-error;
     }
 
     &--high {
-      color: #F59E0B;
+      color: $color-warning;
     }
 
     &--medium {
-      color: #5E6AD2;
+      color: $color-primary;
     }
 
     &--low {

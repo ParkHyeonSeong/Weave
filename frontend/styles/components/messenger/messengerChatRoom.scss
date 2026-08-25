@@ -258,26 +258,30 @@
     line-height: 1.5;
     white-space: pre-wrap;
 
+    // 내 말풍선은 primary를 꽉 채우지 않고 wash로 구분한다 — 다크에서
+    // primary가 밝은 라벤더라 꽉 채우면 목록 표면을 뚫고 나온다.
+    // primary-subtle(8% 알파)이 아니라 primary-wash를 쓴다: 알파 틴트는
+    // --color-bg 위에 합성되면 상대 말풍선(--color-surface)과 1.06:1까지
+    // 붙어 두 화자 구분이 사라진다. wash는 양 테마 모두 불투명이라 구분이 산다.
+    // 텍스트는 두 화자 모두 $color-text라 대비가 테마와 무관하게 유지된다.
     .MessengerChatRoom__Msg--mine & {
-      background: $color-primary;
-      color: $color-text-inverse;
+      background: var(--color-primary-wash);
+      color: $color-text;
     }
   }
 
+  // 말풍선 안쪽 워시는 화자 구분 없이 하나다 — 내 말풍선이 더 이상 반전 표면이
+  // 아니라서 흰 알파 오버레이는 라이트에서 보이지 않는다(그래서 --mine 분기를 지웠다).
   &__CodeBlock {
     margin: $space-1 0;
     padding: $space-2 $space-3;
-    background: rgba(0, 0, 0, 0.06);
+    background: color-mix(in srgb, var(--color-text) 6%, transparent);
     border-radius: $radius-md;
     font-family: 'SFMono-Regular', 'Consolas', 'Liberation Mono', 'Menlo', monospace;
     font-size: 12px;
     line-height: 1.5;
     overflow-x: auto;
     white-space: pre;
-
-    .MessengerChatRoom__Msg--mine & {
-      background: rgba(255, 255, 255, 0.15);
-    }
 
     code {
       background: none;
@@ -288,14 +292,10 @@
 
   &__InlineCode {
     padding: 1px 4px;
-    background: rgba(0, 0, 0, 0.06);
+    background: color-mix(in srgb, var(--color-text) 6%, transparent);
     border-radius: 3px;
     font-family: 'SFMono-Regular', 'Consolas', 'Liberation Mono', 'Menlo', monospace;
     font-size: 12px;
-
-    .MessengerChatRoom__Msg--mine & {
-      background: rgba(255, 255, 255, 0.2);
-    }
   }
 
   &__Input {
@@ -329,7 +329,7 @@
 
     &--code {
       border-color: $color-primary;
-      background: rgba(0, 0, 0, 0.03);
+      background: color-mix(in srgb, var(--color-text) 3%, transparent);
     }
   }
 
@@ -593,23 +593,9 @@
       border-color: $color-primary;
     }
 
-    .MessengerChatRoom__Msg--mine & {
-      background: rgba(255, 255, 255, 0.15);
-      border-color: rgba(255, 255, 255, 0.2);
-      color: $color-text-inverse;
-
-      &:hover {
-        border-color: rgba(255, 255, 255, 0.4);
-      }
-    }
-
     svg {
       flex-shrink: 0;
       color: $color-text-tertiary;
-
-      .MessengerChatRoom__Msg--mine & {
-        color: rgba(255, 255, 255, 0.7);
-      }
     }
   }
 
@@ -627,10 +613,6 @@
     font-size: 10px;
     color: $color-text-tertiary;
     white-space: nowrap;
-
-    .MessengerChatRoom__Msg--mine & {
-      color: rgba(255, 255, 255, 0.6);
-    }
   }
 
   &__FileCardDl {

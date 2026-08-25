@@ -22,7 +22,7 @@
     top: 0; right: 0; bottom: 0;
     width: min(420px, 100%);
     z-index: 120;
-    box-shadow: -8px 0 24px rgba(0, 0, 0, 0.12);
+    box-shadow: var(--shadow-lg);
   }
 
   // -- Mobile: 풀스크린 오버레이 --
@@ -128,11 +128,11 @@
     font-size: $font-size-xs;
     font-weight: $font-weight-medium;
 
-    &--todo { background: rgba(0, 0, 0, 0.06); color: $color-text-secondary; }
+    &--todo { background: color-mix(in srgb, var(--color-text) 6%, transparent); color: $color-text-secondary; }
     &--in_progress { background: $color-status-in-progress-bg; color: $color-status-in-progress; }
     &--done { background: $color-success-bg; color: $color-success; }
     &--open { background: $color-status-in-progress-bg; color: $color-status-in-progress; }
-    &--closed { background: rgba(0, 0, 0, 0.06); color: $color-text-secondary; }
+    &--closed { background: color-mix(in srgb, var(--color-text) 6%, transparent); color: $color-text-secondary; }
   }
 
   &__Title {

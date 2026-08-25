@@ -257,11 +257,13 @@
     align-items: center;
     gap: $space-3;
     padding: 10px $space-4;
+    // 토스트는 본문과 반전된 표면($color-text)이다 — 그 위 전경/워시는 전부
+    // --color-text-inverse에 매어야 다크(밝은 토스트)에서도 대비가 유지된다.
     background: $color-text;
-    color: white;
+    color: $color-text-inverse;
     border-radius: $radius-lg;
     font-size: $font-size-sm;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: var(--shadow-lg);
     z-index: 1000;
     animation: toastSlideUp 0.3s ease-out;
   }
@@ -271,26 +273,26 @@
     align-items: center;
     gap: 4px;
     padding: 4px 10px;
-    background: rgba(255, 255, 255, 0.15);
-    color: white;
+    background: color-mix(in srgb, var(--color-text-inverse) 15%, transparent);
+    color: $color-text-inverse;
     border-radius: $radius-md;
     font-size: $font-size-xs;
     font-weight: $font-weight-medium;
     transition: background $transition-fast;
 
     &:hover {
-      background: rgba(255, 255, 255, 0.25);
+      background: color-mix(in srgb, var(--color-text-inverse) 25%, transparent);
     }
   }
 
   &__ToastClose {
     display: flex;
     align-items: center;
-    color: rgba(255, 255, 255, 0.5);
+    color: color-mix(in srgb, var(--color-text-inverse) 50%, transparent);
     transition: color $transition-fast;
 
     &:hover {
-      color: white;
+      color: $color-text-inverse;
     }
   }
 
@@ -592,11 +594,11 @@
       line-height: 1.5;
       white-space: nowrap;
 
-      &--todo { background: rgba(0, 0, 0, 0.06); color: $color-text-secondary; }
+      &--todo { background: color-mix(in srgb, var(--color-text) 6%, transparent); color: $color-text-secondary; }
       &--in_progress { background: $color-status-in-progress-bg; color: $color-status-in-progress; }
       &--done { background: $color-success-bg; color: $color-success; }
       &--open { background: $color-status-in-progress-bg; color: $color-status-in-progress; }
-      &--closed { background: rgba(0, 0, 0, 0.06); color: $color-text-secondary; }
+      &--closed { background: color-mix(in srgb, var(--color-text) 6%, transparent); color: $color-text-secondary; }
     }
 
     // 콜아웃 패널
@@ -607,11 +609,11 @@
       border-left: 4px solid;
 
       &[data-callout="info"] {
-        background: #EFF6FF;
-        border-left-color: #2563EB;
+        background: var(--color-primary-wash);
+        border-left-color: $color-primary;
       }
       &[data-callout="warning"] {
-        background: #FFFBEB;
+        background: $color-warning-bg;
         border-left-color: $color-warning;
       }
       &[data-callout="success"] {
