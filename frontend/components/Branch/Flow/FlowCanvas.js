@@ -13,6 +13,7 @@ import '@xyflow/react/dist/style.css';
 import { axios } from '@/library/_axios';
 import { getError } from '@/library/errorCode';
 import { errorText } from '@/library/errorText';
+import { useTheme } from '@/library/theme';
 import TaskNode from './TaskNode';
 import DeletableEdge from './DeletableEdge';
 
@@ -23,12 +24,19 @@ const edgeTypes = { deletable: DeletableEdge };
 const EDGE_STYLES = {
   finish_to_start: {
     type: 'smoothstep',
-    markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16 },
-    style: { strokeWidth: 2, stroke: '#6B7280' },
+    markerEnd: {
+      type: MarkerType.ArrowClosed,
+      width: 16,
+      height: 16,
+      // color 미지정 시 라이브러리 기본 marker 색이 새어 나온다(@xyflow/react 12.10.1
+      // dist/esm/index.js:3586 defaultMarkerColor). 반드시 명시한다.
+      color: 'var(--color-text-secondary)',
+    },
+    style: { strokeWidth: 2, stroke: 'var(--color-text-secondary)' },
   },
   relates_to: {
     type: 'smoothstep',
-    style: { strokeWidth: 2, stroke: '#9CA3AF', strokeDasharray: '6 4' },
+    style: { strokeWidth: 2, stroke: 'var(--color-text-tertiary)', strokeDasharray: '6 4' },
   },
 };
 
@@ -39,6 +47,7 @@ export default function FlowCanvas({
   const saveTimerRef = useRef(null);
   const deleteEdgeRef = useRef(null);
   const [edgeType, setEdgeType] = useState('finish_to_start');
+  const { resolved } = useTheme();
 
   // 태스크 -> 노드 변환
   const initialNodes = useMemo(() => {
@@ -200,8 +209,9 @@ export default function FlowCanvas({
         fitViewOptions={{ padding: 0.2 }}
         deleteKeyCode={null}
         proOptions={{ hideAttribution: true }}
+        colorMode={resolved}
       >
-        <Background gap={20} size={1} color="#2A2A2A" />
+        <Background gap={20} size={1} color="var(--color-border)" />
         <Controls showInteractive={false} />
         <Panel position="top-right" className="FlowToolbar">
           <div className="FlowToolbar__EdgeType">
@@ -222,11 +232,11 @@ export default function FlowCanvas({
           </div>
           <div className="FlowToolbar__Legend">
             <div className="FlowToolbar__LegendItem">
-              <svg width="24" height="8"><line x1="0" y1="4" x2="18" y2="4" stroke="#6B7280" strokeWidth="2"/><polygon points="18,1 24,4 18,7" fill="#6B7280"/></svg>
+              <svg width="24" height="8"><line x1="0" y1="4" x2="18" y2="4" stroke="var(--color-text-secondary)" strokeWidth="2"/><polygon points="18,1 24,4 18,7" fill="var(--color-text-secondary)"/></svg>
               <span>Blocks</span>
             </div>
             <div className="FlowToolbar__LegendItem">
-              <svg width="24" height="8"><line x1="0" y1="4" x2="24" y2="4" stroke="#9CA3AF" strokeWidth="2" strokeDasharray="4 3"/></svg>
+              <svg width="24" height="8"><line x1="0" y1="4" x2="24" y2="4" stroke="var(--color-text-tertiary)" strokeWidth="2" strokeDasharray="4 3"/></svg>
               <span>Related</span>
             </div>
           </div>

@@ -12,6 +12,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { ArrowRight, Minus, Anchor } from 'lucide-react';
+import { useTheme } from '@/library/theme';
 import CrossBranchTaskNode from './CrossBranchTaskNode';
 import RestrictedNode from './RestrictedNode';
 import TrackEdge from './TrackEdge';
@@ -111,6 +112,7 @@ function CanvasInner({
 }) {
   const wrapperRef = useRef(null);
   const { screenToFlowPosition } = useReactFlow();
+  const { resolved } = useTheme();
 
   const initialNodes = useMemo(
     () => buildNodes(items, branchById, workflowStatuses, onItemDelete),
@@ -205,6 +207,8 @@ function CanvasInner({
     <div className="TrackCanvas" ref={wrapperRef} onDragOver={handleDragOver} onDrop={handleDrop}>
       <svg className="TrackCanvas__Defs" aria-hidden>
         <defs>
+          {/* currentColor는 이 <svg>의 조상 .Track의 color(=--track-ink=--color-text)로
+              풀린다. 엣지 선 색과 무관하므로 화살촉에 토큰을 직접 준다. */}
           <marker
             id="track-arrow"
             viewBox="0 0 12 12"
@@ -214,7 +218,18 @@ function CanvasInner({
             markerHeight="9"
             orient="auto-start-reverse"
           >
-            <path d="M 0 0 L 11 6 L 0 12 z" fill="currentColor" />
+            <path d="M 0 0 L 11 6 L 0 12 z" fill="var(--color-text-tertiary)" />
+          </marker>
+          <marker
+            id="track-arrow-mat"
+            viewBox="0 0 12 12"
+            refX="10"
+            refY="6"
+            markerWidth="9"
+            markerHeight="9"
+            orient="auto-start-reverse"
+          >
+            <path d="M 0 0 L 11 6 L 0 12 z" fill="var(--color-primary)" />
           </marker>
         </defs>
       </svg>
@@ -233,12 +248,13 @@ function CanvasInner({
         proOptions={{ hideAttribution: true }}
         deleteKeyCode={null}
         defaultEdgeOptions={{ type: 'track' }}
+        colorMode={resolved}
       >
         <Background
           variant={BackgroundVariant.Cross}
           gap={36}
           size={8}
-          color="rgba(28, 28, 28, 0.06)"
+          color="var(--track-border-soft)"
           className="TrackCanvas__Bg"
         />
         <div className="TrackCanvas__Vignette" />
@@ -280,21 +296,21 @@ function CanvasInner({
         <Panel position="top-left" className="TrackCanvas__Legend">
           <div className="TrackCanvas__LegendRow">
             <svg width="36" height="6" viewBox="0 0 36 6">
-              <line x1="0" y1="3" x2="30" y2="3" stroke="#5E6AD2" strokeWidth="2.2" />
-              <polygon points="30,0 36,3 30,6" fill="#5E6AD2" />
+              <line x1="0" y1="3" x2="30" y2="3" stroke="var(--color-primary)" strokeWidth="2.2" />
+              <polygon points="30,0 36,3 30,6" fill="var(--color-primary)" />
             </svg>
             <span>blocks / dep</span>
           </div>
           <div className="TrackCanvas__LegendRow">
             <svg width="36" height="6" viewBox="0 0 36 6">
-              <line x1="0" y1="3" x2="30" y2="3" stroke="#9CA3AF" strokeWidth="1.6" strokeDasharray="4 5" />
-              <polygon points="30,0 36,3 30,6" fill="#9CA3AF" />
+              <line x1="0" y1="3" x2="30" y2="3" stroke="var(--color-text-tertiary)" strokeWidth="1.6" strokeDasharray="4 5" />
+              <polygon points="30,0 36,3 30,6" fill="var(--color-text-tertiary)" />
             </svg>
             <span>draft flow</span>
           </div>
           <div className="TrackCanvas__LegendRow">
             <svg width="36" height="6" viewBox="0 0 36 6">
-              <line x1="0" y1="3" x2="36" y2="3" stroke="#9CA3AF" strokeWidth="1.6" strokeDasharray="6 4" />
+              <line x1="0" y1="3" x2="36" y2="3" stroke="var(--color-text-tertiary)" strokeWidth="1.6" strokeDasharray="6 4" />
             </svg>
             <span>relates</span>
           </div>

@@ -27,17 +27,21 @@ export default function TrackEdge({
   const isMaterialized = data?.materialized;
   const isRelates = data?.linkType === 'relates_to';
 
-  const baseStroke = isRelates ? '#9CA3AF' : (isMaterialized ? '#5E6AD2' : '#9CA3AF');
+  const baseStroke = isRelates
+    ? 'var(--color-text-tertiary)'
+    : (isMaterialized ? 'var(--color-primary)' : 'var(--color-text-tertiary)');
   const strokeWidth = isMaterialized && !isRelates ? 2.2 : 1.6;
   const dasharray = isRelates ? '6 4' : (isMaterialized ? null : '4 5');
 
   return (
     <>
-      {/* white halo - 노드 위 지나가도 선이 끊기지 않도록 */}
+      {/* halo — 노드 위를 지나가도 선이 끊겨 보이지 않게 종이색으로 두껍게 깐다.
+          예전엔 라이트 종이색 16진값을 그대로 박아둬서 다크에서 흰 테두리가
+          남았다. --track-paper가 라이트/다크 양쪽에 있으므로 그걸 쓴다. */}
       <path
         d={edgePath}
         fill="none"
-        stroke="#FAFAF7"
+        stroke="var(--track-paper)"
         strokeWidth={strokeWidth + 5}
         strokeLinecap="round"
         className="TrackEdge__Halo"
@@ -46,12 +50,16 @@ export default function TrackEdge({
         id={id}
         path={edgePath}
         style={{
-          stroke: selected ? '#5E6AD2' : baseStroke,
+          stroke: selected ? 'var(--color-primary)' : baseStroke,
           strokeWidth: selected ? 2.6 : strokeWidth,
           strokeDasharray: dasharray,
           strokeLinecap: 'round',
         }}
-        markerEnd={isRelates ? undefined : 'url(#track-arrow)'}
+        markerEnd={
+          isRelates
+            ? undefined
+            : (isMaterialized ? 'url(#track-arrow-mat)' : 'url(#track-arrow)')
+        }
       />
       <EdgeLabelRenderer>
         <div

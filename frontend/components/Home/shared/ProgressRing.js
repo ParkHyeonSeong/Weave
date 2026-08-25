@@ -1,12 +1,13 @@
 // 진행률(0~100)을 SVG 링으로. 시안 canvas-track.html의 ring SVG와 동일 형태.
-// trackColor/textColor 기본값은 디자인 토큰($color-surface-hover 계열, $color-text)과 정렬.
+// trackColor/textColor 기본값은 테마 토큰(--color-border-faint / --color-text)이라 라이트·다크를 따라간다. color는 stored-color 폴백이라 S7 소유.
 export default function ProgressRing({
   value = 0,
   color = '#5E6AD2',
   size = 48,
   stroke = 5,
-  trackColor = '#EEF0F4',
-  textColor = '#1C1C1C',
+  // 호출부 2곳이 한 번도 안 넘긴다 → 라이트 값으로 고정돼 있었다.
+  trackColor = 'var(--color-border-faint)',
+  textColor = 'var(--color-text)',
 }) {
   const v = Math.max(0, Math.min(100, Math.round(value)));
   const r = (size - stroke) / 2;
