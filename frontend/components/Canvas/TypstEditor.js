@@ -3,6 +3,8 @@ import { Download, AlertTriangle, Loader } from 'lucide-react';
 import { compileToSvg, downloadPdf } from '@/library/typstCompiler';
 import { sanitizeSvg } from '@/library/sanitize';
 import { yCollab, patchYSync } from '@/library/yCollabPatched';
+import { useTheme } from '@/library/theme';
+import { createThemeBinding } from '@/library/editorTheme';
 
 // CodeMirror + Yjs (동적 로드)
 let cmModulesPromise = null;
@@ -14,8 +16,9 @@ function loadCmModules() {
     import('@codemirror/commands'),
     import('@codemirror/language'),
     import('@codemirror/lang-markdown'),
-  ]).then(([state, view, commands, lang, markdown]) => ({
-    state, view, commands, lang, markdown,
+    import('@codemirror/theme-one-dark'),
+  ]).then(([state, view, commands, lang, markdown, oneDark]) => ({
+    state, view, commands, lang, markdown, oneDark,
   }));
   return cmModulesPromise;
 }
@@ -36,6 +39,12 @@ function TypstEditorInner({
   const editorRef = useRef(null);
   const editorViewRef = useRef(null);
   const previewRef = useRef(null);
+
+  // 생성 effect deps는 [ydoc, provider]로 유지한다(resolved를 넣으면 yCollab·patchYSync가
+  // 재생성돼 협업 커서·awareness·undo 소실). 최신 테마는 ref로 읽는다.
+  const { resolved } = useTheme();
+  const resolvedRef = useRef(resolved);
+  const themeBindingRef = useRef(null);
 
   const [svgContent, setSvgContent] = useState(null);
   const [compileErrors, setCompileErrors] = useState([]);
@@ -86,8 +95,15 @@ function TypstEditorInner({
     let destroyed = false;
 
     (async () => {
-      const { state, view: cmView, commands, lang, markdown } = await loadCmModules();
+      const { state, view: cmView, commands, lang, markdown, oneDark } = await loadCmModules();
       if (destroyed) return;
+
+      themeBindingRef.current = createThemeBinding({
+        Compartment: state.Compartment,
+        getResolved: () => resolvedRef.current,
+        getOneDark: () => oneDark,
+        variant: 'full',   // 라이트에 이미 defaultHighlightStyle(fallback:true)이 있다
+      });
 
       const ytext = ydoc.getText('typst');
 
@@ -146,7 +162,9 @@ function TypstEditorInner({
         view = new cmView.EditorView({
           state: state.EditorState.create({
             doc: ytext.toString(),
-            extensions,
+            // 테마 확장은 여기서 만들어야 sync 대기 창을 방어한다 — extensions 배열은
+            // provider.once('sync') 대기 전에 만들어져 그 창의 테마 변경을 놓친다.
+            extensions: [...extensions, themeBindingRef.current.initial()],
           }),
           parent: editorRef.current,
         });
@@ -175,8 +193,19 @@ function TypstEditorInner({
       if (compileTimerRef.current) clearTimeout(compileTimerRef.current);
       if (view) view.destroy();
       editorViewRef.current = null;
+      themeBindingRef.current = null;
     };
   }, [ydoc, provider]);
+
+  // resolved 최신값을 ref에 보관하고(생성 경로가 await 뒤에 읽는다),
+  // 이미 만들어진 뷰는 재생성 없이 확장만 갈아끼운다.
+  useEffect(() => {
+    resolvedRef.current = resolved;
+    const view = editorViewRef.current;
+    const binding = themeBindingRef.current;
+    if (!view || !binding) return;   // 아직 생성 전 — 생성 시점에 ref에서 읽는다
+    view.dispatch({ effects: binding.reconfigure() });
+  }, [resolved]);
 
   // PDF 내보내기
   const handleExportPdf = async () => {

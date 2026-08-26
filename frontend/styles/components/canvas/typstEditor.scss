@@ -88,6 +88,14 @@
 
     .cm-editor {
       height: 100%;
+      // 배경 소유권을 앱 토큰으로 되찾는다. oneDark는 `&`(= .cm-editor)에 자기 기본 배경을
+      // 칠하는데, 그 위에서는 같은 oneDark 팔레트의 stone·coral이 4.5:1 대비 게이트를
+      // 통과하지 못한다. $color-surface로 낮추면 팔레트 10색 최저가 4.9:1이 되어 전건 통과한다.
+      // 라이트 값은 이미 이 배경(.Layout의 $color-surface)이 비쳐 보이던 것과 같아
+      // 외관이 바뀌지 않는다 — 상속하던 것을 명시적으로 소유하게 만든 것뿐이다.
+      // 구문색 자체는 건드리지 않는다(라이브러리 소유). 실측치는 thirdPartyTheme.test.js와
+      // 계획 문서에 있다.
+      background: $color-surface;
     }
 
     .cm-scroller {
