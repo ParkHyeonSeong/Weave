@@ -11,6 +11,7 @@ import {
   formatIcon,
   DEFAULT_COLORS,
 } from '@/library/entityAppearance';
+import { useTheme } from '@/library/theme';
 
 const ENTITY_TO_ENDPOINT = {
   branch: 'branches',
@@ -45,6 +46,7 @@ export default function IconPicker({
   onChange,            // (newIconString) => void
 }) {
   const fallbackColor = DEFAULT_COLORS[entityType] || DEFAULT_COLORS.branch;
+  const { resolved } = useTheme();
 
   // 초기값은 첫 렌더 깜빡임 방지용; 모달이 다시 열릴 때는 useEffect가 동기화한다.
   const [tab, setTab] = useState(() => tabForValue(value));
@@ -180,6 +182,8 @@ export default function IconPicker({
                 height={360}
                 searchPlaceholder="Search emoji..."
                 previewConfig={{ showPreview: false }}
+                // 문자열 enum이라 resolved를 그대로 넘긴다. AUTO 금지 — OS를 따라가 사용자 선택과 어긋난다.
+                theme={resolved}
               />
             </div>
           )}
