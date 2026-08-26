@@ -1,0 +1,26 @@
+// highlight.js 코드 하이라이트 테마 — light/dark 두 벌을 data-theme로 가른다.
+// Next의 전역 CSS import는 한 테마만 싣고 조건부로 바꿀 수 없다(런타임 <link> 교체는 FOUC).
+//
+// meta.load-css인 이유 (@import 중첩이 아니라):
+//   `html[data-theme='dark'] { @import '...css'; }` 는 컴파일은 통과하면서 아무것도
+//   인라인하지 않는 무음 no-op이다 — Sass가 .css를 plain-CSS @import 패스스루로 처리해
+//   @import 문이 출력에 그대로 남고, 셀렉터 안 @import는 CSS 스펙상 무시된다.
+//   meta.load-css는 대상 CSS를 컴파일 타임에 이 블록 안으로 인라인한다(sass 1.23+).
+//
+// 상대경로인 이유 (bare specifier가 아니라):
+//   bare specifier는 --load-path=node_modules 설정을 요구하는데 next.config.mjs(27줄)에
+//   sassOptions 키가 없고, 번들러가 Turbopack 기본(:7 turbopack:)이라 전달 경로가 불확실하며,
+//   이 레포에는 node_modules를 참조하는 SCSS @use/@import 선례가 0건이다.
+//
+// 두 벌을 다 싣는 이유: 조건부 로딩은 전환 시 깜빡임을 만든다. 합계 약 3KB(gzip 전).
+// 캐스케이드: dark (0,2,1) > light (0,1,0) — 명시도로 이기므로 소스 순서에 의존하지 않는다.
+// highlight.js는 전이 의존이라 버전 고정이 없다 — 경로가 깨지면
+// library/thirdPartyTheme.test.js의 compile()이 컴파일 실패로 잡는다.
+
+@use 'sass:meta';
+
+@include meta.load-css('../../node_modules/highlight.js/styles/github.min.css');
+
+html[data-theme='dark'] {
+  @include meta.load-css('../../node_modules/highlight.js/styles/github-dark.min.css');
+}
