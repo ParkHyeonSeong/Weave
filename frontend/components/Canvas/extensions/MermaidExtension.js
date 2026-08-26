@@ -2,7 +2,8 @@ import { Node, mergeAttributes } from '@tiptap/core';
 import { NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Pencil, Eye, AlertTriangle } from 'lucide-react';
-import { getMermaid, nextMermaidId } from './mermaidConfig';
+import { renderMermaid, nextMermaidId } from './mermaidConfig';
+import { useTheme } from '@/library/theme';
 
 // Mermaid DSL 블록 노드
 // - source: 원본 mermaid DSL 텍스트 (data-source 속성에 저장)
@@ -15,48 +16,52 @@ function MermaidView({ node, updateAttributes, selected, editor }) {
   const [error, setError] = useState('');
   const [rendering, setRendering] = useState(true);
   const [draft, setDraft] = useState(source);
-  const cancelledRef = useRef(false);
+  const { resolved } = useTheme();
+  const resolvedRef = useRef(resolved);
 
-  // source 변경 시 SVG 재렌더
+  // 큐 태스크가 실행 시점에 읽는다. 렌더 effect보다 **먼저** 선언해 같은 커밋에서 먼저 실행되게 한다.
+  useEffect(() => { resolvedRef.current = resolved; }, [resolved]);
+
+  // source 또는 테마 변경 시 SVG 재렌더.
+  // ⚠️ 취소 플래그는 effect 실행마다 새로 만든다(지역 let). 이전 구현은 useRef 하나를 공유해서,
+  //    cleanup이 true로 세운 직후 새 effect가 false로 되돌렸고 — 아직 떠 있던 이전 비동기 렌더가
+  //    그 false를 보고 통과해 최신 결과를 덮어썼다. deps에 resolved가 들어가면 이 경로가
+  //    테마 토글마다 확정적으로 열린다.
   useEffect(() => {
-    cancelledRef.current = false;
+    let cancelled = false;
     setRendering(true);
     setError('');
 
     (async () => {
       try {
         if (!source.trim()) {
-          if (cancelledRef.current) return;
+          if (cancelled) return;
           setSvg('');
           setRendering(false);
           return;
         }
-        const mermaid = await getMermaid();
-        // mermaid v10+: parse로 사전 검증
-        const valid = await mermaid.parse(source, { suppressErrors: true });
-        if (valid === false) {
-          if (cancelledRef.current) return;
+        // 테마는 값이 아니라 thunk로 넘긴다 — 큐 실행 시점의 최신 테마로 그려야
+        // N개 블록이 rapid toggle 후 같은 테마로 수렴한다.
+        const res = await renderMermaid(() => resolvedRef.current, nextMermaidId(), source);
+        if (cancelled) return;
+        if (!res.ok) {
           setError('Invalid Mermaid syntax');
           setSvg('');
           setRendering(false);
           return;
         }
-        const { svg: rendered } = await mermaid.render(nextMermaidId(), source);
-        if (cancelledRef.current) return;
-        setSvg(rendered);
+        setSvg(res.svg);
         setRendering(false);
       } catch (e) {
-        if (cancelledRef.current) return;
+        if (cancelled) return;
         setError(e?.message || String(e));
         setSvg('');
         setRendering(false);
       }
     })();
 
-    return () => {
-      cancelledRef.current = true;
-    };
-  }, [source]);
+    return () => { cancelled = true; };
+  }, [source, resolved]);
 
   // edit 모드 진입 시 draft를 현재 source로 리셋
   useEffect(() => {
