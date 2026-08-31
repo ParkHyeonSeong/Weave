@@ -221,6 +221,16 @@
         vertical-align: top;
         overflow-wrap: break-word;
         word-break: break-word;
+
+        // 표 셀은 임의 배경색(팔레트 8색)을 가질 수 있다. `.task-ref`의 기본 배경
+        // `--color-primary-subtle`은 **반투명**이라 셀 색과 합성되고, 그러면 칩 **안쪽**
+        // 배지의 부모가 셀 색에 좌우된다 — `task-ref` 프로파일이 가정한 부모와 어긋나
+        // 분리가 무너진다. 이 표면도 applyFallbackBadges(CanvasOverview.js)로
+        // 같은 프로파일 배지를 심으므로 편집기·읽기 표면과 **같은 규칙**을 쓴다.
+        // ⛔ `.doc-ref`·`.issue-ref`로 넓히지 마라 — Issue ref는 저장색을 안 받는다.
+        .task-ref {
+          background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+        }
       }
       th { background: $color-surface; font-weight: $font-weight-semibold; }
     }

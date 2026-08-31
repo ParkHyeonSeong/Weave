@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, AlertCircle, Lock, CalendarDays } from 'lucide-react';
 import EntityIcon from '@/components/common/EntityIcon';
 import Avatar from '@/components/common/Avatar';
+import { entitySolidStyle, entityTintStyle } from '@/library/entityTint';
 
 function formatDue(date) {
   if (!date) return null;
@@ -122,6 +123,10 @@ export default function TrackTree({
                   );
                 }
                 const ws = workflowStatuses[it.status] || {};
+                // 이 배지의 부모는 페이지 표면이 아니라 트리 **행**(--track-card)이다.
+                // 다크에서 --track-card가 --color-surface보다 밝아 default로 계산하면 묻힌다.
+                const wsTint = entityTintStyle(ws.color, { from: 8, alpha: '14', surface: 'track-card' });
+                const wsSolid = entitySolidStyle(ws.color);
                 const out = outCount.get(it.item_id) || 0;
                 return (
                   <div
@@ -147,8 +152,14 @@ export default function TrackTree({
                       )}
                     </div>
                     <div className="TrackTree__Cell">
-                      <span className="TrackTree__StatusPill" style={{ background: `${ws.color}14`, color: ws.color }}>
-                        <span className="TrackTree__StatusDot" style={{ background: ws.color }} />
+                      <span
+                        className={`TrackTree__StatusPill${wsTint?.['--et-on'] ? ' EntityTint' : ''}`}
+                        style={wsTint}
+                      >
+                        <span
+                          className={`TrackTree__StatusDot${wsSolid?.['--et-on'] ? ' EntitySolid' : ''}`}
+                          style={wsSolid}
+                        />
                         {ws.label}
                       </span>
                     </div>

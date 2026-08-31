@@ -4,6 +4,7 @@ import { Archive } from 'lucide-react';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import Avatar from '@/components/common/Avatar';
 import TaskFilterBar from '../TaskFilterBar';
+import { entityTintStyle } from '@/library/entityTint';
 
 export default function ArchiveList({ branchId, branchKey, taskTypes, workflowStatuses, onSelectTask }) {
   const [tasks, setTasks] = useState([]);
@@ -117,15 +118,18 @@ export default function ArchiveList({ branchId, branchKey, taskTypes, workflowSt
               <span className="ArchiveList__Id">{task.display_id}</span>
               <span className="ArchiveList__Title">{task.title}</span>
               <div className="ArchiveList__Labels">
-                {(task.labels || []).map((label) => (
-                  <span
-                    key={label.label_id}
-                    className="ArchiveList__Label"
-                    style={{ backgroundColor: label.color + '20', color: label.color }}
-                  >
-                    {label.label_name}
-                  </span>
-                ))}
+                {(task.labels || []).map((label) => {
+                  const tint = entityTintStyle(label.color, { alpha: '20' });
+                  return (
+                    <span
+                      key={label.label_id}
+                      className={`ArchiveList__Label${tint?.['--et-on'] ? ' EntityTint' : ''}`}
+                      style={tint}
+                    >
+                      {label.label_name}
+                    </span>
+                  );
+                })}
               </div>
               {task.sprint_name && (
                 <span className="ArchiveList__Sprint">{task.sprint_name}</span>

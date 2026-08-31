@@ -3,6 +3,7 @@ import { Workflow, Calendar, GitBranch, Settings, Share2, Star } from 'lucide-re
 import EntityIcon from '@/components/common/EntityIcon';
 import EntityAppearancePopover from '@/components/common/EntityAppearancePopover';
 import AvatarStack from '@/components/common/AvatarStack';
+import { entityBorderStyle, entityTintStyle } from '@/library/entityTint';
 
 const VIEW_MODES = [
   { key: 'flow', label: 'Flow', icon: Workflow },
@@ -52,22 +53,28 @@ export default function TrackHeader({
             <div className="TrackHeader__Participating">
               <span className="TrackHeader__ParticipatingLabel">Branches</span>
               <div className="TrackHeader__ParticipatingChips">
-                {participatingBranches.map((b) => (
-                  <span
-                    key={b.branch_id}
-                    className="TrackHeader__ParticipatingChip"
-                    style={{ color: b.color, background: `${b.color}14`, borderColor: `${b.color}33` }}
-                    title={b.name}
-                  >
-                    <EntityIcon
-                      icon={b.icon}
-                      color={b.color}
-                      size={14}
-                      entityType="branch"
-                    />
-                    {b.name}
-                  </span>
-                ))}
+                {participatingBranches.map((b) => {
+                  // 헤더 배경은 단색이 아니라 --track-paper → --track-paper-raised 세로 그라데이션이다.
+                  // 위쪽 끝만 보면 통과하지만 아래쪽 끝(다크 최악)에서 31색 중 17색이 미달이었다.
+                  const bTint = entityTintStyle(b.color, { from: 8, alpha: '14', surface: 'track-header' });
+                  const bBd = entityBorderStyle(b.color, { from: 20, alpha: '33' });
+                  return (
+                    <span
+                      key={b.branch_id}
+                      className={`TrackHeader__ParticipatingChip${bTint?.['--et-on'] ? ' EntityTint EntityBorder' : ''}`}
+                      style={{ ...bTint, ...bBd }}
+                      title={b.name}
+                    >
+                      <EntityIcon
+                        icon={b.icon}
+                        color={b.color}
+                        size={14}
+                        entityType="branch"
+                      />
+                      {b.name}
+                    </span>
+                  );
+                })}
               </div>
             </div>
           )}

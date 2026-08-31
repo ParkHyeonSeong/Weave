@@ -426,6 +426,20 @@
             margin-left: 2px;
           }
         }
+        // 표 셀은 임의 배경색(팔레트 8색 · selectedCell)을 가질 수 있다. `.task-ref`의
+        // 기본 배경 `--color-primary-subtle`은 **반투명**이라 셀 색과 합성되고, 그러면
+        // 칩 **안쪽** 배지의 부모가 셀 색에 좌우된다 — `task-ref` 프로파일이 가정한 부모와
+        // 어긋나 분리가 무너진다(수정 전 실측: pink 셀 `#FBCFE8` 위 `#2563EB` 배지가
+        // 라이트 1.0026 · 다크 1.0030, 셀 8색 + selectedCell 전건 538건 미달).
+        // 그래서 **표 안에서만** 같은 합성값을 불투명으로 굳혀 셀 색을 차단한다.
+        // ⛔ 셀색마다 표면 프로파일을 추가하지 마라 — 원장이 팔레트를 따라 무한히 늘어난다.
+        // ⛔ 값을 프로파일과 따로 움직이지 마라. 이 식의 산출은 라이트에서 `task-ref`
+        //    프로파일의 기준값과 같고, 다크에서는 그 프로파일이 이미 덮는 부모 중 하나다.
+        // ⛔ `.doc-ref`·`.issue-ref`로 넓히지 마라. Issue ref는 저장색을 안 받아
+        //    (setBadge color: null) EntityTint가 안 붙는다 — 이 계약의 대상이 아니다.
+        .task-ref {
+          background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+        }
       }
       th {
         background: $color-surface;

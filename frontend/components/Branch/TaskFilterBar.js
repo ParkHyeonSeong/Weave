@@ -7,6 +7,7 @@ import SavedViewSwitcher from '@/components/common/SavedViewSwitcher';
 import { isEmptySpec, emptyGroup } from '@/library/filterBuilderState';
 import FilterBuilder from './FilterBuilder';
 import { priorityVar, chipTintStyle } from '@/library/themePalette';
+import { entityBorderStyle, entityTintStyle } from '@/library/entityTint';
 
 const MAX_VISIBLE = 5;
 
@@ -397,26 +398,51 @@ export default function TaskFilterBar({
       {/* 활성 필터 칩 */}
       {activeChips.length > 0 && (
         <div className="TaskFilterBar__ActiveFilters">
-          {activeChips.map((chip) => (
-            <span
-              key={`${chip.category}-${chip.value}`}
-              className={`TaskFilterBar__ActiveChip${chip.color ? ' TaskFilterBar__ActiveChip--tinted' : ''}`}
-              // 색은 가공하지 않고 --chip-color로만 실어 보낸다. 테두리·글자·틴트는 SCSS가 만든다.
-              // ⛔ `chip.color + '15'`로 되돌리지 마라 — chip.color는 토큰 참조(var(--color-error))일 수
-              //    있어 `var(--color-error)15`가 되고, 무효 선언이 되어 배경이 transparent로 사라진다.
-              style={chipTintStyle(chip.color)}
-            >
-              {chip.label}
-              <button
-                type="button"
-                className="TaskFilterBar__ActiveChipRemove"
-                onClick={() => onToggleFilter(chip.category, chip.value)}
-                style={chip.color ? { color: chip.color } : {}}
+          {activeChips.map((chip) => {
+            // ⚠️ 20개 저장색 소비 지점 중 **이 표면만 색 도메인이 둘**이다(S7 계획 Task 3 호출표 9·10행
+            //    = 하이브리드 계약). 그래서 여기만 두 메커니즘을 명시적으로 분기한다.
+            //      ① DB 저장색 원시 #RRGGBB (statusKeys·labelIds·epicIds)
+            //         → entityTint 경로. 두 테마 값을 --et-*로 내리고 다크 스코프 SCSS가 고른다.
+            //      ② priorityVar()가 내는 토큰 참조 var(--color-*) (priorities 4종) + 그 밖의 지원 밖 색
+            //         → 기존 --chip-color + taskList.scss color-mix(8.235294%) 경로를 그대로 유지한다.
+            // ⛔ ②를 entityTintStyle의 passthrough 결과로 렌더하지 마라 — 색 문자열에 접미가 붙어
+            //    `var(--color-error)15`가 되고, var()를 포함한 선언은 계산값 시점에 문법 검사를 받아
+            //    무효(IACVT)가 된다. background-color는 비상속이라 transparent로 떨어져 틴트가 통째로
+            //    사라진다(library/themePalette.js:52-65 · styles/components/branch/taskList.scss:691-697).
+            //    그래서 alpha:'15'는 이 표면에서 **렌더되지 않는다** — 레거시 접미 기록으로만 남긴다.
+            const storedTint = entityTintStyle(chip.color, { from: 8, alpha: '15' });
+            const storedBorder = entityBorderStyle(chip.color);
+            // 판정은 객체 truthiness가 아니라 --et-on 하나뿐이다(passthrough도 객체를 돌려주기 때문).
+            const isStoredHex = !!storedTint?.['--et-on'];
+            // blank 판정도 단일 기준이다. ⛔ `chip.color ?` truthiness로 재지 마라 —
+            // 공백만 있는 문자열('  ', '\t\n')과 비문자열(42)은 entityTintStyle이 blank로
+            // 돌려주는데 truthiness는 true라, --tinted 클래스와 무효 선언 `--chip-color:'  '`가 붙는다.
+            const hasStoredColor = storedTint !== undefined;
+            return (
+              <span
+                key={`${chip.category}-${chip.value}`}
+                className={`TaskFilterBar__ActiveChip${isStoredHex
+                  ? ' EntityTint EntityBorder'
+                  : (hasStoredColor ? ' TaskFilterBar__ActiveChip--tinted' : '')}`}
+                style={isStoredHex
+                  ? { ...storedTint, ...storedBorder }
+                  : (hasStoredColor ? chipTintStyle(chip.color) : undefined)}
               >
-                <X size={10} />
-              </button>
-            </span>
-          ))}
+                {chip.label}
+                <button
+                  type="button"
+                  className={`TaskFilterBar__ActiveChipRemove${isStoredHex ? ' EntityInk' : ''}`}
+                  onClick={() => onToggleFilter(chip.category, chip.value)}
+                  // 이 버튼의 배경은 페이지 표면이 아니라 **칩의 틴트**다. 커스텀 프로퍼티는 상속되므로
+                  // 부모가 내려놓은 --et-fg를 그대로 쓴다. 부모가 passthrough면 변수가 없어 치환 실패
+                  // (=initial)이므로 그때는 오늘처럼 원 색을 그대로 쓴다.
+                  style={hasStoredColor ? { color: isStoredHex ? 'var(--et-fg)' : chip.color } : {}}
+                >
+                  <X size={10} />
+                </button>
+              </span>
+            );
+          })}
         </div>
       )}
 

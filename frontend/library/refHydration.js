@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { axios } from '@/library/_axios';
 import { attachRefChipAuxNav } from '@/library/refUrl';
+import { entityTintStyle } from '@/library/entityTint';
 
 // 인라인 ref 칩(taskRef/docRef/issueRef/mention) 라이브 하이드레이션.
 // 칩 attrs는 삽입 시점 스냅샷(폴백)이고, 표면이 마운트될 때마다 /ref-status로
@@ -144,10 +145,25 @@ function setBadge(el, { category, label, color }) {
   const safeCategory = SAFE_CATEGORIES.has(category) ? category : 'todo';
   badge.className = `ref-chip__badge ref-chip__badge--${safeCategory}`;
   badge.textContent = label;
-  if (color) {
-    badge.style.backgroundColor = `${color}20`;
-    badge.style.color = color;
+  // 배지 부모는 페이지 표면이 아니라 **ref 칩 자신의 배경**이다(--color-primary-subtle 합성).
+  // 라이브 편집 경로(TaskRefExtension.addNodeView)와 같은 프로파일 — 어긋나면 두 경로 색이 갈린다.
+  // Issue ref는 color:null로 들어와 tint가 undefined라 이 프로파일에 영향받지 않는다.
+  const tint = entityTintStyle(color, { alpha: '20', surface: 'task-ref' });
+  if (tint) {
+    // 커스텀 프로퍼티는 존재하는 것만 내린다. passthrough 객체에는 `--et-*`가 아예 없어
+    // 이 루프가 0회 돌고, CSSOM은 커스텀 프로퍼티를 항상 받아주므로 조용한 실패가 없다.
+    for (const [k, v] of Object.entries(tint)) {
+      if (k.startsWith('--')) badge.style.setProperty(k, v);
+    }
+    // 일반 선언은 supported·passthrough 둘 다 적용한다.
+    badge.style.background = tint.background;   // themed 'var(--et-bg)' / passthrough `${color}20`
+    badge.style.color = tint.color;             // themed 'var(--et-fg)' / passthrough 원 색
   }
+  // ⛔ `if (tint)` 안에서 무조건 add 하면 passthrough 배지에도 EntityTint가 붙어
+  //    다크에서 `var(--et-bg-dark, transparent)`가 이기고 오늘 살아 있던 색이 지워진다.
+  //    판정은 --et-on 하나뿐이다. add가 아니라 toggle인 이유는 재하이드레이션 때문이다 —
+  //    저장색이 지원 → 지원 밖으로 바뀐 배지에서 add만 쓰면 클래스가 남는다.
+  badge.classList.toggle('EntityTint', !!tint?.['--et-on']);
   badge.setAttribute('data-ref-badge', 'true');
   el.appendChild(badge);
 }

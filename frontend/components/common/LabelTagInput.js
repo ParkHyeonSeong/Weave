@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Trash2, Plus } from 'lucide-react';
+import { entityBorderStyle, entityTintStyle } from '@/library/entityTint';
 
 const PRESET_COLORS = [
   '#5E6AD2', '#DC2626', '#F59E0B', '#16A34A', '#2563EB',
@@ -108,27 +109,29 @@ export default function LabelTagInput({ assignedLabels = [], allLabels = [], onT
   return (
     <div className="LabelTagInput" ref={wrapRef}>
       <div className="LabelTagInput__Chips" onClick={() => inputRef.current?.focus()}>
-        {assignedLabels.map((label) => (
-          <span
-            key={label.label_id}
-            className="LabelTagInput__Chip"
-            style={{
-              backgroundColor: label.color + '20',
-              borderColor: label.color,
-              color: label.color,
-            }}
-          >
-            {label.label_name}
-            <button
-              type="button"
-              className="LabelTagInput__ChipRemove"
-              onClick={(e) => { e.stopPropagation(); onToggle(label.label_id); }}
-              style={{ color: label.color }}
+        {assignedLabels.map((label) => {
+          const chipTint = entityTintStyle(label.color, { alpha: '20' });
+          const chipBd = entityBorderStyle(label.color);
+          return (
+            <span
+              key={label.label_id}
+              className={`LabelTagInput__Chip${chipTint?.['--et-on'] ? ' EntityTint EntityBorder' : ''}`}
+              style={{ ...chipTint, ...chipBd }}
             >
-              <X size={10} />
-            </button>
-          </span>
-        ))}
+              {label.label_name}
+              <button
+                type="button"
+                className={`LabelTagInput__ChipRemove${chipTint?.['--et-on'] ? ' EntityInk' : ''}`}
+                onClick={(e) => { e.stopPropagation(); onToggle(label.label_id); }}
+                // 배경이 칩의 틴트라 부모가 내려놓은 --et-fg를 상속으로 쓴다.
+                // passthrough면 변수가 없어 치환 실패(initial)이므로 원 색을 그대로 쓴다.
+                style={{ color: chipTint?.['--et-on'] ? 'var(--et-fg)' : label.color }}
+              >
+                <X size={10} />
+              </button>
+            </span>
+          );
+        })}
         <input
           ref={inputRef}
           className="LabelTagInput__Input"

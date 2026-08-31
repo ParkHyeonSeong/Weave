@@ -10,6 +10,7 @@ import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import Avatar from '@/components/common/Avatar';
 import { progressLabel, progressPercent } from '@/library/subtaskProgress';
 import { priorityVar, DEFAULT_STATUS_FALLBACK } from '@/library/themePalette';
+import { entityTintStyle } from '@/library/entityTint';
 
 const priorityOptions = [
   { value: 'urgent', label: 'Urgent', color: priorityVar('urgent') },
@@ -159,15 +160,21 @@ export default function TaskListRow({ task, branchId, taskTypes, workflowStatuse
 
       {/* 라벨 */}
       <div className="TaskListRow__Labels">
-        {(task.labels || []).map((label) => (
-          <span
-            key={label.label_id}
-            className="TaskListRow__Label"
-            style={{ backgroundColor: label.color + '20', color: label.color }}
-          >
-            {label.label_name}
-          </span>
-        ))}
+        {(task.labels || []).map((label) => {
+          // 행 상태마다 배지 부모가 다르다: 정상·hover는 목록 표면(default),
+          // selected(primary-subtle 워시)·subtask(--color-surface-raised)는 행 자신의 배경이다.
+          // 두 벌을 같이 실어 보내고 storedColor.scss가 행 상태로 고른다 — 정상 행 외관은 불변.
+          const tint = entityTintStyle(label.color, { alpha: '20', raisedSurface: 'task-list-raised' });
+          return (
+            <span
+              key={label.label_id}
+              className={`TaskListRow__Label${tint?.['--et-on'] ? ' EntityTint' : ''}`}
+              style={tint}
+            >
+              {label.label_name}
+            </span>
+          );
+        })}
       </div>
 
       {/* 에픽 — 하위태스크는 부모에서 파생(자기 값 없음)이라 편집기를 숨긴다.

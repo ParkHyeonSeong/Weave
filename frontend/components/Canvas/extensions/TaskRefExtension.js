@@ -3,6 +3,7 @@ import { PluginKey } from '@tiptap/pm/state';
 import TaskRefPopup from './TaskRefPopup';
 import { createRefSuggestionPlugin } from './refSuggestion';
 import { numAttr, strAttr } from './refAttr';
+import { entityTintStyle } from '@/library/entityTint';
 import { internalOrigin, formatRefLabel, matchInternalLink, splitRefLinkText, ISSUE_PATH, TASK_PATH, encodeMarkdownUrl } from './refMarkdown';
 
 export const taskRefPluginKey = new PluginKey('taskRefSuggestion');
@@ -106,10 +107,24 @@ const TaskRefNode = Node.create({
       const badge = document.createElement('span');
       badge.className = `ref-chip__badge ref-chip__badge--${category}`;
       badge.textContent = label;
-      if (node.attrs.statusColor) {
-        badge.style.backgroundColor = `${node.attrs.statusColor}20`;
-        badge.style.color = node.attrs.statusColor;
+      // ⚠️ 위 renderHTML(:87)은 **저장 직렬화**라 손대지 않는다. 여기는 라이브 노드뷰다.
+      // 이 배지의 부모는 문서 표면이 아니라 **칩 자신의 배경**(--color-primary-subtle 합성)이다.
+      // 읽기 경로(refHydration.setBadge)와 반드시 같은 프로파일을 써야 두 경로가 같은 색을 낸다.
+      const tint = entityTintStyle(node.attrs.statusColor, { alpha: '20', surface: 'task-ref' });
+      if (tint) {
+        // 커스텀 프로퍼티는 존재하는 것만 내린다. passthrough 객체에는 `--et-*`가 아예 없어
+        // 이 루프가 0회 돌고, CSSOM은 커스텀 프로퍼티를 항상 받아주므로 조용한 실패가 없다.
+        for (const [k, v] of Object.entries(tint)) {
+          if (k.startsWith('--')) badge.style.setProperty(k, v);
+        }
+        // 일반 선언은 supported·passthrough 둘 다 적용한다.
+        badge.style.background = tint.background;   // themed 'var(--et-bg)' / passthrough `<색>20`
+        badge.style.color = tint.color;             // themed 'var(--et-fg)' / passthrough 원 색
       }
+      // ⛔ `if (tint)` 안에서 무조건 add 하면 passthrough 배지에도 EntityTint가 붙어
+      //    다크에서 `var(--et-bg-dark, transparent)`가 이기고 오늘 살아 있던 색이 지워진다.
+      //    판정은 --et-on 하나뿐이다(refHydration.js setBadge와 같은 계약).
+      badge.classList.toggle('EntityTint', !!tint?.['--et-on']);
       badge.setAttribute('data-ref-badge', 'true');
       dom.appendChild(badge);
 

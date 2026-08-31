@@ -1,0 +1,165 @@
+// 저장색·저장 콘텐츠 색의 렌더타임 보정. 캐스케이드 최후단(_app.js 마지막 import).
+// !important는 인라인 style이 갖던 우선순위를 다크에서 복원하는 용도다(S7 계획 「변경 A — 임의 저장색」).
+//
+// 안전장치의 정본은 **호출부**다: supported 결과의 `--et-on`이 있을 때만 .Entity* 클래스를 붙인다.
+// 아래 var() 폴백은 변수가 누락된 경우의 **방어값일 뿐**이고, 기존 category/background 스타일의
+// 완전한 복원을 보장하지 않는다 — 클래스가 붙은 이상 이 규칙이 !important로 이기기 때문이다.
+// 그래서 passthrough·blank에는 클래스를 붙이면 안 된다.
+// 조건부 Entity* 클래스 배선은 Task 3에서 완료됐고 행동 테스트가 그 조건을 고정한다.
+
+// ── TipTap 저장 콘텐츠 색 (읽기 표면) ──────────────────────────────────────
+// sanitizeHtml hook이 인라인 색 선언을 지우고 아래 클래스를 붙인다.
+// 라이트 값 = 원본 hex 그대로(라이트 무변화). 다크 값 = tiptapColorMap의 동결 산출.
+// !important를 쓰는 이유는 EntityTint와 같다 — 인라인이 갖던 우선순위를 복원한다.
+
+.wv-tc-000000 { color: #000000 !important; }
+.wv-tc-434343 { color: #434343 !important; }
+.wv-tc-666666 { color: #666666 !important; }
+.wv-tc-999999 { color: #999999 !important; }
+.wv-tc-dc2626 { color: #DC2626 !important; }
+.wv-tc-ea580c { color: #EA580C !important; }
+.wv-tc-d97706 { color: #D97706 !important; }
+.wv-tc-16a34a { color: #16A34A !important; }
+.wv-tc-2563eb { color: #2563EB !important; }
+.wv-tc-7c3aed { color: #7C3AED !important; }
+.wv-tc-db2777 { color: #DB2777 !important; }
+.wv-tc-0891b2 { color: #0891B2 !important; }
+
+.wv-hl-fef08a, .wv-cell-fef08a { background-color: #FEF08A !important; }
+.wv-hl-bbf7d0, .wv-cell-bbf7d0 { background-color: #BBF7D0 !important; }
+.wv-hl-bfdbfe, .wv-cell-bfdbfe { background-color: #BFDBFE !important; }
+.wv-hl-fbcfe8, .wv-cell-fbcfe8 { background-color: #FBCFE8 !important; }
+.wv-hl-fed7aa, .wv-cell-fed7aa { background-color: #FED7AA !important; }
+.wv-hl-ddd6fe, .wv-cell-ddd6fe { background-color: #DDD6FE !important; }
+.wv-cell-e0e7ff { background-color: #E0E7FF !important; }
+.wv-cell-f1f5f9 { background-color: #F1F5F9 !important; }
+
+html[data-theme='dark'] {
+  .wv-tc-000000 { color: #E6E6E6 !important; }
+  .wv-tc-434343 { color: #D1D1D1 !important; }
+  .wv-tc-666666 { color: #BCBCBC !important; }
+  .wv-tc-999999 { color: #A8A8A8 !important; }
+  .wv-tc-dc2626 { color: #ED8F8F !important; }
+  .wv-tc-ea580c { color: #F57D3E !important; }
+  .wv-tc-d97706 { color: #F78707 !important; }
+  .wv-tc-16a34a { color: #1ABE56 !important; }
+  .wv-tc-2563eb { color: #799FF3 !important; }
+  .wv-tc-7c3aed { color: #B48EF5 !important; }
+  .wv-tc-db2777 { color: #E876A9 !important; }
+  .wv-tc-0891b2 { color: #09A9CF !important; }
+
+  .wv-hl-fef08a, .wv-cell-fef08a { background-color: #333229 !important; }
+  .wv-hl-bbf7d0, .wv-cell-bbf7d0 { background-color: #2B3332 !important; }
+  .wv-hl-bfdbfe, .wv-cell-bfdbfe { background-color: #2B2F37 !important; }
+  .wv-hl-fbcfe8, .wv-cell-fbcfe8 { background-color: #322E34 !important; }
+  .wv-hl-fed7aa, .wv-cell-fed7aa { background-color: #332F2D !important; }
+  .wv-hl-ddd6fe, .wv-cell-ddd6fe { background-color: #2F2F37 !important; }
+  .wv-cell-e0e7ff { background-color: #2F3137 !important; }
+  .wv-cell-f1f5f9 { background-color: #313337 !important; }
+
+  // ── TipTap 라이브 에디터 (.ProseMirror) ─────────────────────────────────
+  // 라이브 에디터는 sanitizeHtml을 거치지 않아 인라인 style이 남고, 이길 수단은
+  // !important뿐이다. 팔레트가 닫혀 있어 열거가 가능하다(colorExceptions.js에 등록).
+  // ⚠️ style 매칭은 rgb형만: ProseMirror가 dom.style.cssText로 꽂아(prosemirror-model:3439)
+  //    라이브 DOM의 style에 hex가 없다 — hex 셀렉터는 dead 규칙이 된다.
+  // ⚠️ 선택자는 **선언 경계**를 고정한다. `[style*='color: …']`는 `background-color`·`border-color`·
+  //    `outline-color`의 부분문자열로도 매칭된다(Chrome 151·jsdom 실측 6케이스 중 4건 오탐).
+  //    CSSOM은 선언을 `"; "`로 잇고 값 뒤에 `;`를 붙이므로 첫 선언은 `[style^='prop: …']`,
+  //    둘째 이후는 `[style*='; prop: …']`로 잡으면 정확히 그 속성만 매칭된다.
+  // ⚠️ 배경은 8색이면 충분: 하이라이트 6 ∪ 셀 8 = 8이고 다크 대응값도 같아 mark·td가 함께 덮인다.
+  // ⚠️ mark[data-color=… i]를 함께 두는 이유: data-color가 hex·대소문자가 보존되는 유일한 자리다.
+
+  .ProseMirror {
+    // 텍스트 색 12 (rgb형 · 선언 경계 고정)
+    :where([style^='color: rgb(0, 0, 0)'], [style*='; color: rgb(0, 0, 0)']) { color: #E6E6E6 !important; }
+    :where([style^='color: rgb(67, 67, 67)'], [style*='; color: rgb(67, 67, 67)']) { color: #D1D1D1 !important; }
+    :where([style^='color: rgb(102, 102, 102)'], [style*='; color: rgb(102, 102, 102)']) { color: #BCBCBC !important; }
+    :where([style^='color: rgb(153, 153, 153)'], [style*='; color: rgb(153, 153, 153)']) { color: #A8A8A8 !important; }
+    :where([style^='color: rgb(220, 38, 38)'], [style*='; color: rgb(220, 38, 38)']) { color: #ED8F8F !important; }
+    :where([style^='color: rgb(234, 88, 12)'], [style*='; color: rgb(234, 88, 12)']) { color: #F57D3E !important; }
+    :where([style^='color: rgb(217, 119, 6)'], [style*='; color: rgb(217, 119, 6)']) { color: #F78707 !important; }
+    :where([style^='color: rgb(22, 163, 74)'], [style*='; color: rgb(22, 163, 74)']) { color: #1ABE56 !important; }
+    :where([style^='color: rgb(37, 99, 235)'], [style*='; color: rgb(37, 99, 235)']) { color: #799FF3 !important; }
+    :where([style^='color: rgb(124, 58, 237)'], [style*='; color: rgb(124, 58, 237)']) { color: #B48EF5 !important; }
+    :where([style^='color: rgb(219, 39, 119)'], [style*='; color: rgb(219, 39, 119)']) { color: #E876A9 !important; }
+    :where([style^='color: rgb(8, 145, 178)'], [style*='; color: rgb(8, 145, 178)']) { color: #09A9CF !important; }
+
+    // 배경 8 (하이라이트 6 ∪ 셀 8 — mark·td 공통 · 선언 경계 고정)
+    :where([style^='background-color: rgb(254, 240, 138)'], [style*='; background-color: rgb(254, 240, 138)']) { background-color: #333229 !important; }
+    :where([style^='background-color: rgb(187, 247, 208)'], [style*='; background-color: rgb(187, 247, 208)']) { background-color: #2B3332 !important; }
+    :where([style^='background-color: rgb(191, 219, 254)'], [style*='; background-color: rgb(191, 219, 254)']) { background-color: #2B2F37 !important; }
+    :where([style^='background-color: rgb(251, 207, 232)'], [style*='; background-color: rgb(251, 207, 232)']) { background-color: #322E34 !important; }
+    :where([style^='background-color: rgb(254, 215, 170)'], [style*='; background-color: rgb(254, 215, 170)']) { background-color: #332F2D !important; }
+    :where([style^='background-color: rgb(221, 214, 254)'], [style*='; background-color: rgb(221, 214, 254)']) { background-color: #2F2F37 !important; }
+    :where([style^='background-color: rgb(224, 231, 255)'], [style*='; background-color: rgb(224, 231, 255)']) { background-color: #2F3137 !important; }
+    :where([style^='background-color: rgb(241, 245, 249)'], [style*='; background-color: rgb(241, 245, 249)']) { background-color: #313337 !important; }
+
+    // 하이라이트 6 (data-color — hex·대소문자 보존)
+    mark[data-color='#FEF08A' i] { background-color: #333229 !important; }
+    mark[data-color='#BBF7D0' i] { background-color: #2B3332 !important; }
+    mark[data-color='#BFDBFE' i] { background-color: #2B2F37 !important; }
+    mark[data-color='#FBCFE8' i] { background-color: #322E34 !important; }
+    mark[data-color='#FED7AA' i] { background-color: #332F2D !important; }
+    mark[data-color='#DDD6FE' i] { background-color: #2F2F37 !important; }
+  }
+}
+
+// ── 행이 자기 배경을 칠하는 목록 상태 ──────────────────────────────────────
+// TaskListRow의 배지 부모는 행 상태마다 다르다:
+//   normal·hover  → 행에 배경이 없어 목록 표면(--color-surface)이 그대로 보인다 = default 산출
+//   --selected    → --color-primary-subtle 워시를 목록 표면 위에 합성한 색
+//   --subtask     → --color-surface-raised (다크에서 --color-surface보다 밝다)
+// 뒤 둘만 raised 산출을 고른다. 그래서 정상 행 배지는 **한 픽셀도 안 바뀐다**.
+// (최악값 하나로 접으면 정상 행까지 코퍼스 31/31이 이동한다 — RGB 거리 최대 27.5 실측.)
+//
+// ⚠️ --subtask는 --selected보다 뒤에 선언돼 선택된 하위행의 배경도 --color-surface-raised다.
+//    두 선택자를 모두 걸어야 그 조합까지 덮인다.
+// ⚠️ 폴백을 빼지 마라. raised 변수가 없는 배지가 이 행에 들어오면 var()가 무효 선언이 되고,
+//    background-color는 비상속이라 틴트가 통째로 사라진다(S7 「폴백 없는 var() 금지」).
+.TaskListRow--selected .EntityTint,
+.TaskListRow--subtask .EntityTint {
+  background: var(--et-bg-raised, var(--et-bg)) !important;
+  color: var(--et-fg-raised, var(--et-fg)) !important;
+}
+
+html[data-theme='dark'] {
+  .EntityTint {
+    background: var(--et-bg-dark, transparent) !important;
+    color: var(--et-fg-dark, inherit) !important;
+  }
+
+  // 다크 기본 .EntityTint 규칙(바로 위)보다 명시도가 높아야 이긴다 — 클래스 하나가 더 붙어 있다.
+  .TaskListRow--selected .EntityTint,
+  .TaskListRow--subtask .EntityTint {
+    background: var(--et-bg-raised-dark, var(--et-bg-dark)) !important;
+    color: var(--et-fg-raised-dark, var(--et-fg-dark)) !important;
+  }
+
+  .EntityInk {
+    color: var(--et-fg-dark, inherit) !important;
+  }
+
+  .EntityBorder {
+    border-color: var(--et-bd-dark, currentColor) !important;
+  }
+
+  .EntitySolid {
+    background: var(--et-solid-dark, currentColor) !important;
+  }
+
+  // TaskRefExtension.renderHTML이 문서에 굳혀 둔 인라인 배지 색.
+  // 저장 직렬화라 값을 바꿀 수 없고, 임의 저장색이라 열거도 못 한다.
+  // 하이드레이션이 다시 칠한 배지는 .EntityTint가 붙으므로 그것만 제외하고
+  // 다크에서는 중립 토큰으로 눌러 둔다 — 색 정보를 잃는 대신 판독성을 지킨다.
+  //
+  // ⛔ 부모 한정(.task-ref >)을 빼지 마라. 같은 `ref-chip__badge` 클래스를
+  //    IssueRefExtension도 쓰는데(.issue-ref > .ref-chip__badge--open/--closed),
+  //    Issue ref는 저장색을 안 넘겨(setBadge color: null) .EntityTint가 절대 안 붙는다.
+  //    그래서 한정이 없으면 이 !important 중립 규칙이 open(파랑)/closed(초록)을
+  //    똑같은 회색으로 뭉갠다(실측: 라이트 rgb(30,64,175)/rgb(22,163,74)
+  //    → 다크 둘 다 rgb(156,163,175)). 인라인 저장색이 굳는 것은 Task ref뿐이다.
+  .task-ref > .ref-chip__badge:not(.EntityTint) {
+    background: var(--color-surface-hover) !important;
+    color: var(--color-text-secondary) !important;
+  }
+}

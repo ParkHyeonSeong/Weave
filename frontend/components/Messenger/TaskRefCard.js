@@ -1,5 +1,6 @@
 import { X, ListTodo } from 'lucide-react';
 import NavLink from '@/components/common/NavLink';
+import { entityTintStyle } from '@/library/entityTint';
 
 // snake_case key를 Title Case로 변환 (fallback용)
 const formatStatusKey = (key) => key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -35,12 +36,18 @@ export default function TaskRefCard({ taskRef, removable, onRemove }) {
       </div>
       <div className="TaskRefCard__Title">{taskRef.title}</div>
       <div className="TaskRefCard__Footer">
-        <span
-          className={`TaskRefCard__Status TaskRefCard__Status--${taskRef.status_category || taskRef.status}`}
-          style={taskRef.status_color ? { backgroundColor: `${taskRef.status_color}20`, color: taskRef.status_color } : undefined}
-        >
-          {taskRef.status_label || formatStatusKey(taskRef.status)}
-        </span>
+        {(() => {
+          // 저장색이 없거나 지원 밖이면 EntityTint 없이 category 클래스가 배경·글자색을 준다.
+          const tint = entityTintStyle(taskRef.status_color, { alpha: '20' });
+          return (
+            <span
+              className={`TaskRefCard__Status TaskRefCard__Status--${taskRef.status_category || taskRef.status}${tint?.['--et-on'] ? ' EntityTint' : ''}`}
+              style={tint}
+            >
+              {taskRef.status_label || formatStatusKey(taskRef.status)}
+            </span>
+          );
+        })()}
         {(() => {
           const main = (taskRef.assignees || []).find((a) => a.role === 'main');
           return main ? <span className="TaskRefCard__Assignee">{main.username}</span> : null;

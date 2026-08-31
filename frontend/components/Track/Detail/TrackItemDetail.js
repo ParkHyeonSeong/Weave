@@ -6,6 +6,7 @@ import { useRefHydration } from '@/library/refHydration';
 import { useMathHydration } from '@/library/mathRender';
 import Avatar from '@/components/common/Avatar';
 import { PRIORITIES } from '../mockData';
+import { entityBorderStyle, entityInkStyle, entitySolidStyle, entityTintStyle } from '@/library/entityTint';
 
 function formatDateLong(date) {
   if (!date) return '—';
@@ -62,12 +63,22 @@ export default function TrackItemDetail({ item, branch, workflowStatuses, onClos
 
   const ws = workflowStatuses[item.status] || {};
   const prio = PRIORITIES[item.priority] || {};
+  // ⚠️ 이 패널의 배지 부모는 --track-card다(TrackTree 행과 같은 표면) — track-card 프로파일을 쓴다.
+  //    default로 계산하면 다크에서 31색 중 17색이 BADGE_MIN 미달이다(실측 StatusPill 1.2425).
+  const branchTint = entityTintStyle(branch.color, { from: 8, alpha: '14', surface: 'track-card' });
+  const wsTint = entityTintStyle(ws.color, { from: 8, alpha: '14', surface: 'track-card' });
+  const wsSolid = entitySolidStyle(ws.color);
+  const prioInk = entityInkStyle(prio.color);
+  const prioBd = entityBorderStyle(prio.color, { from: 25, alpha: '40' });
 
   return (
     <aside className="TrackDetail">
       <div className="TrackDetail__Head">
         <div className="TrackDetail__Breadcrumb">
-          <span className="TrackDetail__BranchPill" style={{ background: `${branch.color}14`, color: branch.color }}>
+          <span
+            className={`TrackDetail__BranchPill${branchTint?.['--et-on'] ? ' EntityTint' : ''}`}
+            style={branchTint}
+          >
             <GitBranch size={11} />
             {branch.name}
           </span>
@@ -97,11 +108,20 @@ export default function TrackItemDetail({ item, branch, workflowStatuses, onClos
       <h2 className="TrackDetail__Title">{item.title}</h2>
 
       <div className="TrackDetail__StatusRow">
-        <span className="TrackDetail__StatusPill" style={{ background: `${ws.color}14`, color: ws.color }}>
-          <span className="TrackDetail__StatusDot" style={{ background: ws.color }} />
+        <span
+          className={`TrackDetail__StatusPill${wsTint?.['--et-on'] ? ' EntityTint' : ''}`}
+          style={wsTint}
+        >
+          <span
+            className={`TrackDetail__StatusDot${wsSolid?.['--et-on'] ? ' EntitySolid' : ''}`}
+            style={wsSolid}
+          />
           {ws.label}
         </span>
-        <span className="TrackDetail__PrioPill" style={{ color: prio.color, borderColor: `${prio.color}40` }}>
+        <span
+          className={`TrackDetail__PrioPill${prioInk?.['--et-on'] ? ' EntityInk EntityBorder' : ''}`}
+          style={{ ...prioInk, ...prioBd }}
+        >
           <Flag size={10} />
           {prio.label}
         </span>

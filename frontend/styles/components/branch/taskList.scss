@@ -1062,6 +1062,25 @@
 }
 
 // -- Task Row --
+
+// 맥락 행(--context)에서 흐릴 **비핵심 메타**만 모은다.
+// ⛔ 핵심을 여기에 넣지 마라 — __Title · __ContextTag · __Labels/__Label(.EntityTint)은
+//    넣는 순간 제목·저장색 배지 대비 계약이 다시 무너진다.
+// ⛔ __Chevron도 넣지 마라 — 맥락 행에서 일치한 하위태스크를 펼치는 유일한 조작이다.
+// (__Cell·__AssigneeWrap 안의 드롭다운은 DropdownPortal이 createPortal로 document.body에
+//  position:fixed로 띄우므로, 여기 opacity가 **열린 드롭다운까지 흐리지 않는다**.)
+@mixin task-row-context-muted($alpha) {
+  .TaskListRow__TypeIcon,
+  .TaskListRow__Id,
+  .TaskListRow__Badge,
+  .TaskListRow__Issues,
+  .TaskListRow__Progress,
+  .TaskListRow__Cell,
+  .TaskListRow__AssigneeWrap {
+    opacity: $alpha;
+  }
+}
+
 .TaskListRow {
   display: flex;
   align-items: center;
@@ -1092,13 +1111,28 @@
     opacity: 0.3;
   }
 
-  // 필터 활성 시 "하위만 일치한" 비매칭 부모 — 결과가 아니라 맥락임을 흐림으로 표시
+  // 필터 활성 시 "하위만 일치한" 비매칭 부모 — 결과가 아니라 맥락임을 표시
+  //
+  // ⛔ 행 전체에 opacity를 걸지 마라. opacity는 **행이 그린 것 전체**를 배경과 합성해
+  //    제목과 저장색 배지의 실제 대비를 함께 무너뜨린다(수정 전 실측, 코퍼스 31색:
+  //    배지 분리 31/31 미달 최저 1.0944 · 배지 글자 31/31 미달 최저 1.8632 ·
+  //    제목 라이트 3.2572 / 다크 4.4966 — 둘 다 AA 미달).
+  // ⛔ ancestor opacity 아래에서 배지색만 진하게 만들어 보상하지도 마라 — 부모가 아니라
+  //    산출을 건드리는 것이라 같은 배지가 **정상 행에서도** 진해진다.
+  //
+  // 맥락 신호는 비핵심 메타에만 건다. 제목·라벨 배지(.EntityTint)·맥락 태그는 불투명하게
+  // 남아 저장색 대비 계약이 그대로 서고, 클릭·선택 동작도 손대지 않는다.
+  // 이 경계는 entitySurfaceStates.test.js 「TaskListRow--context」가 기계로 고정한다.
   &--context {
-    opacity: 0.5;
+    @include task-row-context-muted(0.55);
 
+    // ⛔ 여기에 background를 넣지 마라. `.TaskListRow--context:hover`는 명시도가
+    //    `.TaskListRow:hover`·`.TaskListRow--selected:hover`와 **동률 (0,2,0)**인데
+    //    선언이 가장 뒤라 **선택 배경을 덮는다** — 맥락 행을 클릭해 둔 채 hover 하면
+    //    선택 표시가 사라진다(실측). 비선택 맥락 행의 hover 표면은 `.TaskListRow:hover`가
+    //    이미 같은 `$color-surface`로 준다. 고명시도 selector를 새로 만들 필요도 없다.
     &:hover {
-      opacity: 0.72;
-      background: $color-surface;
+      @include task-row-context-muted(0.78);
     }
   }
 

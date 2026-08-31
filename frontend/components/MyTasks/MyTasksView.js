@@ -10,6 +10,7 @@ import SavedViewSwitcher from '@/components/common/SavedViewSwitcher';
 import { emptyGroup, isEmptySpec } from '@/library/filterBuilderState';
 import { applySavedView } from '@/library/savedViewState';
 import { priorityVar } from '@/library/themePalette';
+import { entityTintStyle } from '@/library/entityTint';
 
 const STATUS_CATEGORY_OPTIONS = [
   { value: 'todo', label: 'To Do' },
@@ -446,15 +447,18 @@ function MyTasksRow({ task, onRefresh }) {
 
       {/* 라벨 */}
       <div className="MyTasksRow__Labels">
-        {(task.labels || []).map((label) => (
-          <span
-            key={label.label_id}
-            className="MyTasksRow__Label"
-            style={{ backgroundColor: label.color + '20', color: label.color }}
-          >
-            {label.label_name}
-          </span>
-        ))}
+        {(task.labels || []).map((label) => {
+          const tint = entityTintStyle(label.color, { alpha: '20' });
+          return (
+            <span
+              key={label.label_id}
+              className={`MyTasksRow__Label${tint?.['--et-on'] ? ' EntityTint' : ''}`}
+              style={tint}
+            >
+              {label.label_name}
+            </span>
+          );
+        })}
       </div>
 
       {/* 브랜치 (오버레이 위 별도 링크) — branch_id 없으면(쿼리 items) 비링크 표시 */}
@@ -486,12 +490,19 @@ function MyTasksRow({ task, onRefresh }) {
 
       {/* 상태 */}
       <div className="MyTasksRow__Cell" onClick={(e) => e.stopPropagation()}>
-        <span
-          className={`MyTasksRow__Status MyTasksRow__Status--${category}`}
-          style={task.status_color ? { backgroundColor: `${task.status_color}20`, color: task.status_color } : undefined}
-        >
-          {task.status_label || task.status}
-        </span>
+        {(() => {
+          // 저장색이 없거나 지원 밖이면 EntityTint를 붙이지 않는다 —
+          // MyTasksRow__Status--<category> 클래스가 주는 배경·글자색이 유일한 소스로 남아야 한다.
+          const tint = entityTintStyle(task.status_color, { alpha: '20' });
+          return (
+            <span
+              className={`MyTasksRow__Status MyTasksRow__Status--${category}${tint?.['--et-on'] ? ' EntityTint' : ''}`}
+              style={tint}
+            >
+              {task.status_label || task.status}
+            </span>
+          );
+        })()}
       </div>
 
       {/* 마감일 */}

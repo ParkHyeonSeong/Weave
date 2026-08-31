@@ -1,5 +1,6 @@
 import { Search, ListTodo } from 'lucide-react';
 import { useRefSearchPopup } from './useRefSearchPopup';
+import { entityTintStyle } from '@/library/entityTint';
 
 const formatStatusKey = (key) => key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
@@ -45,12 +46,18 @@ export default function TaskRefPopup({ mode, onSelect, onClose, onDismiss, onBac
             <ListTodo size={12} className="TaskRefPopup__ItemIcon" />
             <span className="TaskRefPopup__ItemId">{task.display_id}</span>
             <span className="TaskRefPopup__ItemTitle">{task.title}</span>
-            <span
-              className={`TaskRefPopup__ItemStatus TaskRefPopup__ItemStatus--${task.status_category || task.status}`}
-              style={task.status_color ? { backgroundColor: `${task.status_color}20`, color: task.status_color } : undefined}
-            >
-              {task.status_label || formatStatusKey(task.status)}
-            </span>
+            {(() => {
+              // 저장색이 없거나 지원 밖이면 EntityTint 없이 category 클래스가 배경·글자색을 준다.
+              const tint = entityTintStyle(task.status_color, { alpha: '20' });
+              return (
+                <span
+                  className={`TaskRefPopup__ItemStatus TaskRefPopup__ItemStatus--${task.status_category || task.status}${tint?.['--et-on'] ? ' EntityTint' : ''}`}
+                  style={tint}
+                >
+                  {task.status_label || formatStatusKey(task.status)}
+                </span>
+              );
+            })()}
           </li>
         ))}
       </ul>

@@ -1,6 +1,7 @@
 import { CheckSquare } from 'lucide-react';
 import TaskTypeIcon from '@/components/common/TaskTypeIcon';
 import Avatar from '@/components/common/Avatar';
+import { entityTintStyle } from '@/library/entityTint';
 
 export default function BoardCard({ task, taskTypes, onClick, onContextMenu }) {
   const typeConfig = (taskTypes || []).find((t) => t.type_key === task.task_type);
@@ -53,15 +54,18 @@ export default function BoardCard({ task, taskTypes, onClick, onContextMenu }) {
       {/* 라벨 */}
       {task.labels && task.labels.length > 0 && (
         <div className="BoardCard__Labels">
-          {task.labels.map((label) => (
-            <span
-              key={label.label_id}
-              className="BoardCard__Label"
-              style={{ backgroundColor: label.color + '20', color: label.color }}
-            >
-              {label.label_name}
-            </span>
-          ))}
+          {task.labels.map((label) => {
+            const tint = entityTintStyle(label.color, { alpha: '20' });
+            return (
+              <span
+                key={label.label_id}
+                className={`BoardCard__Label${tint?.['--et-on'] ? ' EntityTint' : ''}`}
+                style={tint}
+              >
+                {label.label_name}
+              </span>
+            );
+          })}
         </div>
       )}
 

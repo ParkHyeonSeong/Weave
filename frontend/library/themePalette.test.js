@@ -11,6 +11,7 @@ import {
   tokenVar, statusCategoryVar, priorityVar, FALLBACK_TOKEN,
   CHIP_COLOR_VAR, CHIP_TINT_PERCENT, chipTintStyle,
 } from './themePalette.js';
+import { entityBorderStyle, entityTintStyle } from './entityTint.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -258,9 +259,11 @@ const BASE_PROPS = {
 
 // 실제 컴포넌트를 SSR로 렌더하고 활성 칩 span + 제거 버튼의 class/style을 그대로 뽑는다.
 // 정규식이 마크업 모양에 엄격한 것은 의도다 — 칩 렌더 구조가 바뀌면 chips.length 단정에서 RED가 된다.
+// 제거 버튼도 supported 저장색에서 EntityInk가 **추가로** 붙으므로 클래스를 통째로 캡처한다.
+// 부모·버튼 양쪽의 실제 클래스를 결과에 담아 각 상태에서 exact 단정을 건다.
 const CHIP_RE = new RegExp(
   '<span class="(TaskFilterBar__ActiveChip[^"]*)"( style="([^"]*)")?>([^<]*)'
-  + '<button type="button" class="TaskFilterBar__ActiveChipRemove"( style="([^"]*)")?>',
+  + '<button type="button" class="(TaskFilterBar__ActiveChipRemove[^"]*)"( style="([^"]*)")?>',
   'g',
 );
 
@@ -270,7 +273,8 @@ function renderChips(props) {
     classes: m[1].split(' ').filter(Boolean),
     styleAttr: m[3],            // 속성 자체가 없으면 undefined
     label: m[4],
-    removeStyleAttr: m[6],
+    removeClasses: m[5].split(' ').filter(Boolean),
+    removeStyleAttr: m[7],
   }));
 }
 
@@ -298,20 +302,32 @@ describe('활성 필터 칩 — 실제 TaskFilterBar 렌더가 유효한 CSS만 
     }
   });
 
-  it('우선순위 4종이 각각 자기 토큰을 --chip-color로만 실어 보낸다(색 가공 없음)', () => {
+  // ═══════════════════════════════════════════════════════════════════════════
+  // S7 하이브리드 계약 (호출표 9·10행, 2026-08-26 A안) — 네 상태를 SSR 행동으로 고정한다.
+  //   ① 토큰 참조 var(--color-*)  → 기존 --chip-color 경로 exact 보존, Entity* 없음
+  //   ② supported #RRGGBB        → entityTint 경로, --et-* + Entity* 클래스
+  //   ③ passthrough(red·#1a6)    → 기존 --chip-color 경로, Entity* 없음
+  //   ④ blank                    → style 없음, tint/Entity 클래스 없음
+  // ②를 ①·③으로 되돌리면(또는 그 반대로) 각 상태의 exact 단정이 RED가 된다.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  it('상태 ① 우선순위 토큰 4종 — --chip-color 경로 exact 보존, Entity* 없음', () => {
     const chips = renderChips({
       filters: { priorities: new Set(['urgent', 'high', 'medium', 'low']) },
     });
     expect(chips.map((c) => c.label)).toEqual(['Urgent', 'High', 'Medium', 'Low']);
     const expected = ['urgent', 'high', 'medium', 'low'].map((p) => priorityVar(p));
     chips.forEach((c, i) => {
-      expect(c.classes).toContain('TaskFilterBar__ActiveChip');
-      expect(c.classes).toContain('TaskFilterBar__ActiveChip--tinted');
+      // 부모·버튼 클래스를 exact로 잡는다 — Entity*가 하나라도 새어 들어오면 RED.
+      expect(c.classes, c.label).toEqual(['TaskFilterBar__ActiveChip', 'TaskFilterBar__ActiveChip--tinted']);
+      expect(c.removeClasses, c.label).toEqual(['TaskFilterBar__ActiveChipRemove']);
       expect(parseInlineStyle(c.styleAttr)).toEqual({ [CHIP_COLOR_VAR]: expected[i] });
+      expect(parseInlineStyle(c.removeStyleAttr)).toEqual({ color: expected[i] });
+      expect(c.styleAttr, c.label).not.toContain('--et-');
     });
   });
 
-  it('DB 저장색(원시 hex) 경로 — status·label·epic 칩도 같은 통로를 쓴다', () => {
+  it('상태 ② DB 저장색(원시 hex) — EntityTint/EntityBorder/EntityInk + --et-* (--chip-color 없음)', () => {
     const chips = renderChips({
       filters: {
         statusKeys: new Set(['done']),
@@ -323,15 +339,54 @@ describe('활성 필터 칩 — 실제 TaskFilterBar 렌더가 유효한 CSS만 
       epics: [{ epic_id: 3, epic_name: 'Alpha', color: '#5E6AD2' }],
     });
     expect(chips.map((c) => c.label)).toEqual(['Done', 'bug', 'Alpha']);
-    expect(chips.map((c) => parseInlineStyle(c.styleAttr))).toEqual([
-      { [CHIP_COLOR_VAR]: '#16A34A' },
-      { [CHIP_COLOR_VAR]: '#DC2626' },
-      { [CHIP_COLOR_VAR]: '#5E6AD2' },
-    ]);
-    for (const c of chips) expect(c.classes).toContain('TaskFilterBar__ActiveChip--tinted');
+    ['#16A34A', '#DC2626', '#5E6AD2'].forEach((hex, i) => {
+      const c = chips[i];
+      expect(c.classes, hex).toEqual(['TaskFilterBar__ActiveChip', 'EntityTint', 'EntityBorder']);
+      expect(c.removeClasses, hex).toEqual(['TaskFilterBar__ActiveChipRemove', 'EntityInk']);
+      // 정본 인자 { from: 8, alpha: '15' } / entityBorderStyle(색) 을 그대로 재현한 기대값.
+      // from을 바꾸거나 entityBorderStyle을 빠뜨리면 여기가 RED다.
+      const tint = entityTintStyle(hex, { from: 8, alpha: '15' });
+      const bd = entityBorderStyle(hex);
+      expect(parseInlineStyle(c.styleAttr), hex).toEqual({
+        '--et-on': '1',
+        '--et-bg': tint['--et-bg'],
+        '--et-fg': tint['--et-fg'],
+        '--et-bg-dark': tint['--et-bg-dark'],
+        '--et-fg-dark': tint['--et-fg-dark'],
+        background: 'var(--et-bg)',
+        color: 'var(--et-fg)',
+        '--et-bd': bd['--et-bd'],
+        '--et-bd-dark': bd['--et-bd-dark'],
+        'border-color': 'var(--et-bd)',
+      });
+      // 제거 버튼은 부모 칩이 내려놓은 --et-fg를 상속으로 쓴다.
+      expect(parseInlineStyle(c.removeStyleAttr), hex).toEqual({ color: 'var(--et-fg)' });
+      // 이 상태에서는 옛 통로가 남으면 안 된다.
+      expect(c.styleAttr, hex).not.toContain(CHIP_COLOR_VAR);
+      expect(c.classes, hex).not.toContain('TaskFilterBar__ActiveChip--tinted');
+      // 두 테마 값이 실제로 갈렸는지 — 같은 값이면 다크 보정이 없는 것이다.
+      expect(tint['--et-bg'], hex).not.toBe(tint['--et-bg-dark']);
+    });
   });
 
-  it('색 없는 칩(Type)은 style 속성도 --tinted 클래스도 달지 않는다', () => {
+  it.each([['red'], ['#1a6']])(
+    '상태 ③ passthrough %s — 기존 --chip-color 경로 유지, Entity*도 --et-*도 없다', (raw) => {
+      const chips = renderChips({
+        filters: { labelIds: new Set([7]) },
+        labels: [{ label_id: 7, label_name: 'bug', color: raw }],
+      });
+      expect(chips).toHaveLength(1);
+      const c = chips[0];
+      expect(c.classes).toEqual(['TaskFilterBar__ActiveChip', 'TaskFilterBar__ActiveChip--tinted']);
+      expect(c.removeClasses).toEqual(['TaskFilterBar__ActiveChipRemove']);
+      expect(parseInlineStyle(c.styleAttr)).toEqual({ [CHIP_COLOR_VAR]: raw });
+      expect(parseInlineStyle(c.removeStyleAttr)).toEqual({ color: raw });
+      // passthrough 결과(`red15` 등)를 이 표면에 렌더하면 여기가 RED다.
+      expect(c.styleAttr).not.toContain('--et-');
+      expect(c.styleAttr).not.toContain('background');
+    });
+
+  it('상태 ④ 색 없는 칩(Type) — style도 tint/Entity 클래스도 달지 않는다', () => {
     const chips = renderChips({
       filters: { typeKeys: new Set(['task']) },
       taskTypes: [{ type_key: 'task', type_name: 'Task' }],
@@ -339,18 +394,48 @@ describe('활성 필터 칩 — 실제 TaskFilterBar 렌더가 유효한 CSS만 
     expect(chips.map((c) => c.label)).toEqual(['Task']);
     expect(chips[0].styleAttr).toBeUndefined();
     expect(chips[0].classes).toEqual(['TaskFilterBar__ActiveChip']);
+    expect(chips[0].removeClasses).toEqual(['TaskFilterBar__ActiveChipRemove']);
+    expect(chips[0].removeStyleAttr).toBeUndefined();
   });
 
-  it('제거 버튼의 color는 토큰·hex 양쪽에서 완결된 CSS 색이다(단일 var() 참조는 유효 — 현행 유지 판정)', () => {
+  // 회귀: blank 판정을 `chip.color ?` truthiness로 하면 공백 문자열과 비문자열이 여기서 샌다.
+  // entityTintStyle은 이 값들에 undefined(=blank)를 돌려주는데 truthiness는 true라
+  // --tinted 클래스와 `--chip-color:'  '`(무효 선언)가 붙는다. 판정은 storedTint 존재 여부 하나뿐이다.
+  it.each([['공백만', '  '], ['탭·개행', '\t\n'], ['비문자열 42', 42], ['빈 문자열', ''], ['null', null]])(
+    '상태 ④ blank(%s) — style도 tint/Entity 클래스도 달지 않는다', (_name, bad) => {
+      const chips = renderChips({
+        filters: { labelIds: new Set([7]) },
+        labels: [{ label_id: 7, label_name: 'bug', color: bad }],
+      });
+      expect(chips).toHaveLength(1);
+      expect(chips[0].classes).toEqual(['TaskFilterBar__ActiveChip']);
+      expect(chips[0].styleAttr).toBeUndefined();
+      expect(chips[0].removeClasses).toEqual(['TaskFilterBar__ActiveChipRemove']);
+      expect(chips[0].removeStyleAttr).toBeUndefined();
+    });
+
+  it('제거 버튼의 color는 네 상태 전부에서 완결된 CSS 색이다', () => {
     const tokenChip = renderChips({ filters: { priorities: new Set(['urgent']) } })[0];
     expect(parseInlineStyle(tokenChip.removeStyleAttr)).toEqual({ color: priorityVar('urgent') });
     expect(parseInlineStyle(tokenChip.removeStyleAttr).color).toMatch(COMPLETE_COLOR_VALUE);
 
+    // supported 저장색은 부모가 내려놓은 --et-fg를 상속으로 쓴다(원색 직접 지정 아님) —
+    // 그래야 다크에서 storedColor.scss의 .EntityInk가 --et-fg-dark로 덮을 수 있다.
     const hexChip = renderChips({
       filters: { statusKeys: new Set(['done']) },
       workflowStatuses: [{ key: 'done', label: 'Done', color: '#16A34A' }],
     })[0];
-    expect(parseInlineStyle(hexChip.removeStyleAttr)).toEqual({ color: '#16A34A' });
+    expect(parseInlineStyle(hexChip.removeStyleAttr)).toEqual({ color: 'var(--et-fg)' });
+    expect(parseInlineStyle(hexChip.removeStyleAttr).color).toMatch(COMPLETE_COLOR_VALUE);
+    expect(hexChip.removeClasses).toContain('EntityInk');
+
+    // passthrough는 오늘처럼 원 색 그대로.
+    const passChip = renderChips({
+      filters: { labelIds: new Set([7]) },
+      labels: [{ label_id: 7, label_name: 'bug', color: 'red' }],
+    })[0];
+    expect(parseInlineStyle(passChip.removeStyleAttr)).toEqual({ color: 'red' });
+    expect(passChip.removeClasses).toEqual(['TaskFilterBar__ActiveChipRemove']);
 
     // 색 없는 칩은 제거 버튼에도 style이 붙지 않는다.
     const plain = renderChips({

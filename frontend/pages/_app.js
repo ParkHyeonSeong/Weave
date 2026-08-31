@@ -110,6 +110,8 @@ import "@/styles/components/scrum/scrum.scss";
 import "@/styles/components/shared/refPanelPageLayout.scss";
 import "@/styles/components/shared/linkHoverPopover.scss";
 import "@/styles/components/common/lightbox.scss";
+// 저장색 다크 보정은 캐스케이드 최후단이어야 한다 — 항상 마지막 @/styles import로 둔다.
+import "@/styles/components/common/storedColor.scss";
 
 export default function App({ Component, pageProps }) {
   const router = useRouter();

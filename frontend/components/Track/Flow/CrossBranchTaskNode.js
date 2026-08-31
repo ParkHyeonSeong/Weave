@@ -3,6 +3,7 @@ import { Handle, Position } from '@xyflow/react';
 import { CalendarDays, Layers, X, ListTree } from 'lucide-react';
 import EntityIcon from '@/components/common/EntityIcon';
 import Avatar from '@/components/common/Avatar';
+import { entityTintStyle } from '@/library/entityTint';
 
 function formatDue(date) {
   if (!date) return null;
@@ -20,6 +21,9 @@ const CrossBranchTaskNode = memo(function CrossBranchTaskNode({ data, selected }
     parent, subtaskTotal, subtaskDone,
     itemId, onDelete,
   } = data;
+
+  // ⚠️ 노드 배경이 --track-card라 배지 부모도 그것이다 — track-card 프로파일(TrackTree·TrackDetail과 동일).
+  const branchTint = entityTintStyle(branchColor, { from: 8, alpha: '14', surface: 'track-card' });
 
   return (
     <div
@@ -44,7 +48,10 @@ const CrossBranchTaskNode = memo(function CrossBranchTaskNode({ data, selected }
       )}
 
       <div className="TrackNode__Header">
-        <span className="TrackNode__BranchChip" style={{ background: `${branchColor}14`, color: branchColor }}>
+        <span
+          className={`TrackNode__BranchChip${branchTint?.['--et-on'] ? ' EntityTint' : ''}`}
+          style={branchTint}
+        >
           <EntityIcon
             icon={branchIcon}
             color={branchColor}

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Search, ListTodo } from 'lucide-react';
 import { axios } from '@/library/_axios';
+import { entityTintStyle } from '@/library/entityTint';
 
 const formatStatusKey = (key) => key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
@@ -71,12 +72,20 @@ export default function TaskSearchPopup({ keyword, mode, onSelect, onClose }) {
             <ListTodo size={12} className="TaskSearchPopup__ItemIcon" />
             <span className="TaskSearchPopup__ItemId">{task.display_id}</span>
             <span className="TaskSearchPopup__ItemTitle">{task.title}</span>
-            <span
-              className={`TaskSearchPopup__ItemStatus TaskSearchPopup__ItemStatus--${task.status_category || task.status}`}
-              style={task.status_color ? { backgroundColor: `${task.status_color}20`, color: task.status_color } : undefined}
-            >
-              {task.status_label || formatStatusKey(task.status)}
-            </span>
+            {(() => {
+              // 저장색이 없거나 지원 밖이면 EntityTint 없이 category 클래스가 배경·글자색을 준다.
+              // 팝업이 --color-surface-overlay 위에 떠 있다. 선택 안 한 항목의 부모가 그 표면이고
+              // 다크에서 --color-surface보다 밝아 default로 계산하면 idle에서 31색 중 17색이 미달이었다.
+              const tint = entityTintStyle(task.status_color, { alpha: '20', surface: 'surface-overlay' });
+              return (
+                <span
+                  className={`TaskSearchPopup__ItemStatus TaskSearchPopup__ItemStatus--${task.status_category || task.status}${tint?.['--et-on'] ? ' EntityTint' : ''}`}
+                  style={tint}
+                >
+                  {task.status_label || formatStatusKey(task.status)}
+                </span>
+              );
+            })()}
             {(() => {
               const main = (task.assignees || []).find((a) => a.role === 'main');
               return main ? <span className="TaskSearchPopup__ItemAssignee">{main.username}</span> : null;

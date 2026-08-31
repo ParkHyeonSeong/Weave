@@ -404,7 +404,20 @@ describe('전 SCSS var(--…) 참조 커버리지', () => {
   // --chip-color: TaskFilterBar 활성 필터 칩이 자기 색(원시 hex 또는 var(--color-*) 토큰)을 SCSS로
   //   넘기는 통로. JS 인라인 style(library/themePalette.js chipTintStyle)이 주입하고 taskList.scss
   //   `.TaskFilterBar__ActiveChip--tinted`가 color-mix로 소비한다 — 보호 접두가 아니라 선언 금지와 무관.
-  const RUNTIME_INJECTED = ['branch-color', 'status-color', 'accent', 'sticky-header-h', 'chip-color'];
+  // --et-*-dark 4개(S7 저장색): producer는 library/entityTint.js가 React 인라인 style로 내리는
+  //   저장색 다크 값이고, consumer는 styles/components/common/storedColor.scss의 .Entity* 다크 규칙이다.
+  //   _themes.scss 전역 토큰이 아니라 요소별 런타임 값이라 여기 등록한다(영구 — PENDING 아님).
+  //   --et-fg-dark만 .EntityTint·.EntityInk 두 규칙에서 소비되므로 SCSS 참조는 5건, 고유 이름은 4개다.
+  // --et-bg/-fg + --et-*-raised 6개(S7 raised 축): 같은 배지가 행 상태마다 다른 부모 위에 놓이는
+  //   TaskListRow(selected·subtask) 때문에 산출을 두 벌 내리고 SCSS가 상태로 고른다.
+  //   raised 변수가 없는 배지에서 무효 선언이 되지 않게 폴백으로 --et-bg/--et-fg를 쓰므로
+  //   그 둘도 SCSS 참조가 생겼다. 셋 다 producer는 library/entityTint.js 인라인 style이다.
+  const RUNTIME_INJECTED = [
+    'branch-color', 'status-color', 'accent', 'sticky-header-h', 'chip-color',
+    'et-bg-dark', 'et-fg-dark', 'et-bd-dark', 'et-solid-dark',
+    'et-bg', 'et-fg',
+    'et-bg-raised', 'et-fg-raised', 'et-bg-raised-dark', 'et-fg-raised-dark',
+  ];
   // 예외는 경로+개수까지 고정 — 번지거나 늘어나면 즉시 검출, 이관(S4/S5)하면 목록·개수 갱신 신호.
   // S4 stage 3에서 track.scss 6건 이관 완료 — 미정의 var(--text-secondary/--text-tertiary)라
   //   폴백만 렌더되고 테마를 따라가지 않던 죽은 참조였고, 정의된 --color-text-* 토큰으로 교체했다.
