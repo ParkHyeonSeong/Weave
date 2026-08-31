@@ -4,55 +4,69 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Weave - Offline</title>
+  <!--
+    서비스워커(public/sw.js)의 오프라인 폴백. 세 제약이 설계를 결정한다.
+    1) CSP가 적용된다 — middleware.js의 matcher가 이 파일을 제외하지 않고 cache.add가
+       헤더까지 저장한다. script-src에 'unsafe-inline'이 없어 인라인 onclick은 안 돌고,
+       캐시된 nonce는 설치 시점의 죽은 값이라 nonce 붙인 script 태그도 불가능하다.
+       → Retry는 <a href="">. sw.js가 리다이렉트 없이 본문만 치환하므로
+         document.URL은 원래 가려던 주소다.
+    2) 서브리소스는 SW가 안 가로챈다(fetch는 mode==='navigate'만, 프리캐시는 이 파일 1건).
+       → 로고는 data URI 인라인 (img-src가 data: 허용).
+    3) _themes.scss를 import 할 수 없다(빌드 밖 정적 자산 + 오프라인에서 추가 요청 실패).
+       → 다크 값은 복제본이고 여기만 OS의 prefers-color-scheme을 따른다(의도된 예외).
+         library/edgeSurfaces.test.js가 그 복제본의 drift를 막는다.
+    ⚠️ 라이트 accent는 사용자 결정 P12 = B-1이다. 이전 값 #6366F1 위 #FFFFFF는
+       대비 4.4669로 WCAG SC 1.4.3 (AA) 미달이었다. #4F46E5로 바꿔 기본 6.2875,
+       hover #4338CA로 7.9031을 확보했다. 잉크(#FFFFFF)와 다크 6값은 무변경이다.
+  -->
   <style>
+    :root {
+      color-scheme: light dark;
+      --off-bg: #f8f9fa;
+      --off-text: #374151;
+      --off-muted: #6b7280;
+      --off-accent: #4F46E5;
+      --off-accent-hover: #4338CA;
+      --off-accent-ink: #FFFFFF;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --off-bg: #0E0F11;
+        --off-text: #E6E8EB;
+        --off-muted: #9CA3AF;
+        --off-accent: #7C8AEA;
+        --off-accent-hover: #8B98F0;
+        --off-accent-ink: #0E0F11;
+      }
+      .icon { content: url("data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTAwIiBoZWlnaHQ9IjUwMCIgdmlld0JveD0iMCAwIDUwMCA1MDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI1MDAiIGhlaWdodD0iNTAwIiByeD0iMTIwIiBmaWxsPSIjMDAwMDAxIi8+CjxsaW5lIHgxPSI2OCIgeTE9IjIyOCIgeDI9IjY4IiB5Mj0iNzAiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iNCIvPgo8bGluZSB4MT0iNDI4IiB5MT0iNDMwIiB4Mj0iNDI4IiB5Mj0iNzAiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iNCIvPgo8bGluZSB4MT0iNDI5IiB5MT0iNzIiIHgyPSI2OSIgeTI9IjcyIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjQiLz4KPGxpbmUgeDE9IjQyOSIgeTE9IjQyOSIgeDI9IjY5IiB5Mj0iNDI5IiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjQiLz4KPHBhdGggZD0iTTE5My42NTIgMzI1TDE1My4yMjMgMTgzLjU5NEgxODUuMjU0TDIwOS4wODIgMjgyLjQyMkgyMTAuMjU0TDIzNi4yMyAxODMuNTk0SDI2My43N0wyODkuNzQ2IDI4Mi42MTdIMjkwLjkxOEwzMTQuNzQ2IDE4My41OTRIMzQ2Ljc3N0wzMDYuMzQ4IDMyNUgyNzcuNjM3TDI1MC42ODQgMjMxLjY0MUgyNDkuNTEyTDIyMi4zNjMgMzI1SDE5My42NTJaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K"); }
+    }
+    /* 아래 레이아웃 규칙은 현행 파일과 동일하다 — 색만 var()로 바뀌었다. */
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      background: #f8f9fa;
-      color: #374151;
+      display: flex; align-items: center; justify-content: center; min-height: 100vh;
+      background: var(--off-bg); color: var(--off-text);
     }
-    .container {
-      text-align: center;
-      padding: 2rem;
+    .container { text-align: center; padding: 2rem; }
+    .icon { width: 80px; height: 80px; margin: 0 auto 1.5rem; opacity: 0.5; }
+    h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.5rem; }
+    p { font-size: 0.95rem; color: var(--off-muted); margin-bottom: 1.5rem; }
+    .retry {
+      display: inline-block; padding: 0.6rem 1.5rem; border: none; border-radius: 6px;
+      font-size: 0.9rem; text-decoration: none; cursor: pointer;
+      background: var(--off-accent); color: var(--off-accent-ink);
     }
-    .icon {
-      width: 80px;
-      height: 80px;
-      margin: 0 auto 1.5rem;
-      opacity: 0.5;
-    }
-    h1 {
-      font-size: 1.5rem;
-      font-weight: 600;
-      margin-bottom: 0.5rem;
-    }
-    p {
-      font-size: 0.95rem;
-      color: #6b7280;
-      margin-bottom: 1.5rem;
-    }
-    button {
-      padding: 0.6rem 1.5rem;
-      background: #6366F1;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      font-size: 0.9rem;
-      cursor: pointer;
-    }
-    button:hover { background: #4f46e5; }
+    .retry:hover { background: var(--off-accent-hover); }
+    .retry:focus-visible { outline: 2px solid var(--off-accent); outline-offset: 2px; }
   </style>
 </head>
 <body>
   <div class="container">
-    <img class="icon" src="/icons/weave_square.svg" alt="Weave" />
+    <img class="icon" src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTAwIiBoZWlnaHQ9IjUwMCIgdmlld0JveD0iMCAwIDUwMCA1MDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI1MDAiIGhlaWdodD0iNTAwIiByeD0iMTIwIiBmaWxsPSJ3aGl0ZSIvPgo8bGluZSB4MT0iNjgiIHkxPSIyMjgiIHgyPSI2OCIgeTI9IjcwIiBzdHJva2U9ImJsYWNrIiBzdHJva2Utd2lkdGg9IjQiLz4KPGxpbmUgeDE9IjQyOCIgeTE9IjQzMCIgeDI9IjQyOCIgeTI9IjcwIiBzdHJva2U9ImJsYWNrIiBzdHJva2Utd2lkdGg9IjQiLz4KPGxpbmUgeDE9IjQyOSIgeTE9IjcyIiB4Mj0iNjkiIHkyPSI3MiIgc3Ryb2tlPSJibGFjayIgc3Ryb2tlLXdpZHRoPSI0Ii8+CjxsaW5lIHgxPSI0MjkiIHkxPSI0MjkiIHgyPSI2OSIgeTI9IjQyOSIgc3Ryb2tlPSJibGFjayIgc3Ryb2tlLXdpZHRoPSI0Ii8+CjxwYXRoIGQ9Ik0xOTMuNjUyIDMyNUwxNTMuMjIzIDE4My41OTRIMTg1LjI1NEwyMDkuMDgyIDI4Mi40MjJIMjEwLjI1NEwyMzYuMjMgMTgzLjU5NEgyNjMuNzdMMjg5Ljc0NiAyODIuNjE3SDI5MC45MThMMzE0Ljc0NiAxODMuNTk0SDM0Ni43NzdMMzA2LjM0OCAzMjVIMjc3LjYzN0wyNTAuNjg0IDIzMS42NDFIMjQ5LjUxMkwyMjIuMzYzIDMyNUgxOTMuNjUyWiIgZmlsbD0iYmxhY2siLz4KPC9zdmc+Cg==" alt="Weave" />
     <h1>Offline</h1>
     <p>Internet connection is unavailable. Please check your network and try again.</p>
-    <button onclick="location.reload()">Retry</button>
+    <a class="retry" href="">Retry</a>
   </div>
 </body>
 </html>
