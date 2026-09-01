@@ -1,0 +1,36 @@
+// 에러 경계 화면. class component이고 에러가 난 상태라 useTheme()을 쓸 수 없어서
+// 색을 전부 CSS 토큰으로 내린다 — 인라인 style로는 테마를 따라갈 수 없다.
+// background를 명시하는 이유: 원래 코드에 배경 지정이 없어 html/body 상속에
+// 의존했는데, 트리가 깨진 상태의 상속을 가정에 두고 싶지 않다(값은 body와 동일).
+
+.ErrorBoundary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  gap: 16px;
+  padding: 40px 24px;
+  text-align: center;
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+  font-family: inherit;
+
+  &__Icon { color: var(--color-warning); flex-shrink: 0; }   // lucide는 stroke=currentColor 상속
+  &__Title { font-size: 18px; font-weight: 600; color: var(--color-text); }
+  &__Message { font-size: 14px; max-width: 480px; }
+
+  &__Button {
+    padding: 8px 20px;
+    border: none;
+    border-radius: 8px;
+    background: var(--color-primary);
+    color: var(--color-text-inverse);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+
+    &:hover { background: var(--color-primary-hover); }
+    &:focus-visible { outline: 2px solid var(--color-border-focus); outline-offset: 2px; }
+  }
+}
