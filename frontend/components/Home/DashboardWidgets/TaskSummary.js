@@ -59,22 +59,22 @@ export default function TaskSummary() {
       <div className="Widget__Body">
         <div className="TaskSummary__Stats">
           <NavLink href="/my-tasks" className="TaskSummary__Stat">
-            <Circle size={18} color="#6B7280" />
+            <Circle size={18} color="var(--color-text-secondary)" />
             <span className="TaskSummary__StatCount">{counts.todo}</span>
             <span className="TaskSummary__StatLabel">Todo</span>
           </NavLink>
           <NavLink href="/my-tasks" className="TaskSummary__Stat">
-            <Loader size={18} color="#1E40AF" />
+            <Loader size={18} color="var(--color-status-in-progress)" />
             <span className="TaskSummary__StatCount">{counts.in_progress}</span>
             <span className="TaskSummary__StatLabel">In Progress</span>
           </NavLink>
           <NavLink href="/my-tasks" className="TaskSummary__Stat">
-            <CheckCircle2 size={18} color="#16A34A" />
+            <CheckCircle2 size={18} color="var(--color-success)" />
             <span className="TaskSummary__StatCount">{counts.done}</span>
             <span className="TaskSummary__StatLabel">Done</span>
           </NavLink>
           <NavLink href="/my-tasks" className="TaskSummary__Stat">
-            <XCircle size={18} color="#DC2626" />
+            <XCircle size={18} color="var(--color-error)" />
             <span className="TaskSummary__StatCount">{counts.cancelled}</span>
             <span className="TaskSummary__StatLabel">Cancelled</span>
           </NavLink>

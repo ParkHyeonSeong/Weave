@@ -700,3 +700,35 @@ describe('Task 3 호출표 — 지원 밖 저장색에서 오늘의 선언이 �
     }
   });
 });
+
+// ── 토큰 참조 입력 안전성 (S9 Task 7) ─────────────────────────────────────────
+// PRIORITY_TOKENS·statusCategoryVar가 돌려주는 값은 `var(--color-error)` 같은 **토큰 참조**다.
+// 저장색(#RRGGBB)과 같은 경로로 들어오지만 문자열 가공을 하면 안 된다.
+describe('토큰 참조 입력 — 알파 접미 금지(IACVT 방지)', () => {
+  const TOKEN = 'var(--color-error)';
+
+  it('entityBorderStyle이 토큰에 알파를 이어 붙이지 않는다 (var(--x)40은 무효 선언이다)', () => {
+    const s = entityBorderStyle(TOKEN, { from: 25, alpha: '40' });
+    expect(s, '선언이 아예 안 나가면 테두리가 사라진다').toBeTruthy();
+    const bc = String(s.borderColor);
+    expect(bc, `알파 접미가 붙었다: ${bc}`).not.toMatch(/var\([^)]*\)\d/);
+    // 사다리 비율은 유지한다 — alpha '40'의 진입점은 LEGACY_ALPHA_ENTRY상 25%다.
+    expect(bc).toBe('color-mix(in srgb, var(--color-error) 25%, transparent)');
+  });
+
+  it('사다리 지정이 없으면 토큰을 그대로 쓴다 (원색 테두리 자리)', () => {
+    expect(entityBorderStyle(TOKEN).borderColor).toBe(TOKEN);
+  });
+
+  it('ink·solid는 이미 토큰 안전하다 (통과 경로 유지)', () => {
+    expect(entityInkStyle(TOKEN)).toEqual({ color: TOKEN });
+    expect(entitySolidStyle(TOKEN)).toEqual({ background: TOKEN });
+  });
+
+  it('저장색(#RRGGBB) 경로는 바뀌지 않는다', () => {
+    const s = entityBorderStyle('#DC2626', { from: 25, alpha: '40' });
+    expect(s['--et-on']).toBe('1');
+    expect(s.borderColor).toBe('var(--et-bd)');
+    expect(String(s['--et-bd'])).not.toContain('color-mix');
+  });
+});

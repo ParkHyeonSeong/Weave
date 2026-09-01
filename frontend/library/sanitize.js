@@ -17,9 +17,9 @@ function fillEmptyParagraph(node) {
 // sanitizeHtml은 읽기 관문일 뿐 저장 경로에 없다(sanitizeSavePath.dom.test.js가 물리 저장 호출부 15곳을 고정).
 //
 // ⛔ style 문자열을 직접 쪼개지 마라(`raw.split(';')`). 실측 반례 2종:
-//   ① `color: #DC2626; color: #123456` — 브라우저가 쓰는 최종색은 팔레트 **밖**인 #123456인데
-//      split은 앞의 #DC2626을 집어 `wv-tc-dc2626`을 붙인다. 다크에서 남색이 빨강이 된다.
-//      반대 순서 `color: #123456; color: #DC2626`은 클래스는 맞지만 죽은 선언 #123456이
+//   ① `color: <팔레트색>; color: <팔레트밖색>` — 브라우저가 쓰는 최종색은 뒤의 팔레트 밖 색인데
+//      split은 앞의 팔레트색을 집어 `wv-tc-…` 클래스를 붙인다. 다크에서 색이 뒤바뀐다.
+//      반대 순서 `color: <팔레트밖색>; color: <팔레트색>`은 클래스는 맞지만 죽은 선언이
 //      인라인에 남아 클래스를 이긴다.
 //   ② `background-image: url("data:image/svg+xml;base64,…")` — data URI 안의 `;`가 선언
 //      구분자로 오인돼 `url("data:image/svg+xml; base64,…")`로 깨진다.

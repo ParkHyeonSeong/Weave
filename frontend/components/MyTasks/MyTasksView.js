@@ -436,7 +436,7 @@ function MyTasksRow({ task, onRefresh }) {
 
       {/* 타입 아이콘 */}
       <span className="MyTasksRow__TypeIcon">
-        <TaskTypeIcon name="CheckSquare" size={14} color="#5E6AD2" />
+        <TaskTypeIcon name="CheckSquare" size={14} color="var(--color-primary)" />
       </span>
 
       {/* Display ID */}

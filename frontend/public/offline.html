@@ -16,9 +16,9 @@
     3) _themes.scss를 import 할 수 없다(빌드 밖 정적 자산 + 오프라인에서 추가 요청 실패).
        → 다크 값은 복제본이고 여기만 OS의 prefers-color-scheme을 따른다(의도된 예외).
          library/edgeSurfaces.test.js가 그 복제본의 drift를 막는다.
-    ⚠️ 라이트 accent는 사용자 결정 P12 = B-1이다. 이전 값 #6366F1 위 #FFFFFF는
-       대비 4.4669로 WCAG SC 1.4.3 (AA) 미달이었다. #4F46E5로 바꿔 기본 6.2875,
-       hover #4338CA로 7.9031을 확보했다. 잉크(#FFFFFF)와 다크 6값은 무변경이다.
+    ⚠️ 라이트 accent는 사용자 결정 P12 = B-1이다. 이전 값은 잉크 위 대비 4.4669로
+       WCAG SC 1.4.3 (AA) 미달이었다. 아래 --off-accent / --off-accent-hover 값으로
+       바꿔 기본 6.2875, hover 7.9031을 확보했다. 잉크와 다크 6값은 무변경이다.
   -->
   <style>
     :root {

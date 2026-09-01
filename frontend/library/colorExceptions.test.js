@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { COLOR_CATEGORIES, COLOR_EXCEPTIONS, findException } from './colorExceptions.js';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { Parser as AcornParser } from 'acorn';   // devDep — 추가 설치 없음
+import acornJsx from 'acorn-jsx';
 import { ROOT, hitsFor, sweepFile } from './literalColorSweep.js';
 import { TEXT_COLORS, HIGHLIGHT_COLORS, CELL_BG_COLORS } from './tiptapColorMap.js';
 
@@ -51,10 +53,18 @@ describe('colorExceptions — 항목 shape 계약', () => {
     expect(bad.map((e) => e.file)).toEqual([]);
   });
 
-  it('CSS/SCSS 항목은 selector가 문자열, 비-CSS 항목은 selector가 null이다', () => {
+  it('selector는 스윕이 그 소스에서 실제로 만들어내는 형태여야 한다', () => {
+    // 스캐너의 구조적 소스는 넷이다: postcss decl(.scss/.css) · HTML <style> 블록과
+    // style="…" 속성(.html) · JSX style={{…}} 객체(.js/.jsx) · SVG/HTML 색 속성.
+    // ⚠️ 예전 계약은 ".scss/.css만 selector를 갖는다"였는데, 그건 HTML <style>·JSX [style]
+    //    소스가 생기기 전 이야기다. 그대로 두면 offline.html의 `:root`와 JSX의 `[style]`이
+    //    형식 위반으로 뜬다 — 둘 다 스캐너가 정말로 그렇게 내는 값이다.
     const bad = COLOR_EXCEPTIONS.filter((e) => {
-      const isCss = e.file.endsWith('.scss') || e.file.endsWith('.css');
-      return isCss ? typeof e.selector !== 'string' || !e.selector : e.selector !== null;
+      const s = e.selector;
+      if (e.file.endsWith('.scss') || e.file.endsWith('.css')) return typeof s !== 'string' || !s;
+      if (e.file.endsWith('.html')) return s !== null && (typeof s !== 'string' || !s);
+      if (/\.jsx?$/.test(e.file)) return s !== null && s !== '[style]';
+      return s !== null;   // svg·json 등은 색 속성이라 selector가 없다
     });
     expect(bad.map((e) => `${e.file}: selector=${JSON.stringify(e.selector)}`)).toEqual([]);
   });
@@ -95,13 +105,12 @@ const S7_FILES = [
   'library/colorContrast.js',
   'library/entityTint.js',
 ];
-// S9 Task 7로 넘긴 **정확한 네 튜플**. 각 튜플을 최대 1회만 면제한다(consume-once).
-// ⛔ `selector !== null`을 통째로 제외하지 마라 — 새 인라인 색이나 같은 색의 추가 출현이
-//    조용히 함께 빠져나간다(실측: `#ABCDEF` 프로브를 넣어 hit이 30→31이 돼도 게이트는 over=0).
+// S9 Task 7로 넘겼던 네 튜플은 **이행이 끝나 비었다**(콜아웃 아이콘 → 상태 토큰).
+// 면제 예산이 0이므로 이제 툴바에 인라인 색이 하나라도 생기면 곧바로 미등록 hit으로 드러난다.
+// ⛔ 여기에 값을 다시 채우지 마라 — 채우는 순간 그 색은 등록도 이행도 없이 통과한다.
+// ⛔ `selector !== null`을 통째로 제외하는 우회도 금지다 — 새 인라인 색이 조용히 빠져나간다.
 const TOOLBAR = 'components/Canvas/CanvasEditorToolbar.js';
-const S9_DEFERRED = ['#2563EB', '#D97706', '#16A34A', '#DC2626'].map((value) => ({
-  file: TOOLBAR, selector: '[style]', prop: 'color', value,
-}));
+const S9_DEFERRED = [];
 const tupleKey = (h) => `${h.file}|${h.selector ?? '-'}|${h.prop ?? '-'}|${h.value}`;
 
 // hits를 (S7이 등록할 것, S9로 넘긴 것)으로 가른다. 면제 예산은 튜플당 1회뿐이다.
@@ -192,11 +201,13 @@ describe('S9 이관 4건은 consume-once로만 면제된다', () => {
     return [...H].filter(([k, n]) => (R.get(k) || 0) < n).map(([k, n]) => `${k} (hit ${n} > 등록 ${R.get(k) || 0})`);
   };
 
-  it('현재 deferred multiset이 정확히 그 네 튜플이다', () => {
+  // ✅ S9 Task 7에서 콜아웃 아이콘 4건을 토큰으로 이행했다 → 면제는 **4 → 0**이 된다.
+  //    이제 툴바에 남는 것은 팔레트 상수 26건(S7 palette-source)뿐이고, 이관 예산은 비어야 한다.
+  //    ⛔ 이 단정을 4로 되돌리지 마라 — 되돌리면 리터럴이 다시 들어와도 초록이 된다.
+  it('이행이 끝나 deferred가 0건이다 (면제 예산이 소진되지 않고 사라졌다)', () => {
     const { deferred, unusedBudget } = partitionS7(hitsFor(TOOLBAR, toolbarSrc));
-    expect(deferred).toHaveLength(4);
-    expect([...bag(deferred).keys()].sort()).toEqual([...bag(S9_DEFERRED).keys()].sort());
-    expect(unusedBudget, '쓰이지 않은 면제 예산 — 이관 목록이 실제와 다르다').toEqual([]);
+    expect(deferred, '아직 이관 대상 인라인 색이 남아 있다').toHaveLength(0);
+    expect(unusedBudget, '면제 예산이 남아 있다 — S9_DEFERRED를 비워야 한다').toEqual([]);
   });
 
   it('S9 이관 4건은 colorExceptions.js에 등록하지 않는다', () => {
@@ -213,19 +224,241 @@ describe('S9 이관 4건은 consume-once로만 면제된다', () => {
     const mutated = `${toolbarSrc}\nconst __probe = <i style={{ color: '#ABCDEF' }} />;\n`;
     expect(mutated).not.toBe(toolbarSrc);
     const { deferred } = partitionS7(hitsFor(TOOLBAR, mutated));
-    expect(deferred).toHaveLength(4);                       // 면제는 여전히 네 건뿐이다
+    expect(deferred).toHaveLength(0);                       // 면제는 이제 0건이다
     expect(unregisteredS7(mutated)).toHaveLength(1);        // 새 색이 그대로 드러난다
     expect(unregisteredS7(mutated)[0]).toContain('#ABCDEF');
   });
 
-  it('기존 네 색 중 하나를 한 번 더 추가하면 그 추가 출현이 RED다', () => {
+  it('이행했던 색을 되돌려 넣어도 RED다 (면제가 사라졌으므로 되돌림이 드러난다)', () => {
     const mutated = `${toolbarSrc}\nconst __dup = <i style={{ color: '#DC2626' }} />;\n`;
     expect(mutated).not.toBe(toolbarSrc);
     const { deferred } = partitionS7(hitsFor(TOOLBAR, mutated));
-    expect(deferred).toHaveLength(4);                       // 예산은 튜플당 1회 — 두 번째는 못 빠져나간다
+    expect(deferred).toHaveLength(0);                       // 면제 예산이 0이라 아무것도 빠져나가지 못한다
     const missing = unregisteredS7(mutated);
     expect(missing).toHaveLength(1);
     expect(missing[0]).toContain('#DC2626');
     expect(missing[0]).toContain('[style]');
+  });
+});
+
+// ── Canvas 콜아웃 아이콘: 종류 ↔ 상태 토큰 exact 결속 (S9 Task 7) ──────────────
+// 네 콜아웃은 의미 상태색이라 토큰이 정답이다. 값만 보면 Info와 Error를 맞바꿔도,
+// style을 통째로 지워도 통과한다 — **콜아웃 종류와 토큰의 짝**을 직접 건다.
+describe('Canvas 콜아웃 아이콘이 상태 토큰과 정확히 짝지어진다', () => {
+  const CALLOUT = {
+    info:    { icon: 'Info',          token: 'var(--color-status-in-progress)' },
+    warning: { icon: 'AlertTriangle', token: 'var(--color-warning)' },
+    success: { icon: 'CheckCircle2',  token: 'var(--color-success)' },
+    error:   { icon: 'XCircle',       token: 'var(--color-error)' },
+  };
+  const src = readFileSync(resolve(ROOT, TOOLBAR), 'utf8');
+  const parse = (text) => AcornParser.extend(acornJsx())
+    .parse(text, { ecmaVersion: 'latest', sourceType: 'module' });
+  const walk = (n, fn) => {
+    if (!n || typeof n.type !== 'string') return;
+    fn(n);
+    for (const k of Object.keys(n)) {
+      if (k === 'type' || k === 'start' || k === 'end' || k === 'loc') continue;
+      const v = n[k];
+      if (Array.isArray(v)) v.forEach((c) => c && typeof c.type === 'string' && walk(c, fn));
+      else if (v && typeof v.type === 'string') walk(v, fn);
+    }
+  };
+  const jsxName = (n) => (n && n.type === 'JSXIdentifier' ? n.name : null);
+
+  // ── 콜아웃 메뉴를 앵커로 잡는다 ────────────────────────────────────────────
+  // ⛔ 파일 전체에서 button을 긁지 않는다. 죽은 button(`{false && <button …/>}`)을 하나 더 두면
+  //    정상 배선이 섞여 들어와 위장이 통과한다(실측). `openDropdown === 'callout' && (…)`가
+  //    실제로 렌더하는 메뉴의 **직접 자식 button**만 계약 대상이다.
+  const calloutMenu = (ast) => {
+    let menu = null;
+    walk(ast, (n) => {
+      if (n.type !== 'LogicalExpression' || n.operator !== '&&') return;
+      const l = n.left;
+      const isGuard = l.type === 'BinaryExpression' && l.operator === '==='
+        && l.left.type === 'Identifier' && l.left.name === 'openDropdown'
+        && l.right.type === 'Literal' && l.right.value === 'callout';
+      if (!isGuard) return;
+      let r = n.right;
+      while (r && r.type === 'JSXExpressionContainer') r = r.expression;
+      if (r && r.type === 'JSXElement') menu = r;
+    });
+    return menu;
+  };
+
+  // 함수 스코프에서 아이콘 이름을 가리는 선언(예: `const Info = XCircle`)을 모은다.
+  // ⚠️ import 바인딩만 보면 함수 안 재선언으로 <Info>가 다른 컴포넌트를 렌더해도 통과한다(실측).
+  const shadowedNames = (ast) => {
+    const out = new Set();
+    for (const n of ast.body) {                      // 최상위 선언은 import가 정본이므로 제외
+      if (n.type === 'VariableDeclaration') for (const d of n.declarations)
+        if (d.id.type === 'Identifier') out.add(`__top__${d.id.name}`);
+    }
+    walk(ast, (n) => {
+      const inFn = n.type === 'FunctionDeclaration' || n.type === 'FunctionExpression'
+        || n.type === 'ArrowFunctionExpression';
+      if (inFn) {
+        for (const prm of n.params) walk(prm, (m) => { if (m.type === 'Identifier') out.add(m.name); });
+        walk(n.body, (m) => {
+          if (m.type !== 'VariableDeclarator' || m.id.type !== 'Identifier') return;
+          out.add(m.id.name);
+        });
+      }
+    });
+    return out;
+  };
+
+  const menuButtons = (text) => {
+    const ast = parse(text);
+    const menu = calloutMenu(ast);
+    const shadow = shadowedNames(ast);
+    if (!menu) return { buttons: [], shadow, menuFound: false };
+    const buttons = menu.children
+      .filter((c) => c.type === 'JSXElement' && jsxName(c.openingElement.name) === 'button')
+      .map((b) => {
+        const calls = [];
+        for (const a of b.openingElement.attributes) {
+          if (a.type !== 'JSXAttribute' || jsxName(a.name) !== 'onClick') continue;
+          walk(a.value, (m) => {
+            if (m.type !== 'CallExpression') return;
+            const isTC = (m.callee.type === 'MemberExpression' && m.callee.property.name === 'toggleCallout')
+              || (m.callee.type === 'Identifier' && m.callee.name === 'toggleCallout');
+            if (!isTC) return;
+            const arg = m.arguments[0];
+            calls.push(arg && arg.type === 'Literal' ? arg.value : null);
+          });
+        }
+        const icons = b.children.filter((c) => c.type === 'JSXElement').map((c) => {
+          const name = jsxName(c.openingElement.name);
+          let token = null;
+          for (const a of c.openingElement.attributes) {
+            if (a.type !== 'JSXAttribute' || jsxName(a.name) !== 'style') continue;
+            walk(a.value, (m) => {
+              if (m.type === 'Property' && m.key.type === 'Identifier' && m.key.name === 'color'
+                && m.value.type === 'Literal' && typeof m.value.value === 'string') token = m.value.value;
+            });
+          }
+          return { icon: name, token, shadowed: shadow.has(name) };
+        });
+        return { calls, icons };
+      });
+    return { buttons, shadow, menuFound: true };
+  };
+
+  const wiringFor = (text, kind) => {
+    const { buttons } = menuButtons(text);
+    const hit = buttons.filter((b) => b.calls.length === 1 && b.calls[0] === kind);
+    if (hit.length !== 1 || hit[0].icons.length !== 1) return null;
+    const { icon, token, shadowed } = hit[0].icons[0];
+    return shadowed ? { icon, token, shadowed: true } : { icon, token };
+  };
+
+  it('콜아웃 메뉴의 직접 자식 button이 정확히 4개이고 각 onClick의 toggleCallout이 정확히 1개다', () => {
+    const { buttons, menuFound } = menuButtons(src);
+    expect(menuFound, "openDropdown === 'callout' 메뉴를 못 찾았다").toBe(true);
+    expect(buttons, '메뉴의 직접 자식 button 수').toHaveLength(4);
+    for (const b of buttons) {
+      expect(b.calls, 'onClick의 toggleCallout 호출 수는 1이어야 한다').toHaveLength(1);
+      expect(typeof b.calls[0], 'kind는 문자열 리터럴이어야 한다').toBe('string');
+      expect(b.icons, 'button의 직접 자식 아이콘 수').toHaveLength(1);
+    }
+    expect(buttons.map((b) => b.calls[0]).sort()).toEqual(Object.keys(CALLOUT).sort());
+  });
+
+  it('네 종류가 각각 지정된 아이콘·토큰과 exact로 짝지어져 있다', () => {
+    const actual = {};
+    for (const kind of Object.keys(CALLOUT)) actual[kind] = wiringFor(src, kind);
+    expect(actual).toEqual(CALLOUT);
+  });
+
+  it('(a) 조건식으로 kind를 위장하면 RED다 (toggleCallout 호출이 2개가 된다)', () => {
+    const mutated = src.replace(
+      "onClick={() => { editor.chain().focus().toggleCallout('info').run(); closeDropdown(); }}>",
+      "onClick={() => { false && editor.chain().focus().toggleCallout('info');"
+      + " editor.chain().focus().toggleCallout('error').run(); closeDropdown(); }}>");
+    expect(mutated, '위장 앵커를 못 찾았다').not.toBe(src);
+    const bad = menuButtons(mutated).buttons.filter((b) => b.calls.length !== 1);
+    expect(bad, 'toggleCallout 호출이 2개인 button을 못 잡았다').toHaveLength(1);
+    expect(wiringFor(mutated, 'info'), '위장된 info는 확정되지 않아야 한다').toBeNull();
+  });
+
+  it('(b) 함수 내부 const Info = XCircle 로 가리면 RED다', () => {
+    const anchor = 'export default function CanvasEditorToolbar(';
+    const i = src.indexOf(anchor);
+    const j = src.indexOf('\n', src.indexOf('{', i));
+    const mutated = `${src.slice(0, j + 1)}  const Info = XCircle;\n${src.slice(j + 1)}`;
+    expect(mutated, 'shadow 앵커를 못 찾았다').not.toBe(src);
+    expect(menuButtons(mutated).shadow.has('Info'), 'shadow 선언을 못 봤다').toBe(true);
+    expect(wiringFor(mutated, 'info')).toEqual({ icon: 'Info', token: CALLOUT.info.token, shadowed: true });
+    expect(wiringFor(mutated, 'info')).not.toEqual(CALLOUT.info);
+  });
+
+  it('(c) 죽은 전체 button으로 정상 배선을 위장하면 RED다', () => {
+    const real = `            <button className="CanvasEditorToolbar__DropdownItem"
+              onClick={() => { editor.chain().focus().toggleCallout('info').run(); closeDropdown(); }}>
+              <Info size={14} style={{ color: 'var(--color-status-in-progress)' }} /> Info
+            </button>`;
+    const mutated = src.replace(real, `            {false && (\n${real}\n            )}
+            <button className="CanvasEditorToolbar__DropdownItem"
+              onClick={() => { editor.chain().focus().toggleCallout('info').run(); closeDropdown(); }}>
+              <XCircle size={14} style={{ color: 'var(--color-error)' }} /> Info
+            </button>`);
+    expect(mutated, '위장 앵커를 못 찾았다').not.toBe(src);
+    // 죽은 button은 JSXExpressionContainer 안이라 직접 자식이 아니다 → 메뉴 자식은 여전히 4개,
+    // 그중 info 자리는 실제로 렌더되는 XCircle/error다.
+    expect(menuButtons(mutated).buttons, '직접 자식만 세야 한다').toHaveLength(4);
+    expect(wiringFor(mutated, 'info')).toEqual({ icon: 'XCircle', token: 'var(--color-error)' });
+    expect(wiringFor(mutated, 'info')).not.toEqual(CALLOUT.info);
+  });
+
+  it('토큰을 서로 맞바꾸면 RED다 (Info ↔ Error)', () => {
+    const mutated = src
+      .replace("<Info size={14} style={{ color: 'var(--color-status-in-progress)' }} />",
+               "<Info size={14} style={{ color: 'var(--color-error)' }} />")
+      .replace("<XCircle size={14} style={{ color: 'var(--color-error)' }} />",
+               "<XCircle size={14} style={{ color: 'var(--color-status-in-progress)' }} />");
+    expect(mutated, '맞바꿈 앵커를 못 찾았다').not.toBe(src);
+    expect(wiringFor(mutated, 'info').token).toBe('var(--color-error)');
+    expect(wiringFor(mutated, 'error').token).toBe('var(--color-status-in-progress)');
+  });
+
+  it('style 배선을 지우면 RED다', () => {
+    for (const kind of Object.keys(CALLOUT)) {
+      const { icon, token } = CALLOUT[kind];
+      const mutated = src.replace(` style={{ color: '${token}' }}`, '');
+      expect(mutated, `${kind} style 앵커를 못 찾았다`).not.toBe(src);
+      expect(wiringFor(mutated, kind).token, `${icon}의 style이 사라졌는데 통과했다`).toBeNull();
+    }
+  });
+
+  it('아이콘 컴포넌트를 바꿔도 RED다', () => {
+    const mutated = src.replace("<Info size={14} style={{ color: 'var(--color-status-in-progress)' }} />",
+                                "<Bell size={14} style={{ color: 'var(--color-status-in-progress)' }} />");
+    expect(mutated).not.toBe(src);
+    expect(wiringFor(mutated, 'info').icon).toBe('Bell');
+  });
+
+  const localBindings = (text) => {
+    const out = {};
+    for (const n of parse(text).body) {
+      if (n.type !== 'ImportDeclaration' || n.source.value !== 'lucide-react') continue;
+      for (const s of n.specifiers) if (s.type === 'ImportSpecifier') out[s.local.name] = s.imported.name;
+    }
+    return out;
+  };
+
+  it('아이콘의 local 이름이 lucide의 imported 이름과 같다 (별칭 위장 금지)', () => {
+    const bound = localBindings(src);
+    for (const [kind, { icon }] of Object.entries(CALLOUT)) {
+      expect(bound[icon], `${kind}의 아이콘 ${icon}이 lucide-react에서 import되지 않았다`).toBeTruthy();
+      expect(bound[icon], `${kind}: <${icon}>이 실제로는 ${bound[icon]}을 렌더한다`).toBe(icon);
+    }
+  });
+
+  it('별칭 위장(XCircle as Info)은 RED다', () => {
+    const mutated = src.replace('  Info, AlertTriangle, CheckCircle2, XCircle,',
+                                '  XCircle as Info, AlertTriangle, CheckCircle2, XCircle,');
+    expect(mutated, '별칭 앵커를 못 찾았다').not.toBe(src);
+    expect(localBindings(mutated).Info).toBe('XCircle');
   });
 });

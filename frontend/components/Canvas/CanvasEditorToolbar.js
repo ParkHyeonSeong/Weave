@@ -340,19 +340,19 @@ export default function CanvasEditorToolbar({ editor, rawModeEnabled = false, ra
           <div className="CanvasEditorToolbar__DropdownMenu">
             <button className="CanvasEditorToolbar__DropdownItem"
               onClick={() => { editor.chain().focus().toggleCallout('info').run(); closeDropdown(); }}>
-              <Info size={14} style={{ color: '#2563EB' }} /> Info
+              <Info size={14} style={{ color: 'var(--color-status-in-progress)' }} /> Info
             </button>
             <button className="CanvasEditorToolbar__DropdownItem"
               onClick={() => { editor.chain().focus().toggleCallout('warning').run(); closeDropdown(); }}>
-              <AlertTriangle size={14} style={{ color: '#D97706' }} /> Warning
+              <AlertTriangle size={14} style={{ color: 'var(--color-warning)' }} /> Warning
             </button>
             <button className="CanvasEditorToolbar__DropdownItem"
               onClick={() => { editor.chain().focus().toggleCallout('success').run(); closeDropdown(); }}>
-              <CheckCircle2 size={14} style={{ color: '#16A34A' }} /> Success
+              <CheckCircle2 size={14} style={{ color: 'var(--color-success)' }} /> Success
             </button>
             <button className="CanvasEditorToolbar__DropdownItem"
               onClick={() => { editor.chain().focus().toggleCallout('error').run(); closeDropdown(); }}>
-              <XCircle size={14} style={{ color: '#DC2626' }} /> Error
+              <XCircle size={14} style={{ color: 'var(--color-error)' }} /> Error
             </button>
           </div>
         )}

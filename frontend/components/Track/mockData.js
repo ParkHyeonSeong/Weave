@@ -1,6 +1,7 @@
 // Mock 데이터 - Track 프로토타입용
 // 백엔드 연결 전 UI 시연을 위한 정적 데이터
 
+import { priorityVar, priorityInkVar } from '@/library/themePalette';
 export const TRACK = {
   track_id: 1,
   track_name: 'Q3 결제 출시 준비',
@@ -38,11 +39,18 @@ export const WORKFLOW_STATUSES = {
   blocked: { label: 'Blocked', color: '#DC2626', category: 'in_progress' },
 };
 
+// 우선순위는 사용자가 색을 고르는 축이 아니라 앱이 정한 의미 등급이다 —
+// themePalette.js의 PRIORITY_TOKENS를 단일 원천으로 재사용한다(중복 매핑 금지).
+// ⛔ 여기서 나온 값은 `var(--x)` 토큰 참조다. 알파 접미(`color + '40'`)를 붙이면
+//    `var(--x)40`이 되어 IACVT로 선언이 통째로 무효가 된다 — entityBorderStyle이
+//    토큰 참조를 color-mix로 처리하도록 되어 있으니 그 경로를 그대로 쓴다.
+// `color`는 **테두리·식별용** 우선순위 색, `ink`는 **텍스트용**이다. 둘은 다른 축이다 —
+// high를 같은 값으로 쓰면 흰 Track 카드 위 글자가 3.19:1로 AA 미달이다(themePalette.js 참조).
 export const PRIORITIES = {
-  urgent: { label: 'Urgent', color: '#DC2626' },
-  high: { label: 'High', color: '#F59E0B' },
-  medium: { label: 'Medium', color: '#5E6AD2' },
-  low: { label: 'Low', color: '#9CA3AF' },
+  urgent: { label: 'Urgent', color: priorityVar('urgent'), ink: priorityInkVar('urgent') },
+  high: { label: 'High', color: priorityVar('high'), ink: priorityInkVar('high') },
+  medium: { label: 'Medium', color: priorityVar('medium'), ink: priorityInkVar('medium') },
+  low: { label: 'Low', color: priorityVar('low'), ink: priorityInkVar('low') },
 };
 
 // 캔버스에 이미 떨궈진 item들

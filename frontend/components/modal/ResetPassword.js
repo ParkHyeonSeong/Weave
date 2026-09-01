@@ -78,7 +78,7 @@ export default function ResetPassword({ user, onClose }) {
 
           <div className="ResetPassword__Body">
             <div className="ResetPassword__EmailSent">
-              <Mail size={32} style={{ color: '#5E6AD2', marginBottom: 12 }} />
+              <Mail size={32} style={{ color: 'var(--color-primary)', marginBottom: 12 }} />
               <p className="ResetPassword__Description">
                 A password reset link has been sent to<br />
                 <strong>{user.email}</strong>

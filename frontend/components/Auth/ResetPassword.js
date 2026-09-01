@@ -91,7 +91,7 @@ export default function ResetPassword({ token }) {
       <div className="ChangePassword">
         <div className="ChangePassword__Card">
           <div className="ChangePassword__Header">
-            <CheckCircle2 size={32} style={{ color: '#16A34A', marginBottom: 8 }} />
+            <CheckCircle2 size={32} style={{ color: 'var(--color-success)', marginBottom: 8 }} />
             <h1 className="ChangePassword__Logo">Password Changed</h1>
             <p className="ChangePassword__Subtitle">
               Your password has been updated. Please sign in with your new password.

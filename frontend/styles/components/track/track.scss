@@ -2202,9 +2202,14 @@ $track-border-soft: var(--track-border-soft);
     border-radius: 9px;
     text-transform: capitalize;
 
+    // ⚠️ 텍스트는 **ink 축**이다. 우선순위 색을 그대로 글자에 쓰면 8% 틴트 위에서 AA가 무너진다
+    //    (실측 라이트: urgent 4.27 / medium 4.25, 행 hover·selected에서는 3.8까지 내려간다).
+    //    urgent는 --high와 같이 **불투명 bg**로 바꿔 행 상태가 배경에 새지 않게 하고 ink를 한 단계
+    //    내린다. medium은 틴트를 유지해도 --color-primary-hover 잉크면 최악 4.74로 통과한다.
+    //    themePalette.test.js가 네 우선순위 × 라이트/다크 × 행 3상태를 전부 단정한다.
     &--urgent {
-      background: color-mix(in srgb, var(--color-error) 8%, transparent);
-      color: $color-error;
+      background: $color-error-bg;
+      color: var(--color-error-strong);
     }
     &--high {
       background: $color-warning-bg;
@@ -2212,7 +2217,7 @@ $track-border-soft: var(--track-border-soft);
     }
     &--medium {
       background: color-mix(in srgb, var(--color-primary) 8%, transparent);
-      color: $color-primary;
+      color: var(--color-primary-hover);
     }
     &--low {
       background: color-mix(in srgb, var(--track-ink-soft) 16%, transparent);

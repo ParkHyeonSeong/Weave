@@ -1,13 +1,34 @@
 import { ChevronDown } from 'lucide-react';
 
-// tiles: [{ icon: <Lucide/>, label, value, delta?: {text, tone:'up'|'warn'}, tone?: 'primary'|'inprog'|'error'|'success'|'doc'|'track', bucket?: string }]
+// tiles: [{ icon: <Lucide/>, label, value, delta?: {text, tone:'up'|'warn'},
+//           tone?: 'primary'|'inprog'|'error'|'success'|'doc'|'warn'|'track'|'scrum', bucket?: string }]
+//
+// 톤은 토큰 참조로만 쓴다 — 같은 타일이 라이트/다크를 따라가야 하고, 값을 여기 박아 두면
+// 다크에서 청록·연분홍 파스텔이 그대로 떠 배경과 분리가 깨진다.
+//
+// ⚠️ `track`과 `scrum`을 **가르는 이유**: 이 컴포넌트는 TrackHome과 ScrumHome이 같이 쓰는데,
+//    둘 다 예전에는 tone:'track' 하나(청록 리터럴 한 쌍)를 썼다. 그러면 "활성 트랙"과
+//    "스크럼 보드"가 같은 색이 되어 화면 의미를 못 나눈다. 각 앱의 아이덴티티 축을 따른다 —
+//    Track은 primary(브랜드), Scrum은 accent-scrum(그린).
 const TONE_BG = {
-  primary: 'rgba(94,106,210,.08)', inprog: '#DBEAFE', error: '#FEF2F2',
-  success: '#F0FDF4', doc: '#FFF7ED', warn: '#FFFBEB', track: '#CCFBF1',
+  primary: 'var(--color-primary-subtle)',
+  inprog:  'var(--color-status-in-progress-bg)',
+  error:   'var(--color-error-bg)',
+  success: 'var(--color-success-bg)',
+  doc:     'var(--color-ref-doc-bg)',
+  warn:    'var(--color-warning-bg)',
+  track:   'var(--color-primary-subtle)',        // TrackHome
+  scrum:   'var(--color-accent-scrum-subtle)',   // ScrumHome
 };
 const TONE_FG = {
-  primary: '#5E6AD2', inprog: '#1E40AF', error: '#DC2626',
-  success: '#16A34A', doc: '#C2410C', warn: '#D97706', track: '#0D9488',
+  primary: 'var(--color-primary)',
+  inprog:  'var(--color-status-in-progress)',
+  error:   'var(--color-error)',
+  success: 'var(--color-success)',
+  doc:     'var(--color-ref-doc)',
+  warn:    'var(--color-warning)',
+  track:   'var(--color-primary)',               // TrackHome
+  scrum:   'var(--color-accent-scrum)',          // ScrumHome
 };
 
 export default function StatTiles({ tiles = [], loading = false, onTileClick, activeBucket, renderPopover }) {

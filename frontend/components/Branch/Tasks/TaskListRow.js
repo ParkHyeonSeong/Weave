@@ -82,7 +82,7 @@ export default function TaskListRow({ task, branchId, taskTypes, workflowStatuse
   };
 
   const epicOptions = [
-    { value: '', label: 'None', color: '#9CA3AF' },
+    { value: '', label: 'None', color: 'var(--color-text-secondary)' },
     ...selectableEpics(epics, task.epic_id).map((e) => ({
       value: String(e.epic_id),
       label: e.epic_name,

@@ -68,7 +68,8 @@ export default function TrackItemDetail({ item, branch, workflowStatuses, onClos
   const branchTint = entityTintStyle(branch.color, { from: 8, alpha: '14', surface: 'track-card' });
   const wsTint = entityTintStyle(ws.color, { from: 8, alpha: '14', surface: 'track-card' });
   const wsSolid = entitySolidStyle(ws.color);
-  const prioInk = entityInkStyle(prio.color);
+  // 텍스트는 ink 축, 테두리는 우선순위 색 축 — 같은 값을 쓰면 high가 AA 미달이다.
+  const prioInk = entityInkStyle(prio.ink);
   const prioBd = entityBorderStyle(prio.color, { from: 25, alpha: '40' });
 
   return (

@@ -216,7 +216,7 @@ export default function EpicDetailPanel({ branchId, workflowStatuses = [], epicS
                       key={c}
                       style={{
                         width: 20, height: 20, borderRadius: '50%', backgroundColor: c,
-                        border: epic.color === c ? '2px solid #1C1C1C' : '2px solid transparent',
+                        border: epic.color === c ? '2px solid var(--color-text)' : '2px solid transparent',
                         cursor: 'pointer', transition: 'transform 150ms ease',
                       }}
                       onClick={() => updateField('color', c)}

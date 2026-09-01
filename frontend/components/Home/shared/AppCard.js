@@ -7,7 +7,7 @@ export function AvatarSet({ members = [], max = 4 }) {
   return <AvatarStack users={members} max={max} className="HCard__Avatars" />;
 }
 
-export default function AppCard({ accent = '#5E6AD2', href, onClick, onContextMenu, children }) {
+export default function AppCard({ accent = 'var(--color-primary)', href, onClick, onContextMenu, children }) {
   const inner = (
     <>
       <span className="HCard__Accent" style={{ background: accent }} />

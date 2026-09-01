@@ -22,7 +22,7 @@ export const PRIORITY_TOKENS = {
   urgent: '--color-error',
   high:   '--color-warning',
   // medium은 --color-primary(브랜드색)다. **의미색이 아니다.**
-  // 6개 컴포넌트가 전부 #5E6AD2(=라이트 --color-primary)를 쓰고 있어 현행 유지가 라이트 동치다.
+  // 6개 컴포넌트가 전부 라이트 --color-primary 값을 쓰고 있어 현행 유지가 라이트 동치다.
   // 의미색(예: --color-status-in-progress)으로 바꾸는 것은 별도 결정 사항이며 이 슬라이스 범위 밖.
   medium: '--color-primary',
   low:    '--color-text-tertiary',
@@ -38,6 +38,23 @@ export function statusCategoryVar(category) {
 
 export function priorityVar(priority) {
   return tokenVar(PRIORITY_TOKENS[priority] || FALLBACK_TOKEN);
+}
+
+// 우선순위 색과 **텍스트 ink는 다른 축이다.** 위 PRIORITY_TOKENS는 테두리·식별 표시에 쓰는
+// 우선순위 색이고, 같은 값을 글자에 그대로 쓰면 표면에 따라 대비가 무너진다.
+// 실측: --color-warning을 흰 Track 카드 위 글자로 쓰면 3.19:1로 WCAG AA(4.5) 미달이다.
+// high만 한 단계 어두운 잉크(--color-warning-ink → 5.02:1)로 갈고 나머지는 같다.
+// (값은 여기 적지 않는다 — 이 파일도 색 스윕 대상이라 주석의 hex가 hit이 된다.)
+// ⛔ 이 매핑을 PRIORITY_TOKENS로 되돌리지 마라 — 테두리가 어두워지고 high 텍스트가 다시 미달이 된다.
+export const PRIORITY_INK_TOKENS = {
+  urgent: PRIORITY_TOKENS.urgent,
+  high:   '--color-warning-ink',
+  medium: PRIORITY_TOKENS.medium,
+  low:    PRIORITY_TOKENS.low,
+};
+
+export function priorityInkVar(priority) {
+  return tokenVar(PRIORITY_INK_TOKENS[priority] || FALLBACK_TOKEN);
 }
 
 // workflowStatuses가 **빈 배열일 때만** 쓰는 폴백. 서버가 상태를 내려주면 이건 절대 안 쓰인다.
@@ -58,7 +75,7 @@ export const DEFAULT_STATUS_FALLBACK = [
 //    ②에 '15'를 붙이면 `var(--color-error)15`가 되는데, var()를 포함한 선언은 계산값 시점에
 //    치환된 뒤 문법 검사를 받으므로 이건 **무효 선언**이 된다(IACVT). background-color는 상속되지
 //    않는 속성이라 unset=initial=transparent로 떨어져 **틴트가 통째로 사라진다**
-//    (실측: computed background-color = rgba(0, 0, 0, 0)).
+//    (실측: computed background-color가 완전 투명으로 떨어진다).
 //
 // 그래서 JS는 색을 **가공하지 않고** 커스텀 프로퍼티로 실어 보내기만 하고, 틴트는 SCSS가
 // color-mix로 만든다(레포 관용구 `color-mix(in srgb, <색> N%, transparent)`).

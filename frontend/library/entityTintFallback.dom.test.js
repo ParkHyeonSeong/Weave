@@ -5,6 +5,8 @@ import { createRoot } from 'react-dom/client';
 import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { Parser as AcornParser } from 'acorn';   // devDep — 추가 설치 없음
+import acornJsx from 'acorn-jsx';
 import TaskRefCard from '@/components/Messenger/TaskRefCard';
 import { applyFallbackBadges } from '@/library/refHydration';
 import TaskRefNode from '@/components/Canvas/extensions/TaskRefExtension';
@@ -104,7 +106,9 @@ describe('Task 3 Step 5 — 각 호출부가 자기 접미를 넘기고 클래�
       ['LabelTagInput__Chip', 'LabelTagInput__ChipRemove']],
     ['components/Track/Detail/TrackItemDetail.js',
       ["entityTintStyle(branch.color, { from: 8, alpha: '14', surface: 'track-card' })", "entityTintStyle(ws.color, { from: 8, alpha: '14', surface: 'track-card' })",
-       'entitySolidStyle(ws.color)', 'entityInkStyle(prio.color)', "entityBorderStyle(prio.color, { from: 25, alpha: '40' })"],
+       // ⚠️ 우선순위는 **ink와 테두리가 다른 축**이다(S9). 텍스트는 prio.ink(=--color-warning-ink 계열),
+       //    테두리는 prio.color(우선순위 색). 같은 값으로 되돌리면 high 텍스트가 흰 카드에서 AA 미달이 된다.
+       'entitySolidStyle(ws.color)', 'entityInkStyle(prio.ink)', "entityBorderStyle(prio.color, { from: 25, alpha: '40' })"],
       ['TrackDetail__BranchPill', 'TrackDetail__StatusPill', 'TrackDetail__StatusDot', 'TrackDetail__PrioPill']],
     // ⚠️ TrackHeader 배경은 단색이 아니라 --track-paper → --track-paper-raised 세로 그라데이션이다.
     //    종전 계약은 위쪽 끝만 보고 default를 승인했는데, 아래쪽 끝(다크 최악)에서 31색 중 17색이
@@ -351,5 +355,116 @@ describe('미하이드레이션 배지 폴백 규칙이 다크 스코프에 있�
     // 하이드레이션이 EntityTint를 붙인 Task ref는 제외된다(자기 저장색을 그대로 쓴다).
     at('task-ref').classList.add('EntityTint');
     expect(at('task-ref').matches(SEL)).toBe(false);
+  });
+});
+
+
+// ── TrackItemDetail 우선순위 배선 — AST로 실제 사용처까지 결속한다 ─────────────
+// ⛔ 소스 문자열 toContain으로는 증명되지 않는다(주석에 정답을 남기면 통과).
+// ⛔ helper **호출만** 봐도 부족하다 — 호출을 그대로 두고 JSX style만 `color: prio.color`로
+//    바꾸면 화면은 되돌아가는데 호출 단정은 초록이다(실측). 선언 이름 → JSX 사용처까지 건다.
+describe('TrackItemDetail — 우선순위 ink/테두리 축 분리 (AST 결속)', () => {
+  const HERE = dirname(fileURLToPath(import.meta.url));
+  const FILE = 'components/Track/Detail/TrackItemDetail.js';
+  const src = readFileSync(resolve(HERE, '..', FILE), 'utf8');
+  const parse = (text) => AcornParser.extend(acornJsx())
+    .parse(text, { ecmaVersion: 'latest', sourceType: 'module' });
+  const walk = (n, fn) => {
+    if (!n || typeof n.type !== 'string') return;
+    fn(n);
+    for (const k of Object.keys(n)) {
+      if (k === 'type' || k === 'start' || k === 'end' || k === 'loc') continue;
+      const v = n[k];
+      if (Array.isArray(v)) v.forEach((c) => c && typeof c.type === 'string' && walk(c, fn));
+      else if (v && typeof v.type === 'string') walk(v, fn);
+    }
+  };
+  const jsxName = (n) => (n && n.type === 'JSXIdentifier' ? n.name : null);
+
+  // `const <name> = entityXStyle(prio.<prop>, {…})` 선언을 이름까지 묶어 모은다.
+  const prioDecls = (text) => {
+    const out = {};
+    walk(parse(text), (n) => {
+      if (n.type !== 'VariableDeclarator' || n.id.type !== 'Identifier') return;
+      const init = n.init;
+      if (!init || init.type !== 'CallExpression' || init.callee.type !== 'Identifier') return;
+      if (!/^entity(Ink|Border|Tint|Solid)Style$/.test(init.callee.name)) return;
+      const a0 = init.arguments[0];
+      if (!a0 || a0.type !== 'MemberExpression' || a0.object.type !== 'Identifier'
+        || a0.object.name !== 'prio' || a0.property.type !== 'Identifier') return;
+      const opts = init.arguments[1];
+      out[n.id.name] = {
+        fn: init.callee.name,
+        arg: `prio.${a0.property.name}`,
+        opts: opts && opts.type === 'ObjectExpression'
+          ? opts.properties.map((pr) => `${pr.key.name ?? pr.key.value}:${pr.value.raw ?? pr.value.value}`).sort()
+          : null,
+      };
+    });
+    return out;
+  };
+
+  // TrackDetail__PrioPill 엘리먼트의 className 조건과 style 스프레드를 읽는다.
+  const prioPill = (text) => {
+    let found = null;
+    walk(parse(text), (n) => {
+      if (n.type !== 'JSXElement') return;
+      const attrs = n.openingElement.attributes.filter((a) => a.type === 'JSXAttribute');
+      const cls = attrs.find((a) => jsxName(a.name) === 'className');
+      if (!cls || !cls.value) return;
+      let raw = '';
+      walk(cls.value, (m) => { if (m.type === 'TemplateElement') raw += m.value.cooked; });
+      if (!raw.includes('TrackDetail__PrioPill')) return;
+      // className 조건이 참조하는 식별자
+      const condIds = [];
+      walk(cls.value, (m) => {
+        if (m.type === 'MemberExpression' && m.object.type === 'Identifier'
+          && m.property.type === 'Literal') condIds.push(`${m.object.name}[${m.property.raw}]`);
+      });
+      const style = attrs.find((a) => jsxName(a.name) === 'style');
+      let spreads = null;
+      if (style && style.value && style.value.type === 'JSXExpressionContainer'
+        && style.value.expression.type === 'ObjectExpression') {
+        spreads = style.value.expression.properties.map((pr) => (pr.type === 'SpreadElement'
+          && pr.argument.type === 'Identifier' ? `...${pr.argument.name}`
+          : `NON_SPREAD:${pr.key ? (pr.key.name ?? pr.key.value) : pr.type}`));
+      }
+      found = { condIds, spreads };
+    });
+    return found;
+  };
+
+  it('선언 이름까지 결속된다 — prioInk는 prio.ink, prioBd는 prio.color', () => {
+    expect(prioDecls(src)).toEqual({
+      prioInk: { fn: 'entityInkStyle',    arg: 'prio.ink',   opts: null },
+      prioBd:  { fn: 'entityBorderStyle', arg: 'prio.color', opts: ["alpha:'40'", 'from:25'] },
+    });
+  });
+
+  it('PrioPill이 prioInk의 --et-on으로 클래스를 켜고 style은 정확히 두 스프레드다', () => {
+    const pill = prioPill(src);
+    expect(pill, 'TrackDetail__PrioPill 엘리먼트를 못 찾았다').toBeTruthy();
+    expect(pill.condIds, "className 조건이 prioInk의 --et-on이어야 한다").toEqual(["prioInk['--et-on']"]);
+    expect(pill.spreads, 'style은 ...prioInk, ...prioBd 두 스프레드뿐이어야 한다')
+      .toEqual(['...prioInk', '...prioBd']);
+  });
+
+  it('주석에 정답을 남기고 실제 호출만 prio.color로 되돌리면 RED다', () => {
+    const mutated = src.replace('  const prioInk = entityInkStyle(prio.ink);',
+      '  // const prioInk = entityInkStyle(prio.ink);\n  const prioInk = entityInkStyle(prio.color);');
+    expect(mutated, '되돌림 앵커를 못 찾았다').not.toBe(src);
+    expect(mutated).toContain('entityInkStyle(prio.ink)');          // substring은 그대로 남는다
+    expect(prioDecls(mutated).prioInk.arg, 'AST는 실제 선언만 본다').toBe('prio.color');
+  });
+
+  it('helper는 그대로 두고 JSX style만 prio.color로 바꿔도 RED다', () => {
+    const mutated = src.replace('          style={{ ...prioInk, ...prioBd }}',
+                                '          style={{ color: prio.color, ...prioBd }}');
+    expect(mutated, 'style 앵커를 못 찾았다').not.toBe(src);
+    // 호출 단정은 그대로 통과한다 — 그래서 사용처를 따로 걸어야 한다.
+    expect(prioDecls(mutated)).toEqual(prioDecls(src));
+    expect(prioPill(mutated).spreads, 'style 스프레드가 깨진 것을 못 잡았다')
+      .toEqual(['NON_SPREAD:color', '...prioBd']);
+    expect(prioPill(mutated).spreads).not.toEqual(prioPill(src).spreads);
   });
 });

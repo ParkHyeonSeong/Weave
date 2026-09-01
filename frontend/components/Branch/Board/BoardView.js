@@ -307,7 +307,7 @@ export default function BoardView({ branchId, branchKey, taskTypes, workflowStat
     }));
   }, [swimlaneMode, columns, filterCtx, groupBy, multiSort, groupLabelFor]);
 
-  if (loading) return <div className="BoardView" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200, color: '#6B7280', fontSize: 14 }}>Loading...</div>;
+  if (loading) return <div className="BoardView" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200, color: 'var(--color-text-secondary)', fontSize: 14 }}>Loading...</div>;
 
   // active sprint 없는 경우
   if (activeSprints.length === 0) {

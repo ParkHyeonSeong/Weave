@@ -132,7 +132,7 @@ export default function ScrumHome() {
       <StatTiles
         loading={loading}
         tiles={[
-          { icon: <CalendarCheck size={16} />, label: '스크럼 보드', value: boards.length, tone: 'track' },
+          { icon: <CalendarCheck size={16} />, label: '스크럼 보드', value: boards.length, tone: 'scrum' },
           { icon: <Users size={16} />, label: '총 멤버', value: memberTotal, tone: 'primary' },
         ]}
       />

@@ -80,7 +80,7 @@ export default function StatDrilldownPopover({ bucket, onClose, onOpenTask, onOp
 
       {state.status === 'loading' && (
         <>{[0, 1, 2].map((i) => (
-          <div className="StatDrill__Sk" key={i}><span className="StatDrill__Dot" style={{ background: '#E7EBF2' }} /><span className="sk" /></div>
+          <div className="StatDrill__Sk" key={i}><span className="StatDrill__Dot" style={{ background: 'var(--color-border)' }} /><span className="sk" /></div>
         ))}</>
       )}
 

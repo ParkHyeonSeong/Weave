@@ -873,7 +873,7 @@ export default function TaskList({ branchId, branchKey, taskTypes, workflowStatu
     return groupTasks(sorted, groupBy).map((b) => ({ ...b, label: groupLabelFor(b.key) }));
   }, [grouping, sprints, backlogTasks, isFilterActive, filterCtx, multiSort, groupBy, groupLabelFor]);
 
-  if (loading) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200, color: '#6B7280', fontSize: 14 }}>Loading...</div>;
+  if (loading) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200, color: 'var(--color-text-secondary)', fontSize: 14 }}>Loading...</div>;
 
   const sprintIds = sprints.map((s) => `sprint-${s.sprint_id}`);
 

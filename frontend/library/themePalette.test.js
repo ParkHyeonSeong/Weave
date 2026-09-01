@@ -6,11 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { compile } from 'sass';
 import postcss from 'postcss';
 import TaskFilterBar from '@/components/Branch/TaskFilterBar';
-import {
-  STATUS_CATEGORY_TOKENS, PRIORITY_TOKENS, DEFAULT_STATUS_FALLBACK,
-  tokenVar, statusCategoryVar, priorityVar, FALLBACK_TOKEN,
-  CHIP_COLOR_VAR, CHIP_TINT_PERCENT, chipTintStyle,
-} from './themePalette.js';
+import { STATUS_CATEGORY_TOKENS, PRIORITY_TOKENS, DEFAULT_STATUS_FALLBACK, tokenVar, statusCategoryVar, priorityVar, FALLBACK_TOKEN, CHIP_COLOR_VAR, CHIP_TINT_PERCENT, chipTintStyle, PRIORITY_INK_TOKENS, priorityInkVar } from './themePalette.js';
 import { entityBorderStyle, entityTintStyle } from './entityTint.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -122,8 +118,10 @@ describe('themePalette 소비 — 우선순위 옵션 배열에 hex가 남아 �
   ];
 
   // ⚠️ 스코프는 **우선순위 옵션 배열 블록**뿐이다. 파일 전역이 아니다.
-  //    이 6파일에는 사용자/서버 저장색 폴백(에픽 색·타입 색 `?? '#5E6AD2'`, 에픽 'None' 옵션
-  //    '#9CA3AF')이 남는다. 그것들은 **S7 소유**이고 이 슬라이스가 손대지 않는다.
+  //    이 6파일에는 사용자/서버 **저장색 폴백**(에픽 색·타입 색의 `?? 기본값`)이 남는다.
+  //    그것들은 S7 stored-color 후속 소유이고 이 슬라이스가 손대지 않는다.
+  //    ⚠️ 정정(S9 Task 7): 에픽 'None' 옵션은 저장색 폴백이 **아니라** "에픽 없음"을 뜻하는
+  //    앱 중립색이라 S9가 --color-text-secondary로 이행했다. 더 이상 S7 소유가 아니다.
   //    파일 전역 hex를 금지하면 S7 이전까지 영구 RED가 되어 회귀 감시가 아니라 방해가 된다.
   //
   // 블록 경계 = `value: 'urgent'` 줄 ~ `value: 'low'` 줄(양끝 포함).
@@ -508,5 +506,170 @@ describe('칩 틴트 SCSS 계약 — 0x15 알파를 color-mix로 보존한다', 
     // base는 `border: 1px solid var(--color-border)` 축약이라 순서가 뒤집히면 테두리 색이 죽는다.
     expect(ruleOf('.TaskFilterBar__ActiveChip').source.start.offset)
       .toBeLessThan(ruleOf('.TaskFilterBar__ActiveChip--tinted').source.start.offset);
+  });
+});
+
+// ── Track 우선순위: 테두리색과 텍스트 ink를 분리한다 (S9 pre-commit correction) ──
+// 우선순위 색(--color-*)은 **테두리·식별용**이고, 같은 값을 텍스트에 그대로 쓰면 카드 표면에서
+// 대비가 무너진다. 실측: --color-warning(#D97706)을 흰 카드 위 글자로 쓰면 3.19:1로 AA 미달이다.
+// 그래서 ink는 별도 매핑(--color-warning-ink)을 쓰고, 테두리는 원래 우선순위 색을 유지한다.
+describe('우선순위 ink는 Track 카드 표면에서 AA를 넘는다', () => {
+  const lin = (c) => { const v = c / 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+  const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const relLum = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  // ⚠️ TrackTree helper와 규율을 통일한다 — 색 파싱이 조용히 NaN이면 비교가 false라 통과하고,
+  //    반올림 뒤에 비교하면 4.4951이 4.5로 올라가 미달이 통과한다.
+  const hexFinite = (v) => {
+    const a = hex(v);
+    expect(a.every(Number.isFinite), `색을 파싱하지 못했다: ${v}`).toBe(true);
+    return a;
+  };
+  const rawRatio = (a, b) => {
+    const [l1, l2] = [relLum(hexFinite(a)), relLum(hexFinite(b))];
+    return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+  };
+  const ratio = (a, b) => Math.round(rawRatio(a, b) * 100) / 100;
+  // ⚠️ 값을 손으로 적지 않는다 — _themes.scss를 컴파일해 읽는다. 스냅샷을 박아 두면 팔레트가
+  //    바뀌어도 테스트가 옛 값으로 초록을 유지한다(드리프트 무감지).
+  const THEMES = { light: {}, dark: {} };
+  postcss.parse(compile(resolve(here, '..', 'styles/_themes.scss')).css).walkRules((rule) => {
+    const dark = /\[data-theme=['"]?dark['"]?\]/.test(rule.selector);
+    rule.walkDecls((d) => { if (d.prop.startsWith('--')) THEMES[dark ? 'dark' : 'light'][d.prop] = d.value.trim(); });
+  });
+  // 배지가 실제로 놓이는 표면 = --track-card (TrackDetail 패널의 PrioPill)
+  const CARD = { light: THEMES.light['--track-card'], dark: THEMES.dark['--track-card'] };
+
+  it('ink 매핑이 우선순위 색 매핑과 별개다 (high만 갈린다)', () => {
+    expect(Object.keys(PRIORITY_INK_TOKENS).sort()).toEqual(Object.keys(PRIORITY_TOKENS).sort());
+    expect(PRIORITY_INK_TOKENS.high, 'high 텍스트는 --color-warning-ink를 쓴다').toBe('--color-warning-ink');
+    expect(PRIORITY_INK_TOKENS.high).not.toBe(PRIORITY_TOKENS.high);
+    for (const k of ['urgent', 'medium', 'low'])
+      expect(PRIORITY_INK_TOKENS[k], `${k}는 우선순위 색을 그대로 쓴다`).toBe(PRIORITY_TOKENS[k]);
+  });
+
+  it('네 우선순위 텍스트가 라이트·다크 모두 4.5 이상이다', () => {
+    const bad = [];
+    for (const [prio, tok] of Object.entries(PRIORITY_INK_TOKENS)) {
+      for (const theme of ['light', 'dark']) {
+        const ink = THEMES[theme][tok];
+        expect(ink, `${tok}이 ${theme} 팔레트에 없다`).toBeTruthy();
+        const raw = rawRatio(ink, CARD[theme]);            // 반올림 전에 비교한다
+        if (raw < 4.5) bad.push(`${prio}/${theme}: ${tok} ${ink} on ${CARD[theme]} = ${Math.round(raw * 1000) / 1000}`);
+      }
+    }
+    expect(bad, `Track 카드 표면에서 AA 미달:\n${bad.join('\n')}`).toEqual([]);
+  });
+
+  it('테두리는 우선순위 색을 유지한다 (ink로 갈아끼우지 않는다)', () => {
+    expect(priorityVar('high')).toBe('var(--color-warning)');
+    expect(priorityInkVar('high')).toBe('var(--color-warning-ink)');
+  });
+
+  // ⚠️ Track의 우선순위 텍스트 표면은 **둘**이다: TrackDetail 패널의 PrioPill(위 단정)과
+  //    TrackTree의 Priority 컬럼(track.scss). 후자는 토큰 매핑을 쓰지 않고 SCSS가 직접 색을 칠한다.
+  //
+  // ⛔ 원시 track.scss를 정규식으로 읽지 마라. 주석에 정답 선언을 남기고 실제 선언을 되돌리면
+  //    `indexOf('&--urgent {')`가 **주석을 먼저** 집어 위장이 통과한다(실측: 저대비 복귀가 초록).
+  //    Sass로 컴파일하면 주석은 사라지고 실제로 캐스케이드에 나가는 선언만 남는다.
+  // ⛔ prop별로 **마지막 값만** 접지 마라. 잘못된 `color: … !important`를 앞에 두고 정답 선언을
+  //    뒤에 두면 마지막 값만 보는 수집기는 통과하지만 실제 캐스케이드는 !important가 이긴다(실측).
+  //    선언을 전부 배열로 모으고 개수·important까지 단정한다.
+  const trackRules = (() => {
+    const css = compile(resolve(here, '..', 'styles/components/track/track.scss')).css;
+    const byMod = {};
+    postcss.parse(css).walkRules((rule) => {
+      for (const sel of rule.selectors) {
+        const m = sel.match(/\.TrackTree__Priority--(urgent|high|medium|low)$/);
+        if (!m) continue;
+        const bag = (byMod[m[1]] ||= { rules: 0, decls: [] });
+        bag.rules += 1;
+        rule.walkDecls((d) => bag.decls.push({
+          prop: d.prop, value: d.value.trim(), important: Boolean(d.important),
+        }));
+      }
+    });
+    return byMod;
+  })();
+  const BG_PROPS = new Set(['background', 'background-color', 'background-image']);
+  const onlyDecl = (mod, pred, label) => {
+    const hits = trackRules[mod].decls.filter(pred);
+    expect(hits, `${mod}: ${label} 선언은 정확히 1개여야 한다`).toHaveLength(1);
+    expect(hits[0].important, `${mod}: ${label}에 !important가 붙었다`).toBe(false);
+    return hits[0].value;
+  };
+
+  it('TrackTree Priority의 실제 컴파일된 선언이 개수·important까지 exact다', () => {
+    const EXPECT = {
+      urgent: { bg: 'var(--color-error-bg)',                                       ink: 'var(--color-error-strong)' },
+      high:   { bg: 'var(--color-warning-bg)',                                     ink: 'var(--color-warning-ink)' },
+      medium: { bg: 'color-mix(in srgb, var(--color-primary) 8%, transparent)',    ink: 'var(--color-primary-hover)' },
+      low:    { bg: 'color-mix(in srgb, var(--track-ink-soft) 16%, transparent)',  ink: 'var(--track-ink-soft)' },
+    };
+    expect(Object.keys(trackRules).sort()).toEqual(Object.keys(EXPECT).sort());
+    for (const [mod, want] of Object.entries(EXPECT)) {
+      // 규칙 수까지 건다 — 뒤에 오버라이드 규칙이 붙으면 앞 선언만 보고 통과할 수 있다.
+      expect(trackRules[mod].rules, `${mod} 규칙 수`).toBe(1);
+      expect(onlyDecl(mod, (d) => BG_PROPS.has(d.prop), 'background 계열')).toBe(want.bg);
+      expect(onlyDecl(mod, (d) => d.prop === 'color', 'color')).toBe(want.ink);
+      expect(trackRules[mod].decls.some((d) => d.important), `${mod}에 !important 선언이 있다`).toBe(false);
+    }
+  });
+
+  it('잘못된 !important 선언을 앞에 두면 RED다', () => {
+    // 컴파일 결과를 흉내내지 않고, 수집기가 무엇을 보는지 직접 건다.
+    const poisoned = [
+      { prop: 'color', value: 'var(--color-primary)', important: true },
+      { prop: 'background', value: 'var(--color-error-bg)', important: false },
+      { prop: 'color', value: 'var(--color-error-strong)', important: false },
+    ];
+    const hits = poisoned.filter((d) => d.prop === 'color');
+    expect(hits, 'color 선언이 2개면 계약 위반이다').toHaveLength(2);
+    expect(hits.some((d) => d.important), '!important를 못 봤다').toBe(true);
+  });
+
+  it('TrackTree Priority 컬럼이 네 우선순위 × 양 테마 × 행 3상태에서 4.5 이상이다', () => {
+    const px = (v) => {
+      const a = String(v).startsWith('#')
+        ? [1, 3, 5].map((i) => parseInt(String(v).slice(i, i + 2), 16))
+        : String(v).match(/[\d.]+/g).slice(0, 3).map(Number);
+      // ⚠️ 색 파싱이 조용히 NaN이 되면 대비가 NaN이 되고 `< 4.5` 비교가 false라 통과한다.
+      expect(a.every(Number.isFinite), `색을 파싱하지 못했다: ${v}`).toBe(true);
+      return a;
+    };
+    const mix = (fg, pct, bg) => px(fg).map((c, i) => c * (pct / 100) + px(bg)[i] * (1 - pct / 100));
+    const lin = (c) => { const v = c / 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+    const RL = (a) => 0.2126 * lin(a[0]) + 0.7152 * lin(a[1]) + 0.0722 * lin(a[2]);
+    const rawRatio = (a, b) => (Math.max(RL(px(a)), RL(px(b))) + 0.05) / (Math.min(RL(px(a)), RL(px(b))) + 0.05);
+    const tokenOf = (expr, M) => {
+      const v = String(expr).match(/var\((--[a-z0-9-]+)\)/i);
+      expect(v, `토큰 참조가 아니다: ${expr}`).toBeTruthy();
+      const val = M[v[1]];
+      expect(val, `${v[1]}이 팔레트에 없다`).toBeTruthy();
+      return val;
+    };
+    const bad = [];
+    const declOf = (mod) => ({
+      background: trackRules[mod].decls.filter((d) => BG_PROPS.has(d.prop)).slice(-1)[0].value,
+      color: trackRules[mod].decls.filter((d) => d.prop === 'color').slice(-1)[0].value,
+    });
+    for (const mod of Object.keys(trackRules)) {
+      const decl = declOf(mod);
+      for (const theme of ['light', 'dark']) {
+        const M = THEMES[theme];
+        const rows = {
+          base: px(M['--track-card']),
+          hover: mix(M['--color-primary'], 2.5, M['--track-paper']),
+          selected: mix(M['--color-primary'], 6, M['--track-paper']),
+        };
+        const pct = (decl.background.match(/(\d+(?:\.\d+)?)%/) || [])[1];   // color-mix면 행이 비친다
+        for (const [state, rowBg] of Object.entries(rows)) {
+          const surface = pct ? mix(tokenOf(decl.background, M), Number(pct), rowBg) : px(tokenOf(decl.background, M));
+          // ⚠️ **반올림 전에** 비교한다. 4.4951을 4.5로 반올림해 통과시키지 않는다.
+          const raw = rawRatio(tokenOf(decl.color, M), surface);
+          if (raw < 4.5) bad.push(`${mod}/${theme}/${state} = ${Math.round(raw * 1000) / 1000}`);
+        }
+      }
+    }
+    expect(bad, `TrackTree Priority 컬럼 AA 미달:\n${bad.join('\n')}`).toEqual([]);
   });
 });

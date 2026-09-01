@@ -122,10 +122,25 @@ export function entityInkStyle(color) {
   };
 }
 
+// 토큰 참조(`var(--x)`)는 저장색과 같은 인자 자리로 들어오지만 **문자열 가공을 하면 안 된다**.
+// `var(--color-error)` + '40' = `var(--color-error)40`은 치환 뒤 문법 검사에서 무효가 되고
+// (IACVT) 선언이 통째로 버려져 테두리가 사라진다 — themePalette.js의 같은 경고와 한 축이다.
+const isTokenRef = (v) => typeof v === 'string' && /^var\(\s*--/.test(v.trim());
+
 export function entityBorderStyle(color, { from, alpha } = {}) {
   if (isBlank(color)) return undefined;
   const c = normalizeStoredColor(color);
-  if (!c) return { borderColor: alpha ? `${color}${alpha}` : color };
+  if (!c) {
+    if (isTokenRef(color)) {
+      // 사다리 위치가 지정된 자리만 비율을 만든다. color-mix는 계산 시점에 토큰을 읽으므로
+      // 라이트/다크가 자동으로 따라온다(레포 관용구 `color-mix(in srgb, <색> N%, transparent)`).
+      const pct = LEGACY_ALPHA_ENTRY[alpha] ?? (from == null ? null : Number(from));
+      return Number.isFinite(pct)
+        ? { borderColor: `color-mix(in srgb, ${color} ${pct}%, transparent)` }
+        : { borderColor: color };
+    }
+    return { borderColor: alpha ? `${color}${alpha}` : color };
+  }
   // 판정은 truthiness가 아니라 **생략 여부**다 — `from: 0`은 사다리 최하단을 요구한 것이지
   // "원색 테두리"가 아니다. truthiness로 재면 0이 조용히 bare 경로로 접힌다.
   const bare = from == null;

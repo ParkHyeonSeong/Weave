@@ -27,7 +27,7 @@ import NavLink from '@/components/common/NavLink';
 import { taskDeleteMessage } from '@/library/taskDeleteMessage';
 import { buildTaskDescriptionExtensions } from './taskDescriptionExtensions';
 import { copyAsMarkdown } from '@/library/copyMarkdown';
-import { priorityVar } from '@/library/themePalette';
+import { priorityVar, DEFAULT_STATUS_FALLBACK } from '@/library/themePalette';
 
 const PRIORITY_OPTIONS = [
   { value: 'urgent', label: 'Urgent', color: priorityVar('urgent') },
@@ -196,13 +196,7 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
               value={task.status}
               options={workflowStatuses.length > 0
                 ? workflowStatuses.map((ws) => ({ value: ws.key, label: ws.label, color: ws.color }))
-                : [
-                  { value: 'todo', label: 'To Do', color: '#9CA3AF' },
-                  { value: 'in_progress', label: 'In Progress', color: '#2563EB' },
-                  { value: 'done', label: 'Done', color: '#16A34A' },
-                  { value: 'cancelled', label: 'Cancelled', color: '#DC2626' },
-                ]
-              }
+                : DEFAULT_STATUS_FALLBACK}
               onChange={(val) => updateField('status', val)}
             />
           </div>
