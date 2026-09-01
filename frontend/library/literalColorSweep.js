@@ -22,7 +22,7 @@ import postcss from 'postcss';
 import { JSDOM } from 'jsdom';
 import { Parser as AcornParser } from 'acorn';   // devDep ^8.18.0 — 추가 설치 없음
 import acornJsx from 'acorn-jsx';                // devDep ^5.3.2 — 추가 설치 없음
-import { COLOR_EXCEPTIONS } from './colorExceptions.js';
+import { COLOR_EXCEPTIONS, THIRD_PARTY_OWNED, PRIOR_SLICE_DEFERRED } from './colorExceptions.js';
 import { COLOR_CLASSIFIED } from './colorClassified.js';
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -506,9 +506,42 @@ export function hitsFor(relPath, text) {
 }
 
 // ── 스윕 대상 ─────────────────────────────────────────────────────────────────
-export const SWEEP_ROOTS = ['styles', 'components', 'pages', 'library', 'public'];
+// 런타임에 실제로 번들되는 디렉터리를 전부 센다. hooks/·lib/이 빠져 있으면 그 아래에서
+// 색 리터럴이 생기거나 스윕 모듈을 import해도 게이트가 침묵한다(실측: 런타임 9파일 누락).
+export const SWEEP_ROOTS = ['styles', 'components', 'pages', 'library', 'public', 'hooks', 'lib'];
+
+// Next가 인식하는 **루트 직속 런타임 진입점**. 디렉터리가 아니라 파일이라 SWEEP_ROOTS와 축이
+// 다르다(SWEEP_ROOTS는 `${root}/` 접두로 단정되므로 여기 섞으면 그 단정이 깨진다).
+// middleware만 보면 같은 코드를 proxy·instrumentation으로 옮겨 담는 순간 게이트가 침묵한다.
+export const ROOT_RUNTIME_ENTRYPOINTS = ['middleware', 'proxy', 'instrumentation', 'instrumentation-client'];
+// Next는 이 진입점들을 프로젝트 루트뿐 아니라 `src/` 아래에서도 인식한다. 루트만 보면
+// src/ 레이아웃으로 옮기는 순간 게이트가 침묵한다(실측 반례: src/proxy.js는 SWEEP_ROOTS에
+// 없어 열거되지 않았다).
+export const ROOT_RUNTIME_LOCATIONS = ['', 'src/'];
+const SUPPORTED_ENTRY_EXT = ['.js', '.jsx'];
+// ⚠️ 이 스캐너는 TS를 파싱하지 못한다(acorn + acorn-jsx만 쓴다). .ts/.tsx 진입점이 생기면
+//    조용히 건너뛰지 말고 **목록으로 드러낸다** — 조용한 제외는 "감시 중"이라는 주장을
+//    거짓으로 만든다. literalColorSweep.test.js가 이 목록이 비어 있음을 단정해 fail-closed 한다.
+const UNSUPPORTED_ENTRY_EXT = ['.ts', '.tsx'];
+const existsRel = (rel) => { try { readFileSync(resolve(ROOT, rel)); return true; } catch { return false; } };
+const entryPaths = (exts) => ROOT_RUNTIME_LOCATIONS.flatMap((loc) =>
+  ROOT_RUNTIME_ENTRYPOINTS.flatMap((base) => exts.map((ext) => `${loc}${base}${ext}`)));
+
+/** 파싱 가능한 진입점 후보 전 조합(위치 × 이름 × 확장자). 파일 존재와 무관하다. */
+export const rootRuntimeCandidates = () => entryPaths(SUPPORTED_ENTRY_EXT);
+
+/** 존재하지만 이 스캐너가 파싱하지 못하는 진입점. 비어 있지 않으면 테스트가 fail-closed 한다. */
+export function unsupportedRootEntrypoints({ exists = existsRel } = {}) {
+  return entryPaths(UNSUPPORTED_ENTRY_EXT).filter(exists);
+}
+const rootRuntimeFiles = () => rootRuntimeCandidates().filter(existsRel);
 const EXT_RE = /\.(scss|css|js|jsx|html|svg|json)$/;
-const SKIP_RE = /(?:\.test\.js$|\.test\.jsx$|__fixtures__\/|__snapshots__\/|^public\/fonts\/|^public\/wasm\/|^public\/assets\/)/;
+// ⚠️ tiptapCanonical.baseline.json은 **테스트 산출물**이다(소비처: tiptapStoredColor.dom.test.js
+//    단 1곳). 구성상 저장 HTML의 색 문자열로만 이뤄져 있어 스윕하면 픽스처 내용만큼 자기참조
+//    hit이 생긴다(실측 64). STRUCTURAL_EXCLUSIONS(정의처·정본 자신, 길이 3 고정)와는 축이
+//    다르므로 여기서 **exact 경로 하나만** 뺀다 — `*.baseline.json` 같은 광역 패턴은 앞으로
+//    생길 다른 baseline의 진짜 색까지 통째로 가리므로 쓰지 않는다.
+const SKIP_RE = /(?:\.test\.js$|\.test\.jsx$|__fixtures__\/|__snapshots__\/|^public\/fonts\/|^public\/wasm\/|^public\/assets\/|^library\/tiptapCanonical\.baseline\.json$)/;
 
 // 튜플 등록이 자기모순이거나 자기참조인 파일만 **파일 단위로** 제외한다.
 // 테스트가 길이를 3으로 고정하므로 네 번째 항목은 테스트를 고의로 고쳐야 들어온다.
@@ -528,6 +561,42 @@ export const STRUCTURAL_EXCLUSIONS = [
 ];
 const EXCLUDED = new Set(STRUCTURAL_EXCLUSIONS.map((e) => e.file));
 
+// ── S8 인계: 서드파티 소유 파일 제외 (STRUCTURAL_EXCLUSIONS와 **다른 축**) ──────────
+// S8이 `colorExceptions.js`에 `THIRD_PARTY_OWNED` 5항목을 등록했다. 그 중 **경로 기준
+// 두 종류만** 스윕 대상에서 뺀다 — `styles/vendor/` 아래와 `node_modules/` 아래.
+// 근거(실측): `styles/vendor/highlight-themes.scss`는 `meta.load-css`로 highlight.js의
+// github/github-dark CSS를 컴파일 타임에 인라인하므로, 컴파일 산출 CSS에 라이브러리 팔레트
+// **36개 리터럴**이 그대로 나타난다(github/github-dark 팔레트 hex). 이것들은 우리 소스에 한
+// 글자도 없고 라이브러리 패치 버전마다 바뀌므로, 튜플로 등록하면 업그레이드마다 게이트가
+// 깨진다 — 그 깨짐은 "우리 코드에 리터럴이 생겼다"는 신호가 아니라 소음이다.
+//
+// ⚠️ 나머지 3항목(`library/editorTheme.js`·`components/Canvas/extensions/mermaidConfig.js`·
+//    `components/common/IconPicker.js`)은 **문서 기록 전용이며 스윕 대상에 그대로 남는다.**
+//    지금 리터럴이 0건이라 제외가 불필요하고, 제외하면 나중에 그 파일에 생길 진짜 리터럴을
+//    놓친다. 경로 접두 두 개로만 판정하는 이유가 이것이다 — 파일 목록을 그대로 쓰면 안 된다.
+//
+// ⚠️ `THIRD_PARTY_OWNED`를 `CLASSIFIED_POOL`에 **넣지 않는다.** 소비 풀에 넣으면 튜플
+//    (file, selector, prop, value)이 없는 항목이라 아무 hit도 소비하지 못해 전부 dead가 되고,
+//    설령 튜플을 붙여도 라이브러리 버전마다 dead/over가 번갈아 뜬다. 축이 다르다:
+//    CLASSIFIED_POOL은 "이 튜플은 분류됐다", THIRD_PARTY_EXCLUDED는 "이 파일은 우리 것이 아니다".
+const THIRD_PARTY_PREFIXES = ['styles/vendor/', 'node_modules/'];
+export const THIRD_PARTY_EXCLUDED = THIRD_PARTY_OWNED
+  .map((e) => e.file)
+  .filter((f) => THIRD_PARTY_PREFIXES.some((pre) => f.startsWith(pre)));
+const THIRD_PARTY_EXCLUDED_SET = new Set(THIRD_PARTY_EXCLUDED);
+
+/**
+ * 수집 판정의 **단일 술어**. 두 제외 축과 확장자·SKIP 규칙을 한곳에서 결정한다.
+ * 테스트가 파일을 만들지 않고도 "이 경로가 제외되는가"를 직접 물을 수 있게 export한다
+ * (그래야 광역 패턴으로 넓혔을 때 합성 경로로 RED를 낼 수 있다).
+ */
+export function isSweepTarget(rel) {
+  if (!EXT_RE.test(rel) || SKIP_RE.test(rel)) return false;
+  if (EXCLUDED.has(rel)) return false;                   // 정의처·정본 자신
+  if (THIRD_PARTY_EXCLUDED_SET.has(rel)) return false;   // S8 인계 — vendor/node_modules만
+  return true;
+}
+
 export function collectSweepTargets() {
   const out = [];
   for (const root of SWEEP_ROOTS) {
@@ -536,10 +605,10 @@ export function collectSweepTargets() {
     catch { continue; }
     for (const f of entries) {
       const rel = `${root}/${f.split('\\').join('/')}`;
-      if (!EXT_RE.test(rel) || SKIP_RE.test(rel) || EXCLUDED.has(rel)) continue;
-      out.push(rel);
+      if (isSweepTarget(rel)) out.push(rel);
     }
   }
+  for (const rel of rootRuntimeFiles()) if (isSweepTarget(rel)) out.push(rel);
   return out.sort();
 }
 
@@ -556,6 +625,12 @@ const sameTuple = (e, h) =>
 // 이미 있어 예외로 등록할 수 없는 선언)는 **같은 정본의 두 면**이다. 스윕의 명제는
 // "소스에 박힌 색 리터럴은 전부 분류되어 있다"이지 "전부 예외다"가 아니다.
 // COLOR_CLASSIFIED는 같은 튜플의 반복을 count로 접어 두므로 여기서 펼쳐 소비 예산을 만든다.
+// ⚠️ THIRD_PARTY_OWNED는 여기 **들어오지 않는다**(위 THIRD_PARTY_EXCLUDED 주석 참조).
+//    import은 `colorExceptions.js`에서 COLOR_EXCEPTIONS와 함께 가져오되 풀에는 섞지 않는다.
+// ⛔ PRIOR_SLICE_DEFERRED는 **소비 풀에 들어가지 않는다.** 유예는 분류가 아니다 —
+//    풀에 넣으면 선행 슬라이스의 미결 색이 소비되어 over가 0이 되고, "다 끝났다"가 된다.
+//    그건 이름만 다른 allowlist다. 유예는 `sweepRepo().deferred`라는 **별도 결과 채널**로만
+//    드러나고 완료 판정(over)에는 아무 영향을 주지 않는다. 소유 슬라이스가 닫아야 over가 준다.
 export const CLASSIFIED_POOL = [
   ...COLOR_EXCEPTIONS,
   ...COLOR_CLASSIFIED.flatMap((e) => Array.from({ length: e.count }, () => e)),
@@ -597,7 +672,39 @@ export function sweepRepo({ read = (rel) => readFileSync(resolve(ROOT, rel), 'ut
     over.push(...r.over); overHits.push(...r.overHits);
   }
   const deadEntries = deadOf(pool);
-  return { over, overHits, deadEntries,
+  // ── 유예 채널 ───────────────────────────────────────────────────────────────
+  // over 중 "누가 닫을지가 이미 정해진" 것들을 **표시만** 한다. over에서 빼지 않는다 —
+  // 빼는 순간 완료 판정이 거짓이 된다. 이 채널은 보고용이고, 게이트는 여전히 over로 낸다.
+  //
+  // ⚠️ **소속(membership) 판정이 아니라 consume-once 예산이다.** 같은 튜플이 소스에 N번
+  //    나오면 원장에도 N개 있어야 하고, N+1번째 출현은 유예로 흡수되지 않는다. 소속으로 재면
+  //    기존 유예 튜플을 복사해 붙인 **새 출현이 무제한 흡수**되어 "소유자 미상 0"이 거짓이 된다
+  //    (실측: 유예와 같은 튜플을 한 줄 더 넣으면 over 75 / deferred 75 로 같이 늘어 통과).
+  //    CLASSIFIED_POOL의 consume()과 같은 슬롯 규약을 쓴다.
+  const deferredPool = PRIOR_SLICE_DEFERRED.map((e) => ({ e, used: false }));
+  const deferred = [];
+  for (const h of overHits) {
+    const slot = deferredPool.find((s) => !s.used && sameTuple(s.e, h));
+    if (slot) { slot.used = true; deferred.push(h); }
+  }
+  const deferredByOwner = {};
+  for (const s of deferredPool) {
+    if (!s.used) continue;
+    const o = s.e.owner || '(owner 미상)';
+    deferredByOwner[o] = (deferredByOwner[o] || 0) + 1;
+  }
+  // 소비되지 않은 유예 = 원장은 남았다고 하는데 소스에는 없다(이행됐거나 파일이 사라졌다).
+  // dead와 같은 성격이지만 축이 달라 따로 낸다 — 원장이 조용히 낡는 것을 막는다.
+  const deferredUnused = deferredPool.filter((s) => !s.used).map((s) => `${fmtEntry(s.e)} — 미소비 유예`);
+  // ── 완료 판정의 정본 ─────────────────────────────────────────────────────────
+  // 사용자 결정(S9): 완료 기준은 "전역 over 0"이 아니라 **"신규·무소유 over 0 + 선행 debt 74 exact"**다.
+  // 선행 슬라이스가 소유한 74건은 공식 deferred debt로 남기고, S9는 자기가 만든 색만 책임진다.
+  // ⚠️ unownedOver는 over에서 유예를 **consume-once로** 차감한 나머지다. 소속 판정이 아니라
+  //    슬롯이라 같은 튜플의 N+1번째 출현은 여기 그대로 드러난다.
+  const deferredSet = new Set(deferred);
+  const unownedOverHits = overHits.filter((h) => !deferredSet.has(h));
+  const unownedOver = unownedOverHits.map(fmtHit);
+  return { deferred, deferredByOwner, deferredUnused, unownedOver, unownedOverHits, over, overHits, deadEntries,
            dead: deadEntries.map((e) => `${fmtEntry(e)} — 미소비 분류/예외`),
            hitCount, fileCount: targets.length };
 }
