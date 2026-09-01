@@ -486,3 +486,12 @@
     }
   }
 }
+
+// 다크에서 로고 자산을 교체한다. 라이트 자산은 흰 타일이라 라이트 헤더 위에서는
+// 대비 1.00으로 윤곽선만 읽히지만, 다크 헤더(--color-bg) 위에서는 19:1 밝은 사각형이
+// 되어 바에서 가장 밝은 덩어리가 된다. picture[media]는 OS를 따라 사용자가 고른 모드와
+// 어긋나므로 쓰지 않는다 — data-theme이 앱 안의 정확한 기준이다.
+// (.Header 중첩 밖에 두는 이유: html[data-theme]이 .Header의 조상이라 &로 표현할 수 없다)
+html[data-theme='dark'] .Header__LogoIcon {
+  content: url('/icons/weave_square_dark.svg');
+}
