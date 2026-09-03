@@ -7,6 +7,7 @@ import {
 import { axios } from '@/library/_axios';
 import NavLink from '@/components/common/NavLink';
 import { LOGIN_PATH } from '@/library/authRedirect';
+import { clearClientSession } from '@/library/sessionCleanup';
 import { useUiPrefs } from '@/library/UiPrefsContext';
 import Avatar from '@/components/common/Avatar';
 
@@ -168,8 +169,7 @@ export default function CommandPalette({ onClose }) {
         break;
       case 'logout':
         axios.post('/auth/logout').catch(() => {});
-        sessionStorage.removeItem('profile');
-        sessionStorage.removeItem('avatar_url');
+        clearClientSession();
         sessionStorage.removeItem('app_initialized');
         // returnTo 미전달: 로그아웃 후 다시 보호 페이지로 복귀시키지 않는다
         router.replace(LOGIN_PATH);

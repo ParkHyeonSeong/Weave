@@ -78,3 +78,36 @@ describe('ThemeProvider×UiPrefsProvider×ThemeServerSync 통합 (GA)', () => {
     expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('system');
   });
 });
+
+describe('공개 경로 계정 전환 격리 (쓰기 경로 도입 후)', () => {
+  it('서버 값이 오염돼도 system으로 되돌리고 미러를 덮어쓴다', async () => {
+    // 공유 브라우저: 이전 사용자가 dark를 남긴 상태에서 다른 계정으로 로그인
+    localStorage.setItem(THEME_STORAGE_KEY, 'dark');
+    axios.get.mockResolvedValueOnce({ data: { status: true, ui_prefs: { theme: 'neon' } } });
+    await mount(true);
+    expect(document.getElementById('probe').textContent).toBe('system:light');
+    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('system');
+  });
+  it('새 계정이 light를 저장해 뒀으면 그 값을 채택한다', async () => {
+    localStorage.setItem(THEME_STORAGE_KEY, 'dark');
+    axios.get.mockResolvedValueOnce({ data: { status: true, ui_prefs: { theme: 'light' } } });
+    await mount(true);
+    expect(document.getElementById('probe').textContent).toBe('light:light');
+    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('light');
+  });
+  it('200 + {status:false} 실패 엔벨로프는 서버 권위를 주지 않는다 (미러 유지)', async () => {
+    localStorage.setItem(THEME_STORAGE_KEY, 'dark');
+    axios.get.mockResolvedValueOnce({ data: { status: false } });
+    await mount(true);
+    expect(document.getElementById('probe').textContent).toBe('dark:dark');
+    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark');
+  });
+  it('서버 채택이 미러를 덮어써도 PATCH를 유발하지 않는다 (채택 ≠ 사용자 선택)', async () => {
+    // ThemeServerSync는 setMode만 부른다. 여기서 PATCH가 나가면 로그인마다 쓰기가 발생하고,
+    // Task 2의 드레인 GET과 맞물려 두 탭이 서로의 값을 되쓰는 루프가 된다. 이 단정이 그 루프를 막는다.
+    localStorage.setItem(THEME_STORAGE_KEY, 'dark');
+    axios.get.mockResolvedValueOnce({ data: { status: true, ui_prefs: { theme: 'light' } } });
+    await mount(true);
+    expect(axios.patch).not.toHaveBeenCalled();
+  });
+});

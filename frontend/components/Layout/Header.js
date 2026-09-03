@@ -7,6 +7,7 @@ import AppSwitcher from './AppSwitcher';
 import Avatar from '@/components/common/Avatar';
 import NavLink from '@/components/common/NavLink';
 import ThemeToggleButton from '@/components/Layout/ThemeToggleButton';
+import { clearClientSession } from '@/library/sessionCleanup';
 
 const NOTI_ICONS = {
   mention: AtSign,
@@ -126,8 +127,7 @@ export default function Header({ isMobile, hasSidebar = false, onToggleSidebar, 
     } catch {
       // 쿠키 폐기는 서버 책임이라 네트워크 실패해도 클라이언트는 계속 정리한다
     }
-    sessionStorage.removeItem('profile');
-    sessionStorage.removeItem('avatar_url');
+    clearClientSession();
     sessionStorage.removeItem('app_initialized');
     // returnTo 미전달: 로그아웃 후 다시 보호 페이지로 복귀시키지 않는다
     router.replace(LOGIN_PATH);

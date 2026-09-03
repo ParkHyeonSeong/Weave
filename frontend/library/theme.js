@@ -11,6 +11,9 @@ import { errorText } from '@/library/errorText';
 //   DARK_KILL_SWITCH = 비상 정지. explicit dark까지 light로 강제한다. 부트스트랩·런타임 양쪽.
 // 이 분리 덕에 롤아웃 전에도 devtools localStorage.theme='dark' 프리뷰가 살아 있다.
 export const THEME_STORAGE_KEY = 'theme';
+// 같은 탭 통지. storage 이벤트는 "다른" 탭에만 오므로, 이 탭이 미러를 지웠을 때(로그아웃)
+// 살아 있는 ThemeProvider에게 다시 읽으라고 알리는 유일한 경로다.
+export const THEME_MIRROR_EVENT = 'weave:theme-mirror';
 export const VALID_MODES = ['light', 'dark', 'system'];
 export const SYSTEM_ENABLED = false;
 export const DARK_KILL_SWITCH = false;
@@ -116,6 +119,15 @@ export function ThemeProvider({ children, systemEnabled = SYSTEM_ENABLED, killSw
     };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
+  // 같은 탭 동기화 — 로그아웃이 미러를 지운 뒤 알린다. _app.js의 이 Provider는 appReady
+  // 게이트 밖이라 언마운트되지 않으므로, 여기서 다시 읽지 않으면 이전 계정의 explicit
+  // dark/light가 로그인 화면까지 남는다. 미러 부재 → 'system' → 플래그대로 해석된다.
+  useEffect(() => {
+    const onMirror = () => setModeState(normalizeMode(getStoredMode()));
+    window.addEventListener(THEME_MIRROR_EVENT, onMirror);
+    return () => window.removeEventListener(THEME_MIRROR_EVENT, onMirror);
   }, []);
 
   const resolved = resolveTheme(mode, osDark, { systemEnabled, killSwitch });

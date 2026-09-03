@@ -1,13 +1,13 @@
 import axios from 'axios';
 import { getErrorCode } from '@/library/errorCode';
+import { clearClientSession } from '@/library/sessionCleanup';
 
 let isAuthExpiredDispatched = false;
 
 function dispatchAuthExpired() {
   if (isAuthExpiredDispatched) return;
   isAuthExpiredDispatched = true;
-  sessionStorage.removeItem('profile');
-  sessionStorage.removeItem('avatar_url');
+  clearClientSession();
   window.dispatchEvent(new CustomEvent('auth:expired'));
   setTimeout(() => { isAuthExpiredDispatched = false; }, 3000);
 }
