@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useUiPrefs } from '@/library/UiPrefsContext';
+import { errorText } from '@/library/errorText';
 
 // 다크모드 테마 결정 로직 단일 소스 — 부트스트랩(public/theme-boot.js)·런타임(ThemeProvider)이 공유.
 //
@@ -159,8 +160,78 @@ export function ThemeServerSync() {
       { systemEnabled },
     );
     if (next !== mode) setMode(next);
-    // mode는 deps에서 의도적 제외 — 서버 스냅샷 변화에만 반응 (로컬 변경에 재머지하면 루프)
+    // mode는 deps에서 의도적 제외 — prefs 변화에만 반응한다 (mode를 넣으면 재머지 루프).
+    //
+    // ⚠️ deps가 prefs.theme(값)이 아니라 prefs(객체 정체성)인 이유: 저장 실패 롤백은
+    // theme를 '마지막 서버 확인값'으로 되돌리는데, 그 값은 낙관 적용 직전 값과 같다.
+    // 낙관 적용과 롤백이 같은 React 배치에 합쳐지면 값 diff가 0이라 브리지가 돌지 않고
+    // mode가 실패한 낙관값에 남는다(실측: choose 후 렌더 1회, mode=dark / prefs.theme=light).
+    // 객체 정체성은 setPrefs마다 새로 생기므로 왕복 롤백도 관측된다. 다른 namespace 변경에도
+    // 돌지만 mergeServerTheme은 순수 함수이고 setMode는 next !== mode로 막혀 무해하다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadStatus, prefs.theme]);
+  }, [loadStatus, prefs]);
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// S10 — 사용자 설정 진입점. Profile 라디오·Header 토글은 전부 이 훅을 쓴다.
+// ---------------------------------------------------------------------------
+
+export const THEME_OPTIONS = Object.freeze([
+  Object.freeze({ value: 'light',  label: 'Light',  hint: '항상 밝은 테마' }),
+  Object.freeze({ value: 'dark',   label: 'Dark',   hint: '항상 어두운 테마' }),
+  Object.freeze({ value: 'system', label: 'System', hint: '기기 설정을 따름' }),
+]);
+
+const CYCLE = { light: 'dark', dark: 'system', system: 'light' };
+
+export function nextCycleMode(current) {
+  return CYCLE[normalizeMode(current)];
+}
+
+// 선택을 즉시 적용하고(낙관적) 서버에 저장한다. 실패하면 error를 노출한다 —
+// 조용히 되돌아가면 사용자는 뭐가 잘못됐는지 알 수 없다.
+//
+// ⚠️ 여기서 setMode로 되돌리지 않는다. 되돌림 권위는 UiPrefsContext 하나다:
+// setNamespaceChecked가 prefs.theme를 마지막 서버 확인값으로 되돌리고, ThemeServerSync가
+// 그 변화를 setMode로 옮긴다. 훅에서 한 번 더 되돌리면 Profile과 Header가 서로의 선택을
+// 덮어쓰고, 되돌아갈 값도 아무도 확인한 적 없는 직전 낙관값이 된다.
+//
+// choose는 reject 하지 않는다. 호출부가 onClick이라 reject 하면 unhandled rejection이
+// 콘솔에 남는다. 실패는 error 상태로만 알린다 — 문구는 레포 규약(errorText)으로 풀고
+// 코드가 없는 네트워크 실패만 아래 폴백을 쓴다.
+//
+// enabled: UI는 공개 플래그 뒤에서만 렌더한다. 킬스위치가 켜지면 화면이 light로 강제되므로
+// 설정 UI도 함께 감춘다 — 고른 값과 보이는 값이 다르면 사용자는 앱이 고장났다고 읽는다.
+const SAVE_FAILED_TEXT = '테마 설정을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.';
+
+export function useThemePreference() {
+  const { mode, resolved, setMode, systemEnabled, killSwitch } = useTheme();
+  const { setNamespaceChecked } = useUiPrefs();
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState('');
+
+  const clearError = useCallback(() => setError(''), []);
+
+  const choose = useCallback(async (nextMode) => {
+    const want = normalizeMode(nextMode);
+    if (want === normalizeMode(mode)) return;
+    setError('');
+    setPending(true);
+    setMode(want);                       // 낙관적: 화면 + localStorage 미러
+    try {
+      await setNamespaceChecked('theme', want);
+    } catch (e) {
+      setError(errorText(e?.code, e?.category) || SAVE_FAILED_TEXT);
+    } finally {
+      setPending(false);
+    }
+  }, [mode, setMode, setNamespaceChecked]);
+
+  return {
+    enabled: systemEnabled && !killSwitch,
+    mode, resolved,
+    options: THEME_OPTIONS,
+    choose, pending, error, clearError,
+  };
 }
