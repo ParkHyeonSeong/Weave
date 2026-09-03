@@ -6,6 +6,7 @@ import { LOGIN_PATH } from '@/library/authRedirect';
 import AppSwitcher from './AppSwitcher';
 import Avatar from '@/components/common/Avatar';
 import NavLink from '@/components/common/NavLink';
+import ThemeToggleButton from '@/components/Layout/ThemeToggleButton';
 
 const NOTI_ICONS = {
   mention: AtSign,
@@ -263,6 +264,7 @@ export default function Header({ isMobile, hasSidebar = false, onToggleSidebar, 
       </div>
 
       <div className="Header__Right">
+        <ThemeToggleButton />
         <button
           className="Header__IconBtn"
           title="Messenger"

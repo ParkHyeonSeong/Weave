@@ -119,6 +119,16 @@
     }
   }
 
+  // S10 테마 토글. Header__IconBtn의 기본 스타일을 그대로 쓰고 상태 표시만 얹는다.
+  &__ThemeToggle {
+    &[data-mode='system'] { color: $color-text-secondary; }
+    &[aria-disabled='true'] { opacity: 0.5; cursor: default; }
+    // P3(§14.3): 모바일에는 토글을 두지 않는다. JS 판정(useMobile)은 초기 false라
+    // 첫 렌더에 한 프레임 보였다가 사라지므로, 첫 페인트에 적용되는 미디어쿼리로 숨긴다.
+    // 중단점은 $bp-mobile(mobile mixin) 하나만 따른다 — useMobile의 MOBILE_QUERY와 같은 값이다.
+    @include mobile { display: none; }
+  }
+
   // -- Notification dropdown --
   &__NotiWrap {
     position: relative;
