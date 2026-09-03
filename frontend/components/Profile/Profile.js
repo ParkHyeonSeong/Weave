@@ -3,6 +3,7 @@ import { User, Mail, Lock, Eye, EyeOff, Camera, Trash2 } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import Alert from '@/components/modal/Alert';
 import ProfileTokens from '@/components/Profile/ProfileTokens';
+import AppearanceSection from '@/components/Profile/AppearanceSection';
 import Avatar from '@/components/common/Avatar';
 import { AVATAR_COLORS } from '@/library/userAvatar';
 import { getError } from '@/library/errorCode';
@@ -356,6 +357,9 @@ export default function Profile() {
           </button>
         </form>
       </div>
+
+      {/* 표시 설정 섹션 — 공개 플래그 뒤에서만 DOM을 만든다 */}
+      <AppearanceSection />
 
       {/* 비밀번호 변경 섹션 */}
       <div className="Profile__Section">

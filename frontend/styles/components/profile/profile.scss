@@ -417,3 +417,40 @@
     &:hover { background: color-mix(in srgb, var(--color-error) 8%, transparent); }
   }
 }
+
+// S10 테마 설정. 색은 전부 테마 토큰만 쓴다 — 새 리터럴을 넣으면 S9 스윕 게이트가 RED다.
+.Appearance {
+  &__Group {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 4px;
+    @media (max-width: 560px) { grid-template-columns: 1fr; }
+  }
+
+  &__Option {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 14px;
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+    background: $color-surface;
+    color: $color-text;
+    text-align: left;
+    cursor: pointer;
+    // 포커스 링은 globals.scss의 전역 :focus-visible 규칙을 그대로 쓴다.
+
+    &:hover:not([aria-disabled='true']) { background: $color-surface-hover; }
+    &[aria-disabled='true'] { opacity: 0.55; cursor: default; }
+
+    // 선택 표시를 색만으로 하지 않는다 — 색각 이상 사용자를 위해 테두리 두께도 바꾼다
+    &--selected { border-color: $color-primary; box-shadow: inset 0 0 0 1px $color-primary; }
+  }
+
+  &__OptionLabel { font-size: $font-size-base; font-weight: $font-weight-semibold; }
+  &__OptionHint  { font-size: $font-size-xs; color: $color-text-secondary; }
+  &__Hint        { margin-top: 10px; font-size: $font-size-xs; color: $color-text-secondary; }
+  &__Error       { margin-top: 8px; font-size: $font-size-sm; color: $color-error; }
+}
