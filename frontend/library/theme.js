@@ -1,13 +1,18 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useUiPrefs } from '@/library/UiPrefsContext';
 
-// 다크모드 테마 결정 로직 단일 소스 — 부트스트랩(_document 인라인)·런타임(ThemeProvider)이 공유.
-// SYSTEM_ENABLED가 숨김 롤아웃 스위치: false인 동안 'system'은 해석하지 않고 light로 강제해
-// OS 다크 사용자에게 미완성 다크가 누출되지 않는다. S10 공개 슬라이스에서 true로 플립 —
-// theme.test.js의 bootstrap parity 테스트가 플립 후 첫 페인트/런타임 불일치를 막는다.
+// 다크모드 테마 결정 로직 단일 소스 — 부트스트랩(public/theme-boot.js)·런타임(ThemeProvider)이 공유.
+//
+// 플래그가 둘인 이유: SYSTEM_ENABLED만으로는 다크를 끌 수 없다. resolveTheme의
+// `if (mode === 'dark') return 'dark'`가 그 플래그를 읽지 않아, 명시적으로 dark를 고른
+// 사용자는 플래그가 꺼져 있어도 계속 다크를 본다(프리뷰를 위해 의도된 동작이다).
+//   SYSTEM_ENABLED   = 공개 플래그. 'system'의 OS 추종 + 서버 권위 + 설정 UI 렌더를 연다.
+//   DARK_KILL_SWITCH = 비상 정지. explicit dark까지 light로 강제한다. 부트스트랩·런타임 양쪽.
+// 이 분리 덕에 롤아웃 전에도 devtools localStorage.theme='dark' 프리뷰가 살아 있다.
 export const THEME_STORAGE_KEY = 'theme';
 export const VALID_MODES = ['light', 'dark', 'system'];
 export const SYSTEM_ENABLED = false;
+export const DARK_KILL_SWITCH = false;
 
 const META_COLORS = { light: '#FFFFFF', dark: '#0E0F11' }; // _themes.scss --color-bg와 동기
 
@@ -16,7 +21,8 @@ export function normalizeMode(raw) {
   return VALID_MODES.includes(raw) ? raw : 'system';
 }
 
-export function resolveTheme(rawMode, osDark, { systemEnabled = SYSTEM_ENABLED } = {}) {
+export function resolveTheme(rawMode, osDark, { systemEnabled = SYSTEM_ENABLED, killSwitch = DARK_KILL_SWITCH } = {}) {
+  if (killSwitch) return 'light';          // explicit dark도 여기서 막힌다
   const mode = normalizeMode(rawMode);
   if (mode === 'dark') return 'dark';
   if (mode === 'light') return 'light';
@@ -56,14 +62,18 @@ export function applyResolvedTheme(resolved, doc = document) {
 // prod 정적 HTML의 nonce가 빈 값이 되고, middleware는 요청마다 새 nonce를 CSP에 넣으므로
 // 인라인은 차단된다. 외부 파일은 script-src 'self'로 통과. theme.test.js parity 테스트가
 // resolveTheme과의 동치를, Task 9 파일 parity가 파일과 이 함수의 동기화를 강제한다.
-export function buildBootstrapScript({ systemEnabled = SYSTEM_ENABLED } = {}) {
+export function buildBootstrapScript({ systemEnabled = SYSTEM_ENABLED, killSwitch = DARK_KILL_SWITCH } = {}) {
   // ⚠️ storage 읽기만 try — 정규화·해석은 항상 실행. getItem 예외를 해석까지 묶으면
   // 런타임(getStoredMode→null→'system')과 결과가 갈려 GA에서 light→dark FOUC가 난다.
   const readStored = `var t=null;try{t=localStorage.getItem('${THEME_STORAGE_KEY}');}catch(e){}`;
   const normalize = `var v=(t==='light'||t==='dark'||t==='system')?t:'system';`;
   const resolveGa = `var r=v==='dark'?'dark':v==='light'?'light':(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');`;
   const resolvePreview = `var r=v==='dark'?'dark':'light';`;
-  return `(function(){${readStored}${normalize}${systemEnabled ? resolveGa : resolvePreview}document.documentElement.setAttribute('data-theme',r);try{var m=document.querySelector('meta[name="theme-color"]');if(m)m.content=r==='dark'?'${META_COLORS.dark}':'${META_COLORS.light}';}catch(e){}})();`;
+  const resolveKilled = `var r='light';`;
+  // 앞부분(readStored/normalize)은 플래그와 무관하게 고정한다 — 산출물 diff가 항상
+  // 해석 절 한 줄로만 나와야 리뷰어가 무엇이 바뀌었는지 즉시 본다.
+  const resolve = killSwitch ? resolveKilled : (systemEnabled ? resolveGa : resolvePreview);
+  return `(function(){${readStored}${normalize}${resolve}document.documentElement.setAttribute('data-theme',r);try{var m=document.querySelector('meta[name="theme-color"]');if(m)m.content=r==='dark'?'${META_COLORS.dark}':'${META_COLORS.light}';}catch(e){}})();`;
 }
 
 // 토글 순간 transition:all 205곳의 스태거드 색 전환 억제 (globals.scss .theme-switching 규칙과 짝)
@@ -83,7 +93,7 @@ const ThemeContext = createContext(null);
 
 // systemEnabled prop: 기본은 롤아웃 플래그 — 테스트가 GA 경로(OS 추종·서버 권위)를
 // 플래그 플립 전에 검증할 수 있도록 주입 가능하게 열어둔다.
-export function ThemeProvider({ children, systemEnabled = SYSTEM_ENABLED }) {
+export function ThemeProvider({ children, systemEnabled = SYSTEM_ENABLED, killSwitch = DARK_KILL_SWITCH }) {
   const [mode, setModeState] = useState('system');
   const [osDark, setOsDark] = useState(false);
   const [ready, setReady] = useState(false); // 초기 미러 채택 전 DOM 동기 금지(부트스트랩 결과 보존)
@@ -107,7 +117,7 @@ export function ThemeProvider({ children, systemEnabled = SYSTEM_ENABLED }) {
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
-  const resolved = resolveTheme(mode, osDark, { systemEnabled });
+  const resolved = resolveTheme(mode, osDark, { systemEnabled, killSwitch });
 
   // DOM 동기 — attr 변화 시에만 트랜지션 억제, meta는 항상 동기(멱등).
   useEffect(() => {
@@ -128,15 +138,15 @@ export function ThemeProvider({ children, systemEnabled = SYSTEM_ENABLED }) {
   }, []);
 
   const value = useMemo(
-    () => ({ mode, resolved, setMode, systemEnabled }),
-    [mode, resolved, setMode, systemEnabled],
+    () => ({ mode, resolved, setMode, systemEnabled, killSwitch }),
+    [mode, resolved, setMode, systemEnabled, killSwitch],
   );
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
 export function useTheme() {
   return useContext(ThemeContext)
-    || { mode: 'system', resolved: 'light', setMode: () => {}, systemEnabled: SYSTEM_ENABLED };
+    || { mode: 'system', resolved: 'light', setMode: () => {}, systemEnabled: SYSTEM_ENABLED, killSwitch: DARK_KILL_SWITCH };
 }
 
 // UiPrefsProvider 안에서 서버 스냅샷을 전이표대로 채택하는 브리지 (UI 없음)

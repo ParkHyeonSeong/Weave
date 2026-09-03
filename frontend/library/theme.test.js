@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import {
-  THEME_STORAGE_KEY, VALID_MODES, SYSTEM_ENABLED,
+  THEME_STORAGE_KEY, VALID_MODES, SYSTEM_ENABLED, DARK_KILL_SWITCH,
   normalizeMode, resolveTheme, mergeServerTheme, buildBootstrapScript, applyResolvedTheme,
 } from './theme';
 
@@ -86,15 +86,17 @@ describe('buildBootstrapScript ↔ resolveTheme parity', () => {
     return { attr, metaColor: meta.content };
   }
 
-  it('preview/GA × 저장값 × OS 전수 일치', () => {
-    for (const systemEnabled of [false, true]) {
-      const script = buildBootstrapScript({ systemEnabled });
-      for (const stored of [null, 'light', 'dark', 'system', 'neon']) {
-        for (const osDark of [false, true]) {
-          const want = resolveTheme(stored, osDark, { systemEnabled });
-          const got = evalBootstrap(script, { stored, osDark });
-          expect(got.attr, `flag=${systemEnabled} stored=${stored} os=${osDark}`).toBe(want);
-          expect(got.metaColor).toBe(want === 'dark' ? '#0E0F11' : '#FFFFFF');
+  it('killSwitch × preview/GA × 저장값 × OS 전수 일치', () => {
+    for (const killSwitch of [false, true]) {
+      for (const systemEnabled of [false, true]) {
+        const script = buildBootstrapScript({ systemEnabled, killSwitch });
+        for (const stored of [null, 'light', 'dark', 'system', 'neon']) {
+          for (const osDark of [false, true]) {
+            const want = resolveTheme(stored, osDark, { systemEnabled, killSwitch });
+            const got = evalBootstrap(script, { stored, osDark });
+            expect(got.attr, `kill=${killSwitch} flag=${systemEnabled} stored=${stored} os=${osDark}`).toBe(want);
+            expect(got.metaColor).toBe(want === 'dark' ? '#0E0F11' : '#FFFFFF');
+          }
         }
       }
     }
@@ -140,5 +142,34 @@ describe('public/theme-boot.js ↔ buildBootstrapScript 동기화', () => {
   it('파일 내용 = 생성원 출력', () => {
     const file = readFileSync(resolve(__dirname, '../public/theme-boot.js'), 'utf8').trim();
     expect(file).toBe(buildBootstrapScript());
+  });
+});
+
+describe('DARK_KILL_SWITCH — 비상 정지는 explicit dark까지 light로 강제한다', () => {
+  const KILL = { killSwitch: true };
+
+  it('기본값은 꺼져 있다 (S5~S9 프리뷰 보존)', () => {
+    expect(DARK_KILL_SWITCH).toBe(false);
+  });
+  it('저장값·플래그·OS 전 조합이 light — explicit dark까지(SYSTEM_ENABLED가 못 하던 일)', () => {
+    for (const osDark of [false, true]) {
+      for (const systemEnabled of [false, true]) {
+        for (const raw of ['dark', 'system', 'light', null, undefined, 'neon']) {
+          expect(resolveTheme(raw, osDark, { systemEnabled, ...KILL }), `${raw}`).toBe('light');
+        }
+      }
+    }
+  });
+  it('부트스트랩 산출물도 light 고정 — 첫 페인트부터 막힌다', () => {
+    for (const systemEnabled of [false, true]) {
+      const script = buildBootstrapScript({ systemEnabled, killSwitch: true });
+      expect(script).toContain("var r='light';");
+      expect(script).not.toContain('matchMedia');
+      expect(script).not.toContain("v==='dark'?'dark'");
+    }
+  });
+  it('기존 프리뷰 계약(theme.test.js:19)은 깨지지 않는다 — killSwitch 미지정 = false', () => {
+    expect(resolveTheme('dark', false, { systemEnabled: false })).toBe('dark');
+    expect(resolveTheme('dark', true, { systemEnabled: false })).toBe('dark');
   });
 });
