@@ -139,6 +139,10 @@ async def update_task(
     instead: add_task_label/remove_task_label, add_task_assignee/remove_task_assignee,
     set_task_custom_field. Pass dry_run=True to preview the added/removed/final diff
     WITHOUT writing (all validation still runs).
+    Side effect: when this task is a top-level task and its main assignee actually
+    changes to a user, subtasks whose main equals the previous main (or have no main)
+    follow to the new main; subtasks with a different main are left alone. Unassigning
+    the main and sub-only changes do not propagate. dry_run never propagates.
     To re-parent (make this a subtask of another task) pass parent_task_id with that
     task's id. To promote it to a top-level task, pass promote_to_top=True (this sends
     parent_task_id=null). Leaving both out keeps the current parent unchanged.
@@ -399,6 +403,9 @@ async def add_task_assignee(branch_id: BranchRef, task_id: int, user_id: UserRef
     Use this instead of update_task(assignee_*) when you only want to ADD someone —
     update_task replaces the whole assignee set. role="main" replaces the current main;
     adding role="sub" to the current main is rejected.
+    Setting role="main" on a top-level task also moves subtasks whose main was the
+    previous main (or had none) to the new main; subtasks with a different main are
+    left alone.
     """
     return await get_client().call_json(
         "POST", f"/api/branches/{branch_id}/tasks/{task_id}/assignees",

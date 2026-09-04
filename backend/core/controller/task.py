@@ -20,6 +20,7 @@ from library.custom_field_validator import validate_custom_field_values
 from library.mention_parser import extract_mention_user_ids
 from library.date_validator import is_valid_date_order
 from library.html_markdown import ensure_html, html_to_markdown
+from library.assignee_cascade import cascade_main_assignee_to_subtasks, main_of
 
 
 def _collect_assignee_ids(assignees) -> set[int]:
@@ -527,6 +528,13 @@ async def update(task_id: int, body, branch_id: int, request: Request, db: Async
                 f'{username}님이 {display_id} {title}에 회원님을 담당자로 지정했습니다',
                 link, 'task', task_id, db,
             )
+
+        # 부모 Main 변경을 갈라지지 않은 직접 하위에 전파(WEAVE-43). 이 task가 하위면 대상 없음.
+        # dry_run은 위(:453)에서 이미 반환했으므로 여기 도달하지 않는다.
+        if effective_parent is None:
+            await cascade_main_assignee_to_subtasks(
+                task_id, main_of(old_assignees_list), body.assignees.main,
+                branch_id, user_id, request.state.payload.get('username', ''), db)
 
     return {'status': True}
 

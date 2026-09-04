@@ -14,6 +14,7 @@ from core.model import task_type_config as type_model
 from library import activity_service
 from library import notification_service
 from library.custom_field_validator import validate_custom_field_values
+from library.assignee_cascade import cascade_main_assignee_to_subtasks, main_of
 
 
 async def get_task_in_branch_or_error(task_id: int, branch_id: int, request: Request, db: AsyncSession):
@@ -100,6 +101,12 @@ async def add_task_assignee(task_id: int, user_id_to_add: int, role: str,
             f'{username}님이 {display_id} {title}에 회원님을 담당자로 지정했습니다',
             link, 'task', task_id, db,
         )
+    # main 지정이면 부모 Main 변경을 직접 하위에 전파(WEAVE-43, replace 경로와 같은 헬퍼·규칙).
+    # sub 추가는 무전파. 멱등 no-op(current_role == 'main')은 위에서 이미 return.
+    if role == 'main' and task.get('parent_task_id') is None:
+        await cascade_main_assignee_to_subtasks(
+            task_id, main_of(old), user_id_to_add, branch_id, actor_id,
+            request.state.payload.get('username', ''), db)
     return {'status': True}
 
 
