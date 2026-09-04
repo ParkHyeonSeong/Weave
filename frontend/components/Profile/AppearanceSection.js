@@ -5,8 +5,8 @@ import { THEME_ICONS } from '@/components/common/themeIcons';
 // WAI-ARIA radiogroup: 화살표로 이동하면 즉시 선택된다(탭 이동과 다르다).
 // roving tabindex — 그룹 전체가 탭 정지 하나만 갖도록 선택 항목만 tabIndex 0.
 //
-// enabled가 false면 아무 것도 렌더하지 않는다. 공개 플립 전(또는 킬스위치 작동 시)
-// 사용자가 이 설정을 볼 수 없어야 한다 — 미완성 다크로 가는 문을 열어두지 않는다.
+// enabled가 false면 아무 것도 렌더하지 않는다. 킬스위치가 켜졌거나 공개 플래그를 되돌린
+// 상태에서는 사용자가 이 설정을 볼 수 없어야 한다 — 고른 값과 보이는 값이 갈리면 안 된다.
 //
 // 저장 중(pending)에는 DOM disabled를 쓰지 않는다 — 포커스된 요소가 disabled가 되면
 // 브라우저가 즉시 blur해 키보드 포커스가 body로 날아가고 roving tabindex가 깨진다.

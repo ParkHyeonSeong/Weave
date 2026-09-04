@@ -11,8 +11,8 @@ export function clearClientSession() {
   try { sessionStorage.removeItem('avatar_url'); } catch {}
   // 공유 브라우저에서 이전 계정의 테마 취향이 로그인 화면까지 남지 않게 한다.
   // 미러가 없으면 normalizeMode가 'system'을 돌려주고, 해석은 플래그에 따라 갈린다:
-  //   * SYSTEM_ENABLED=false: 미러 삭제 후 light (현재 롤아웃 상태)
-  //   * SYSTEM_ENABLED=true:  미러 삭제 후 OS 추종 — OS가 다크면 로그인 화면도 다크
+  //   * SYSTEM_ENABLED=true (현재, S10 공개 후): 미러 삭제 후 OS 추종 — OS가 다크면 로그인 화면도 다크
+  //   * SYSTEM_ENABLED=false (킬스위치와 별개의 되돌림 경로): 미러 삭제 후 light
   // 보장하는 것은 "앞 계정의 선택이 남지 않는다" 하나뿐이다.
   try { localStorage.removeItem(THEME_STORAGE_KEY); } catch {}
   // 같은 탭에는 storage 이벤트가 오지 않는다 — 살아 있는 ThemeProvider에 직접 알려

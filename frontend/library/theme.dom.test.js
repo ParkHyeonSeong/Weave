@@ -53,7 +53,7 @@ describe('ThemeProvider (실마운트)', () => {
     expect(document.querySelector('meta[name="theme-color"]').content).toBe('#0E0F11');
   });
 
-  it('숨김 롤아웃: 미러 없음 → system이어도 light', () => {
+  it('미러 없음 + OS 라이트 → system이어도 light', () => {
     mount();
     expect(document.getElementById('probe').textContent).toBe('system:light');
     expect(document.documentElement.getAttribute('data-theme')).toBe('light');
@@ -77,7 +77,7 @@ describe('ThemeProvider (실마운트)', () => {
     expect(document.documentElement.getAttribute('data-theme')).toBe('light');
   });
 
-  it('matchMedia 전이 반영 (systemEnabled 주입 = GA 경로 사전 검증)', () => {
+  it('matchMedia 전이 반영 (systemEnabled 주입 = 플래그 값과 무관하게 GA 경로 고정)', () => {
     localStorage.setItem(THEME_STORAGE_KEY, 'system');
     mount({ systemEnabled: true });
     expect(document.documentElement.getAttribute('data-theme')).toBe('light');

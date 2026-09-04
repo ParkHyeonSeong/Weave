@@ -7,15 +7,17 @@ import { errorText } from '@/library/errorText';
 // 플래그가 둘인 이유: SYSTEM_ENABLED만으로는 다크를 끌 수 없다. resolveTheme의
 // `if (mode === 'dark') return 'dark'`가 그 플래그를 읽지 않아, 명시적으로 dark를 고른
 // 사용자는 플래그가 꺼져 있어도 계속 다크를 본다(프리뷰를 위해 의도된 동작이다).
-//   SYSTEM_ENABLED   = 공개 플래그. 'system'의 OS 추종 + 서버 권위 + 설정 UI 렌더를 연다.
+//   SYSTEM_ENABLED   = 공개 플래그. S10에서 true로 플립했다 — 'system'이 OS를 따르고,
+//                      서버에 저장된 테마가 권위를 가지며, 설정 UI(Profile 라디오·Header 토글)가 렌더된다.
 //   DARK_KILL_SWITCH = 비상 정지. explicit dark까지 light로 강제한다. 부트스트랩·런타임 양쪽.
-// 이 분리 덕에 롤아웃 전에도 devtools localStorage.theme='dark' 프리뷰가 살아 있다.
+//                      되돌릴 일이 생기면 SYSTEM_ENABLED를 만지지 말고 이것을 켠다(한 줄·한 커밋).
+// ⚠️ 이 상수를 바꾸면 public/theme-boot.js를 반드시 재생성한다(theme.test.js parity가 RED로 잡는다).
 export const THEME_STORAGE_KEY = 'theme';
 // 같은 탭 통지. storage 이벤트는 "다른" 탭에만 오므로, 이 탭이 미러를 지웠을 때(로그아웃)
 // 살아 있는 ThemeProvider에게 다시 읽으라고 알리는 유일한 경로다.
 export const THEME_MIRROR_EVENT = 'weave:theme-mirror';
 export const VALID_MODES = ['light', 'dark', 'system'];
-export const SYSTEM_ENABLED = false;
+export const SYSTEM_ENABLED = true;
 export const DARK_KILL_SWITCH = false;
 
 const META_COLORS = { light: '#FFFFFF', dark: '#0E0F11' }; // _themes.scss --color-bg와 동기
@@ -95,8 +97,8 @@ export function withTransitionsSuppressed(doc, fn) {
 // ---------------------------------------------------------------------------
 const ThemeContext = createContext(null);
 
-// systemEnabled prop: 기본은 롤아웃 플래그 — 테스트가 GA 경로(OS 추종·서버 권위)를
-// 플래그 플립 전에 검증할 수 있도록 주입 가능하게 열어둔다.
+// systemEnabled prop: 기본은 공개 플래그. 주입 가능하게 열어둔 이유는 테스트가 두 경로
+// (OS 추종·서버 권위 vs 프리뷰 전용)를 플래그 값과 무관하게 각각 고정하기 위해서다 — 지우지 마라.
 export function ThemeProvider({ children, systemEnabled = SYSTEM_ENABLED, killSwitch = DARK_KILL_SWITCH }) {
   const [mode, setModeState] = useState('system');
   const [osDark, setOsDark] = useState(false);
