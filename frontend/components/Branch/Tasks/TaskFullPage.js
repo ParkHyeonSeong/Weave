@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import { ArrowLeft, Trash2, ChevronDown, ShieldAlert, Star, Pencil, Copy, ArrowUp } from 'lucide-react';
 import useStar from '@/hooks/useStar';
@@ -15,6 +15,7 @@ import { selectableEpics } from '@/library/epics';
 import { useRefHydration } from '@/library/refHydration';
 import { useMathHydration } from '@/library/mathRender';
 import { errorText } from '@/library/errorText';
+import { orderMembersForPicker } from '@/library/memberOrder';
 import Avatar from '@/components/common/Avatar';
 import TaskIssueSection from './TaskIssueSection';
 import TaskSubtaskSection from './TaskSubtaskSection';
@@ -55,6 +56,11 @@ export default function TaskFullPage() {
   const currentUserId = typeof window !== 'undefined'
     ? (JSON.parse(sessionStorage.getItem('profile') || '{}').user_id ?? null)
     : null;
+
+  const pickerMembers = useMemo(
+    () => orderMembersForPicker(members, currentUserId),
+    [members, currentUserId],
+  );
 
   // 제목 편집
   const [editingTitle, setEditingTitle] = useState(false);
@@ -385,7 +391,7 @@ export default function TaskFullPage() {
                 value={(task.assignees || []).find((a) => a.role === 'main')?.user_id || ''}
                 options={[
                   { value: '', label: 'Unassigned' },
-                  ...members.map((m) => ({ value: m.user_id, label: m.username })),
+                  ...pickerMembers.map((m) => ({ value: m.user_id, label: m.username })),
                 ]}
                 onChange={(val) => {
                   const mainId = val === '' ? null : Number(val);

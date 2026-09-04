@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { User, MessageCircle, ChevronRight, ChevronDown } from 'lucide-react';
 import { axios } from '@/library/_axios';
 import { selectableEpics } from '@/library/epics';
@@ -11,6 +11,7 @@ import Avatar from '@/components/common/Avatar';
 import { progressLabel, progressPercent } from '@/library/subtaskProgress';
 import { priorityVar, DEFAULT_STATUS_FALLBACK } from '@/library/themePalette';
 import { entityTintStyle } from '@/library/entityTint';
+import { orderMembersForPicker } from '@/library/memberOrder';
 
 const priorityOptions = [
   { value: 'urgent', label: 'Urgent', color: priorityVar('urgent') },
@@ -18,6 +19,17 @@ const priorityOptions = [
   { value: 'medium', label: 'Medium', color: priorityVar('medium') },
   { value: 'low', label: 'Low', color: priorityVar('low') },
 ];
+
+// 현재 사용자 id — 코드베이스 공통 패턴(TaskList.js:63 등): sessionStorage 'profile'.
+// 담당자 드롭다운에서 본인을 맨 위로 올리는 데만 쓴다(WEAVE-44).
+function currentUserId() {
+  if (typeof window === 'undefined') return null;
+  try {
+    return JSON.parse(sessionStorage.getItem('profile') || '{}').user_id ?? null;
+  } catch {
+    return null;
+  }
+}
 
 export default function TaskListRow({ task, branchId, taskTypes, workflowStatuses, epics, members, onClick, onContextMenu, isSelected, isOverlay, indent, expandable, expanded, onToggleExpand, progress, contextOnly }) {
   const statusOptions = (workflowStatuses && workflowStatuses.length > 0)
@@ -90,7 +102,8 @@ export default function TaskListRow({ task, branchId, taskTypes, workflowStatuse
     })),
   ];
 
-  const memberList = members || [];
+  const myUserId = useMemo(() => currentUserId(), []);
+  const memberList = useMemo(() => orderMembersForPicker(members, myUserId), [members, myUserId]);
   const hasEpic = !!task.epic_id;
 
   return (
@@ -288,7 +301,7 @@ export default function TaskListRow({ task, branchId, taskTypes, workflowStatuse
                   }}
                 >
                   <Avatar user={m} size={24} />
-                  <span>{m.display_name || m.email}</span>
+                  <span>{m.username}</span>
                 </button>
               );
             })}

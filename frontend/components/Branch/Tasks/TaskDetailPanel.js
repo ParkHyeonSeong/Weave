@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import { X, Maximize2, Trash2, ChevronDown, Star, Pencil, Copy, ArrowUp } from 'lucide-react';
 import useStar from '@/hooks/useStar';
@@ -13,6 +13,7 @@ import { formatYMD, formatDateTime } from '@/library/formatTime';
 import { selectableEpics } from '@/library/epics';
 import { useRefHydration } from '@/library/refHydration';
 import { useMathHydration } from '@/library/mathRender';
+import { orderMembersForPicker } from '@/library/memberOrder';
 import Avatar from '@/components/common/Avatar';
 import TaskIssueSection from './TaskIssueSection';
 import TaskGithubRefSection from './TaskGithubRefSection';
@@ -61,6 +62,13 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
   const currentUserId = typeof window !== 'undefined'
     ? (JSON.parse(sessionStorage.getItem('profile') || '{}').user_id ?? null)
     : null;
+
+  // Main Assignee 피커 전용 순서: 본인 → 이름순(WEAVE-44).
+  // members 원본은 Sub 다중 선택기·enrich 등 다른 용도라 그대로 둔다.
+  const pickerMembers = useMemo(
+    () => orderMembersForPicker(members, currentUserId),
+    [members, currentUserId],
+  );
 
   // 제목 편집
   const [editingTitle, setEditingTitle] = useState(false);
@@ -335,7 +343,7 @@ export default function TaskDetailPanel({ branchId, branchKey, taskTypes: extern
                 value={(task.assignees || []).find((a) => a.role === 'main')?.user_id || ''}
                 options={[
                   { value: '', label: 'Unassigned' },
-                  ...members.map((m) => ({ value: m.user_id, label: m.username })),
+                  ...pickerMembers.map((m) => ({ value: m.user_id, label: m.username })),
                 ]}
                 onChange={(val) => {
                   const mainId = val === '' ? null : Number(val);
